@@ -10,7 +10,7 @@ export const miniAppEmbed = {
       type: "launch_miniapp",
       name: "Crux",
       url: SITE_URL,
-      splashImageUrl: `${SITE_URL}/icon.svg`,
+      splashImageUrl: `${SITE_URL}/splash.png`,
       splashBackgroundColor: "#050505",
     },
   },

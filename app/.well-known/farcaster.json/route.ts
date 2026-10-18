@@ -17,11 +17,11 @@ export function GET() {
       subtitle: "Every chain. One market.",
       description:
         "Trade any asset on any chain with one unified balance. Intent-based execution, fair launches, canonical liquidity and perpetual markets.",
-      iconUrl: `${SITE_URL}/icon.svg`,
+      iconUrl: `${SITE_URL}/icon-1024.png`,
       homeUrl: SITE_URL,
       imageUrl: `${SITE_URL}/opengraph-image`,
       buttonTitle: "Launch Crux",
-      splashImageUrl: `${SITE_URL}/icon.svg`,
+      splashImageUrl: `${SITE_URL}/splash.png`,
       splashBackgroundColor: "#050505",
       primaryCategory: "finance",
       tags: ["trading", "omnichain", "defi", "intents"],
