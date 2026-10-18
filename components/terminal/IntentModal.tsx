@@ -1,19 +1,30 @@
 "use client";
 
 import { useState } from "react";
-import { parseUnits, verifyTypedData, type Hex } from "viem";
-import { useConnection, useSignTypedData, useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { erc20Abi, formatUnits, parseUnits, verifyTypedData, type Hex } from "viem";
+import { useConfig, useConnection, useSignTypedData, useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { readContract, waitForTransactionReceipt } from "wagmi/actions";
 import { Modal, KineticLoader } from "@/components/ui/Modal";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { originSettlerAbi } from "@/contracts/abis/erc7683";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
-import { BATCH_WINDOW_SECONDS, SETTLER, SETTLER_DEPLOYED, SLIPPAGE_BPS, buildGaslessOrder } from "@/lib/intents";
+import {
+  BATCH_WINDOW_SECONDS,
+  SETTLER,
+  SETTLER_DEPLOYED,
+  SLIPPAGE_BPS,
+  TESTNET_ESCROW_ASSETS,
+  TESTNET_USDC,
+  buildGaslessOrder,
+} from "@/lib/intents";
 import { NOVA_ASSET, clearingLimit, minReceived, sourceAsset, type OrderDraft } from "@/lib/order";
 import { usd } from "@/lib/tokens";
 
 type Flow =
   | { kind: "idle" }
   | { kind: "switching" }
+  /** Settler live: approving it to escrow test USDC. */
+  | { kind: "approving" }
   | { kind: "signing" }
   | { kind: "broadcasting" }
   /** Settler live: openFor sent to Base Sepolia. */
@@ -22,7 +33,7 @@ type Flow =
   | { kind: "local"; signature: Hex; valid: boolean }
   | { kind: "error"; message: string };
 
-const BUSY: Flow["kind"][] = ["switching", "signing", "broadcasting"];
+const BUSY: Flow["kind"][] = ["switching", "approving", "signing", "broadcasting"];
 
 const qtyFmt = new Intl.NumberFormat("en-US", { maximumFractionDigits: 4 });
 const priceFmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 4 });
@@ -43,6 +54,7 @@ function errorMessage(err: unknown) {
 }
 
 export function IntentModal({ order, open, onClose }: { order: OrderDraft | null; open: boolean; onClose: () => void }) {
+  const config = useConfig();
   const { address, chainId, chain } = useConnection();
   const { mutateAsync: signTypedData } = useSignTypedData();
   const { mutateAsync: switchChain } = useSwitchChain();
@@ -88,6 +100,30 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
         ? { caip19: NOVA_ASSET.caip19, amount: parseUnits(min.toFixed(6), NOVA_ASSET.decimals) }
         : { caip19: payAsset.caip19, amount: parseUnits(min.toFixed(payAsset.decimals), payAsset.decimals) };
 
+      if (SETTLER_DEPLOYED) {
+        // The settler pulls the input into escrow inside openFor, so it needs
+        // the funds and an allowance before the user signs.
+        if (!TESTNET_ESCROW_ASSETS.has(input.caip19)) {
+          setFlow({ kind: "error", message: "The testnet settler escrows USDC only. Buy with Base USDC to open this intent." });
+          return;
+        }
+        const usdc = { address: TESTNET_USDC, abi: erc20Abi, chainId: TESTNET.id } as const;
+        const balance = await readContract(config, { ...usdc, functionName: "balanceOf", args: [address] });
+        if (balance < input.amount) {
+          setFlow({
+            kind: "error",
+            message: `Needs ${formatUnits(input.amount, 6)} test USDC on Base Sepolia (you have ${formatUnits(balance, 6)}). Get some free at faucet.circle.com.`,
+          });
+          return;
+        }
+        const allowance = await readContract(config, { ...usdc, functionName: "allowance", args: [address, SETTLER] });
+        if (allowance < input.amount) {
+          setFlow({ kind: "approving" });
+          const approval = await writeContract({ ...usdc, functionName: "approve", args: [SETTLER, input.amount] });
+          await waitForTransactionReceipt(config, { hash: approval, chainId: TESTNET.id });
+        }
+      }
+
       const typed = buildGaslessOrder({
         user: address,
         chainId: signingChainId,
@@ -95,7 +131,8 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
         inputAmount: input.amount,
         outputCaip19: output.caip19,
         minOutputAmount: output.amount,
-        destinationChainId: 8453,
+        // On testnet the fill also happens on Base Sepolia, where the destination settler lives.
+        destinationChainId: SETTLER_DEPLOYED ? TESTNET.id : 8453,
       });
 
       setFlow({ kind: "signing" });
@@ -126,6 +163,7 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
     idle: "Confirm Cross-Chain Intent",
     error: "Try again",
     switching: "Switching to Base Sepolia…",
+    approving: "Approving test USDC…",
     signing: "Awaiting signature…",
     broadcasting: "Broadcasting openFor…",
     broadcast: "",
@@ -233,7 +271,7 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
           </button>
           <p className="mt-3 text-center text-[11px] text-dim">
             {SETTLER_DEPLOYED
-              ? "Signs the order, then opens it on Base Sepolia (testnet gas only)."
+              ? "Approves test USDC if needed, signs the order, then opens it on Base Sepolia. Testnet only, no real funds."
               : "Gasless EIP-712 signature. No funds move until a solver fills the batch."}
           </p>
         </>

@@ -17,6 +17,18 @@ export const SETTLER_DEPLOYED = configuredSettler !== null;
 /** Launch + batch-auction factory on Base Sepolia, once deployed (NEXT_PUBLIC_CRUX_FACTORY). */
 export const FACTORY = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY);
 
+/** Circle USDC on Base Sepolia: what the testnet settler escrows. */
+export const TESTNET_USDC = "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as Address;
+
+/**
+ * CAIP-19 inputs the testnet settler can escrow (mirrors crux-contracts/script/Deploy.s.sol).
+ * The terminal quotes in Base USDC, which maps to Sepolia USDC on testnet.
+ */
+export const TESTNET_ESCROW_ASSETS: ReadonlySet<string> = new Set([
+  "eip155:8453/erc20:0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  "eip155:84532/erc20:0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+]);
+
 export const BATCH_WINDOW_SECONDS = 60;
 export const SLIPPAGE_BPS = 50;
 
