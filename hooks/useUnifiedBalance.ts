@@ -23,7 +23,10 @@ const aggregatorAbi = [
   },
 ] as const;
 
-export type BalanceStatus = "demo" | "loading" | "live" | "unavailable" | "unlinked";
+export type BalanceStatus = "demo" | "loading" | "live" | "unavailable" | "unlinked" | "soon";
+
+// Robinhood Chain has no public RPC yet; only query it once one is configured.
+const ROBINHOOD_LIVE = Boolean(process.env.NEXT_PUBLIC_ROBINHOOD_RPC);
 
 export type ChainBalanceView = {
   chain: ChainKey;
@@ -76,7 +79,11 @@ export function useUnifiedBalance(): UnifiedBalance {
 
   const baseNative = useBalance({ address, chainId: base.id, query });
   const bscNative = useBalance({ address, chainId: bsc.id, query });
-  const rhNative = useBalance({ address, chainId: robinhoodChain.id, query: { ...query, retry: 1 } });
+  const rhNative = useBalance({
+    address,
+    chainId: robinhoodChain.id,
+    query: { ...query, enabled: enabled && ROBINHOOD_LIVE, retry: 1 },
+  });
 
   const baseUsdc = useReadContract({
     address: USDC.base?.address,
@@ -153,7 +160,9 @@ export function useUnifiedBalance(): UnifiedBalance {
       // Solana balances need an SVM wallet; EVM connectors can't read them.
       { chain: "solana", label: "Solana", usd: 0, usdc: 0, native: null, status: "unlinked" },
       evmRow("bsc", "BSC", bscNative, bscUsdc, bnbUsd),
-      evmRow("robinhood", "Robinhood", rhNative, rhUsdc, ethUsd),
+      ROBINHOOD_LIVE
+        ? evmRow("robinhood", "Robinhood", rhNative, rhUsdc, ethUsd)
+        : { chain: "robinhood", label: "Robinhood", usd: 0, usdc: 0, native: null, status: "soon" },
     ]);
     const isLoading = rows.some((r) => r.status === "loading") || prices.isLoading;
     return build("live", address, isLoading, rows, total, null);

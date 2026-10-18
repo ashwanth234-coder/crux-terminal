@@ -10,6 +10,7 @@ const CHAIN_ICON = { base: BaseIcon, solana: SolanaIcon, bsc: BscIcon, robinhood
 const STATUS_NOTE: Partial<Record<BalanceStatus, string>> = {
   unavailable: "RPC offline",
   unlinked: "SVM wallet not linked",
+  soon: "Network coming soon",
 };
 
 const noopSubscribe = () => () => {};
