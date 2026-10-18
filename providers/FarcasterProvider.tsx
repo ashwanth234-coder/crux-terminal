@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useConnect, useConnection, useConnectors } from "wagmi";
 import {
   getMiniAppContext,
@@ -52,10 +52,27 @@ export function FarcasterProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Inside Farcaster the user already has a wallet: connect it without a picker.
+  // The first request can be interrupted (e.g. the host asking the user to pick a
+  // preferred wallet), so retry a couple of times before leaving it to the picker.
+  const attempts = useRef(0);
   useEffect(() => {
     if (!isFarcaster || isConnected) return;
     const fc = connectors.find((c) => c.id === "farcaster");
-    if (fc) connect({ connector: fc });
+    if (!fc) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tryConnect = () => {
+      attempts.current += 1;
+      connect(
+        { connector: fc },
+        {
+          onError: () => {
+            if (attempts.current < 3) timer = setTimeout(tryConnect, 2000);
+          },
+        },
+      );
+    };
+    tryConnect();
+    return () => clearTimeout(timer);
   }, [isFarcaster, isConnected, connectors, connect]);
 
   const value = useMemo<FarcasterState>(() => ({ isFarcaster, context, triggerSwap: triggerCruxIntent }), [isFarcaster, context]);

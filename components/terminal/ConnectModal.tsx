@@ -1,9 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useConnect, useConnectors, type Connector } from "wagmi";
 import { Modal, KineticLoader } from "@/components/ui/Modal";
+import { initFarcaster } from "@/lib/farcaster";
 
 const COPY: Record<string, { name: string; detail: string }> = {
+  farcaster: { name: "Farcaster Wallet", detail: "The wallet in this Farcaster client" },
   coinbaseWalletSDK: { name: "Coinbase Smart Wallet", detail: "Passkey sign-in · no extension" },
   walletConnect: { name: "WalletConnect", detail: "Scan with any mobile wallet" },
   injected: { name: "Browser Wallet", detail: "Injected provider" },
@@ -17,6 +20,15 @@ function ConnectorIcon({ connector }: { connector: Connector }) {
   if (connector.icon) {
     // eslint-disable-next-line @next/next/no-img-element -- wallet icons are data URIs supplied by EIP-6963
     return <img src={connector.icon} alt="" className="h-7 w-7 rounded-lg" />;
+  }
+  if (connector.id === "farcaster") {
+    return (
+      <span className="grid h-7 w-7 place-items-center rounded-lg bg-[#855DCD]">
+        <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+          <path d="M7 6.5h10v11h-1.8v-4.6a3.2 3.2 0 0 0-6.4 0v4.6H7v-11Z" fill="white" />
+        </svg>
+      </span>
+    );
   }
   if (connector.id === "coinbaseWalletSDK") {
     return (
@@ -51,9 +63,22 @@ export function ConnectModal({ open, onClose }: { open: boolean; onClose: () => 
   });
 
   // The Farcaster connector auto-connects inside a client and is useless elsewhere.
+  const [inMiniApp, setInMiniApp] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void initFarcaster().then((v) => live && setInMiniApp(v));
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  // Inside a Farcaster client its own wallet leads the list (a manual fallback if
+  // auto-connect was interrupted); elsewhere it is useless, so it is hidden.
   // Hide the generic injected entry when EIP-6963 already discovered named wallets.
   const discovered = all.some((c) => c.type === "injected" && c.id !== "injected");
-  const connectors = all.filter((c) => c.id !== "farcaster" && !(discovered && c.id === "injected"));
+  const connectors = all
+    .filter((c) => (c.id === "farcaster" ? inMiniApp : !(discovered && c.id === "injected")))
+    .sort((a, b) => Number(b.id === "farcaster") - Number(a.id === "farcaster"));
 
   const close = () => {
     reset();
