@@ -1,0 +1,88 @@
+import { encodeAbiParameters, keccak256, toHex, type Address, type Hex } from "viem";
+
+const PLACEHOLDER_SETTLER = "0x0000000000000000000000000000000000c7c500";
+
+/** Origin settler contract (ERC-7683). Placeholder until the settler is deployed. */
+export const SETTLER = (process.env.NEXT_PUBLIC_CRUX_SETTLER ?? PLACEHOLDER_SETTLER) as Address;
+export const SETTLER_DEPLOYED = SETTLER.toLowerCase() !== PLACEHOLDER_SETTLER;
+
+export const BATCH_WINDOW_SECONDS = 60;
+export const SLIPPAGE_BPS = 50;
+
+const ORDER_DATA_TYPESTRING =
+  "CruxBatchOrder(bytes32 inputAsset,uint256 inputAmount,bytes32 outputAsset,uint256 minOutputAmount,uint256 destinationChainId,uint32 batchWindow)";
+
+/** keccak256 of the order-data type string, per ERC-7683's `orderDataType`. */
+export const ORDER_DATA_TYPE = keccak256(toHex(ORDER_DATA_TYPESTRING));
+
+/**
+ * Assets are referenced by keccak256(CAIP-19 id) so EVM and SVM assets fit the
+ * same bytes32 field.
+ */
+export function assetId(caip19: string): Hex {
+  return keccak256(toHex(caip19));
+}
+
+/** EIP-712 types for ERC-7683 `GaslessCrossChainOrder`. */
+export const GASLESS_ORDER_TYPES = {
+  GaslessCrossChainOrder: [
+    { name: "originSettler", type: "address" },
+    { name: "user", type: "address" },
+    { name: "nonce", type: "uint256" },
+    { name: "originChainId", type: "uint256" },
+    { name: "openDeadline", type: "uint32" },
+    { name: "fillDeadline", type: "uint32" },
+    { name: "orderDataType", type: "bytes32" },
+    { name: "orderData", type: "bytes" },
+  ],
+} as const;
+
+export type IntentDraft = {
+  user: Address;
+  /** Chain the wallet is on; the EIP-712 domain must match it. */
+  chainId: number;
+  inputCaip19: string;
+  inputAmount: bigint;
+  outputCaip19: string;
+  minOutputAmount: bigint;
+  destinationChainId: number;
+};
+
+export function buildGaslessOrder(draft: IntentDraft) {
+  const now = Math.floor(Date.now() / 1000);
+  const orderData = encodeAbiParameters(
+    [
+      { type: "bytes32" },
+      { type: "uint256" },
+      { type: "bytes32" },
+      { type: "uint256" },
+      { type: "uint256" },
+      { type: "uint32" },
+    ],
+    [
+      assetId(draft.inputCaip19),
+      draft.inputAmount,
+      assetId(draft.outputCaip19),
+      draft.minOutputAmount,
+      BigInt(draft.destinationChainId),
+      BATCH_WINDOW_SECONDS,
+    ],
+  );
+
+  return {
+    domain: { name: "CruxSettler", version: "1", chainId: draft.chainId, verifyingContract: SETTLER },
+    types: GASLESS_ORDER_TYPES,
+    primaryType: "GaslessCrossChainOrder" as const,
+    message: {
+      originSettler: SETTLER,
+      user: draft.user,
+      nonce: BigInt(Date.now()),
+      originChainId: BigInt(draft.chainId),
+      // Intent must be opened inside the current batch window and filled within 10 minutes.
+      openDeadline: now + BATCH_WINDOW_SECONDS,
+      fillDeadline: now + 600,
+      orderDataType: ORDER_DATA_TYPE,
+      orderData,
+    },
+  };
+}

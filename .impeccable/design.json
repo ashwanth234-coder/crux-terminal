@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-18T00:00:00Z",
+  "title": "Design System: Crux",
+  "extensions": {
+    "colorMeta": {
+      "acid": { "role": "primary", "displayName": "Acid Lime", "canonical": "#d4f933", "tonalRamp": ["#262e05", "#3e4b09", "#5c6f0f", "#7f9a15", "#a9c81f", "#d4f933", "#e2ff5c", "#f3ffc2"] },
+      "acid-deep": { "role": "primary", "displayName": "Pressed Acid", "canonical": "#a9c81f", "tonalRamp": ["#1f2604", "#323e07", "#4a5c0c", "#678012", "#a9c81f", "#c0dc4a", "#d6ec83", "#eef7c8"] },
+      "void": { "role": "neutral", "displayName": "Void", "canonical": "#050505", "tonalRamp": ["#050505", "#0a0a0a", "#141414", "#262626", "#404040", "#666666", "#a3a3a3", "#ededed"] },
+      "void-2": { "role": "neutral", "displayName": "Void Raised", "canonical": "#0a0a0a", "tonalRamp": ["#050505", "#0a0a0a", "#141414", "#262626", "#404040", "#666666", "#a3a3a3", "#ededed"] },
+      "panel": { "role": "neutral", "displayName": "Panel", "canonical": "#0c0d0f", "tonalRamp": ["#060708", "#0c0d0f", "#16181b", "#25282d", "#3d4148", "#646972", "#a2a6ae", "#eceef2"] },
+      "panel-2": { "role": "neutral", "displayName": "Panel Raised", "canonical": "#111215", "tonalRamp": ["#060708", "#111215", "#1a1c20", "#282b31", "#3f434b", "#666b75", "#a3a7b0", "#eceef2"] },
+      "line": { "role": "neutral", "displayName": "Hairline", "canonical": "#1e2024", "tonalRamp": ["#0b0c0d", "#141518", "#1e2024", "#2a2d33", "#43474f", "#686d77", "#a5a9b1", "#edeef1"] },
+      "line-2": { "role": "neutral", "displayName": "Hairline Strong", "canonical": "#2a2d33", "tonalRamp": ["#0b0c0d", "#141518", "#1e2024", "#2a2d33", "#43474f", "#686d77", "#a5a9b1", "#edeef1"] },
+      "chrome": { "role": "neutral", "displayName": "Titanium Chrome", "canonical": "#e0e2ec", "tonalRamp": ["#1b1c22", "#2f313a", "#4a4d58", "#6b6f7c", "#9497a4", "#bec1cc", "#e0e2ec", "#f6f7fb"] },
+      "bright": { "role": "neutral", "displayName": "Bright Chrome", "canonical": "#f1f2f6", "tonalRamp": ["#1b1c22", "#2f313a", "#4a4d58", "#6b6f7c", "#9497a4", "#bec1cc", "#e0e2ec", "#f1f2f6"] },
+      "steel": { "role": "neutral", "displayName": "Steel", "canonical": "#7b808a", "tonalRamp": ["#17181b", "#2a2c31", "#43464d", "#5f636b", "#7b808a", "#9ea2aa", "#c3c6cc", "#eceef0"] },
+      "muted": { "role": "neutral", "displayName": "Muted", "canonical": "#8a8f98", "tonalRamp": ["#17181b", "#2a2c31", "#43464d", "#62666e", "#8a8f98", "#a8acb3", "#c9ccd1", "#eeeff1"] },
+      "dim": { "role": "neutral", "displayName": "Dim", "canonical": "#5b6069", "tonalRamp": ["#141518", "#24262a", "#3a3d43", "#5b6069", "#7a7f88", "#9da1a8", "#c2c5ca", "#ecedef"] },
+      "up": { "role": "semantic", "displayName": "Up", "canonical": "#b6e83a", "tonalRamp": ["#222e07", "#38490d", "#536c14", "#72941c", "#94bf26", "#b6e83a", "#d0f47c", "#eefbcd"] },
+      "down": { "role": "semantic", "displayName": "Down", "canonical": "#ff6b5b", "tonalRamp": ["#3a0e09", "#5c1710", "#86241a", "#b33427", "#e24838", "#ff6b5b", "#ff9e93", "#ffdcd8"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Statement headlines (hero, token, borderless) at 122% width, bright over steel." },
+      "headline": { "displayName": "Headline", "purpose": "Mechanics h3 and Experience h2 at 108% width so two-line breaks hold." },
+      "title": { "displayName": "Title", "purpose": "Modal titles and mobile nav rows." },
+      "body": { "displayName": "Body", "purpose": "Section copy in chrome at 65-70%, max 26-29rem." },
+      "label": { "displayName": "Label", "purpose": "Nav links, captions, instrument labels; sentence case." },
+      "numeric": { "displayName": "Numeric", "purpose": "Tape rows, wayfinding numerals, prices; tabular figures." },
+      "numeric-instrument": { "displayName": "Numeric Instrument", "purpose": "The batch countdown and large data figures." }
+    },
+    "shadows": [
+      { "name": "glass-lift", "value": "0 40px 120px -40px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.04)", "purpose": "Terminal card lifted off the void." },
+      { "name": "glass-lift-modal", "value": "0 40px 120px -30px rgba(0,0,0,0.95), inset 0 1px 0 rgba(255,255,255,0.05)", "purpose": "Modal panel." },
+      { "name": "acid-hover", "value": "0 0 32px -4px rgba(212,249,51,0.55)", "purpose": "Primary button hover only." },
+      { "name": "clearing-glow", "value": "0 8px 40px -12px rgba(212,249,51,0.55)", "purpose": "Batch instrument during the clearing second." },
+      { "name": "heartbeat-glow", "value": "0 0 14px 2px rgba(212,249,51,0.8)", "purpose": "Header heartbeat fill during the clearing second." },
+      { "name": "signal-trail", "value": "0 0 12px rgba(212,249,51,0.7)", "purpose": "Value pulse travelling the token pipeline." }
+    ],
+    "motion": [
+      { "name": "rise", "value": "0.9s cubic-bezier(0.2, 0.7, 0.1, 1)", "purpose": "Entrance: 18px rise with 6px blur clearing; staggered about 80ms." },
+      { "name": "line-up", "value": "1.1s cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Headline lines revealed upward from a clipped mask." },
+      { "name": "state", "value": "300ms ease-out", "purpose": "Hover and color transitions on buttons and links." },
+      { "name": "clock-tick", "value": "1000ms linear", "purpose": "Heartbeat and instrument fill per second of the batch window." },
+      { "name": "clearing", "value": "500ms", "purpose": "Border and glow change into and out of the clearing beat." },
+      { "name": "tape", "value": "70s linear infinite", "purpose": "Intent tape scroll." },
+      { "name": "pulse-soft", "value": "2.4s ease-in-out infinite", "purpose": "Live-status dot breathing." },
+      { "name": "flow", "value": "3.2s linear infinite", "purpose": "Pipeline signal trail and node pulse cadence." },
+      { "name": "kinetic", "value": "0.9s ease-in-out infinite", "purpose": "Four-bar working loader for signing and routing." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" },
+      { "name": "container", "value": "1440px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Acid pill for the primary action; the only filled acid object on a screen.",
+      "html": "<a class=\"ds-btn-primary\" href=\"#\">Explore the protocol <svg viewBox=\"0 0 16 16\" fill=\"none\" width=\"14\" height=\"14\" aria-hidden=\"true\"><path d=\"M4.5 11.5 11.5 4.5M6 4.5h5.5V10\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></a>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 8px; height: 48px; padding: 0 24px; border-radius: 999px; background: #d4f933; color: #050505; font-family: Archivo, ui-sans-serif, sans-serif; font-size: 14px; font-weight: 500; text-decoration: none; white-space: nowrap; box-shadow: 0 0 0 0 rgba(212,249,51,0); transition: background-color .3s ease-out, box-shadow .3s ease-out, transform .3s ease-out; } .ds-btn-primary svg { transition: transform .3s; } .ds-btn-primary:hover { background: #e2ff5c; box-shadow: 0 0 32px -4px rgba(212,249,51,0.55); } .ds-btn-primary:hover svg { transform: translate(2px,-2px); } .ds-btn-primary:active { transform: scale(0.98); } .ds-btn-primary:focus-visible { outline: 2px solid #d4f933; outline-offset: 2px; }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Hairline pill for secondary actions and per-section links.",
+      "html": "<a class=\"ds-btn-outline\" href=\"#\">Token economics <svg viewBox=\"0 0 16 16\" fill=\"none\" width=\"14\" height=\"14\" aria-hidden=\"true\"><path d=\"M3 8h10M9 4l4 4-4 4\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></a>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; gap: 8px; height: 48px; padding: 0 24px; border-radius: 999px; border: 1px solid #2a2d33; background: transparent; color: #e0e2ec; font-family: Archivo, ui-sans-serif, sans-serif; font-size: 14px; font-weight: 500; text-decoration: none; transition: border-color .3s ease-out, background-color .3s ease-out, transform .3s; } .ds-btn-outline:hover { border-color: rgba(224,226,236,0.6); background: rgba(255,255,255,0.04); } .ds-btn-outline:active { transform: scale(0.98); } .ds-btn-outline:focus-visible { outline: 2px solid #d4f933; outline-offset: 2px; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Frameless muted text action.",
+      "html": "<button class=\"ds-btn-ghost\" type=\"button\">Disconnect</button>",
+      "css": ".ds-btn-ghost { height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: transparent; color: #8a8f98; font-family: Archivo, ui-sans-serif, sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; transition: color .3s ease-out; } .ds-btn-ghost:hover { color: #e0e2ec; } .ds-btn-ghost:focus-visible { outline: 2px solid #d4f933; outline-offset: 2px; }"
+    },
+    {
+      "name": "Amount Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Hairline field with a mono value, ticker chip and acid caret.",
+      "html": "<label class=\"ds-field\"><input class=\"ds-field-input\" value=\"100\" inputmode=\"decimal\" aria-label=\"Amount\"><span class=\"ds-chip\">NOVA</span></label>",
+      "css": ".ds-field { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid #1e2024; border-radius: 8px; background: transparent; transition: border-color .3s; } .ds-field:focus-within { border-color: #2a2d33; } .ds-field-input { flex: 1; min-width: 0; border: 0; background: transparent; color: #e0e2ec; caret-color: #d4f933; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 22px; font-variant-numeric: tabular-nums; outline: none; } .ds-chip { padding: 4px 8px; border: 1px solid #2a2d33; border-radius: 999px; color: #8a8f98; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10px; }"
+    },
+    {
+      "name": "Header Navigation",
+      "kind": "nav",
+      "refersTo": "header",
+      "description": "Blurred void bar with acid-underline links and the batch heartbeat baseline.",
+      "html": "<header class=\"ds-nav\"><nav><a href=\"#\">Protocol</a><a href=\"#\">Technology</a><a href=\"#\">Token</a></nav><a class=\"ds-nav-cta\" href=\"#\">Launch App</a><span class=\"ds-nav-beat\"><span></span></span></header>",
+      "css": ".ds-nav { position: relative; display: flex; align-items: center; justify-content: space-between; height: 72px; padding: 0 48px; background: rgba(5,5,5,0.8); backdrop-filter: blur(24px); } .ds-nav nav { display: flex; gap: 32px; } .ds-nav nav a { position: relative; color: rgba(224,226,236,0.7); font-family: Archivo, ui-sans-serif, sans-serif; font-size: 13px; text-decoration: none; transition: color .3s; } .ds-nav nav a::after { content: ''; position: absolute; left: 0; bottom: -6px; height: 1px; width: 100%; background: #d4f933; transform: scaleX(0); transform-origin: left; transition: transform .3s; } .ds-nav nav a:hover { color: #e0e2ec; } .ds-nav nav a:hover::after { transform: scaleX(1); } .ds-nav nav a:focus-visible { outline: 2px solid #d4f933; outline-offset: 3px; border-radius: 6px; } .ds-nav-cta { display: inline-flex; align-items: center; height: 40px; padding: 0 20px; border-radius: 999px; background: #d4f933; color: #050505; font-family: Archivo, ui-sans-serif, sans-serif; font-size: 13px; font-weight: 500; text-decoration: none; } .ds-nav-beat { position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: #1e2024; } .ds-nav-beat span { display: block; height: 1px; width: 62%; background: #d4f933; }"
+    },
+    {
+      "name": "Batch Instrument",
+      "kind": "custom",
+      "refersTo": "batch-instrument",
+      "description": "Batch number and acid mono countdown; flares acid on the clearing second (hover simulates the beat).",
+      "html": "<div class=\"ds-batch\" role=\"timer\"><div class=\"ds-batch-cell\"><p class=\"ds-batch-title\"><span class=\"ds-dot\"></span>Batch <span class=\"ds-mono\">#48,213</span></p><p class=\"ds-batch-sub\">One uniform price · simulated</p></div><div class=\"ds-batch-cell ds-batch-right\"><p class=\"ds-batch-sub\">Clears in</p><p class=\"ds-batch-count\">00:37</p></div><span class=\"ds-batch-fill\"></span></div>",
+      "css": ".ds-batch { position: relative; display: inline-flex; overflow: hidden; border: 1px solid #2a2d33; border-radius: 12px; background: rgba(5,5,5,0.6); backdrop-filter: blur(12px); font-family: Archivo, ui-sans-serif, sans-serif; transition: border-color .5s, box-shadow .5s; } .ds-batch:hover { border-color: rgba(212,249,51,0.7); box-shadow: 0 8px 40px -12px rgba(212,249,51,0.55); } .ds-batch-cell { display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 12px 16px; } .ds-batch-right { border-left: 1px solid #1e2024; text-align: right; } .ds-batch-title { margin: 0; display: flex; align-items: center; gap: 8px; color: #e0e2ec; font-size: 12px; } .ds-batch-sub { margin: 0; color: #8a8f98; font-size: 11px; } .ds-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; } .ds-dot { width: 6px; height: 6px; border-radius: 999px; background: #d4f933; } .ds-batch-count { margin: 0; color: #d4f933; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 24px; line-height: 1; font-variant-numeric: tabular-nums; } .ds-batch-fill { position: absolute; left: 0; bottom: 0; height: 1px; width: 38%; background: rgba(212,249,51,0.7); }"
+    },
+    {
+      "name": "Intent Tape",
+      "kind": "custom",
+      "refersTo": "intent-tape",
+      "description": "Full-bleed simulated fill feed in mono, labelled as simulated.",
+      "html": "<div class=\"ds-tape\"><div class=\"ds-tape-label\"><span class=\"ds-dot\"></span>Simulated feed</div><ul class=\"ds-tape-row\"><li><span class=\"d\">0x4f…a2</span><span class=\"b\">BUY</span><span class=\"c\">1,204.5 $NOVA</span><span class=\"m\">Solana → Base</span><span class=\"d\">0.84s</span></li><li><span class=\"d\">0x91…0c</span><span class=\"s\">SELL</span><span class=\"c\">880.0 $FORM</span><span class=\"m\">BSC → Base</span><span class=\"d\">1.12s</span></li></ul></div>",
+      "css": ".ds-tape { display: flex; border-top: 1px solid #1e2024; border-bottom: 1px solid #1e2024; background: rgba(5,5,5,0.7); overflow: hidden; transition: border-color .5s; } .ds-tape:hover { border-color: rgba(212,249,51,0.5); } .ds-tape-label { display: flex; align-items: center; gap: 8px; padding: 0 24px; border-right: 1px solid #1e2024; background: #050505; color: #8a8f98; font-family: Archivo, ui-sans-serif, sans-serif; font-size: 11px; white-space: nowrap; } .ds-dot { width: 6px; height: 6px; border-radius: 999px; background: #d4f933; } .ds-tape-row { display: flex; gap: 40px; margin: 0; padding: 12px 0 12px 32px; list-style: none; } .ds-tape-row li { display: flex; gap: 12px; white-space: nowrap; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; font-variant-numeric: tabular-nums; } .ds-tape .d { color: #5b6069; } .ds-tape .b { color: #d4f933; } .ds-tape .s { color: #ff6b5b; } .ds-tape .c { color: #e0e2ec; } .ds-tape .m { color: #8a8f98; }"
+    },
+    {
+      "name": "Terminal Card",
+      "kind": "card",
+      "refersTo": "terminal-card",
+      "description": "Sheened panel lifted off the void, split internally by hairlines.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-bar\"><span class=\"on\">Trade</span><span>Discover</span><span>Portfolio</span></div><div class=\"ds-card-body\"><p class=\"ds-card-k\">Unified balance</p><p class=\"ds-card-v\">$12,480.22</p></div></div>",
+      "css": ".ds-card { overflow: hidden; border: 1px solid #1e2024; border-radius: 16px; background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0) 40%), #0c0d0f; box-shadow: 0 40px 120px -40px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.04); color: #e0e2ec; font-family: Archivo, ui-sans-serif, sans-serif; } .ds-card-bar { display: flex; gap: 20px; padding: 12px 20px; border-bottom: 1px solid #1e2024; font-size: 11.5px; color: #8a8f98; } .ds-card-bar .on { color: #e0e2ec; box-shadow: inset 0 -1px 0 #d4f933; padding-bottom: 4px; } .ds-card-body { padding: 20px; } .ds-card-k { margin: 0; color: #8a8f98; font-size: 12px; } .ds-card-v { margin: 6px 0 0; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 28px; font-variant-numeric: tabular-nums; color: #f1f2f6; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Clearing Room",
+    "overview": "Crux is a dark trading floor seen through one instrument. Everything sits on void black, divided by hairlines rather than boxes, and the page keeps time on the protocol's own 60-second batch clock: a heartbeat line under the nav fills across each window, a batch instrument counts down, and a simulated intent tape scrolls fills. When a batch clears, every clock-bound surface flares acid together for one second, then falls quiet. That single synchronized beat is the system's signature; the rest of the page stays restrained so it can land.\n\nLettering is titanium chrome in solid values, never gradient. Emphasis comes from two tones of the same chrome (bright for the claim, steel for its counterweight line) and from Archivo's width axis: headlines are set extended, so the voice reads engineered and wide rather than loud. Numbers are the only thing in JetBrains Mono, which makes every price, count, address and countdown read as data at a glance.\n\nDepth is cinematic and physical, not decorative: chrome WebGL objects lit by a procedural softbox studio, sitting in radial key-light falloffs that bleed off-canvas. Interface surfaces stay nearly flat, layered by tone and hairline. Density is low in marketing sections and high inside the terminal card, where the same tokens compress into an app.",
+    "keyCharacteristics": [
+      "Void black field, hairline structure (#1e2024 / #2a2d33), no card grids or stat tiles.",
+      "Acid lime is a signal, not a palette: actions, live markers, and the clearing pulse.",
+      "Two-tone chrome headlines (bright over steel) at extended width.",
+      "Mono strictly for numerals; all words in Archivo.",
+      "One synchronized clearing beat across header, instrument, tape and 3D.",
+      "Chrome 3D under procedural studio light; everything live-looking is labelled simulated."
+    ],
+    "rules": [
+      { "name": "The Signal Not Surface Rule", "body": "Acid never fills a panel, section or decorative shape. It appears as a primary button fill, a 1-6px live marker, a hairline, a glow, or a single active numeral. If acid covers more than a button's worth of area on a screen, something is wrong.", "section": "colors" },
+      { "name": "The One Beat Rule", "body": "The clearing second (clock.left <= 1) is one synchronized moment: header heartbeat glows, batch instrument border goes acid/70 with an acid shadow, tape border goes acid/50 and its label reads \"Batch clearing\", the hero knot filament and monolith beam flare. New clock-bound surfaces join this beat; they never pulse on their own schedule.", "section": "colors" },
+      { "name": "The Solid Chrome Rule", "body": "Lettering is always a solid value. Emphasis is bright vs steel, never gradient text.", "section": "colors" },
+      { "name": "The Numbers Only Rule", "body": "JetBrains Mono carries counts, prices, quantities, addresses, chain-agnostic tickers in data rows, and countdowns. Every word, including labels beside those numbers, is Archivo.", "section": "typography" },
+      { "name": "The Two-Tone Headline Rule", "body": "Multi-line headlines put the claim in bright and the answer in steel (\"One balance.\" / \"Every chain.\"). One break, two values, no third tone.", "section": "typography" },
+      { "name": "The Width Rule", "body": "Headline width is a system choice: 122% for statement headlines, 108% where a two-line break must hold in a narrow column. Do not set display type at default width.", "section": "typography" },
+      { "name": "The Flat Until Live Rule", "body": "Interface surfaces carry no colored shadow at rest. Acid light appears only in response to hover on an action or to the batch clock.", "section": "elevation" },
+      { "name": "The Studio Light Rule", "body": "3D chrome is lit by the shared procedural softbox environment (overhead box, strip glints, cool floor bounce, one acid ring), baked once to a 256px cube map. No downloaded HDRs.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep acid to primary actions, live markers, the active wayfinding numeral and the clearing beat.",
+      "Do bind any new live-looking element to the shared batch clock and flare it on the clearing second only.",
+      "Do label every live-looking feed, count or clock \"simulated\" in visible copy and in its accessible name.",
+      "Do set statement headlines in Archivo at 122% width, two-line headlines in narrow columns at 108%, bright over steel.",
+      "Do set every numeral (price, count, address, countdown) in JetBrains Mono with tabular figures, and every word in Archivo.",
+      "Do divide space with 1px hairlines (line by default, line-2 for interactive outlines).",
+      "Do light 3D chrome with the shared procedural studio; mount canvases lazily near the viewport, pause offscreen, instance repeated meshes, and track labels with an HTML overlay rather than in-scene HTML.",
+      "Do collapse pinned or scrubbed motion to plain stacked scroll under prefers-reduced-motion and on mobile."
+    ],
+    "donts": [
+      "Don't use gradient text; lettering is a solid value.",
+      "Don't fill panels, sections or decorative shapes with acid, or give a resting surface an acid glow.",
+      "Don't build grids of equal cards or rows of stat tiles; show the mechanism (clock, tape, pipeline, equation) instead.",
+      "Don't put kicker or eyebrow labels above headings; section numbers appear only as wayfinding (header chapter chip, mechanics rail).",
+      "Don't set words in the monospace or numerals for data in Archivo body text.",
+      "Don't let a clock-bound element pulse on its own timer, out of step with the batch."
+    ]
+  }
+}
