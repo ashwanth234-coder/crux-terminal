@@ -5,6 +5,7 @@ import { Logo } from "./Logo";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { NAV_LINKS } from "@/lib/site";
 import { useBatchClock } from "@/lib/batch";
+import { LaunchTokenButton } from "@/components/launch/LaunchTokenButton";
 
 /** Chapters announce themselves with data-chapter="NN Label" on their section or panel. */
 function useActiveChapter() {
@@ -157,6 +158,9 @@ export function Header() {
               </a>
             </li>
           ))}
+          <li className="pt-5">
+            <LaunchTokenButton onOpen={() => setOpen(false)} className={buttonClass("outline", "md", "w-full")} />
+          </li>
         </ul>
       </div>
     </header>

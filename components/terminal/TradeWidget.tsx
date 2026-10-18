@@ -163,7 +163,7 @@ export function TradeWidget() {
           onChange={setSource}
           availableFor={balance.availableFor}
           label={side === "buy" ? "Pay with" : "Receive to"}
-          unavailable={balance.mode === "live" ? { "solana-usdc": "Link a Solana wallet to use" } : {}}
+          unavailable={balance.mode === "live" && !balance.solana.connected ? { "solana-usdc": "Connect a Solana wallet to use" } : {}}
         />
       </div>
 

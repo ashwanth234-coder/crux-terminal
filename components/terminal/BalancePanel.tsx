@@ -4,13 +4,14 @@ import { useSyncExternalStore } from "react";
 import { BaseIcon, BscIcon, RobinhoodIcon, SolanaIcon } from "@/components/ui/icons";
 import { useUnifiedBalance, type BalanceStatus } from "@/hooks/useUnifiedBalance";
 import { usd } from "@/lib/tokens";
+import { useSolanaConnectModal } from "@/providers/SolanaProvider";
 
 const CHAIN_ICON = { base: BaseIcon, solana: SolanaIcon, bsc: BscIcon, robinhood: RobinhoodIcon } as const;
 
 const STATUS_NOTE: Partial<Record<BalanceStatus, string>> = {
   unavailable: "RPC offline",
-  unlinked: "SVM wallet not linked",
   soon: "Network coming soon",
+  "evm-off": "EVM wallet not connected",
 };
 
 const noopSubscribe = () => () => {};
@@ -19,6 +20,7 @@ export function BalancePanel() {
   // Wallet state is client-only; render the demo snapshot until hydrated so SSR matches.
   const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
   const live = useUnifiedBalance();
+  const { openSolana } = useSolanaConnectModal();
   const b = hydrated ? live : { ...live, mode: "demo" as const };
   const [whole, cents] = b.totalFormatted.split(".");
   const up = (b.change24h ?? 0) >= 0;
@@ -65,7 +67,23 @@ export function BalancePanel() {
                 <span className="flex min-w-0 items-center gap-2.5 text-chrome/90">
                   <Icon className="h-4 w-4 shrink-0" />
                   <span className="truncate">{row.label}</span>
-                  {note && <span className="truncate font-mono text-[9.5px] text-dim">{note}</span>}
+                  {note && <span className="truncate text-[10.5px] text-dim">{note}</span>}
+                  {row.chain === "solana" && hydrated && (
+                    <button
+                      type="button"
+                      onClick={openSolana}
+                      className={`shrink-0 rounded-full border px-2 py-0.5 text-[10.5px] transition-colors ${
+                        b.solana.connected
+                          ? "border-line-2 font-mono text-muted hover:border-chrome/40 hover:text-chrome"
+                          : "border-acid/40 text-acid hover:border-acid hover:bg-acid/10"
+                      }`}
+                      title={b.solana.connected ? "Manage Solana wallet" : "Connect a Solana wallet"}
+                    >
+                      {b.solana.connected && b.solana.publicKey
+                        ? `${b.solana.publicKey.slice(0, 4)}…${b.solana.publicKey.slice(-4)}`
+                        : "Connect Solana"}
+                    </button>
+                  )}
                 </span>
                 {row.status === "loading" ? (
                   <span className="h-3 w-16 rounded bg-[linear-gradient(90deg,#1e2024,#2a2d33,#1e2024)] bg-[length:200%_100%] animate-shimmer" />

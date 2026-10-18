@@ -1,10 +1,21 @@
-import { encodeAbiParameters, keccak256, toHex, type Address, type Hex } from "viem";
+import { encodeAbiParameters, isAddress, keccak256, toHex, type Address, type Hex } from "viem";
 
+// Only used as the EIP-712 verifyingContract for local signature checks while
+// nothing is deployed; never sent to a chain.
 const PLACEHOLDER_SETTLER = "0x0000000000000000000000000000000000c7c500";
 
-/** Origin settler contract (ERC-7683). Placeholder until the settler is deployed. */
-export const SETTLER = (process.env.NEXT_PUBLIC_CRUX_SETTLER ?? PLACEHOLDER_SETTLER) as Address;
-export const SETTLER_DEPLOYED = SETTLER.toLowerCase() !== PLACEHOLDER_SETTLER;
+function envAddress(value: string | undefined): Address | null {
+  return value && isAddress(value) ? (value as Address) : null;
+}
+
+const configuredSettler = envAddress(process.env.NEXT_PUBLIC_CRUX_SETTLER);
+
+/** ERC-7683 origin settler on Base Sepolia, once deployed (NEXT_PUBLIC_CRUX_SETTLER). */
+export const SETTLER = (configuredSettler ?? PLACEHOLDER_SETTLER) as Address;
+export const SETTLER_DEPLOYED = configuredSettler !== null;
+
+/** Launch + batch-auction factory on Base Sepolia, once deployed (NEXT_PUBLIC_CRUX_FACTORY). */
+export const FACTORY = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY);
 
 export const BATCH_WINDOW_SECONDS = 60;
 export const SLIPPAGE_BPS = 50;

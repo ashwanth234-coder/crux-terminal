@@ -2,6 +2,7 @@ import { MobiusHero } from "@/components/canvas";
 import { ArrowUpRight, LinkButton } from "@/components/ui/Button";
 import { CHAINS } from "@/components/ui/icons";
 import { BatchStatus } from "./BatchStatus";
+import { LaunchTokenButton } from "@/components/launch/LaunchTokenButton";
 import { IntentTape } from "./IntentTape";
 
 const LINES = [
@@ -48,7 +49,8 @@ export function Hero() {
             <LinkButton href="#protocol">
               Explore the protocol <ArrowUpRight />
             </LinkButton>
-            <LinkButton href="#technology" variant="outline">
+            <LaunchTokenButton />
+            <LinkButton href="#technology" variant="ghost" className="px-3">
               <span className="grid h-6 w-6 place-items-center rounded-full border border-chrome/40">
                 <svg viewBox="0 0 10 10" className="ml-px h-2 w-2" aria-hidden="true">
                   <path d="M2 1 8.5 5 2 9Z" fill="currentColor" />

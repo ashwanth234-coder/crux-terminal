@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { BatchAuctionRings, DerivativesGrid, GlassHelix, LiquidVortex } from "@/components/canvas";
 import { ArrowRight, LinkButton } from "@/components/ui/Button";
 import { HyperliquidIcon } from "@/components/ui/icons";
-import { AuctionClock } from "./AuctionClock";
+import { BatchAuctionTracker } from "@/components/terminal/BatchAuctionTracker";
 import { MechanicsTrack } from "./MechanicsTrack";
 
 type Mechanic = {
@@ -36,7 +36,7 @@ const MECHANICS: Mechanic[] = [
     visual: (
       <>
         <BatchAuctionRings className="absolute inset-0" />
-        <AuctionClock />
+        <BatchAuctionTracker />
       </>
     ),
   },

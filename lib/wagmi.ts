@@ -1,5 +1,5 @@
 import { createConfig, http, type CreateConnectorFn } from "wagmi";
-import { base, bsc } from "wagmi/chains";
+import { base, baseSepolia, bsc } from "wagmi/chains";
 import { coinbaseWallet } from "wagmi/connectors/coinbaseWallet";
 import { injected } from "wagmi/connectors/injected";
 import { walletConnect } from "wagmi/connectors/walletConnect";
@@ -28,12 +28,14 @@ const connectors: CreateConnectorFn[] = [
 ];
 
 export const wagmiConfig = createConfig({
-  chains: [base, bsc, robinhoodChain],
+  // Mainnets for live balances and Farcaster swaps; Base Sepolia for testnet settlement.
+  chains: [base, bsc, robinhoodChain, baseSepolia],
   connectors,
   transports: {
     [base.id]: http(),
     [bsc.id]: http(),
     [robinhoodChain.id]: http(),
+    [baseSepolia.id]: http(),
   },
   ssr: true,
 });

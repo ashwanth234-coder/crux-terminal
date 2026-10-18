@@ -1,5 +1,5 @@
 import { defineChain, type Address } from "viem";
-import { base, bsc } from "viem/chains";
+import { base, baseSepolia, bsc } from "viem/chains";
 
 /**
  * Robinhood Chain (EVM spoke). The default RPC host does not resolve publicly
@@ -15,7 +15,11 @@ export const robinhoodChain = defineChain({
   },
 });
 
-export const SUPPORTED_CHAINS = [base, bsc, robinhoodChain] as const;
+export const SUPPORTED_CHAINS = [base, bsc, robinhoodChain, baseSepolia] as const;
+
+/** Testnet home of the Crux settler and batch-auction factory. */
+export const TESTNET = baseSepolia;
+export const TESTNET_EXPLORER = "https://sepolia.basescan.org";
 
 export type ChainKey = "base" | "solana" | "bsc" | "robinhood";
 
@@ -35,6 +39,7 @@ export const USDC: Partial<Record<Exclude<ChainKey, "solana">, UsdcSpec>> = {
 export const PRICE_FEEDS = {
   ethUsd: { chainId: base.id, address: "0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70" as Address },
   bnbUsd: { chainId: bsc.id, address: "0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE" as Address },
+  solUsd: { chainId: base.id, address: "0x975043adBb80fc32276CbF9Bbcfd4A601a12462D" as Address },
 } as const;
 
 export const CHAIN_ID: Record<Exclude<ChainKey, "solana">, number> = {

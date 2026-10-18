@@ -5,6 +5,8 @@ import { WagmiProvider } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { wagmiConfig } from "@/lib/wagmi";
 import { ConnectModal } from "@/components/terminal/ConnectModal";
+import { SolanaProvider } from "./SolanaProvider";
+import { LaunchProvider } from "./LaunchProvider";
 
 type ConnectModalContext = { openConnect: () => void };
 
@@ -28,10 +30,12 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <ConnectCtx.Provider value={value}>
-          {children}
-          <ConnectModal open={open} onClose={() => setOpen(false)} />
-        </ConnectCtx.Provider>
+        <SolanaProvider>
+          <ConnectCtx.Provider value={value}>
+            <LaunchProvider>{children}</LaunchProvider>
+            <ConnectModal open={open} onClose={() => setOpen(false)} />
+          </ConnectCtx.Provider>
+        </SolanaProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );

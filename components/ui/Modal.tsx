@@ -11,10 +11,12 @@ type ModalProps = {
   children: ReactNode;
   /** Blocks backdrop/Escape dismissal, e.g. while a wallet prompt is open. */
   locked?: boolean;
+  /** "lg" for forms that need room (e.g. the token launch form). */
+  size?: "md" | "lg";
 };
 
 /** Native <dialog> modal: focus trapping, Escape and top-layer stacking come free. */
-export function Modal({ open, onClose, title, subtitle, children, locked = false }: ModalProps) {
+export function Modal({ open, onClose, title, subtitle, children, locked = false, size = "md" }: ModalProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
 
@@ -36,7 +38,7 @@ export function Modal({ open, onClose, title, subtitle, children, locked = false
       onClick={(e) => {
         if (e.target === ref.current && !locked) onClose();
       }}
-      className="m-auto w-[min(460px,calc(100vw-32px))] max-h-[calc(100svh-32px)] overflow-visible rounded-2xl border border-line-2 bg-transparent p-0 text-chrome backdrop:bg-black/75 backdrop:backdrop-blur-sm open:animate-rise"
+      className={`m-auto ${size === "lg" ? "w-[min(600px,calc(100vw-32px))]" : "w-[min(460px,calc(100vw-32px))]"} max-h-[calc(100svh-32px)] overflow-visible rounded-2xl border border-line-2 bg-transparent p-0 text-chrome backdrop:bg-black/75 backdrop:backdrop-blur-sm open:animate-rise`}
     >
       <div className="panel-sheen relative max-h-[calc(100svh-32px)] overflow-y-auto overflow-x-hidden rounded-2xl p-5 shadow-[0_40px_120px_-30px_rgba(0,0,0,0.95),inset_0_1px_0_rgba(255,255,255,0.05)] sm:p-6">
         <div className="flex items-start justify-between gap-4">
