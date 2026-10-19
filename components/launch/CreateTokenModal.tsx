@@ -14,6 +14,9 @@ import { previewHref } from "@/lib/launch";
 
 /** With the batch auction off, CruxFactory runs one pro-rata sale over OPEN_SALE_WINDOW (1 day). */
 const OPEN_SALE_HOURS = 24;
+
+/** CruxFactory only needs a target above zero; testnet faucets hand out ~10 USDC, so the floor drops there. */
+const MIN_TARGET = FACTORY ? 1 : 1_000;
 import { useConnectModal } from "@/providers/Web3Provider";
 
 type Form = {
@@ -36,7 +39,7 @@ const INITIAL: Form = {
   farcaster: "",
   website: "",
   supply: "1,000,000,000",
-  target: "50,000",
+  target: FACTORY ? "10" : "50,000",
   batchAuction: true,
 };
 
@@ -63,7 +66,7 @@ function validate(f: Form) {
   const supply = Number(digits(f.supply));
   if (!supply || supply < 1_000) errors.supply = "Supply must be at least 1,000.";
   const target = Number(digits(f.target));
-  if (!target || target < 1_000) errors.target = "Set a graduation target of at least $1,000.";
+  if (!target || target < MIN_TARGET) errors.target = `Set a graduation target of at least $${MIN_TARGET.toLocaleString("en-US")}.`;
   return errors;
 }
 
@@ -419,7 +422,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                 onChange={(e) => set("supply", withCommas(e.target.value))}
               />
             </Field>
-            <Field id={id("target")} label="Graduation target" error={showErr("target")} hint="USDC raised before it moves to the Base pool">
+            <Field id={id("target")} label="Graduation target" error={showErr("target")} hint={FACTORY ? "Test USDC the auction must raise to graduate" : "USDC the auction must raise to graduate"}>
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-[14px] text-dim">$</span>
                 <input
