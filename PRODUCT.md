@@ -25,12 +25,12 @@ Landing page and terminal live at https://crux-terminal.vercel.app and run as a 
 ## Capabilities and Constraints
 
 - Live balance aggregation on Base and BSC (native + USDC, Chainlink-priced); Robinhood Chain RPC not yet public; Solana balances need an SVM wallet.
-- ERC-7683 gasless intents are signed off-chain; the origin settler is not deployed, so nothing is broadcast.
+- Testnet only: CruxSettler, CruxDestinationSettler and CruxFactory are live and source-verified on Base Sepolia (84532). Intents escrow test USDC; a testnet solver fills them with MockNOVA; launches run real 60-second batch auctions. Nothing is on mainnet.
 - $NOVA, $FORM, $MIND are illustrative tokens; their prices and changes are demo data.
 
 ## Brand Commitments
 
-Name CRUX with the four-point wireframe star mark. Visual world pinned by the founder's reference boards: void black, electric acid lime (#D4F933) for primary actions, titanium chrome, extended bold sans display, monospace for financial data, cinematic chrome 3D. Section copy from the master brief is binding.
+Name CRUX with the four-point wireframe star mark. Visual world (2026-10-19, "Quiet Power"): obsidian #08090B, graphite #111215 surfaces, soft white #F3F3F0 type, acid lime #D0F77A only for actions and outcomes, extended sans display, monospace for financial data. No WebGL, no looping motion; mechanisms are shown as static diagrams and real testnet data. Section copy from the master brief is binding.
 
 ## Evidence on Hand
 

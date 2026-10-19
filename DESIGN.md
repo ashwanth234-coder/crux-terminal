@@ -1,34 +1,32 @@
 ---
 name: Crux
-description: Omnichain execution protocol; a void-black instrument that runs on a 60-second batch clock.
+description: Omnichain execution, shown with real Base Sepolia data on an obsidian page where lime marks only actions and outcomes.
 colors:
-  acid: "#d4f933"
-  acid-deep: "#a9c81f"
-  void: "#050505"
-  void-2: "#0a0a0a"
-  panel: "#0c0d0f"
-  panel-2: "#111215"
-  line: "#1e2024"
+  void: "#08090b"
+  panel: "#111215"
+  panel-2: "#16171b"
+  line: "#1c1e22"
   line-2: "#2a2d33"
-  chrome: "#e0e2ec"
-  bright: "#f1f2f6"
-  steel: "#7b808a"
-  muted: "#8a8f98"
-  dim: "#5b6069"
-  up: "#b6e83a"
-  down: "#ff6b5b"
+  acid: "#d0f77a"
+  acid-lift: "#dcfa98"
+  chrome: "#f3f3f0"
+  steel: "#80848d"
+  muted: "#8f939b"
+  dim: "#767a84"
+  up: "#c4ec74"
+  down: "#ff7a6b"
 typography:
   display:
     fontFamily: "Archivo, ui-sans-serif, sans-serif"
-    fontSize: "clamp(2.25rem, 5.9vw, 5.6rem)"
-    fontWeight: 700
-    lineHeight: 0.92
+    fontSize: "clamp(2.4rem, 5.4vw, 5.1rem)"
+    fontWeight: 600
+    lineHeight: 0.95
     letterSpacing: "-0.04em"
-    fontVariation: "'wdth' 122"
+    fontVariation: "'wdth' 112"
   headline:
     fontFamily: "Archivo, ui-sans-serif, sans-serif"
-    fontSize: "clamp(2.2rem, 3.7vw, 3.8rem)"
-    fontWeight: 700
+    fontSize: "clamp(2.2rem, 3.6vw, 3.5rem)"
+    fontWeight: 600
     lineHeight: 0.95
     letterSpacing: "-0.04em"
     fontVariation: "'wdth' 108"
@@ -40,244 +38,248 @@ typography:
     letterSpacing: "-0.03em"
     fontVariation: "'wdth' 108"
   body:
-    fontFamily: "Archivo, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "15px"
+    fontFamily: "Archivo, ui-sans-serif, sans-serif"
+    fontSize: "15.5px"
     fontWeight: 400
     lineHeight: 1.625
+  body-sm:
+    fontFamily: "Archivo, ui-sans-serif, sans-serif"
+    fontSize: "13.5px"
+    fontWeight: 400
+    lineHeight: 1.5
   label:
-    fontFamily: "Archivo, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "13px"
+    fontFamily: "Archivo, ui-sans-serif, sans-serif"
+    fontSize: "12.5px"
     fontWeight: 400
     lineHeight: 1.4
   numeric:
-    fontFamily: "JetBrains Mono, ui-monospace, SFMono-Regular, monospace"
-    fontSize: "11px"
+    fontFamily: "JetBrains Mono, ui-monospace, monospace"
+    fontSize: "11.5px"
     fontWeight: 400
-    lineHeight: 1.4
     fontFeature: "'tnum' 1"
   numeric-instrument:
-    fontFamily: "JetBrains Mono, ui-monospace, SFMono-Regular, monospace"
-    fontSize: "24px"
+    fontFamily: "JetBrains Mono, ui-monospace, monospace"
+    fontSize: "44px"
     fontWeight: 400
     lineHeight: 1
     fontFeature: "'tnum' 1"
 rounded:
-  md: "6px"
+  sm: "4px"
   lg: "8px"
   xl: "12px"
   2xl: "16px"
-  pill: "999px"
+  full: "999px"
 spacing:
-  gutter-mobile: "16px"
-  gutter-tablet: "32px"
-  gutter-desktop: "48px"
-  header: "72px"
-  section-y: "96px"
-  section-y-lg: "128px"
-  container: "1440px"
+  gutter-sm: "16px"
+  gutter-md: "32px"
+  gutter-lg: "48px"
+  panel: "20px"
+  section: "96px"
+  section-lg: "128px"
 components:
   button-primary:
     backgroundColor: "{colors.acid}"
     textColor: "{colors.void}"
-    rounded: "{rounded.pill}"
+    rounded: "{rounded.full}"
     padding: "0 24px"
     height: "48px"
   button-primary-hover:
-    backgroundColor: "#e2ff5c"
+    backgroundColor: "{colors.acid-lift}"
     textColor: "{colors.void}"
   button-primary-sm:
     backgroundColor: "{colors.acid}"
     textColor: "{colors.void}"
-    rounded: "{rounded.pill}"
+    rounded: "{rounded.full}"
     padding: "0 16px"
     height: "36px"
   button-outline:
-    backgroundColor: "transparent"
     textColor: "{colors.chrome}"
-    rounded: "{rounded.pill}"
+    rounded: "{rounded.full}"
     padding: "0 24px"
     height: "48px"
   button-ghost:
-    backgroundColor: "transparent"
     textColor: "{colors.muted}"
-    rounded: "{rounded.pill}"
+    rounded: "{rounded.full}"
     padding: "0 16px"
     height: "36px"
-  batch-instrument:
-    backgroundColor: "{colors.void}"
-    textColor: "{colors.chrome}"
-    rounded: "{rounded.xl}"
-    padding: "12px 16px"
-  terminal-card:
+  panel:
     backgroundColor: "{colors.panel}"
-    textColor: "{colors.chrome}"
     rounded: "{rounded.2xl}"
+    padding: "{spacing.panel}"
+  diagram:
+    backgroundColor: "{colors.panel}"
+    rounded: "{rounded.xl}"
+    padding: "{spacing.panel}"
   input-field:
-    backgroundColor: "transparent"
     textColor: "{colors.chrome}"
-    typography: "{typography.numeric}"
     rounded: "{rounded.lg}"
     padding: "10px 12px"
-  chip:
-    backgroundColor: "transparent"
+  status-pill:
     textColor: "{colors.muted}"
-    rounded: "{rounded.pill}"
-    padding: "4px 8px"
+    rounded: "{rounded.full}"
+    padding: "4px 10px"
 ---
 
 # Design System: Crux
 
 ## Overview
 
-**Creative North Star: "The Clearing Room"**
+**Creative North Star: "Quiet Power"**
 
-Crux is a dark trading floor seen through one instrument. Everything sits on void black, divided by hairlines rather than boxes, and the page keeps time on the protocol's own 60-second batch clock: a heartbeat line under the nav fills across each window, a batch instrument counts down, and a simulated intent tape scrolls fills. When a batch clears, every clock-bound surface flares acid together for one second, then falls quiet. That single synchronized beat is the system's signature; the rest of the page stays restrained so it can land.
+Crux sits on an obsidian page and proves its mechanism instead of performing it. Negative space and 1px hairlines carry the structure. Surfaces are graphite panels, set apart from the ground by tone alone. There is no WebGL, no ambient loop and no simulated feed. The hero's right column shows the newest real events from the Crux contracts on Base Sepolia. Every mechanic is a static diagram with real contract names and an honest status: "Live on Base Sepolia testnet" or "Planned".
 
-Lettering is titanium chrome in solid values, never gradient. Emphasis comes from two tones of the same chrome (bright for the claim, steel for its counterweight line) and from Archivo's width axis: headlines are set extended, so the voice reads engineered and wide rather than loud. Numbers are the only thing in JetBrains Mono, which makes every price, count, address and countdown read as data at a glance.
+Lettering is soft white in solid values. Headlines are Archivo set wide: 112% width, or 108% where a two-line break has to hold in a narrow column. The claim is in bright and the answering line is in steel. Lime is kept for signals only: the primary action, a live or outcome marker, and the one bar that crosses a diagram. JetBrains Mono is used only for numbers, addresses and countdowns, so data reads as data at a glance.
 
-Depth is cinematic and physical, not decorative: chrome WebGL objects lit by a procedural softbox studio, sitting in radial key-light falloffs that bleed off-canvas. Interface surfaces stay nearly flat, layered by tone and hairline. Density is low in marketing sections and high inside the terminal card, where the same tokens compress into an app.
+The marketing chapters are sparse. The terminal and launch views are denser, with the same tokens packed tighter into an app. Motion appears only where it does a job: one short entrance, and a bar loader while a wallet signs. The page reads fully with motion off, and the headline paints with the first frame.
 
 **Key Characteristics:**
-- Void black field, hairline structure (#1e2024 / #2a2d33), no card grids or stat tiles.
-- Acid lime is a signal, not a palette: actions, live markers, and the clearing pulse.
-- Two-tone chrome headlines (bright over steel) at extended width.
-- Mono strictly for numerals; all words in Archivo.
-- One synchronized clearing beat across header, instrument, tape and 3D.
-- Chrome 3D under procedural studio light; everything live-looking is labelled simulated.
+- Obsidian ground, graphite panels, hairline structure; depth by tone, never by glow.
+- Lime is a signal: primary actions, live/outcome markers, a single crossing bar. It never fills an area.
+- Two-tone extended headlines: bright claim, steel answer.
+- Mono only for numbers, addresses and countdowns; every word is Archivo.
+- Every number is real Base Sepolia data, labelled testnet, or clearly marked simulated, demo or planned.
+- Functional motion only; static diagrams instead of animated scenes.
 
 ## Colors
 
-A near-monochrome void-and-chrome palette with one electric accent held in reserve.
+A near-black neutral ramp with one lime signal, plus coral for loss and cancellation.
 
 ### Primary
-- **Acid Lime** (acid): the primary action fill (Launch App, Explore, Launch the app), the clearing pulse, the heartbeat fill line, live-status dots, the active wayfinding numeral, BUY side on the tape, text selection, caret and focus ring. Also an accent Lightformer ring in the 3D studio so chrome objects catch a lime glint.
-- **Pressed Acid** (acid-deep): darker acid reserved for depressed or secondary acid states; hover goes lighter (#e2ff5c), never darker.
+- **Signal Lime** (acid): fill of the primary pill button; live and outcome dots (filled intent, settled launch, open auction); the clearing-price line in the batch diagram; the threshold bar in the syndication chart; the deposit progress bar; the active wayfinding numeral in the header; the focus ring, caret and text selection.
+- **Lifted Lime** (acid-lift): the primary button's hover state only. It lightens; it never glows.
 
 ### Neutral
-- **Void** (void): page and section background, the color text sits on inside acid buttons. Also the browser theme color.
-- **Void Raised** (void-2), **Panel** (panel), **Panel Raised** (panel-2): tonal steps for terminal surfaces; panel carries a faint top sheen (white 3.5% to 0 over 40%), panel-2 backs segmented controls.
-- **Hairline** (line): the default divider: section top borders, header baseline, tape borders, internal card splits.
-- **Hairline Strong** (line-2): interactive outlines (outline buttons, icon buttons, chips, modal frame) and resting node rings.
-- **Titanium Chrome** (chrome): body text color; used at 55-85% opacity for supporting copy (subcopy at 65-70%).
-- **Bright Chrome** (bright): the first, claiming line of every headline and hero figures.
-- **Steel** (steel): the second, answering line of a two-line headline.
-- **Muted** (muted): secondary labels, captions, ghost button text.
-- **Dim** (dim): tertiary metadata (wallet stubs, timings, inactive rail steps, copyright).
+- **Obsidian** (void): page ground, header bar at 80% with blur once scrolled, button text on lime.
+- **Graphite** (panel): every raised surface: activity card, terminal, diagrams, launch instrument, modals.
+- **Graphite Raised** (panel-2): popovers and tooltips that sit above a panel.
+- **Hairline** (line): the default 1px divider, section top rules, panel borders, skeleton bars.
+- **Hairline Strong** (line-2): interactive outlines (outline buttons, pills, chips), diagram stems and tracks, dashed borders on planned diagrams, scrollbar thumb.
+- **Soft White** (chrome): all primary lettering; body copy runs at 60-70% opacity (`chrome/65`, `chrome/70`), list items at 80-85%.
+- **Steel** (steel): the answering line of a two-line headline and the name after a ticker. 5.6:1 on obsidian.
+- **Muted** (muted): captions, secondary detail, status-pill text, field labels.
+- **Dim** (dim): timestamps, denominators ("/ $5,000"), contract event names, copyright line.
 
 ### Semantic
-- **Up** (up) and **Down** (down): price change and validation only. Down marks SELL on the tape and over-budget amounts.
+- **Up** (up): positive change in terminal data.
+- **Down** (down): losses, cancelled launches, invalid fields (borders at 40-60%, the cancelled progress bar).
 
 ### Named Rules
-**The Signal Not Surface Rule.** Acid never fills a panel, section or decorative shape. It appears as a primary button fill, a 1-6px live marker, a hairline, a glow, or a single active numeral. If acid covers more than a button's worth of area on a screen, something is wrong.
+**The Signal Not Surface Rule.** Lime never fills a panel, section or decorative shape. It appears as a button fill, a 6px dot, a 1px line, a single bar or numeral, or a small status chip. If lime covers more than a button's worth of area on a screen, something is wrong.
 
-**The One Beat Rule.** The clearing second (clock.left <= 1) is one synchronized moment: header heartbeat glows, batch instrument border goes acid/70 with an acid shadow, tape border goes acid/50 and its label reads "Batch clearing", the hero knot filament and monolith beam flare. New clock-bound surfaces join this beat; they never pulse on their own schedule.
-
-**The Solid Chrome Rule.** Lettering is always a solid value. Emphasis is bright vs steel, never gradient text.
+**The No Halo Rule.** No glows, colored shadows or colored halos anywhere. Lime emphasis is a solid fill or a line, never light.
 
 ## Typography
 
-**Display Font:** Archivo variable with the width axis (fallback ui-sans-serif, sans-serif)
-**Body Font:** Archivo (fallback ui-sans-serif, system-ui)
-**Numeric Font:** JetBrains Mono, tabular figures (fallback ui-monospace, SFMono-Regular)
+**Display Font:** Archivo (variable width axis), with ui-sans-serif fallback
+**Body Font:** Archivo
+**Label/Mono Font:** JetBrains Mono, with ui-monospace fallback, tabular figures
 
-**Character:** An extended grotesque that reads as machined titanium, paired with a monospace that only ever carries numbers, so data and language never blur.
+**Character:** One family sets every word, and its width axis gives it an architectural feel. The mono is a second voice kept for data.
 
 ### Hierarchy
-- **Display** (700, clamp(2.25rem, 5.9vw, 5.6rem) in the hero; clamp(2.6rem, 5vw, 5.2rem) for token and borderless; line-height 0.92-0.95, tracking -0.04em, width 122%): hero, token and borderless headlines. Balanced wrap, lines revealed upward from a clipped mask.
-- **Headline** (700, clamp(2.2rem, 3.7vw, 3.8rem), line-height 0.95, width 108%): mechanics h3 and Experience h2, narrowed so their forced two-line breaks hold in a 5/12 column.
-- **Title** (600, 22-24px, line-height 1.02, tracking -0.03em, width 108%): modal titles, mobile nav links.
-- **Body** (400, 15px / 16px hero, line-height 1.625, max 26-29rem): section copy in chrome at 65-70%.
-- **Label** (400, 11-13px): nav links (13px chrome/70), captions (12px muted), instrument labels (11px muted). Sentence case.
-- **Numeric** (JetBrains Mono, tabular): 11px on the tape and wayfinding numerals, 22px in the trade amount field, 24px for the batch countdown, 56px light for the Experience equation figures.
+- **Display** (600, 112% width, -0.04em, line-height 0.95): statement headlines. Hero `clamp(2.4rem, 5.4vw, 5.1rem)`, Borderless `clamp(2.8rem, 5.4vw, 5rem)`, Token `clamp(2.6rem, 5vw, 4.6rem)`. The large stage figures and the $37M+ figure range from `clamp(2.2rem, 3.2vw, 3rem)` to `clamp(2.6rem, 4vw, 3.6rem)`.
+- **Headline** (600, 108% width, line-height 0.95): mechanics chapters `clamp(2.2rem, 3.6vw, 3.5rem)` and Experience `clamp(2.5rem, 4vw, 3.8rem)`. The launch page h1 is `clamp(2rem, 5vw, 3.4rem)` in the medium display style (108%, -0.03em).
+- **Title** (600, 108% width, -0.03em): modal and launch-step headings at 22px, notice headings at 28px, launch card ticker at 26px, mobile nav rows at 24px.
+- **Body** (400, line-height 1.625): section copy at 15.5px (15px in Experience, 16px under the hero headline), capped at 26-30rem.
+- **Small body** (400): 13, 13.5 and 14px for diagram copy, notices and list items. Card titles are 15px medium; the latest-launch ticker is 17px.
+- **Label** (400): 11.5, 12 and 12.5px for captions, field labels, panel footers and status lines. Status pills are 11px; compact chips and the launch badge are 10-10.5px.
+- **Numeric** (JetBrains Mono, tabular): 11-11.5px for timestamps, addresses and axis ticks; 13-14px for raised amounts; 18-30px for terminal balances and amounts; 44px for the auction countdown; 52px light for the 4 / 1 / 0 equation.
+
+The ramp in use is 10, 10.5, 11, 11.5, 12, 12.5, 13, 13.5, 14, 15, 15.5, 16, 17, 22, 26 and 28px, plus the display clamps above. All of these are on-system. The half-pixel steps are deliberate tuning for Archivo at small sizes.
 
 ### Named Rules
-**The Numbers Only Rule.** JetBrains Mono carries counts, prices, quantities, addresses, chain-agnostic tickers in data rows, and countdowns. Every word, including labels beside those numbers, is Archivo.
+**The Numbers Only Rule.** JetBrains Mono carries counts, prices, amounts, addresses, tickers inside data chips, and countdowns. Every word, including the label beside a number, is Archivo.
 
-**The Two-Tone Headline Rule.** Multi-line headlines put the claim in bright and the answer in steel ("One balance." / "Every chain."). One break, two values, no third tone.
+**The Two-Tone Headline Rule.** Multi-line headlines put the claim in bright and the answer in steel ("One balance." / "Every chain."). One break, two values, no third tone, never gradient text.
 
-**The Width Rule.** Headline width is a system choice: 122% for statement headlines, 108% where a two-line break must hold in a narrow column. Do not set display type at default width.
+**The Width Rule.** Display type is always extended: 112% for statement headlines, 108% for chapter headlines and titles. Never set display type at default width.
 
 ## Layout
 
-A 1440px max container with horizontal gutters of 16px (mobile), 32px (sm) and 48px (lg), on a 12-column grid from lg. The fixed header is 72px tall; sections open with a hairline top border and 96px top padding (128px from lg). The hero fills the small viewport height: copy in 6-7 columns on the left, the chrome knot absolutely positioned to bleed 24% off the right edge, and the intent tape running full-bleed along the bottom (on phones the tape moves to the top so the live feed is in the first viewport, and the knot drops below the copy at 360-460px tall).
+The container is 1440px wide, with 16px gutters, 32px from 640px and 48px from 1024px. Each section is a full-width band with a single hairline on top. From `lg` it uses a 12-column grid: copy takes 4-7 columns and the evidence (activity card, terminal, diagram) takes the rest. Section padding is 80-96px on small screens and 96-144px on large ones; the hero gets 56-96px below a 72px fixed header. Panels pad 20px, rising to 24px from `sm` on diagrams and the launch instrument. The mechanics are stacked chapters, each its own band, with no pinned or scrubbed sequence. The token pipeline is a vertical track on phones and a four-column horizontal track from 640px.
 
-Faint 12-column vertical hairlines (white 2.8%) sit behind the hero, masked out by 80% height. Mechanics run as a pinned horizontal track on desktop (one 100vw panel per mechanic, 5:7 copy-to-visual split, snapping to whole panels) and stack vertically on mobile or under reduced motion. Copy columns are narrow (max-w-sm to 29rem); sections place copy and visual asymmetrically rather than in equal halves.
+**The Hairline Structure Rule.** Space is divided by 1px lines and negative space, not by boxes in boxes. Within a panel, regions split with `line` borders; lists use `divide-y` hairlines.
 
 ## Elevation & Depth
 
-Interface surfaces are flat and layered by tone and hairline; shadows serve two jobs only. Dark ambient drops (long, heavily negative-spread black shadows plus a 1px inset top highlight) lift the terminal card and modal off the void like glass on a desk. Acid glows are signal: they appear on primary-button hover, on the clearing beat, and on the burn node. Real depth comes from WebGL chrome objects under a procedural Lightformer studio and from radial key-light gradients (#1b1d22 falling to void) placed behind them.
+Flat by default. Surfaces stand off the obsidian ground by tone (void, then panel, then panel-2) and a 1px hairline border. The only shadows are neutral black drop shadows on elements that float above the page: modals, the pay-with popover and tooltips. The header takes an 80% obsidian fill and a backdrop blur only after the page scrolls.
 
 ### Shadow Vocabulary
-- **Glass lift** (`box-shadow: 0 40px 120px -40px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.04)`): terminal card; modal uses the -30px / 0.95 / 0.05 variant.
-- **Acid hover glow** (`box-shadow: 0 0 32px -4px rgba(212,249,51,0.55)`): primary button hover only.
-- **Clearing glow** (`box-shadow: 0 8px 40px -12px rgba(212,249,51,0.55)`): batch instrument during the clearing second; header heartbeat uses `0 0 14px 2px rgba(212,249,51,0.8)`.
-- **Signal trail** (`box-shadow: 0 0 12px rgba(212,249,51,0.7)`): the value pulse travelling the token pipeline.
+- **Modal lift** (`box-shadow: 0 40px 120px -30px rgba(0,0,0,0.95), inset 0 1px 0 rgba(255,255,255,0.05)`): the modal panel.
+- **Popover lift** (`box-shadow: 0 24px 60px -20px rgba(0,0,0,0.9)`): the pay-with dropdown.
+- **Tooltip lift** (`box-shadow: 0 12px 32px -12px rgba(0,0,0,0.9)`): form help tooltips.
 
 ### Named Rules
-**The Flat Until Live Rule.** Interface surfaces carry no colored shadow at rest. Acid light appears only in response to hover on an action or to the batch clock.
-
-**The Studio Light Rule.** 3D chrome is lit by the shared procedural softbox environment (overhead box, strip glints, cool floor bounce, one acid ring), baked once to a 256px cube map. No downloaded HDRs.
+**The Tone Not Light Rule.** Depth comes from tone and hairlines. Any shadow is neutral black and sits only on an element floating above the page. Nothing at rest gives off light.
 
 ## Shapes
 
-Two shape families: pills for anything you press or tag (buttons, icon buttons, chips, search field, live dots), and modest rounded rectangles for containers (8px for fields and segmented controls, 12px for the batch instrument and trade widget, 16px for the terminal card and modal). Structure between regions is drawn with 1px hairlines and border-l / border-y splits, not boxes. The focus ring is a 2px acid outline offset 3px with a 6px radius. The closing CRUX wordmark is hollow: near-void fill (#0f1012) with a 1px line-2 stroke, lit from above by a faint chrome radial.
+Soft rectangles and full pills. Panels and cards use a 16px radius; diagrams and the latest-launch tracker use 12px. Inner rows and fields use 8px, skeleton bars 4px and chart bars 2px. Buttons, pills, chips, dots and the menu toggle are full pills. Borders are always 1px. A dashed `line-2` border marks a diagram of something planned but not yet deployed. The Crux mark is a wireframe four-point star. The footer closes on the CRUX wordmark at full page width, drawn as an outline: a 1px `line-2` stroke on obsidian at 125% width.
 
 ## Components
 
 ### Buttons
-Confident pills; the only filled acid objects on the page.
-- **Shape:** fully rounded (999px).
-- **Primary:** acid fill, void text, 14px medium, 48px tall with 24px sides (sm: 36-40px tall, 13px). Trailing arrow-up-right glyph nudges up-right on hover.
-- **Hover / Focus:** fill lightens to #e2ff5c with the acid hover glow; 300ms ease-out; active scales to 0.98; focus is the 2px acid outline.
-- **Outline:** transparent with a line-2 border and chrome text; hover lifts the border to chrome/60 and adds a white 4% wash. Used for secondary actions and every per-section "learn more".
-- **Ghost:** muted text that brightens to chrome; no frame.
+Flat, quiet pills that never glow.
+- **Shape:** full pill (999px).
+- **Primary:** lime fill, obsidian text, Archivo 500. Medium is 48px high with 24px padding at 14px; small is 36px with 16px padding at 13px. The header button is 40px high with 20px padding.
+- **Hover / Focus:** hover lightens to Lifted Lime over 200ms. Press scales to 0.98. Focus is a 2px lime outline offset 2px. Trailing arrows nudge 2px on hover.
+- **Outline:** transparent with a 1px `line-2` border and chrome text. Hover lifts the border to chrome at 60% and adds a 4% white wash. Used for per-chapter CTAs and secondary actions.
+- **Ghost:** muted text that turns chrome on hover.
 
-### Chips
-- **Style:** pill, line-2 border, mono 10px muted text (token ticker inside the amount field), or 8px icon-button circles in the same border.
+### Chips / Status pills
+- **Style:** 1px `line-2` border, full pill, muted text at 11px ("Testnet", "Base Sepolia testnet"). Ticker chips are mono 10px.
+- **State:** live states get a lime dot and a lime border at 40-50%. Graduated is the one solid lime chip. Cancelled uses a coral dot. Planned uses a hollow dot outlined in chrome at 40%.
 
 ### Cards / Containers
-- **Corner Style:** 16px for the terminal card and modal, 12px for nested widgets.
-- **Background:** panel with the top sheen; nested widgets use void at 60% with backdrop blur.
-- **Shadow Strategy:** glass lift (see Elevation).
-- **Border:** 1px line; internal regions split by line hairlines.
-- **Internal Padding:** 12-20px.
+- **Corner Style:** 16px for panels and launch cards, 12px for diagrams.
+- **Background:** graphite (panel); fields inside the terminal sit on obsidian at 60%.
+- **Shadow Strategy:** none at rest (see Elevation & Depth).
+- **Border:** 1px `line`; hover moves a launch card to `line-2`.
+- **Internal Padding:** 20px. Header and footer strips use 14-16px vertical padding and are split off by hairlines.
 
 ### Inputs / Fields
-- **Style:** 8px radius, 1px line border, transparent fill, 22px mono value, dim placeholder, acid caret.
-- **Focus:** border steps from line to line-2 (focus-within); keyboard focus also shows the acid outline.
-- **Error:** the dependent figure turns down (#ff6b5b); no red frames.
+- **Style:** 1px `line` border, 8px radius, obsidian at 60%, 10-12px padding. Text is 14px Archivo, or 22px mono for amounts. Placeholders are dim and the caret is lime.
+- **Focus:** the border moves to lime at 60% in forms, or to `line-2` in the terminal amount field. No glow.
+- **Error / Disabled:** invalid fields take a coral border at 60%; disabled controls drop to 50% opacity and stop pointer events.
 
 ### Navigation
-- **Header:** fixed, transparent over the hero, void/80 with a heavy backdrop blur once scrolled past 24px. Links are 13px chrome/70, brightening to chrome with a 1px acid underline drawn from the left on hover. Right side: chapter chip ("06 / 07 Token", acid mono numeral, dim mono total, chrome label) shown only outside the mechanics run, then the small acid Launch App pill.
-- **Heartbeat:** a 1px line baseline under the header with an acid fill scaling across each 60s window; glows on clearing and snaps back as the next batch opens.
-- **Mobile:** 40px pill menu button with a three-line hamburger morphing to a cross; links listed as 24px title-weight rows divided by hairlines.
-- **Mechanics rail:** 56px tab rail with mono numerals (acid when active) and 13px labels; a chrome/50 hairline beneath tracks scroll progress.
+- **Style:** a fixed 72px bar with one `line` hairline beneath. It is transparent at the top and becomes obsidian at 80% with blur once the page scrolls. Links are 13px chrome at 70%. On hover they turn full chrome and a 1px lime underline draws in from the left.
+- **Wayfinding:** from 1280px, a chapter readout shows the active section: a lime mono numeral, "/ 07" in dim mono, then the chapter name.
+- **Mobile:** a pill menu toggle opens a stacked list of 24px headline rows divided by hairlines.
 
-### Batch Instrument (signature)
-A 12px-radius void/60 blurred capsule with two cells split by a hairline: left, a pinging acid dot, "Batch #N" (mono count) and "One uniform price · simulated"; right, "Clears in" over a 24px acid mono countdown. A 1px acid line along the bottom fills with the window. On clearing it joins the One Beat.
+### Testnet Activity (signature)
+The hero's evidence card shows the newest real events from the Crux contracts on Base Sepolia. Each row has a 6px dot (lime for an outcome, chrome at 35% otherwise), a 13.5px title, a 12.5px muted detail and a mono relative time. Rows link to the launch or to Basescan. The card has explicit loading (skeleton rows), error ("Couldn't reach Base Sepolia. Retrying every 30 seconds."), empty and unconfigured states, and a footer linking the settler address.
 
-### Intent Tape (signature)
-A full-bleed strip bordered top and bottom in line, void/70 with blur. A fixed left cell reads "Simulated feed" beside a soft-pulsing acid dot; the feed scrolls at 70s per loop with edge fade masks: dim wallet stub, acid BUY or down SELL, chrome quantity and ticker, muted route, dim timing, all mono 11px.
+### Mechanism Diagrams (signature)
+Static figures on graphite. The execution diagram is a four-step grid split by 1px gaps. The batch window shows bid stems dropping to one lime clearing line. Planned mechanics get dashed-border diagrams with a "Planned" caption. Real contract names and addresses appear in mono with an outbound arrow.
 
-### Value Pipeline (signature)
-A hairline track (vertical on phones, horizontal from sm) with small line-2 node rings that pulse acid in sequence, a lime trail travelling the line, and a heavy 28px acid-ringed node for the burn sink.
+### Batch Instrument
+Used in the launch view and the latest-launch tracker. It shows a mono countdown (44px on the launch page) and the raised amount over the target. A 4px progress bar is lime, coral when cancelled; the time bar is chrome at 60%. The uniform price is in mono.
+
+### Motion
+- **Rise** (0.7s, cubic-bezier(0.16, 1, 0.3, 1)): the one entrance, a 10px lift from near-zero opacity, used when a modal opens. It is never applied to the hero headline.
+- **Kinetic** (0.9s ease-in-out): four 3px bars while a wallet signs or routes. It is the only repeating animation, and it shows only while work is in progress.
+- **State** (200-300ms ease-out): color, border and transform transitions on hover.
+- Reduced motion collapses every animation to a single near-instant iteration and turns off smooth scrolling.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** keep acid to primary actions, live markers, the active wayfinding numeral and the clearing beat.
-- **Do** bind any new live-looking element to the shared batch clock and flare it on the clearing second only.
-- **Do** label every live-looking feed, count or clock "simulated" in visible copy and in its accessible name.
-- **Do** set statement headlines in Archivo at 122% width, two-line headlines in narrow columns at 108%, bright over steel.
-- **Do** set every numeral (price, count, address, countdown) in JetBrains Mono with tabular figures, and every word in Archivo.
-- **Do** divide space with 1px hairlines (line by default, line-2 for interactive outlines).
-- **Do** light 3D chrome with the shared procedural studio; mount canvases lazily near the viewport, pause offscreen, instance repeated meshes, and track labels with an HTML overlay rather than in-scene HTML.
-- **Do** collapse pinned or scrubbed motion to plain stacked scroll under prefers-reduced-motion and on mobile.
+- **Do** keep lime to primary actions, live and outcome markers, the active wayfinding numeral and a single crossing bar or line per diagram.
+- **Do** show real Base Sepolia data, and label anything else in visible copy as testnet, simulated, demo or planned.
+- **Do** give every data surface honest loading, error, empty and unconfigured states.
+- **Do** set statement headlines in Archivo at 112% width and chapter headlines at 108%, bright over steel.
+- **Do** set every number, address and countdown in JetBrains Mono with tabular figures, and every word in Archivo.
+- **Do** divide space with 1px hairlines (`line` by default, `line-2` for interactive outlines and diagram tracks) and generous negative space.
+- **Do** mark planned mechanisms with a dashed `line-2` border and a "Planned" caption.
+- **Do** keep the page fully legible with motion off, and paint the headline with the first frame.
 
 ### Don't:
+- **Don't** add glows, colored shadows or halos, including on button hover.
+- **Don't** fill panels, sections or decorative shapes with lime.
+- **Don't** use WebGL, ambient loops, tickers or scrolling feeds; show mechanisms as static diagrams.
+- **Don't** present a simulated or illustrative number as live.
 - **Don't** use gradient text; lettering is a solid value.
-- **Don't** fill panels, sections or decorative shapes with acid, or give a resting surface an acid glow.
-- **Don't** build grids of equal cards or rows of stat tiles; show the mechanism (clock, tape, pipeline, equation) instead.
-- **Don't** put kicker or eyebrow labels above headings; section numbers appear only as wayfinding (header chapter chip, mechanics rail).
-- **Don't** set words in the monospace or numerals for data in Archivo body text.
-- **Don't** let a clock-bound element pulse on its own timer, out of step with the batch.
+- **Don't** put kicker or eyebrow labels above headings; numbered chapters appear only as header wayfinding.
+- **Don't** set words in the monospace, or numbers for data in Archivo.
+- **Don't** hide or delay the hero headline behind an entrance animation.

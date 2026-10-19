@@ -218,13 +218,13 @@ function LaunchView({ model, auction, id }: { model: LaunchModel; auction: Aucti
 
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <p className="label-mono">{simulated ? "Simulated auction" : `Auction #${id} · Base Sepolia`}</p>
-          <h1 className="mt-2 font-display-md text-[clamp(2rem,5vw,3.4rem)] leading-[0.95] text-chrome">
+          <h1 className="font-display-md text-[clamp(2rem,5vw,3.4rem)] leading-[0.95] text-chrome">
             {model.symbol ? `$${model.symbol}` : "Token launch"}
             {model.name && <span className="text-steel"> {model.name}</span>}
           </h1>
           <p className="mt-2 text-[13px] text-muted">
-            Graduates at <span className="font-mono tabular-nums text-chrome">${fmtUsdc(auction.graduationTarget)}</span> {simulated ? "simulated USDC" : "test USDC"}
+            {simulated ? "Simulated auction" : <>Auction <span className="font-mono">#{id}</span> on Base Sepolia</>} · Graduates at{" "}
+            <span className="font-mono tabular-nums text-chrome">${fmtUsdc(auction.graduationTarget)}</span> {simulated ? "simulated USDC" : "test USDC"}
           </p>
         </div>
         <span

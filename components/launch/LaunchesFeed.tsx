@@ -70,8 +70,7 @@ export function LaunchesFeed() {
     <Shell mode={FACTORY ? "live" : null}>
       <div className="flex flex-wrap items-end justify-between gap-6">
         <div>
-          <p className="label-mono">{FACTORY ? "Launches · Base Sepolia" : "Launches"}</p>
-          <h1 className="mt-2 font-display-md text-[clamp(2rem,5vw,3.4rem)] leading-[0.95] text-chrome">
+          <h1 className="font-display-md text-[clamp(2rem,5vw,3.4rem)] leading-[0.95] text-chrome">
             Every launch, <span className="text-steel">one price.</span>
           </h1>
           <p className="mt-3 max-w-[34rem] text-[14px] leading-relaxed text-muted">
@@ -131,7 +130,7 @@ export function LaunchesFeed() {
           ) : loading ? (
             <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label="Loading launches">
               {[0, 1, 2].map((i) => (
-                <li key={i} className="h-[300px] animate-pulse rounded-2xl border border-line bg-panel/40" />
+                <li key={i} className="h-[300px] rounded-2xl border border-line bg-panel/40" />
               ))}
             </ul>
           ) : visible.length === 0 ? (

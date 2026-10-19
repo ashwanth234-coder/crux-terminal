@@ -30,7 +30,7 @@ export function BalancePanel() {
       <div className="flex items-center justify-between">
         <p className="text-[11px] text-muted">Total Buying Power</p>
         <span
-          className={`rounded-full border px-2 py-0.5 font-mono text-[9px] tracking-[0.16em] ${
+          className={`rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-[0.16em] ${
             b.mode === "live" ? "border-acid/40 text-acid" : "border-line-2 text-dim"
           }`}
         >
