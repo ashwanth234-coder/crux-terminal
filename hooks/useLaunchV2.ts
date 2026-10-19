@@ -57,7 +57,13 @@ export function useLaunchV2(factory: Address, id: bigint): LaunchV2Model {
     ...fac,
     functionName: "getAuction",
     args: [id],
-    query: { refetchInterval: (q) => ((q.state.data?.status ?? 0) === 0 ? POLL_MS : false) },
+    query: {
+      refetchInterval: (q) => ((q.state.data?.status ?? 0) === 0 ? POLL_MS : false),
+      // A revert (no such auction) or an empty address is an answer, not a network blip: don't retry it.
+      retry: (failures, err) =>
+        failures < 2 &&
+        !(err instanceof BaseError && err.walk((e) => e instanceof ContractFunctionRevertedError || e instanceof ContractFunctionZeroDataError)),
+    },
   });
   const auction = core.data ? toAuctionV2(core.data) : null;
   const live = auction?.status === 0;
