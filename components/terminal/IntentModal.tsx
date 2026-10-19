@@ -14,6 +14,7 @@ import {
   SETTLER_DEPLOYED,
   SLIPPAGE_BPS,
   TESTNET_ESCROW_ASSETS,
+  TESTNET_NOVA_CAIP19,
   TESTNET_USDC,
   buildGaslessOrder,
 } from "@/lib/intents";
@@ -97,7 +98,11 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
         ? { caip19: payAsset.caip19, amount: parseUnits(order.notional.toFixed(payAsset.decimals), payAsset.decimals) }
         : { caip19: NOVA_ASSET.caip19, amount: parseUnits(order.qty.toFixed(6), NOVA_ASSET.decimals) };
       const output = buying
-        ? { caip19: NOVA_ASSET.caip19, amount: parseUnits(min.toFixed(6), NOVA_ASSET.decimals) }
+        ? {
+            // On testnet, ask for MockNOVA: the token the Crux solver holds and can deliver.
+            caip19: SETTLER_DEPLOYED && TESTNET_NOVA_CAIP19 ? TESTNET_NOVA_CAIP19 : NOVA_ASSET.caip19,
+            amount: parseUnits(min.toFixed(6), NOVA_ASSET.decimals),
+          }
         : { caip19: payAsset.caip19, amount: parseUnits(min.toFixed(payAsset.decimals), payAsset.decimals) };
 
       if (SETTLER_DEPLOYED) {

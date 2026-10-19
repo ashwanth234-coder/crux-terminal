@@ -1,4 +1,4 @@
-import { encodeAbiParameters, isAddress, keccak256, toHex, type Address, type Hex } from "viem";
+import { encodeAbiParameters, getAddress, isAddress, keccak256, toHex, type Address, type Hex } from "viem";
 
 // Only used as the EIP-712 verifyingContract for local signature checks while
 // nothing is deployed; never sent to a chain.
@@ -34,6 +34,14 @@ export const TESTNET_ESCROW_ASSETS: ReadonlySet<string> = new Set([
   "eip155:8453/erc20:0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
   "eip155:84532/erc20:0x036CbD53842c5426634e7929541eC2318f3dCF7e",
 ]);
+
+/**
+ * MockNOVA on Base Sepolia (crux-contracts/script/DeployNova.s.sol), once deployed
+ * (NEXT_PUBLIC_CRUX_TEST_NOVA). Testnet buys ask for it so the solver can fill them.
+ * Checksummed, because the asset id is keccak256 of this exact string.
+ */
+const testNova = envAddress(process.env.NEXT_PUBLIC_CRUX_TEST_NOVA);
+export const TESTNET_NOVA_CAIP19 = testNova ? `eip155:84532/erc20:${getAddress(testNova)}` : null;
 
 export const BATCH_WINDOW_SECONDS = 60;
 export const SLIPPAGE_BPS = 50;
