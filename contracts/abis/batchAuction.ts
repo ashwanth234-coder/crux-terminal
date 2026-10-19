@@ -86,6 +86,50 @@ export const cruxFactoryAbi = [
     outputs: [{ ...auction, name: "" }],
   },
   {
+    type: "function",
+    name: "auctionCount",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    /** Tokens sold in the auction (80% of supply); the rest seeds the pool on graduation. */
+    type: "function",
+    name: "saleSupply",
+    stateMutability: "view",
+    inputs: [{ name: "auctionId", type: "uint256" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    /** USDC an account has committed and not yet claimed (as tokens or a refund). */
+    type: "function",
+    name: "deposits",
+    stateMutability: "view",
+    inputs: [
+      { name: "auctionId", type: "uint256" },
+      { name: "account", type: "address" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    /** Tokens the account would receive if the auction graduated at current deposits. */
+    type: "function",
+    name: "previewAllocation",
+    stateMutability: "view",
+    inputs: [
+      { name: "auctionId", type: "uint256" },
+      { name: "account", type: "address" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  { type: "error", name: "InvalidParams", inputs: [] },
+  { type: "error", name: "UnknownAuction", inputs: [] },
+  { type: "error", name: "NotLive", inputs: [] },
+  { type: "error", name: "WindowClosed", inputs: [] },
+  { type: "error", name: "WindowOpen", inputs: [] },
+  { type: "error", name: "ZeroAmount", inputs: [] },
+  { type: "error", name: "NothingToClaim", inputs: [] },
+  {
     type: "event",
     name: "AuctionCreated",
     anonymous: false,
@@ -119,6 +163,16 @@ export const cruxFactoryAbi = [
   {
     type: "event",
     name: "TokensClaimed",
+    anonymous: false,
+    inputs: [
+      { name: "auctionId", type: "uint256", indexed: true },
+      { name: "account", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "Refunded",
     anonymous: false,
     inputs: [
       { name: "auctionId", type: "uint256", indexed: true },

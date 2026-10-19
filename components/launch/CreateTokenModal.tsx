@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { getAddress, keccak256, parseEventLogs, parseUnits, toHex, type Address, type Hex } from "viem";
 import { useConfig, useConnection, useSwitchChain, useWriteContract } from "wagmi";
 import { waitForTransactionReceipt } from "wagmi/actions";
@@ -9,6 +10,7 @@ import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { cruxFactoryAbi } from "@/contracts/abis/batchAuction";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import { BATCH_WINDOW_SECONDS, FACTORY } from "@/lib/intents";
+import { previewHref } from "@/lib/launch";
 
 /** With the batch auction off, CruxFactory runs one pro-rata sale over OPEN_SALE_WINDOW (1 day). */
 const OPEN_SALE_HOURS = 24;
@@ -48,7 +50,7 @@ type Phase =
   | { kind: "form" }
   | { kind: "simulating"; step: number }
   | { kind: "deploying"; label: string; hash?: Hex }
-  | { kind: "done"; token: Address; simulated: boolean; hash?: Hex; auctionId?: bigint };
+  | { kind: "done"; token: Address; simulated: boolean; hash?: Hex; auctionId?: bigint; start: number };
 
 const digits = (v: string) => v.replace(/[^0-9]/g, "");
 const withCommas = (v: string) => (digits(v) ? Number(digits(v)).toLocaleString("en-US") : "");
@@ -115,6 +117,7 @@ const inputCls =
 
 export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const uid = useId();
+  const router = useRouter();
   const config = useConfig();
   const { address, chainId, isConnected } = useConnection();
   const { mutateAsync: switchChain } = useSwitchChain();
@@ -153,7 +156,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     }
     // A deterministic preview address; clearly labelled as not on-chain.
     const preview = getAddress(`0x${keccak256(toHex(`crux:${form.name}:${form.symbol}:${Date.now()}`)).slice(-40)}`);
-    setPhase({ kind: "done", token: preview, simulated: true });
+    setPhase({ kind: "done", token: preview, simulated: true, start: Math.floor(Date.now() / 1000) });
   };
 
   const deploy = async () => {
@@ -188,7 +191,14 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     const receipt = await waitForTransactionReceipt(config, { hash, chainId: TESTNET.id });
     const [created] = parseEventLogs({ abi: cruxFactoryAbi, eventName: "AuctionCreated", logs: receipt.logs });
     if (!created) throw new Error("Deployed, but no AuctionCreated event was found in the receipt.");
-    setPhase({ kind: "done", token: created.args.token, simulated: false, hash, auctionId: created.args.auctionId });
+    setPhase({
+      kind: "done",
+      token: created.args.token,
+      simulated: false,
+      hash,
+      auctionId: created.args.auctionId,
+      start: Math.floor(Date.now() / 1000),
+    });
   };
 
   const submit = async () => {
@@ -204,9 +214,22 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     }
   };
 
+  /** Opens the launch view: the on-chain auction, or the simulated preview of this form. */
   const viewInTerminal = () => {
+    if (phase.kind !== "done") return;
+    const href =
+      phase.auctionId !== undefined
+        ? `/launch/${phase.auctionId.toString()}`
+        : previewHref({
+            name: form.name.trim(),
+            symbol: form.symbol,
+            supply: digits(form.supply),
+            target: digits(form.target),
+            window: form.batchAuction ? BATCH_WINDOW_SECONDS : OPEN_SALE_HOURS * 3600,
+            start: phase.start,
+          });
     close();
-    requestAnimationFrame(() => document.getElementById("protocol")?.scrollIntoView({ behavior: "smooth" }));
+    router.push(href);
   };
 
   const id = (k: string) => `${uid}-${k}`;
