@@ -202,7 +202,7 @@ export function MyIntentsPanel() {
       ) : isLoading ? (
         <div className="mt-4 space-y-3" aria-label="Loading intents">
           {[0, 1].map((i) => (
-            <span key={i} className="block h-9 rounded-md bg-[linear-gradient(90deg,#1e2024,#2a2d33,#1e2024)] bg-[length:200%_100%] animate-shimmer" />
+            <span key={i} className="block h-9 rounded-md bg-line/70" />
           ))}
         </div>
       ) : intents.length === 0 ? (

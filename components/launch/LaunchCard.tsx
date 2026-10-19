@@ -6,7 +6,7 @@ import type { LaunchSummary } from "@/hooks/useLaunches";
 import { fmtUsdc, formatRemaining, impliedPrice, type Phase } from "@/lib/launch";
 
 const BADGE: Record<Phase, { label: string; className: string; dot: string }> = {
-  open: { label: "Live", className: "border-acid/50 text-chrome", dot: "animate-pulse-soft bg-acid" },
+  open: { label: "Live", className: "border-acid/50 text-chrome", dot: "bg-acid" },
   closed: { label: "Awaiting settlement", className: "border-line-2 text-chrome/80", dot: "bg-chrome/60" },
   settled: { label: "Settled", className: "border-line-2 text-chrome/80", dot: "bg-chrome/60" },
   graduated: { label: "Graduated", className: "border-acid bg-acid text-void", dot: "bg-void" },

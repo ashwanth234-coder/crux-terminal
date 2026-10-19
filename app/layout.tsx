@@ -18,12 +18,10 @@ const jetbrains = JetBrains_Mono({
 });
 
 const DIRECTION_CONTRACT = `<!--
-THESIS: The page runs on Crux's own 60-second batch clock: a heartbeat line, a live batch status and a simulated intent tape replace the static DeFi grid of equal cards and stat tiles.
-OWN-WORLD: Void #050505, hairlines #1E2024, titanium chrome #E0E2EC lettering in solid values (no gradient text), acid #D4F933 only for actions and the clearing pulse; Archivo extended display, JetBrains Mono only for numbers; chrome WebGL objects lit by procedural softboxes.
-STORY: See one market across four chains, watch intents clear in a batch, walk the four mechanics in a pinned horizontal run, follow value into $CRUX, launch.
-FIRST VIEWPORT: Heartbeat line under the nav; left, batch status then a 6rem three-line headline, subcopy, lime Explore and outline Watch; right, the chrome link bleeding off-canvas; bottom, full-width intent tape.
-FORM: brief-pinned elevation of the founder's reference world; no seed roll (seed key: pinned).
-FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+THESIS: Quiet Power. The page proves the mechanism with real Base Sepolia data and static diagrams instead of WebGL, loops and simulated feeds.
+OWN-WORLD: Obsidian #08090B, graphite #111215 surfaces, soft white #F3F3F0 type, acid lime #D0F77A only for actions and outcomes; Archivo for words, JetBrains Mono for numbers; hairlines, no glows.
+STORY: One market across four chains, real testnet activity, the four mechanics with honest status, the planned token, launch.
+FIRST VIEWPORT: Headline painted with the first frame, subcopy, two actions, chains; right, live Base Sepolia activity from the Crux contracts.
 -->`;
 
 export const metadata: Metadata = {
@@ -48,7 +46,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#050505",
+  themeColor: "#08090b",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",

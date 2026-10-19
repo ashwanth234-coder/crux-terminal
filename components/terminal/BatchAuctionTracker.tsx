@@ -1,131 +1,92 @@
 "use client";
 
-import { useMemo } from "react";
-import { BATCH_SECONDS, formatCountdown, seeded, useBatchClock } from "@/lib/batch";
+import Link from "next/link";
+import { ArrowRight } from "@/components/ui/Button";
+import { useLaunches, type LaunchSummary } from "@/hooks/useLaunches";
+import { useNow } from "@/hooks/useLaunchAuction";
+import { FACTORY } from "@/lib/intents";
+import { auctionPhase, fmtUsdc, formatRemaining, impliedPrice, type Phase } from "@/lib/launch";
 
-type Order = { id: number; amount: string; asset: string; chain: string; via?: string };
+const STATUS: Record<Phase, string> = {
+  open: "Deposits open",
+  closed: "Awaiting settlement",
+  settled: "Settled",
+  graduated: "Graduated",
+  cancelled: "Cancelled · refunds open",
+};
 
-const SOURCES = [
-  { chain: "Base", asset: "ETH", min: 0.05, max: 3, dp: 2 },
-  { chain: "Solana", asset: "USDC", min: 40, max: 2400, dp: 0, via: "via ERC-7683" },
-  { chain: "BSC", asset: "USDC", min: 40, max: 1800, dp: 0 },
-  { chain: "Robinhood", asset: "USDC", min: 40, max: 900, dp: 0 },
-] as const;
-
-/** Orders arrive through the window; one every ~4s, all sharing the batch's single price. */
-function ordersFor(batch: number) {
-  const r = seeded(batch * 2654435761);
-  const firstId = 1000 + (batch % 500) * 15;
-  const list: Order[] = Array.from({ length: 15 }, (_, i) => {
-    const s = SOURCES[i % 3 === 2 ? 2 : r() > 0.82 ? 3 : r() > 0.5 ? 1 : 0];
-    const amt = s.min + r() * (s.max - s.min);
-    return {
-      id: firstId + i,
-      amount: amt.toLocaleString("en-US", { minimumFractionDigits: s.dp, maximumFractionDigits: s.dp }),
-      asset: s.asset,
-      chain: s.chain,
-      via: "via" in s ? s.via : undefined,
-    };
-  });
-  const price = 0.036 + r() * 0.012;
-  return { list, price };
+function Latest({ launch, now }: { launch: LaunchSummary; now: number | null }) {
+  const { auction } = launch;
+  const phase = now === null ? "open" : auctionPhase(auction, now);
+  const price = impliedPrice(auction.totalDeposits, launch.saleSupply);
+  const left = now === null ? 0 : auction.startTime + auction.batchWindow - now;
+  return (
+    <Link href={`/launch/${launch.id}`} className="block px-5 py-5 transition-colors hover:bg-white/[0.02]">
+      <div className="flex items-baseline justify-between gap-4">
+        <p className="truncate text-[17px] text-chrome">
+          {launch.symbol ? `$${launch.symbol}` : `Auction #${launch.id}`}
+          {launch.name && <span className="text-steel"> {launch.name}</span>}
+        </p>
+        <span className={`shrink-0 text-[12px] ${phase === "graduated" || phase === "open" ? "text-acid" : "text-muted"}`}>
+          {phase === "open" ? `Closes in ${formatRemaining(left)}` : STATUS[phase]}
+        </span>
+      </div>
+      <dl className="mt-4 grid grid-cols-2 gap-4 text-[12px]">
+        <div>
+          <dt className="text-muted">Raised</dt>
+          <dd className="mt-1 font-mono text-[13px] text-chrome">
+            ${fmtUsdc(auction.totalDeposits)} <span className="text-dim">/ ${fmtUsdc(auction.graduationTarget)}</span>
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted">Uniform price</dt>
+          <dd className="mt-1 truncate font-mono text-[13px] text-chrome">{phase === "cancelled" ? "None" : price ? `$${price}` : "No bids yet"}</dd>
+        </div>
+      </dl>
+    </Link>
+  );
 }
 
-const R = 46;
-const CIRC = 2 * Math.PI * R;
-
 /**
- * The 60-second uniform batch auction, live: a countdown ring synced to the
- * site-wide batch clock and a stream of (simulated) intents pooling into the
- * current batch, every one at the same clearing price.
+ * The newest real launch on the deployed CruxFactory (Base Sepolia): what the
+ * batch auction actually did, in place of a simulated order stream.
  */
 export function BatchAuctionTracker() {
-  const clock = useBatchClock();
-  const batch = clock?.batch ?? 0;
-  const left = clock?.left ?? BATCH_SECONDS;
-  const into = BATCH_SECONDS - left;
-  const clearing = clock !== null && left <= 1;
-  const { list, price } = useMemo(() => ordersFor(batch), [batch]);
-
-  const arrived = clock ? Math.min(list.length, Math.floor(into / 4) + 1) : 3;
-  const recent = list.slice(Math.max(0, arrived - 3), arrived).reverse();
-  const priceLabel = `$${price.toFixed(4)}`;
-  const progress = clock ? (into + 1) / BATCH_SECONDS : 0;
+  const now = useNow();
+  const { launches, loading, error } = useLaunches(FACTORY);
+  const latest = launches[0];
 
   return (
-    <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-5 lg:p-10">
-      {/* Countdown ring */}
-      <div className="mx-auto flex flex-col items-center">
-        <div className="relative h-[116px] w-[116px]">
-          <svg viewBox="0 0 108 108" className="h-full w-full -rotate-90" aria-hidden="true">
-            <circle cx="54" cy="54" r={R} fill="rgba(5,5,5,0.55)" stroke="#2a2d33" strokeWidth="2" />
-            <circle
-              cx="54"
-              cy="54"
-              r={R}
-              fill="none"
-              stroke="#d4f933"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeDasharray={CIRC}
-              strokeDashoffset={CIRC * (1 - progress)}
-              className={left >= BATCH_SECONDS ? "" : "transition-[stroke-dashoffset] duration-1000 ease-linear"}
-              style={{ filter: clearing ? "drop-shadow(0 0 6px rgba(212,249,51,0.9))" : undefined }}
-            />
-          </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center" role="timer" aria-label={`Batch clears in ${left} seconds`}>
-            <span className="font-mono text-[22px] leading-none tabular-nums text-chrome">{clock ? formatCountdown(left) : "00:—"}</span>
-            <span className="mt-1.5 text-[10.5px] text-muted">{clearing ? "Clearing" : "Batch auction"}</span>
-          </div>
-        </div>
-        <p className="mt-2 text-[11px] text-muted">
-          Batch <span className="font-mono tabular-nums text-chrome/80">#{clock ? batch.toLocaleString("en-US") : "———"}</span>
-        </p>
+    <section aria-labelledby="latest-launch" className="rounded-xl border border-line bg-panel">
+      <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5">
+        <h3 id="latest-launch" className="text-[13.5px] font-medium text-chrome">
+          Latest launch
+        </h3>
+        <span className="text-[11.5px] text-muted">Base Sepolia testnet</span>
       </div>
 
-      {/* Intent stream pooling into this batch */}
-      <div className="mx-auto w-full max-w-[460px] rounded-xl border border-line bg-void/80 p-3.5 backdrop-blur-md sm:p-4">
-        <div className="flex items-center justify-between text-[11px]">
-          <span className="flex items-center gap-2 text-chrome/85">
-            <span className="h-1.5 w-1.5 rounded-full bg-acid animate-pulse-soft" aria-hidden="true" />
-            Orders in this batch
-          </span>
-          <span className="text-dim">
-            <span className="font-mono tabular-nums text-muted">{arrived}</span> pooled · simulated
-          </span>
+      {!FACTORY ? (
+        <p className="px-5 py-6 text-[13px] text-muted">No factory is configured for this build.</p>
+      ) : loading ? (
+        <div className="space-y-2.5 px-5 py-6" aria-busy="true" aria-label="Reading launches">
+          <span className="block h-4 w-40 rounded bg-line" />
+          <span className="block h-3 w-56 rounded bg-line/70" />
         </div>
-        <ul className="mt-2.5 space-y-1.5" aria-live="polite">
-          {recent.map((o, i) => (
-            <li
-              key={o.id}
-              className={`flex items-baseline justify-between gap-3 rounded-md px-2 py-1.5 text-[12px] transition-colors ${
-                i === 0 ? "animate-rise bg-white/[0.03]" : ""
-              }`}
-            >
-              <span className="min-w-0 truncate text-chrome/80">
-                <span className="font-mono text-dim">#{o.id}</span>{" "}
-                <span className="font-mono tabular-nums text-chrome">
-                  {o.amount} {o.asset}
-                </span>{" "}
-                from {o.chain}
-                {o.via && <span className="text-dim"> ({o.via})</span>}
-              </span>
-              <span className="shrink-0 font-mono tabular-nums text-muted">{priceLabel}</span>
-            </li>
-          ))}
-        </ul>
-        {/* Uniform clearing banner */}
-        <div
-          className={`mt-3 flex items-center justify-between gap-3 rounded-lg border px-3 py-2 transition-colors duration-500 ${
-            clearing ? "border-acid bg-acid/10" : "border-acid/30"
-          }`}
-        >
-          <span className="text-[11.5px] leading-snug text-chrome/85">
-            <span className="text-acid">Zero MEV advantage.</span> Every chain clears at one identical price.
-          </span>
-          <span className="shrink-0 font-mono text-[13px] tabular-nums text-acid">{priceLabel}</span>
-        </div>
+      ) : error && !latest ? (
+        <p role="status" className="px-5 py-6 text-[13px] text-muted">
+          Couldn&apos;t reach Base Sepolia. Retrying shortly.
+        </p>
+      ) : !latest ? (
+        <p className="px-5 py-6 text-[13px] text-muted">No launches yet. Launch a token to open the first 60-second batch.</p>
+      ) : (
+        <Latest launch={latest} now={now} />
+      )}
+
+      <div className="border-t border-line px-5 py-3">
+        <Link href="/launches" className="group inline-flex items-center gap-1.5 text-[12.5px] text-chrome/80 transition-colors hover:text-chrome">
+          View all live launches <ArrowRight className="h-3 w-3" />
+        </Link>
       </div>
-    </div>
+    </section>
   );
 }

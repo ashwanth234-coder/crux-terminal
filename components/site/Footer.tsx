@@ -25,7 +25,7 @@ export function Footer() {
                 <a
                   href={l.href}
                   {...(l.href.startsWith("http") ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-                  className="flex items-center text-[13px] text-chrome/70 transition-colors duration-300 hover:text-acid"
+                  className="flex items-center text-[13px] text-chrome/70 transition-colors duration-300 hover:text-chrome"
                   aria-label={l.icon ? "Crux on X" : undefined}
                 >
                   {l.icon ? <XIcon className="h-3.5 w-3.5" /> : l.label}
@@ -38,10 +38,9 @@ export function Footer() {
 
       {/* The close: the wordmark at the full width of the page, lit from above like the chrome */}
       <div aria-hidden="true" className="relative mx-auto max-w-[1440px] select-none px-4 sm:px-8 lg:px-12">
-        <p className="font-display mt-10 text-center text-[27vw] leading-[0.78] tracking-[-0.05em] text-[#0f1012] [font-stretch:125%] [-webkit-text-stroke:1px_#2a2d33] min-[1440px]:text-[390px]">
+        <p className="font-display mt-10 text-center text-[27vw] leading-[0.78] tracking-[-0.05em] text-void [font-stretch:125%] [-webkit-text-stroke:1px_#2a2d33] min-[1440px]:text-[390px]">
           CRUX
         </p>
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-[radial-gradient(ellipse_50%_80%_at_50%_0%,rgba(224,226,236,0.07),transparent_70%)]" />
       </div>
 
       <div className="mx-auto flex max-w-[1440px] items-center justify-between border-t border-line px-4 py-6 sm:px-8 lg:px-12">

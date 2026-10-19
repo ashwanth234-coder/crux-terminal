@@ -1,32 +1,27 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-void: #050505;
-  --color-void-2: #0a0a0a;
-  --color-panel: #0c0d0f;
-  --color-panel-2: #111215;
-  --color-line: #1e2024;
+  /* Quiet Power: obsidian ground, graphite surfaces, soft white type, lime as a signal only */
+  --color-void: #08090b;
+  --color-void-2: #0c0d10;
+  --color-panel: #111215;
+  --color-panel-2: #16171b;
+  --color-line: #1c1e22;
   --color-line-2: #2a2d33;
-  --color-acid: #d4f933;
-  --color-acid-deep: #a9c81f;
-  --color-chrome: #e0e2ec;
-  --color-muted: #8a8f98;
-  --color-dim: #5b6069;
-  --color-up: #b6e83a;
-  --color-down: #ff6b5b;
+  --color-acid: #d0f77a;
+  --color-acid-deep: #b2d95c;
+  --color-chrome: #f3f3f0;
+  --color-muted: #8f939b;
+  --color-dim: #767a84;
+  --color-up: #c4ec74;
+  --color-down: #ff7a6b;
 
   --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;
 
-  --animate-rise: rise 0.9s cubic-bezier(0.2, 0.7, 0.1, 1) both;
-  --animate-pulse-soft: pulse-soft 2.4s ease-in-out infinite;
+  /* Motion is functional only: one entrance, and a spinner while a wallet works. */
+  --animate-rise: rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
   --animate-kinetic: kinetic 0.9s ease-in-out infinite;
-  --animate-tape: tape 70s linear infinite;
-  --animate-line-up: line-up 1.1s cubic-bezier(0.16, 1, 0.3, 1) both;
-  --animate-flow: flow 3.2s linear infinite;
-  --animate-node: node 3.2s ease-out infinite;
-  --animate-flow-y: flow-y 3.2s linear infinite;
-  --animate-shimmer: shimmer 1.4s linear infinite;
 }
 
 @keyframes kinetic {
@@ -39,105 +34,15 @@
   }
 }
 
-@keyframes tape {
-  to {
-    transform: translateX(-50%);
-  }
-}
-
-@keyframes line-up {
-  from {
-    transform: translateY(104%);
-  }
-  to {
-    transform: none;
-  }
-}
-
-/* A pulse of value travelling the token pipeline */
-@keyframes flow {
-  0% {
-    left: 0%;
-    opacity: 0;
-  }
-  4% {
-    opacity: 1;
-  }
-  75% {
-    left: 100%;
-    opacity: 1;
-  }
-  82%,
-  100% {
-    left: 100%;
-    opacity: 0;
-  }
-}
-
-@keyframes flow-y {
-  0% {
-    top: 0%;
-    opacity: 0;
-  }
-  4% {
-    opacity: 1;
-  }
-  75% {
-    top: 100%;
-    opacity: 1;
-  }
-  82%,
-  100% {
-    top: 100%;
-    opacity: 0;
-  }
-}
-
-@keyframes node {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(212, 249, 51, 0);
-    border-color: var(--color-line-2);
-  }
-  6% {
-    box-shadow: 0 0 0 6px rgba(212, 249, 51, 0.12);
-    border-color: rgba(212, 249, 51, 0.7);
-  }
-  30% {
-    box-shadow: 0 0 0 14px rgba(212, 249, 51, 0);
-    border-color: var(--color-line-2);
-  }
-}
-
-@keyframes shimmer {
-  from {
-    background-position: -200% 0;
-  }
-  to {
-    background-position: 200% 0;
-  }
-}
-
+/* Entrance from an already-legible state: a short lift, never hidden text. */
 @keyframes rise {
   from {
-    opacity: 0;
-    transform: translateY(18px);
-    filter: blur(6px);
+    opacity: 0.001;
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
     transform: none;
-    filter: none;
-  }
-}
-
-@keyframes pulse-soft {
-  0%,
-  100% {
-    opacity: 0.45;
-  }
-  50% {
-    opacity: 1;
   }
 }
 
@@ -204,8 +109,8 @@ a {
   /* Extended display face for section headlines */
   .font-display {
     font-family: var(--font-archivo), ui-sans-serif, sans-serif;
-    font-stretch: 122%;
-    font-weight: 700;
+    font-stretch: 112%;
+    font-weight: 600;
     letter-spacing: -0.04em;
     line-height: 0.92;
     text-wrap: balance;
@@ -231,27 +136,18 @@ a {
 
   /* Solid lettering: emphasis comes from weight and value, not gradients */
   .text-bright {
-    color: #f1f2f6;
+    color: #f3f3f0;
   }
 
+  /* The answering line of a two-line headline: 5.6:1 on obsidian */
   .text-steel {
-    color: #7b808a;
+    color: #80848d;
   }
 
-  .grain::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    opacity: 0.07;
-    mix-blend-mode: overlay;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
-  }
 
+  /* Graphite surface: tone, not sheen or glow */
   .panel-sheen {
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 40%),
-      var(--color-panel);
+    background: var(--color-panel);
   }
 }
 

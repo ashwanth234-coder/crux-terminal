@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { Logo } from "./Logo";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { NAV_LINKS } from "@/lib/site";
-import { useBatchClock } from "@/lib/batch";
 import { LaunchTokenButton } from "@/components/launch/LaunchTokenButton";
 
 /** Chapters announce themselves with data-chapter="NN Label" on their section or panel. */
@@ -38,11 +37,9 @@ function useActiveChapter() {
 export function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
-  const clock = useBatchClock();
   const chapter = useActiveChapter();
   const [num, ...label] = (chapter ?? "").split(" ");
-  // The mechanics rail already shows position for 02-05; do not repeat it here.
-  const showChip = chapter !== null && !["02", "03", "04", "05"].includes(num);
+  const showChip = chapter !== null;
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -55,9 +52,6 @@ export function Header() {
     document.body.style.overflow = open ? "hidden" : "";
   }, [open]);
 
-  // Full and glowing in the last second, then snap back as the next batch opens.
-  const clearing = clock !== null && clock.left <= 1;
-  const reopening = clock !== null && clock.left >= 60;
 
   return (
     <header
@@ -101,18 +95,6 @@ export function Header() {
             <a href="#protocol" className={buttonClass("acid", "sm", "h-10 px-5")}>
               Launch App <ArrowUpRight />
             </a>
-            <p
-              aria-hidden="true"
-              className={`pointer-events-none absolute right-0 top-[calc(100%+16px)] hidden w-36 text-right text-[9.5px] font-medium uppercase leading-[1.6] tracking-[0.24em] text-muted transition-opacity duration-500 xl:block ${
-                scrolled ? "opacity-0" : "opacity-100"
-              }`}
-            >
-              OMNICHAIN
-              <br />
-              EXECUTION
-              <br />
-              PROTOCOL
-            </p>
           </div>
           <button
             type="button"
@@ -131,15 +113,8 @@ export function Header() {
         </div>
       </div>
 
-      {/* Batch heartbeat: fills over each 60s window, flares when the batch clears */}
-      <div className="absolute inset-x-0 bottom-0 h-px bg-line" aria-hidden="true">
-        <div
-          className={`h-px origin-left bg-acid transition-[transform,box-shadow] ease-linear ${
-            reopening ? "duration-0" : "duration-1000"
-          } ${clearing ? "shadow-[0_0_14px_2px_rgba(212,249,51,0.8)]" : ""}`}
-          style={{ transform: `scaleX(${clock ? (60 - clock.left + 1) / 60 : 0})` }}
-        />
-      </div>
+      {/* A single hairline under the bar; no clock, no glow */}
+      <div className="absolute inset-x-0 bottom-0 h-px bg-line" aria-hidden="true" />
 
       <div
         id="mobile-nav"

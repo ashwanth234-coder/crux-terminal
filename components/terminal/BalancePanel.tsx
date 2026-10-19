@@ -37,14 +37,14 @@ export function BalancePanel() {
           {b.mode === "live" ? "LIVE" : "DEMO"}
         </span>
       </div>
-      <p className={`mt-1 font-mono text-[30px] font-medium tracking-tight text-chrome ${b.isLoading ? "animate-pulse-soft" : ""}`}>
+      <p className={`mt-1 font-mono text-[30px] font-medium tracking-tight text-chrome ${b.isLoading ? "text-chrome/40" : ""}`}>
         {whole}
         <span className="text-chrome/70">.{cents}</span>
       </p>
       <p className={`mt-1 flex items-center gap-1.5 font-mono text-[12px] ${b.change24h === null ? "text-muted" : up ? "text-up" : "text-down"}`}>
         {b.change24h === null ? (
           <>
-            <span className="h-1.5 w-1.5 rounded-full bg-acid animate-pulse-soft" />
+            <span className="h-1.5 w-1.5 rounded-full bg-acid" />
             Live · refreshes every 30s
           </>
         ) : (
@@ -86,7 +86,7 @@ export function BalancePanel() {
                   )}
                 </span>
                 {row.status === "loading" ? (
-                  <span className="h-3 w-16 rounded bg-[linear-gradient(90deg,#1e2024,#2a2d33,#1e2024)] bg-[length:200%_100%] animate-shimmer" />
+                  <span className="h-3 w-16 rounded bg-line" />
                 ) : (
                   <span className="font-mono text-chrome/90" title={row.native ? `${row.native.amount.toFixed(5)} ${row.native.symbol} + ${row.usdc.toFixed(2)} USDC` : undefined}>
                     {usd.format(row.usd)}

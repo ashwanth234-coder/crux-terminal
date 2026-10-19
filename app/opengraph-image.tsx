@@ -15,7 +15,7 @@ export default function OpengraphImage() {
           flexDirection: "column",
           justifyContent: "space-between",
           padding: 72,
-          background: "radial-gradient(circle at 78% 40%, #23262c 0%, #0a0a0a 45%, #050505 100%)",
+          background: "radial-gradient(circle at 78% 40%, #23262c 0%, #0a0a0a 45%, #08090b 100%)",
           color: "#E0E2EC",
           fontFamily: "sans-serif",
         }}
@@ -25,7 +25,7 @@ export default function OpengraphImage() {
             style={{
               width: 44,
               height: 44,
-              border: "3px solid #D4F933",
+              border: "3px solid #d0f77a",
               borderRadius: 10,
               transform: "rotate(45deg)",
             }}
@@ -38,7 +38,7 @@ export default function OpengraphImage() {
           <div style={{ color: "#8f949e" }}>Zero friction.</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ background: "#D4F933", color: "#050505", padding: "14px 30px", borderRadius: 999, fontSize: 28, fontWeight: 700 }}>
+          <div style={{ background: "#d0f77a", color: "#08090b", padding: "14px 30px", borderRadius: 999, fontSize: 28, fontWeight: 700 }}>
             Launch Crux ↗
           </div>
           <div style={{ fontSize: 22, letterSpacing: 6, color: "#8A8F98" }}>OMNICHAIN EXECUTION PROTOCOL</div>

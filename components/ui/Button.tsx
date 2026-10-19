@@ -4,10 +4,11 @@ type Variant = "acid" | "outline" | "ghost";
 type Size = "sm" | "md";
 
 const base =
-  "group inline-flex items-center justify-center gap-2 rounded-full font-medium whitespace-nowrap transition-[background-color,border-color,color,box-shadow,transform] duration-300 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acid active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50";
+  "group inline-flex items-center justify-center gap-2 rounded-full font-medium whitespace-nowrap transition-[background-color,border-color,color,transform] duration-200 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acid active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50";
 
 const variants: Record<Variant, string> = {
-  acid: "bg-acid text-void hover:bg-[#e2ff5c] shadow-[0_0_0_0_rgba(212,249,51,0)] hover:shadow-[0_0_32px_-4px_rgba(212,249,51,0.55)]",
+  // Flat lime pill: hover lightens, it never glows.
+  acid: "bg-acid text-void hover:bg-[#dcfa98]",
   outline: "border border-line-2 text-chrome hover:border-chrome/60 hover:bg-white/[0.04]",
   ghost: "text-muted hover:text-chrome",
 };

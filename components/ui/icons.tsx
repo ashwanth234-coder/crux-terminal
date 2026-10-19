@@ -37,7 +37,7 @@ export function RobinhoodIcon({ className = "h-4 w-4" }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
       <path d="M19.6 3.2c-5.6.4-10.4 3.6-12.6 9.4L5 20.8l2.4-.2 1.8-6.2c2.6-.2 5.4-1.6 7.2-4 1.6-2.2 2.6-4.6 3.2-7.2Z" fill="#CCFF00" />
-      <path d="M9.2 14.4c1.6-3.4 4.4-6.4 7.8-8.6" stroke="#050505" strokeWidth="1" fill="none" />
+      <path d="M9.2 14.4c1.6-3.4 4.4-6.4 7.8-8.6" stroke="#08090b" strokeWidth="1" fill="none" />
     </svg>
   );
 }

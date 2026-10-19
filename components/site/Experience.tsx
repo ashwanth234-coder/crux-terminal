@@ -1,9 +1,8 @@
 import { UnifiedBalanceCard } from "@/components/terminal/UnifiedBalanceCard";
-import { TiltIn } from "./TiltIn";
 
 export function Experience() {
   return (
-    <section id="protocol" data-chapter="01 Experience" className="relative scroll-mt-16">
+    <section id="protocol" data-chapter="01 Experience" className="relative scroll-mt-16 border-t border-line">
       <div className="mx-auto grid max-w-[1440px] gap-14 px-4 pb-24 pt-24 sm:px-8 lg:grid-cols-12 lg:gap-10 lg:px-12 lg:pb-24 lg:pt-32">
         <div className="flex flex-col justify-center lg:col-span-4">
           <h2 className="font-display text-[clamp(2.5rem,4vw,3.8rem)] leading-[0.95] [font-stretch:108%]">
@@ -31,7 +30,7 @@ export function Experience() {
                 <div>
                   <dt className="sr-only">{m.label.join(" ")}</dt>
                   <dd>
-                    <span className={`block font-mono text-[56px] font-light leading-none ${m.accent ? "text-acid" : "text-bright"}`}>
+                    <span className={`block font-mono text-[52px] font-light leading-none ${m.accent ? "text-acid" : "text-bright"}`}>
                       {m.value}
                     </span>
                     <span className="mt-3 block text-[12px] leading-[1.45] text-muted">
@@ -46,9 +45,9 @@ export function Experience() {
           </dl>
         </div>
 
-        <TiltIn className="lg:col-span-8">
+        <div className="lg:col-span-8">
           <UnifiedBalanceCard />
-        </TiltIn>
+        </div>
       </div>
     </section>
   );

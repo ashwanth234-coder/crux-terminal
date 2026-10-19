@@ -233,7 +233,7 @@ function LaunchView({ model, auction, id }: { model: LaunchModel; auction: Aucti
           }`}
         >
           <span
-            className={`h-1.5 w-1.5 rounded-full ${status.live ? "animate-pulse-soft bg-acid" : phase === "cancelled" ? "bg-down" : phase === "graduated" ? "bg-acid" : "bg-dim"}`}
+            className={`h-1.5 w-1.5 rounded-full ${status.live ? "bg-acid" : phase === "cancelled" ? "bg-down" : phase === "graduated" ? "bg-acid" : "bg-dim"}`}
             aria-hidden="true"
           />
           {status.label}
