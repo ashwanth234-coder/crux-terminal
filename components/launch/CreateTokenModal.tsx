@@ -9,6 +9,9 @@ import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { cruxFactoryAbi } from "@/contracts/abis/batchAuction";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import { BATCH_WINDOW_SECONDS, FACTORY } from "@/lib/intents";
+
+/** With the batch auction off, CruxFactory runs one pro-rata sale over OPEN_SALE_WINDOW (1 day). */
+const OPEN_SALE_HOURS = 24;
 import { useConnectModal } from "@/providers/Web3Provider";
 
 type Form = {
@@ -253,7 +256,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             <div className="col-span-2 rounded-lg border border-line p-3">
               <dt className="text-muted">Launch mechanism</dt>
               <dd className="mt-1 text-chrome">
-                {form.batchAuction ? `${BATCH_WINDOW_SECONDS}s uniform-price batch auction` : "Open bonding curve"}
+                {form.batchAuction ? `${BATCH_WINDOW_SECONDS}s uniform-price batch auction` : `${OPEN_SALE_HOURS}-hour pro-rata sale`}
               </dd>
             </div>
           </dl>
@@ -432,7 +435,11 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                   </span>
                 </span>
               </p>
-              <p className="mt-1 text-[11.5px] text-dim">Every opening order clears at the same price. Recommended.</p>
+              <p className="mt-1 text-[11.5px] text-dim">
+                {form.batchAuction
+                  ? "Every opening order clears at the same price. Recommended."
+                  : `Off: a ${OPEN_SALE_HOURS}-hour pro-rata sale. Everyone still pays one price, but buyers wait a full day to claim.`}
+              </p>
             </div>
             <button
               type="button"
