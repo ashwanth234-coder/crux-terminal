@@ -20,6 +20,7 @@ import {
   parsePriceUsd,
   phaseV2,
   priceUsd,
+  windowLabel,
   type AuctionV2,
   type PhaseV2,
 } from "@/lib/launchV2";
@@ -142,7 +143,7 @@ function ViewV2({ model, auction, id }: { model: LaunchV2Model; auction: Auction
                 {phase === "scheduled" ? formatRemaining(opensIn) : phase === "open" ? formatRemaining(closesIn) : "Closed"}
               </p>
             </div>
-            <p className="pb-1 text-right text-[11.5px] text-dim">{auction.batchWindow >= 3600 ? `${auction.batchWindow / 3600}-hour batch` : `${auction.batchWindow}s uniform batch`}</p>
+            <p className="pb-1 text-right text-[11.5px] text-dim">{windowLabel(auction.batchWindow)} uniform batch</p>
           </div>
           <div className="mt-4">
             <Bar value={phase === "open" ? 1 - closesIn / auction.batchWindow : phase === "scheduled" ? 0 : 1} className={phase === "open" ? "bg-chrome/60" : "bg-line-2"} />
@@ -166,10 +167,16 @@ function ViewV2({ model, auction, id }: { model: LaunchV2Model; auction: Auction
 
           <dl className="mt-6 divide-y divide-line border-t border-line">
             <Row
-              label={phase === "graduated" ? "Clearing price" : "Clearing price if it closed now"}
-              hint={phase === "graduated" ? "Every filled bid paid this" : "Live from the contract's clearing search"}
+              label={phase === "graduated" || phase === "cancelled" ? "Clearing price" : "Clearing price if it closed now"}
+              hint={
+                phase === "graduated"
+                  ? "Every filled bid paid this"
+                  : phase === "cancelled"
+                    ? "Demand didn't cover the sale at the floor; every deposit is refundable"
+                    : "Live from the contract's clearing search"
+              }
             >
-              {phase === "cancelled" ? "None" : price !== null ? `$${priceUsd(price)}` : model.wouldGraduate === false ? "Below the floor" : "No bids yet"}
+              {phase === "cancelled" ? "None: launch cancelled" : price !== null ? `$${priceUsd(price)}` : model.wouldGraduate === false ? "Below the floor" : "No bids yet"}
             </Row>
             <Row label="Market cap at this price">{price !== null && phase !== "cancelled" ? marketCapUsd(price, auction.totalSupply) : "—"}</Row>
             <Row label="Floor price" hint="Bids must allow at least this">{`$${priceUsd(auction.floorPrice)}`}</Row>

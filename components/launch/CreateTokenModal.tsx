@@ -10,7 +10,7 @@ import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { cruxFactoryAbi, cruxFactoryV2Abi } from "@/contracts/abis/batchAuction";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import { BATCH_WINDOW_SECONDS, FACTORY, FACTORY_V2 } from "@/lib/intents";
-import { V2_FEE, V2_MIN_LEAD_SECONDS, V2_SPLIT } from "@/lib/launchV2";
+import { V2_FEE, V2_MIN_LEAD_SECONDS, V2_SPLIT, V2_WINDOWS, buyersNeeded, windowLabel } from "@/lib/launchV2";
 import { previewHref } from "@/lib/launch";
 
 /** With the batch auction off, CruxFactory runs one pro-rata sale over OPEN_SALE_WINDOW (1 day). */
@@ -34,6 +34,8 @@ type Form = {
   startsIn: string;
   /** V2: most of the sale one wallet can receive, as a percentage. */
   walletCap: string;
+  /** V2: batch window in seconds. */
+  window: string;
 };
 
 const INITIAL: Form = {
@@ -48,6 +50,7 @@ const INITIAL: Form = {
   batchAuction: true,
   startsIn: "10",
   walletCap: "5",
+  window: "60",
 };
 
 const SIM_STEPS = [
@@ -83,6 +86,16 @@ function validate(f: Form) {
     if (!Number.isFinite(cap) || cap < 0.1 || cap > 100) errors.walletCap = "Between 0.1% and 100% of the sale.";
   }
   return errors;
+}
+
+/** How many wallets a cap needs before the sale can fill (and so graduate). */
+function capHint(walletCap: string) {
+  const cap = Number(walletCap);
+  if (!Number.isFinite(cap) || cap < 0.1 || cap > 100) return "Share of the sale one wallet can receive; the excess is refunded";
+  const n = buyersNeeded(cap);
+  return n === 1
+    ? "One wallet can fill the whole sale; anything over the cap is refunded"
+    : `Needs at least ${n} buyers to fill the sale and graduate; each wallet's excess is refunded`;
 }
 
 /** Off-chain metadata carried as a data URI so launch needs no IPFS pinning service. */
@@ -204,7 +217,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
           totalSupply,
           graduationTarget: parseUnits(digits(form.target), 6),
           startTime: BigInt(Math.floor(Date.now() / 1000) + Math.round(Number(form.startsIn) * 60)),
-          batchWindow: form.batchAuction ? BATCH_WINDOW_SECONDS : OPEN_SALE_HOURS * 3600,
+          batchWindow: Number(form.window),
           maxAllocationPerWallet: (sale * capBps) / BigInt(10_000),
         },
       ],
@@ -336,7 +349,11 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             <div className="col-span-2 rounded-lg border border-line p-3">
               <dt className="text-muted">Launch mechanism</dt>
               <dd className="mt-1 text-chrome">
-                {form.batchAuction ? `${BATCH_WINDOW_SECONDS}s uniform-price batch auction` : `${OPEN_SALE_HOURS}-hour pro-rata sale`}
+                {FACTORY_V2
+                  ? `${windowLabel(Number(form.window))} uniform-price batch auction`
+                  : form.batchAuction
+                    ? `${BATCH_WINDOW_SECONDS}s uniform-price batch auction`
+                    : `${OPEN_SALE_HOURS}-hour pro-rata sale`}
               </dd>
             </div>
           </dl>
@@ -518,7 +535,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                 id={id("walletCap")}
                 label="Max allocation per wallet"
                 error={showErr("walletCap")}
-                hint="Share of the sale one wallet can receive; the excess is refunded"
+                hint={capHint(form.walletCap)}
               >
                 <div className="relative">
                   <input
@@ -536,7 +553,37 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             </div>
           )}
 
+          {/* V2: every launch is a uniform-price batch; the creator picks how long it stays open */}
+          {FACTORY_V2 && (
+            <fieldset className="rounded-xl border border-line p-4">
+              <legend className="px-1 text-[13px] text-chrome">Batch window</legend>
+              <div role="radiogroup" aria-label="Batch window" className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {V2_WINDOWS.map((w) => {
+                  const active = form.window === String(w.seconds);
+                  return (
+                    <button
+                      key={w.seconds}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => set("window", String(w.seconds))}
+                      className={`h-10 rounded-lg border text-[13px] transition-colors ${
+                        active ? "border-chrome/60 bg-line-2 text-chrome" : "border-line text-muted hover:text-chrome"
+                      }`}
+                    >
+                      {w.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-3 text-[11.5px] leading-snug text-dim">
+                Every bid in the window clears at one price, whatever its length. Longer windows give buyers time to find the launch.
+              </p>
+            </fieldset>
+          )}
+
           {/* Batch auction toggle with an explanatory tooltip (also exposed as its description) */}
+          {!FACTORY_V2 && (
           <div className="flex items-start justify-between gap-4 rounded-xl border border-line p-4">
             <div className="min-w-0">
               <p className="flex items-center gap-2 text-[13px] text-chrome">
@@ -581,6 +628,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
               />
             </button>
           </div>
+          )}
 
           {error && (
             <p role="alert" className="rounded-lg border border-down/30 bg-down/10 px-3 py-2 text-[12px] text-down">

@@ -291,7 +291,7 @@ function LaunchView({ model, auction, id }: { model: LaunchModel; auction: Aucti
           </div>
 
           <dl className="mt-6 divide-y divide-line border-t border-line">
-            <Row label={phase === "graduated" ? "Clearing price" : "Clearing price so far"}>
+            <Row label={phase === "graduated" || phase === "cancelled" ? "Clearing price" : "Clearing price so far"}>
               {phase === "cancelled" ? "None: target missed" : price ? `$${price} per token` : "—"}
             </Row>
             <Row label="Market cap at this price">{phase === "cancelled" ? "—" : (impliedMarketCap(auction.totalDeposits) ?? "—")}</Row>

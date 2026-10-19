@@ -89,3 +89,23 @@ export function toAuctionV2(raw: {
 }): AuctionV2 {
   return { ...raw, startTime: Number(raw.startTime), settledAt: Number(raw.settledAt) };
 }
+
+/** Batch windows offered at launch; the contract accepts anything from 30 seconds to 24 hours. */
+export const V2_WINDOWS = [
+  { seconds: 60, label: "60 sec" },
+  { seconds: 300, label: "5 min" },
+  { seconds: 3_600, label: "1 hour" },
+  { seconds: 86_400, label: "24 hours" },
+] as const;
+
+/** "60-second", "5-minute", "1-hour", "24-hour". */
+export function windowLabel(seconds: number) {
+  if (seconds % 3_600 === 0) return `${seconds / 3_600}-hour`;
+  if (seconds % 60 === 0 && seconds >= 120) return `${seconds / 60}-minute`;
+  return `${seconds}-second`;
+}
+
+/** Fewest distinct wallets that can fill the sale under a per-wallet cap (as a % of the sale). */
+export function buyersNeeded(capPercent: number) {
+  return Math.ceil(100 / capPercent - 1e-9);
+}
