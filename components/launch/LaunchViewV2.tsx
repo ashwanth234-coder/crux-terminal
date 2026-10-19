@@ -236,8 +236,10 @@ function ActionPanelV2({ model, auction, phase, symbol }: { model: LaunchV2Model
     try {
       const hash = await action(setBusy);
       setDone({ text: success, hash });
+      return true;
     } catch (err) {
       setError(launchError(err));
+      return false;
     } finally {
       setBusy(null);
     }
@@ -281,7 +283,15 @@ function ActionPanelV2({ model, auction, phase, symbol }: { model: LaunchV2Model
         onSubmit={(e) => {
           e.preventDefault();
           if (!parsed || parsed <= BigInt(0) || overBalance || !limitPrice || limitError) return;
-          void run((s) => model.deposit(parsed!, limitPrice, s), `Bid placed: $${fmtUsdc(parsed!)} ${limitOn ? `up to $${limit} per token` : "at any clearing price"}.`);
+          void run(
+            (s) => model.deposit(parsed!, limitPrice, s),
+            `Bid placed: $${fmtUsdc(parsed!)} ${limitOn ? `up to $${limit} per token` : "at any clearing price"}.`,
+          ).then((ok) => {
+            if (!ok) return;
+            setAmount("");
+            setLimit("");
+            setLimitOn(false);
+          });
         }}
       >
         <label htmlFor={`${uid}-amt`} className="text-[12.5px] text-muted">

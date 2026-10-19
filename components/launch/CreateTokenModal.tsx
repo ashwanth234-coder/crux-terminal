@@ -174,9 +174,12 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     setError(null);
   };
 
+  // Closing (or a failed attempt) keeps every value the creator typed; only a successful launch clears the form.
   const close = () => {
     if (busy) return;
-    reset();
+    setTouched(false);
+    setPhase({ kind: "form" });
+    setError(null);
     onClose();
   };
 
