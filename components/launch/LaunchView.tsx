@@ -219,6 +219,9 @@ function LaunchView({ model, auction, id }: { model: LaunchModel; auction: Aucti
             {model.symbol ? `$${model.symbol}` : "Token launch"}
             {model.name && <span className="text-steel"> {model.name}</span>}
           </h1>
+          <p className="mt-2 text-[13px] text-muted">
+            Graduates at <span className="font-mono tabular-nums text-chrome">${fmtUsdc(auction.graduationTarget)}</span> {simulated ? "simulated USDC" : "test USDC"}
+          </p>
         </div>
         <span
           className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] ${
@@ -266,7 +269,7 @@ function LaunchView({ model, auction, id }: { model: LaunchModel; auction: Aucti
           </div>
 
           <dl className="mt-6 divide-y divide-line border-t border-line">
-            <Row label={phase === "graduated" ? "Clearing price" : "Implied uniform price"}>
+            <Row label={phase === "graduated" ? "Clearing price (uniform, zero MEV slippage)" : "Uniform price (zero MEV slippage)"}>
               {phase === "cancelled" ? "None: target missed" : price ? `$${price} per token` : "—"}
             </Row>
             <Row label="On sale (80% of supply)">{model.saleSupply !== null ? `${fmtTokens(model.saleSupply)} ${symbol}` : "—"}</Row>
@@ -329,6 +332,8 @@ function ActionPanel({ model, auction, phase, symbol }: { model: LaunchModel; au
   const overBalance = parsed !== null && model.usdcBalance !== null && parsed > model.usdcBalance;
   const needsApproval = parsed !== null && model.allowance !== null && parsed > model.allowance;
   const share = auction.totalDeposits > BigInt(0) ? Number((model.myDeposit * BigInt(10000)) / auction.totalDeposits) / 100 : 0;
+  // Exact uniform price; the contract's integer clearingPrice rounds to 0 for sub-cent tokens.
+  const clearing = impliedPrice(auction.totalDeposits, model.saleSupply);
 
   const run = async (action: (onStep: (s: TxStep) => void) => Promise<Hex | undefined>, success: string) => {
     setError(null);
@@ -447,7 +452,7 @@ function ActionPanel({ model, auction, phase, symbol }: { model: LaunchModel; au
     body = (
       <>
         <p className="text-[13px] leading-relaxed text-muted">
-          The window has closed. Anyone can settle it in one transaction.{" "}
+          The window has closed. Anyone can crank the settlement to finalize the clearing price and distribute tokens.{" "}
           <span className="text-chrome">
             {willGraduate ? "Target met: settling graduates the token." : "Target missed: settling cancels the launch and opens exact refunds."}
           </span>
@@ -474,8 +479,14 @@ function ActionPanel({ model, auction, phase, symbol }: { model: LaunchModel; au
               </>
             ) : (
               <>
-                The launch graduated. <span className="text-chrome">You get {fmtTokens(model.allocation)} {symbol}</span> at the uniform
-                clearing price.
+                The launch graduated. You secured <span className="text-chrome">{fmtTokens(model.allocation)} {symbol}</span>
+                {clearing ? (
+                  <>
+                    {" "}at <span className="font-mono tabular-nums text-chrome">${clearing}</span> USDC per token, the same price as every other buyer.
+                  </>
+                ) : (
+                  " at the uniform clearing price."
+                )}
               </>
             )}
           </p>
