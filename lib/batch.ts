@@ -14,12 +14,15 @@ export type BatchClock = {
   left: number;
   /** 0 → 1 progress through the window. */
   progress: number;
+  /** Unix seconds at this tick, for countdowns that keep time with the batch. */
+  now: number;
 };
 
 function read(): BatchClock {
-  const elapsed = Math.floor(Date.now() / 1000) - EPOCH;
+  const now = Math.floor(Date.now() / 1000);
+  const elapsed = now - EPOCH;
   const into = elapsed % BATCH_SECONDS;
-  return { batch: Math.floor(elapsed / BATCH_SECONDS), left: BATCH_SECONDS - into, progress: into / BATCH_SECONDS };
+  return { batch: Math.floor(elapsed / BATCH_SECONDS), left: BATCH_SECONDS - into, progress: into / BATCH_SECONDS, now };
 }
 
 // One shared 1s ticker for every subscriber on the page.

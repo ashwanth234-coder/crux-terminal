@@ -117,3 +117,31 @@ export const destinationSettlerAbi = [
     outputs: [],
   },
 ] as const;
+
+/**
+ * CruxSettler extensions beyond ERC-7683 (crux-contracts/src/CruxSettler.sol):
+ * the per-order escrow and the permissionless refund once the grace period ends.
+ */
+export const cruxSettlerAbi = [
+  {
+    type: "function",
+    name: "escrows",
+    stateMutability: "view",
+    inputs: [{ name: "orderId", type: "bytes32" }],
+    outputs: [
+      { name: "user", type: "address" },
+      { name: "token", type: "address" },
+      { name: "amount", type: "uint256" },
+      { name: "fillDeadline", type: "uint32" },
+      // Status: 0 None, 1 Open, 2 Settled, 3 Refunded.
+      { name: "status", type: "uint8" },
+    ],
+  },
+  {
+    type: "function",
+    name: "refund",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "orderId", type: "bytes32" }],
+    outputs: [],
+  },
+] as const;

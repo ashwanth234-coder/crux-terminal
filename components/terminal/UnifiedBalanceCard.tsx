@@ -1,6 +1,7 @@
 import { CruxMark } from "@/components/site/Logo";
 import { TokenOrbs } from "@/components/canvas";
 import { BalancePanel } from "./BalancePanel";
+import { MyIntentsPanel } from "./MyIntentsPanel";
 import { TradeWidget } from "./TradeWidget";
 import { WalletChip } from "./WalletChip";
 
@@ -61,6 +62,9 @@ export function UnifiedBalanceCard() {
           <TradeWidget />
         </div>
       </div>
+
+      {/* Testnet escrow: only renders with a live settler and a connected wallet */}
+      <MyIntentsPanel />
     </div>
   );
 }

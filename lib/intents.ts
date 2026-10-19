@@ -14,6 +14,12 @@ const configuredSettler = envAddress(process.env.NEXT_PUBLIC_CRUX_SETTLER);
 export const SETTLER = (configuredSettler ?? PLACEHOLDER_SETTLER) as Address;
 export const SETTLER_DEPLOYED = configuredSettler !== null;
 
+/** Block the settler was deployed in (crux-contracts/broadcast/Deploy.s.sol/84532/run-latest.json); log scans start here. */
+export const SETTLER_DEPLOY_BLOCK = BigInt(48311115);
+
+/** CruxSettler.REFUND_GRACE: refunds open this long after an order's fillDeadline. */
+export const REFUND_GRACE_SECONDS = 3600;
+
 /** Launch + batch-auction factory on Base Sepolia, once deployed (NEXT_PUBLIC_CRUX_FACTORY). */
 export const FACTORY = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY);
 
