@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { ArrowUpRight } from "@/components/ui/Button";
 import type { LaunchSummary } from "@/hooks/useLaunches";
-import { fmtUsdc, formatRemaining, impliedMarketCap, impliedPrice, type Phase } from "@/lib/launch";
+import { fmtUsdc, formatRemaining, type Phase } from "@/lib/launch";
+import { describeLaunch } from "@/lib/launchSummary";
 
 const BADGE: Record<Phase, { label: string; className: string; dot: string }> = {
+  scheduled: { label: "Scheduled", className: "border-line-2 text-chrome/80", dot: "bg-chrome/50" },
   open: { label: "Live", className: "border-acid/50 text-chrome", dot: "bg-acid" },
   closed: { label: "Awaiting settlement", className: "border-line-2 text-chrome/80", dot: "bg-chrome/60" },
   settled: { label: "Settled", className: "border-line-2 text-chrome/80", dot: "bg-chrome/60" },
@@ -27,15 +29,16 @@ export function LaunchCard({ launch, phase, now }: { launch: LaunchSummary; phas
   const badge = BADGE[phase];
   const ticker = launch.symbol ?? `#${id}`;
   const raised = auction.graduationTarget > BigInt(0) ? Number((auction.totalDeposits * BigInt(10000)) / auction.graduationTarget) / 10_000 : 0;
-  const price = impliedPrice(auction.totalDeposits, launch.saleSupply);
-  const cap = impliedMarketCap(auction.totalDeposits);
-  const left = now === null ? auction.batchWindow : auction.startTime + auction.batchWindow - now;
+  const d = describeLaunch(launch, now);
+  const price = d.price;
+  const cap = d.marketCap;
+  const left = d.closesIn;
   const elapsed = 1 - Math.max(0, left) / auction.batchWindow;
-  const priceLabel = phase === "graduated" ? "Clearing price" : phase === "open" ? "Clearing price so far" : "Uniform price";
+  const priceLabel = d.priceLabel;
 
   return (
     <Link
-      href={`/launch/${id}`}
+      href={launch.href}
       className="group flex h-full flex-col rounded-2xl border border-line bg-panel p-5 transition-colors duration-200 hover:border-line-2 focus-visible:border-acid/60"
     >
       {/* Identity */}
@@ -47,6 +50,7 @@ export function LaunchCard({ launch, phase, now }: { launch: LaunchSummary; phas
           <h2 className="truncate text-[17px] font-medium leading-tight text-chrome">${ticker}</h2>
           <p className="mt-0.5 truncate text-[12.5px] text-muted">
             {launch.name ?? "Unnamed token"} <span className="font-mono text-dim">· #{id}</span>
+            {launch.version === 2 && <span className="text-dim"> · LP locked</span>}
           </p>
         </div>
         <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${badge.className}`}>
@@ -59,7 +63,7 @@ export function LaunchCard({ launch, phase, now }: { launch: LaunchSummary; phas
       <div className="mt-6">
         <p className="text-[12px] text-muted">{priceLabel}</p>
         {phase !== "cancelled" && price ? (
-          <p className="mt-1 truncate font-mono text-[22px] leading-tight text-chrome">${price}</p>
+          <p className="mt-1 truncate font-mono text-[22px] leading-tight text-chrome">{price}</p>
         ) : (
           <p className="mt-1 text-[19px] leading-tight text-chrome/70">{phase === "cancelled" ? "None: target missed" : "No bids yet"}</p>
         )}
@@ -71,6 +75,14 @@ export function LaunchCard({ launch, phase, now }: { launch: LaunchSummary; phas
 
       {/* Progress: the sealed window, then the raise */}
       <div className="mt-6 space-y-4 border-t border-line pt-4">
+        {phase === "scheduled" && (
+          <div className="flex items-baseline justify-between gap-3 text-[12px]">
+            <span className="text-muted">Deposits open in</span>
+            <span className="font-mono text-chrome" role="timer">
+              {formatRemaining(d.opensIn)}
+            </span>
+          </div>
+        )}
         {phase === "open" && (
           <div>
             <div className="flex items-baseline justify-between gap-3 text-[12px]">
@@ -99,7 +111,7 @@ export function LaunchCard({ launch, phase, now }: { launch: LaunchSummary; phas
       </div>
 
       <span className="mt-auto inline-flex items-center gap-1.5 pt-5 text-[12.5px] text-chrome/75 transition-colors group-hover:text-chrome">
-        {phase === "open" ? "Deposit" : phase === "closed" ? "Settle" : "View auction"} <ArrowUpRight />
+        {phase === "open" ? "Bid" : phase === "closed" ? "Settle" : "View auction"} <ArrowUpRight />
       </span>
     </Link>
   );

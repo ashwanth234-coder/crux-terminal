@@ -155,7 +155,7 @@ function AuctionJump() {
   );
 }
 
-function Notice({ title, children }: { title: string; children: ReactNode }) {
+export function Notice({ title, children }: { title: string; children: ReactNode }) {
   return (
     <Shell mode={null}>
       <div className="mx-auto max-w-[560px] py-16 text-center">
@@ -175,6 +175,7 @@ function Notice({ title, children }: { title: string; children: ReactNode }) {
 // ------------------------------------------------------------------- view
 
 const STATUS: Record<Phase, { label: string; live: boolean }> = {
+  scheduled: { label: "Scheduled", live: false },
   open: { label: "Deposits open", live: true },
   closed: { label: "Window closed · awaiting settlement", live: false },
   settled: { label: "Settled", live: false },
@@ -534,6 +535,7 @@ function ActionPanel({ model, auction, phase, symbol }: { model: LaunchModel; au
   }
 
   const heading: Record<Phase, string> = {
+    scheduled: "Deposit",
     open: "Deposit",
     closed: "Settle",
     settled: "Settled",

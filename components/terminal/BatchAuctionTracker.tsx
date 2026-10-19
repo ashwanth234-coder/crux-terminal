@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { ArrowRight } from "@/components/ui/Button";
-import { useLaunches, type LaunchSummary } from "@/hooks/useLaunches";
+import { useAllLaunches, type LaunchSummary } from "@/hooks/useLaunches";
 import { useNow } from "@/hooks/useLaunchAuction";
-import { FACTORY } from "@/lib/intents";
-import { auctionPhase, fmtUsdc, formatRemaining, impliedPrice, type Phase } from "@/lib/launch";
+import { FACTORY, FACTORY_V2 } from "@/lib/intents";
+import { fmtUsdc, formatRemaining, type Phase } from "@/lib/launch";
+import { describeLaunch } from "@/lib/launchSummary";
 
 const STATUS: Record<Phase, string> = {
+  scheduled: "Scheduled",
   open: "Deposits open",
   closed: "Awaiting settlement",
   settled: "Settled",
@@ -17,18 +19,17 @@ const STATUS: Record<Phase, string> = {
 
 function Latest({ launch, now }: { launch: LaunchSummary; now: number | null }) {
   const { auction } = launch;
-  const phase = now === null ? "open" : auctionPhase(auction, now);
-  const price = impliedPrice(auction.totalDeposits, launch.saleSupply);
-  const left = now === null ? 0 : auction.startTime + auction.batchWindow - now;
+  const d = describeLaunch(launch, now);
+  const phase = d.phase;
   return (
-    <Link href={`/launch/${launch.id}`} className="block px-5 py-5 transition-colors hover:bg-white/[0.02]">
+    <Link href={launch.href} className="block px-5 py-5 transition-colors hover:bg-white/[0.02]">
       <div className="flex items-baseline justify-between gap-4">
         <p className="truncate text-[17px] text-chrome">
           {launch.symbol ? `$${launch.symbol}` : `Auction #${launch.id}`}
           {launch.name && <span className="text-steel"> {launch.name}</span>}
         </p>
         <span className={`shrink-0 text-[12px] ${phase === "graduated" || phase === "open" ? "text-acid" : "text-muted"}`}>
-          {phase === "open" ? `Closes in ${formatRemaining(left)}` : STATUS[phase]}
+          {phase === "open" ? `Closes in ${formatRemaining(d.closesIn)}` : phase === "scheduled" ? `Opens in ${formatRemaining(d.opensIn)}` : STATUS[phase]}
         </span>
       </div>
       <dl className="mt-4 grid grid-cols-2 gap-4 text-[12px]">
@@ -39,8 +40,8 @@ function Latest({ launch, now }: { launch: LaunchSummary; now: number | null }) 
           </dd>
         </div>
         <div>
-          <dt className="text-muted">Uniform price</dt>
-          <dd className="mt-1 truncate font-mono text-[13px] text-chrome">{phase === "cancelled" ? "None" : price ? `$${price}` : "No bids yet"}</dd>
+          <dt className="text-muted">{d.priceLabel}</dt>
+          <dd className="mt-1 truncate font-mono text-[13px] text-chrome">{phase === "cancelled" ? "None" : (d.price ?? "No bids yet")}</dd>
         </div>
       </dl>
     </Link>
@@ -53,7 +54,7 @@ function Latest({ launch, now }: { launch: LaunchSummary; now: number | null }) 
  */
 export function BatchAuctionTracker() {
   const now = useNow();
-  const { launches, loading, error } = useLaunches(FACTORY);
+  const { launches, loading, error } = useAllLaunches(FACTORY, FACTORY_V2);
   const latest = launches[0];
 
   return (
@@ -65,7 +66,7 @@ export function BatchAuctionTracker() {
         <span className="text-[11.5px] text-muted">Base Sepolia testnet</span>
       </div>
 
-      {!FACTORY ? (
+      {!FACTORY && !FACTORY_V2 ? (
         <p className="px-5 py-6 text-[13px] text-muted">No factory is configured for this build.</p>
       ) : loading ? (
         <div className="space-y-2.5 px-5 py-6" aria-busy="true" aria-label="Reading launches">

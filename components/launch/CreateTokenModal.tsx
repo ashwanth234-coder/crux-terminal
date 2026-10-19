@@ -7,16 +7,17 @@ import { useConfig, useConnection, useSwitchChain, useWriteContract } from "wagm
 import { waitForTransactionReceipt } from "wagmi/actions";
 import { Modal, KineticLoader } from "@/components/ui/Modal";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
-import { cruxFactoryAbi } from "@/contracts/abis/batchAuction";
+import { cruxFactoryAbi, cruxFactoryV2Abi } from "@/contracts/abis/batchAuction";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
-import { BATCH_WINDOW_SECONDS, FACTORY } from "@/lib/intents";
+import { BATCH_WINDOW_SECONDS, FACTORY, FACTORY_V2 } from "@/lib/intents";
+import { V2_FEE, V2_MIN_LEAD_SECONDS, V2_SPLIT } from "@/lib/launchV2";
 import { previewHref } from "@/lib/launch";
 
 /** With the batch auction off, CruxFactory runs one pro-rata sale over OPEN_SALE_WINDOW (1 day). */
 const OPEN_SALE_HOURS = 24;
 
 /** CruxFactory only needs a target above zero; testnet faucets hand out ~10 USDC, so the floor drops there. */
-const MIN_TARGET = FACTORY ? 1 : 1_000;
+const MIN_TARGET = FACTORY || FACTORY_V2 ? 1 : 1_000;
 import { useConnectModal } from "@/providers/Web3Provider";
 
 type Form = {
@@ -29,6 +30,10 @@ type Form = {
   supply: string;
   target: string;
   batchAuction: boolean;
+  /** V2: minutes from now until deposits open. */
+  startsIn: string;
+  /** V2: most of the sale one wallet can receive, as a percentage. */
+  walletCap: string;
 };
 
 const INITIAL: Form = {
@@ -39,8 +44,10 @@ const INITIAL: Form = {
   farcaster: "",
   website: "",
   supply: "1,000,000,000",
-  target: FACTORY ? "10" : "50,000",
+  target: FACTORY || FACTORY_V2 ? "10" : "50,000",
   batchAuction: true,
+  startsIn: "10",
+  walletCap: "5",
 };
 
 const SIM_STEPS = [
@@ -67,6 +74,14 @@ function validate(f: Form) {
   if (!supply || supply < 1_000) errors.supply = "Supply must be at least 1,000.";
   const target = Number(digits(f.target));
   if (!target || target < MIN_TARGET) errors.target = `Set a graduation target of at least $${MIN_TARGET.toLocaleString("en-US")}.`;
+  if (FACTORY_V2) {
+    const minutes = Number(f.startsIn);
+    if (!Number.isFinite(minutes) || minutes * 60 < V2_MIN_LEAD_SECONDS || minutes > 30 * 24 * 60) {
+      errors.startsIn = `Schedule the start ${V2_MIN_LEAD_SECONDS / 60} minutes to 30 days ahead.`;
+    }
+    const cap = Number(f.walletCap);
+    if (!Number.isFinite(cap) || cap < 0.1 || cap > 100) errors.walletCap = "Between 0.1% and 100% of the sale.";
+  }
   return errors;
 }
 
@@ -135,7 +150,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
   const errors = validate(form);
   const showErr = (k: keyof Form) => (touched ? errors[k] : undefined);
   const busy = phase.kind === "simulating" || phase.kind === "deploying";
-  const live = FACTORY !== null;
+  const live = FACTORY !== null || FACTORY_V2 !== null;
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -162,7 +177,49 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     setPhase({ kind: "done", token: preview, simulated: true, start: Math.floor(Date.now() / 1000) });
   };
 
+  /** CruxFactoryV2: scheduled start, per-wallet cap, locked liquidity. */
+  const deployV2 = async (factory: Address) => {
+    if (!isConnected || !address) {
+      openConnect();
+      return;
+    }
+    if (chainId !== TESTNET.id) {
+      setPhase({ kind: "deploying", label: "Switching to Base Sepolia…" });
+      await switchChain({ chainId: TESTNET.id });
+    }
+    const totalSupply = parseUnits(digits(form.supply), 18);
+    const sale = (totalSupply * BigInt(V2_SPLIT.saleBps)) / BigInt(10_000);
+    const capBps = BigInt(Math.round(Number(form.walletCap) * 100));
+    setPhase({ kind: "deploying", label: "Confirm the launch in your wallet…" });
+    const hash = await writeContract({
+      address: factory,
+      abi: cruxFactoryV2Abi,
+      functionName: "createAuction",
+      chainId: TESTNET.id,
+      args: [
+        {
+          name: form.name.trim(),
+          symbol: form.symbol,
+          metadataURI: metadataURI(form),
+          totalSupply,
+          graduationTarget: parseUnits(digits(form.target), 6),
+          startTime: BigInt(Math.floor(Date.now() / 1000) + Math.round(Number(form.startsIn) * 60)),
+          batchWindow: form.batchAuction ? BATCH_WINDOW_SECONDS : OPEN_SALE_HOURS * 3600,
+          maxAllocationPerWallet: (sale * capBps) / BigInt(10_000),
+        },
+      ],
+    });
+    setPhase({ kind: "deploying", label: "Deploying token and auction…", hash });
+    const receipt = await waitForTransactionReceipt(config, { hash, chainId: TESTNET.id });
+    const [created] = parseEventLogs({ abi: cruxFactoryV2Abi, eventName: "AuctionCreated", logs: receipt.logs });
+    if (!created) throw new Error("Deployed, but no AuctionCreated event was found in the receipt.");
+    reset();
+    onClose();
+    router.push(`/launch/v2/${created.args.auctionId.toString()}`);
+  };
+
   const deploy = async () => {
+    if (FACTORY_V2) return deployV2(FACTORY_V2);
     if (!FACTORY) return;
     if (!isConnected || !address) {
       openConnect();
@@ -436,6 +493,49 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             </Field>
           </div>
 
+          {FACTORY_V2 && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field
+                id={id("startsIn")}
+                label="Scheduled start"
+                error={showErr("startsIn")}
+                hint="Minutes from now until deposits open, so buyers can gather"
+              >
+                <div className="relative">
+                  <input
+                    id={id("startsIn")}
+                    className={`${inputCls} pr-20 font-mono`}
+                    inputMode="numeric"
+                    value={form.startsIn}
+                    aria-invalid={Boolean(showErr("startsIn"))}
+                    aria-describedby={`${id("startsIn")}-msg`}
+                    onChange={(e) => set("startsIn", e.target.value.replace(/[^0-9]/g, ""))}
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-dim">minutes</span>
+                </div>
+              </Field>
+              <Field
+                id={id("walletCap")}
+                label="Max allocation per wallet"
+                error={showErr("walletCap")}
+                hint="Share of the sale one wallet can receive; the excess is refunded"
+              >
+                <div className="relative">
+                  <input
+                    id={id("walletCap")}
+                    className={`${inputCls} pr-10 font-mono`}
+                    inputMode="decimal"
+                    value={form.walletCap}
+                    aria-invalid={Boolean(showErr("walletCap"))}
+                    aria-describedby={`${id("walletCap")}-msg`}
+                    onChange={(e) => set("walletCap", e.target.value.replace(/[^0-9.]/g, ""))}
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-dim">%</span>
+                </div>
+              </Field>
+            </div>
+          )}
+
           {/* Batch auction toggle with an explanatory tooltip (also exposed as its description) */}
           <div className="flex items-start justify-between gap-4 rounded-xl border border-line p-4">
             <div className="min-w-0">
@@ -486,6 +586,25 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             <p role="alert" className="rounded-lg border border-down/30 bg-down/10 px-3 py-2 text-[12px] text-down">
               {error}
             </p>
+          )}
+
+          {FACTORY_V2 && (
+            <ul className="space-y-2 rounded-xl border border-line p-4 text-[12.5px] leading-snug text-muted">
+              <li className="flex items-start gap-2">
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-acid" aria-hidden="true" />
+                <span>
+                  <span className="text-chrome">{V2_FEE.creatorShareBps / 100}% of protocol fees are automatically routed to your wallet upon graduation.</span>{" "}
+                  The fee is {V2_FEE.feeBps / 100}% of the raise.
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-chrome/40" aria-hidden="true" />
+                <span>
+                  Liquidity is locked forever: {V2_SPLIT.lpBps / 100}% of supply and half the raise seed a Uniswap pool whose LP is burned. Your{" "}
+                  {V2_SPLIT.creatorBps / 100}% and your share of the raise vest over 30 days.
+                </span>
+              </li>
+            </ul>
           )}
 
           <button type="submit" className={buttonClass("acid", "md", "w-full rounded-xl font-semibold")}>

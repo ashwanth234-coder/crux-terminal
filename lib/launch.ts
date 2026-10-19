@@ -46,7 +46,8 @@ export type LaunchModel = {
   claim: (onStep: OnStep) => Promise<Hex | undefined>;
 };
 
-export type Phase = "open" | "closed" | "settled" | "graduated" | "cancelled";
+/** "scheduled" only occurs on V2 launches, before deposits open. */
+export type Phase = "scheduled" | "open" | "closed" | "settled" | "graduated" | "cancelled";
 
 export function auctionPhase(a: AuctionState, now: number): Phase {
   if (a.status === 2) return "graduated";
@@ -102,6 +103,12 @@ const REVERTS: Record<string, string> = {
   WindowOpen: "The window is still open; it can be settled once the countdown ends.",
   ZeroAmount: "Enter an amount above zero.",
   NothingToClaim: "This wallet has nothing left to claim in this auction.",
+  NotStarted: "Deposits haven't opened yet. They open at the scheduled start.",
+  PriceBelowFloor: "Your limit is below the floor price. Raise it to at least the floor.",
+  TooManyBidders: "This auction is full: it has reached the maximum number of bidders.",
+  InvalidClearingPrice: "The clearing price changed. Refresh and settle again.",
+  NotSettled: "The auction hasn't been settled yet.",
+  InvalidParams: "Those launch settings aren't allowed. Check the start time, window, supply and wallet cap.",
 };
 
 /** Human message for wallet, RPC and CruxFactory revert errors. */
