@@ -11,7 +11,8 @@ type Stage = {
 };
 
 const STAGES: Stage[] = [
-  { lead: "1%", title: "Launch Fees", detail: "On bonding curve volume plus graduation fees." },
+  // Planned: the deployed CruxFactory charges no fee yet.
+  { lead: "1%", title: "Launch Fees", detail: "Planned, not live yet: a fee on batch-auction volume plus graduation fees." },
   { lead: "DEX", title: "Spot Trading", detail: "Protocol cut on all DEX swaps." },
   { lead: "HIP-3", title: "Derivatives Royalties", detail: "Revenue share from HIP-3 syndicated markets." },
   { lead: "Burn", title: "Buyback & Burn", detail: "Net revenue used for open-market buybacks and burns.", sink: true },
