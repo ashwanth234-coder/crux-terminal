@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ArrowUpRight } from "@/components/ui/Button";
 import type { LaunchSummary } from "@/hooks/useLaunches";
-import { fmtUsdc, formatRemaining, impliedPrice, type Phase } from "@/lib/launch";
+import { fmtUsdc, formatRemaining, impliedMarketCap, impliedPrice, type Phase } from "@/lib/launch";
 
 const BADGE: Record<Phase, { label: string; className: string; dot: string }> = {
   open: { label: "Live", className: "border-acid/50 text-chrome", dot: "bg-acid" },
@@ -13,62 +13,92 @@ const BADGE: Record<Phase, { label: string; className: string; dot: string }> = 
   cancelled: { label: "Cancelled", className: "border-line text-dim", dot: "bg-dim" },
 };
 
+function Bar({ value, className }: { value: number; className: string }) {
+  return (
+    <div className="h-1 overflow-hidden rounded-full bg-line" aria-hidden="true">
+      <div className={`h-full rounded-full ${className}`} style={{ width: `${Math.min(100, Math.max(0, value * 100))}%` }} />
+    </div>
+  );
+}
+
+/** Identity first, then the one price everyone pays, then how far the auction has come. */
 export function LaunchCard({ launch, phase, now }: { launch: LaunchSummary; phase: Phase; now: number | null }) {
   const { auction, id } = launch;
   const badge = BADGE[phase];
-  const symbol = launch.symbol ? `$${launch.symbol}` : "Token";
+  const ticker = launch.symbol ?? `#${id}`;
   const raised = auction.graduationTarget > BigInt(0) ? Number((auction.totalDeposits * BigInt(10000)) / auction.graduationTarget) / 10_000 : 0;
   const price = impliedPrice(auction.totalDeposits, launch.saleSupply);
+  const cap = impliedMarketCap(auction.totalDeposits);
   const left = now === null ? auction.batchWindow : auction.startTime + auction.batchWindow - now;
+  const elapsed = 1 - Math.max(0, left) / auction.batchWindow;
+  const priceLabel = phase === "graduated" ? "Clearing price" : phase === "open" ? "Clearing price so far" : "Uniform price";
 
   return (
     <Link
       href={`/launch/${id}`}
-      className="group panel-sheen flex h-full flex-col rounded-2xl border border-line bg-void p-5 transition-colors duration-300 hover:border-line-2 focus-visible:border-acid/60"
+      className="group flex h-full flex-col rounded-2xl border border-line bg-panel p-5 transition-colors duration-200 hover:border-line-2 focus-visible:border-acid/60"
     >
-      <div className="flex items-center justify-between gap-3">
-        <span className="font-mono text-[11px] tracking-[0.18em] text-dim">#{id}</span>
-        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10.5px] font-medium uppercase tracking-[0.14em] ${badge.className}`}>
+      {/* Identity */}
+      <div className="flex items-center gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-line-2 bg-void font-mono text-[12px] text-chrome" aria-hidden="true">
+          {ticker.replace("#", "").slice(0, 3)}
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-[17px] font-medium leading-tight text-chrome">${ticker}</h2>
+          <p className="mt-0.5 truncate text-[12.5px] text-muted">
+            {launch.name ?? "Unnamed token"} <span className="font-mono text-dim">· #{id}</span>
+          </p>
+        </div>
+        <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${badge.className}`}>
           <span className={`h-1.5 w-1.5 rounded-full ${badge.dot}`} aria-hidden="true" />
           {badge.label}
         </span>
       </div>
 
-      <h2 className="mt-5 truncate font-display-md text-[26px] leading-none text-chrome">
-        {symbol}
-        {launch.name && <span className="text-steel"> {launch.name}</span>}
-      </h2>
-
+      {/* The one price every buyer pays */}
       <div className="mt-6">
-        <div className="flex items-baseline justify-between gap-3 text-[11.5px]">
-          <span className="text-muted">Raised</span>
-          <span className="font-mono tabular-nums text-muted">{(raised * 100).toFixed(0)}%</span>
-        </div>
-        <p className="mt-1.5 font-mono text-[14px] tabular-nums text-chrome">
-          ${fmtUsdc(auction.totalDeposits)} <span className="text-[12px] text-dim">/ ${fmtUsdc(auction.graduationTarget)}</span>
+        <p className="text-[12px] text-muted">{priceLabel}</p>
+        {phase !== "cancelled" && price ? (
+          <p className="mt-1 truncate font-mono text-[22px] leading-tight text-chrome">${price}</p>
+        ) : (
+          <p className="mt-1 text-[19px] leading-tight text-chrome/70">{phase === "cancelled" ? "None: target missed" : "No bids yet"}</p>
+        )}
+        <p className="mt-1 text-[12px] text-muted">
+          Market cap <span className="font-mono text-chrome/85">{phase === "cancelled" || !cap ? "—" : cap}</span>
+          <span className="text-dim"> at this price</span>
         </p>
-        <div className="mt-2.5 h-1 overflow-hidden rounded-full bg-line" aria-hidden="true">
-          <div
-            className={`h-full rounded-full ${phase === "cancelled" ? "bg-down/60" : "bg-acid"}`}
-            style={{ width: `${Math.min(100, Math.max(0, raised * 100))}%` }}
-          />
+      </div>
+
+      {/* Progress: the sealed window, then the raise */}
+      <div className="mt-6 space-y-4 border-t border-line pt-4">
+        {phase === "open" && (
+          <div>
+            <div className="flex items-baseline justify-between gap-3 text-[12px]">
+              <span className="text-muted">Sealed window</span>
+              <span className="font-mono text-acid" role="timer">
+                {formatRemaining(left)}
+              </span>
+            </div>
+            <div className="mt-2">
+              <Bar value={elapsed} className="bg-chrome/50" />
+            </div>
+          </div>
+        )}
+        <div>
+          <div className="flex items-baseline justify-between gap-3 text-[12px]">
+            <span className="text-muted">
+              Raised <span className="font-mono text-chrome/85">${fmtUsdc(auction.totalDeposits)}</span>
+              <span className="text-dim"> / ${fmtUsdc(auction.graduationTarget)}</span>
+            </span>
+            <span className="font-mono text-muted">{(raised * 100).toFixed(0)}%</span>
+          </div>
+          <div className="mt-2">
+            <Bar value={raised} className={phase === "cancelled" ? "bg-down/60" : "bg-acid"} />
+          </div>
         </div>
       </div>
 
-      <dl className="mt-6 grid grid-cols-2 gap-4 border-t border-line pt-4 text-[11.5px]">
-        <div className="min-w-0">
-          <dt className="text-muted">Uniform price</dt>
-          <dd className="mt-1 truncate font-mono tabular-nums text-chrome">{phase === "cancelled" ? "—" : price ? `$${price}` : "No bids yet"}</dd>
-        </div>
-        <div>
-          <dt className="text-muted">{phase === "open" ? "Closes in" : "Window"}</dt>
-          <dd className={`mt-1 font-mono tabular-nums ${phase === "open" ? "text-acid" : "text-chrome/70"}`} role={phase === "open" ? "timer" : undefined}>
-            {phase === "open" ? formatRemaining(left) : auction.batchWindow >= 3600 ? `${auction.batchWindow / 3600}h sale · closed` : `${auction.batchWindow}s batch · closed`}
-          </dd>
-        </div>
-      </dl>
-
-      <span className="mt-5 inline-flex items-center gap-1.5 text-[12px] text-chrome/70 transition-colors group-hover:text-chrome">
+      <span className="mt-auto inline-flex items-center gap-1.5 pt-5 text-[12.5px] text-chrome/75 transition-colors group-hover:text-chrome">
         {phase === "open" ? "Deposit" : phase === "closed" ? "Settle" : "View auction"} <ArrowUpRight />
       </span>
     </Link>

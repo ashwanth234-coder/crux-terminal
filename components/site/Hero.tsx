@@ -10,9 +10,9 @@ export function Hero() {
         <div className="lg:col-span-7">
           {/* Painted with the first frame: the headline is the LCP and is never held back by an animation. */}
           <h1 className="font-display text-[clamp(2.4rem,5.4vw,5.1rem)] leading-[0.95]">
-            <span className="block text-bright">Every chain.</span>
-            <span className="block text-bright">One market.</span>
-            <span className="block text-steel">Zero friction.</span>
+            <span className="block text-bright">Launch once.</span>
+            <span className="block text-bright">Clear fairly.</span>
+            <span className="block text-steel">Trade everywhere.</span>
           </h1>
 
           <p className="mt-8 max-w-[30rem] text-[16px] leading-relaxed text-chrome/70">
@@ -21,10 +21,10 @@ export function Hero() {
           </p>
 
           <div className="mt-10 flex flex-wrap items-center gap-3">
-            <LinkButton href="#protocol">
-              Explore the protocol <ArrowUpRight />
+            <LinkButton href="/launches">
+              Explore Markets <ArrowUpRight />
             </LinkButton>
-            <LaunchTokenButton />
+            <LaunchTokenButton label="Launch a Token" />
           </div>
 
           <div className="mt-16">

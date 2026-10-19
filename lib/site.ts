@@ -16,12 +16,13 @@ export const miniAppEmbed = {
   },
 } as const;
 
+/**
+ * Primary navigation: Discover | Launch | Terminal | Docs. Launch opens the
+ * token launch modal; the rest are routes, absolute so they work on every page.
+ */
 export const NAV_LINKS = [
-  { label: "Explore Launches", href: "/launches" },
-  { label: "Protocol", href: "#protocol" },
-  { label: "Ecosystem", href: "#ecosystem" },
-  { label: "Technology", href: "#technology" },
-  { label: "Token", href: "#token" },
-  { label: "Developers", href: "#developers" },
-  { label: "Docs", href: "#docs" },
+  { label: "Discover", href: "/launches" },
+  { label: "Launch", href: null },
+  { label: "Terminal", href: "/#protocol" },
+  { label: "Docs", href: "/#docs" },
 ] as const;

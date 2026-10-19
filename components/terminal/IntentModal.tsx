@@ -1,12 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { erc20Abi, formatUnits, parseUnits, verifyTypedData, type Hex } from "viem";
-import { useConfig, useConnection, useSignTypedData, useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { useQuery } from "@tanstack/react-query";
+import {
+  createPublicClient,
+  erc20Abi,
+  formatUnits,
+  http,
+  parseAbiItem,
+  parseEventLogs,
+  parseUnits,
+  verifyTypedData,
+  type Hex,
+} from "viem";
+import { baseSepolia } from "viem/chains";
+import { useConfig, useConnection, useReadContract, useSignTypedData, useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { readContract, waitForTransactionReceipt } from "wagmi/actions";
 import { Modal, KineticLoader } from "@/components/ui/Modal";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
-import { originSettlerAbi } from "@/contracts/abis/erc7683";
+import { cruxSettlerAbi, originSettlerAbi } from "@/contracts/abis/erc7683";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import {
   BATCH_WINDOW_SECONDS,
@@ -39,12 +51,57 @@ const BUSY: Flow["kind"][] = ["switching", "approving", "signing", "broadcasting
 const qtyFmt = new Intl.NumberFormat("en-US", { maximumFractionDigits: 4 });
 const priceFmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 4 });
 
-function Row({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+// Destination settler on Base Sepolia and its fill event: read-only, to show what the solver delivered.
+const DESTINATION = "0x300a835939D2beBed59C543470DCD9a9c8065822";
+const ORDER_FILLED = parseAbiItem(
+  "event OrderFilled(bytes32 indexed orderId, address indexed filler, address indexed recipient, address token, uint256 amount)",
+);
+// sepolia.base.org caps eth_getLogs at 200 blocks; publicnode allows wide ranges.
+const logClient = createPublicClient({ chain: baseSepolia, transport: http("https://base-sepolia-rpc.publicnode.com", { timeout: 15_000 }) });
+
+// Escrow status on CruxSettler: 1 Open, 2 Settled (OrderSettled emitted), 3 Refunded.
+const ESCROW_SETTLED = 2;
+const ESCROW_REFUNDED = 3;
+
+const STEPS = ["Quote ready", "Wallet signature", "Intent submitted", "Settlement confirmed"] as const;
+
+function Row({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="flex items-baseline justify-between gap-4 py-2.5">
-      <dt className="text-[12px] text-muted">{label}</dt>
-      <dd className={`text-right font-mono text-[12.5px] ${accent ? "text-acid" : "text-chrome"}`}>{value}</dd>
+      <dt className="shrink-0 text-[12.5px] text-muted">{label}</dt>
+      <dd className="min-w-0 text-right">
+        <span className="font-mono text-[12.5px] text-chrome">{value}</span>
+        {hint && <span className="mt-0.5 block text-[11.5px] text-dim">{hint}</span>}
+      </dd>
     </div>
+  );
+}
+
+type Tone = "active" | "failed" | "halted";
+
+/** Four steps; a step only counts as done once the chain says so. "halted" marks a step that was never reached. */
+function Lifecycle({ stage, tone }: { stage: number; tone: Tone }) {
+  return (
+    <ol className="grid grid-cols-4 gap-2" aria-label="Intent progress">
+      {STEPS.map((label, i) => {
+        const done = i < stage;
+        const current = i === stage;
+        return (
+          <li key={label} aria-current={current ? "step" : undefined}>
+            <span
+              className={`block h-0.5 rounded-full ${
+                done ? "bg-chrome/70" : current ? (tone === "failed" ? "bg-down" : tone === "halted" ? "bg-line-2" : "bg-acid") : "bg-line-2"
+              }`}
+              aria-hidden="true"
+            />
+            <span className={`mt-2 block text-[11.5px] leading-tight ${current && tone !== "halted" ? "text-chrome" : done ? "text-muted" : "text-dim"}`}>
+              {label}
+              <span className="sr-only">{done ? " (done)" : current ? (tone === "halted" ? " (not reached)" : " (current)") : ""}</span>
+            </span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -65,6 +122,32 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
   const receipt = useWaitForTransactionReceipt({
     hash: flow.kind === "broadcast" ? flow.hash : undefined,
     chainId: TESTNET.id,
+  });
+
+  // After openFor lands: the order id from its Open event, then its escrow until it settles or refunds.
+  const opened = receipt.data?.status === "success" ? parseEventLogs({ abi: originSettlerAbi, eventName: "Open", logs: receipt.data.logs })[0] : undefined;
+  const orderId = opened?.args.orderId;
+  const escrow = useReadContract({
+    address: SETTLER,
+    abi: cruxSettlerAbi,
+    functionName: "escrows",
+    args: orderId ? [orderId] : undefined,
+    chainId: TESTNET.id,
+    query: {
+      enabled: Boolean(orderId),
+      refetchInterval: (q) => ((q.state.data?.[4] ?? 1) <= 1 ? 4_000 : false),
+    },
+  });
+  const escrowStatus = escrow.data?.[4];
+  const fromBlock = receipt.data?.blockNumber;
+  const delivered = useQuery({
+    queryKey: ["crux-order-filled", orderId],
+    enabled: escrowStatus === ESCROW_SETTLED && Boolean(orderId) && fromBlock !== undefined,
+    staleTime: Infinity,
+    queryFn: async () => {
+      const [log] = await logClient.getLogs({ address: DESTINATION, event: ORDER_FILLED, args: { orderId }, fromBlock });
+      return log ? { amount: log.args.amount ?? BigInt(0), tx: log.transactionHash } : null;
+    },
   });
 
   const busy = BUSY.includes(flow.kind);
@@ -164,106 +247,178 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
     }
   };
 
+  // ---------------------------------------------------------------- lifecycle
+
+  const reverted = receipt.data?.status === "reverted";
+  let stage = 0;
+  let failed = false;
+  let halted = false;
+  let working = busy;
+  let note: string;
+  switch (flow.kind) {
+    case "idle":
+      note = "Quote ready. Review it, then confirm to sign.";
+      break;
+    case "error":
+      failed = true;
+      note = flow.message;
+      break;
+    case "switching":
+      stage = 1;
+      note = "Switch your wallet to Base Sepolia.";
+      break;
+    case "approving":
+      stage = 1;
+      note = `Approve exactly ${usd.format(order.notional)} of test USDC for the settler.`;
+      break;
+    case "signing":
+      stage = 1;
+      note = "Sign the intent in your wallet. Signing costs no gas.";
+      break;
+    case "broadcasting":
+      stage = 2;
+      note = "Confirm the submission (openFor) in your wallet.";
+      break;
+    case "local":
+      stage = 2;
+      failed = !flow.valid;
+      halted = flow.valid;
+      note = flow.valid
+        ? "Signed and verified locally. No settler is configured, so nothing was submitted."
+        : "The signature did not verify. Nothing was submitted.";
+      break;
+    case "broadcast":
+      if (reverted || receipt.isError) {
+        stage = 2;
+        failed = true;
+        note = reverted ? "The submission reverted. Your funds did not move." : "Submitted, but the confirmation could not be read.";
+      } else if (!receipt.isSuccess) {
+        stage = 2;
+        working = true;
+        note = "Confirming the submission on Base Sepolia…";
+      } else if (escrowStatus === ESCROW_SETTLED) {
+        stage = 4;
+        note = delivered.data
+          ? `Settlement confirmed. A solver delivered ${qtyFmt.format(Number(formatUnits(delivered.data.amount, 18)))} $${order.symbol} and the escrow was released.`
+          : "Settlement confirmed. A solver filled your intent and the escrow was released.";
+      } else if (escrowStatus === ESCROW_REFUNDED) {
+        stage = 3;
+        failed = true;
+        note = "No solver filled this intent in time. The escrow was refunded to you.";
+      } else {
+        stage = 3;
+        working = true;
+        note = `Submitted and escrowed. Waiting for a solver to fill it at the next ${BATCH_WINDOW_SECONDS}-second batch.`;
+      }
+      break;
+  }
+
   const ctaLabel: Record<Flow["kind"], string> = {
-    idle: "Confirm Cross-Chain Intent",
+    idle: "Confirm & sign intent",
     error: "Try again",
     switching: "Switching to Base Sepolia…",
     approving: "Approving test USDC…",
     signing: "Awaiting signature…",
-    broadcasting: "Broadcasting openFor…",
+    broadcasting: "Submitting intent…",
     broadcast: "",
     local: "",
   };
 
+  // ---------------------------------------------------------------- quote
+
+  const origin = SETTLER_DEPLOYED ? "Base Sepolia" : order.originLabel;
+  const destination = SETTLER_DEPLOYED ? { name: "Base Sepolia", id: 84532 } : { name: "Base", id: 8453 };
+  const inputLabel = buying
+    ? `${usd.format(order.notional)} ${SETTLER_DEPLOYED ? "test USDC" : "USDC"}`
+    : `${qtyFmt.format(order.qty)} $${order.symbol}`;
+  const outputLabel = buying ? `${qtyFmt.format(order.qty)} $${order.symbol}` : usd.format(order.notional);
+  const minLabel = buying ? `${qtyFmt.format(min)} $${order.symbol}` : usd.format(min);
+  const finished = flow.kind === "broadcast" || flow.kind === "local";
+
   return (
-    <Modal open={open} onClose={close} locked={busy} title="Review cross-chain intent" subtitle="ERC-7683 gasless order, signed with EIP-712.">
-      {/* Headline amounts */}
-      <div className="grid grid-cols-1 items-center gap-3 rounded-xl border border-line bg-void/60 p-4 min-[420px]:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+    <Modal open={open} onClose={close} locked={busy} title="Review intent" subtitle="ERC-7683 order, signed with EIP-712.">
+      <Lifecycle stage={stage} tone={failed ? "failed" : halted ? "halted" : "active"} />
+      <p role="status" aria-live="polite" className={`mt-3 flex items-start gap-2 text-[12.5px] leading-snug ${failed ? "text-down" : "text-chrome/85"}`}>
+        {working && <KineticLoader className="mt-0.5 shrink-0 text-acid" />}
+        <span>{note}</span>
+      </p>
+
+      {/* Pre-signature quote: what goes in, what comes out, and how it gets there */}
+      <div className="mt-5 grid grid-cols-1 gap-3 rounded-xl border border-line bg-void/60 p-4 min-[420px]:grid-cols-2">
         <div>
-          <p className="text-[11px] text-muted">You {buying ? "pay" : "sell"}</p>
-          <p className="mt-1.5 font-mono text-[18px] text-chrome">
-            {buying ? usd.format(order.notional) : `${qtyFmt.format(order.qty)} $${order.symbol}`}
-          </p>
-          <p className="mt-0.5 text-[11px] text-muted">{buying ? order.source.label : `≈ ${usd.format(order.notional)}`}</p>
+          <p className="text-[12px] text-muted">You {buying ? "pay" : "sell"}</p>
+          <p className="mt-1.5 font-mono text-[18px] text-chrome">{inputLabel}</p>
+          <p className="mt-0.5 text-[12px] text-muted">on {origin}</p>
         </div>
-        <span className="grid h-8 w-8 rotate-90 place-items-center rounded-full border border-line-2 text-chrome min-[420px]:rotate-0">
-          <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" aria-hidden="true">
-            <path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-          </svg>
-        </span>
         <div className="min-[420px]:text-right">
-          <p className="text-[11px] text-muted">You receive</p>
-          <p className="mt-1.5 font-mono text-[18px] text-chrome">
-            {buying ? `${qtyFmt.format(order.qty)} $${order.symbol}` : usd.format(order.notional)}
-          </p>
-          <p className="mt-0.5 text-[11px] text-muted">{buying ? "Crux Spot DEX" : order.source.label}</p>
+          <p className="text-[12px] text-muted">You receive (expected)</p>
+          <p className="mt-1.5 font-mono text-[18px] text-chrome">{outputLabel}</p>
+          <p className="mt-0.5 text-[12px] text-muted">minimum {minLabel}</p>
         </div>
       </div>
 
-      <dl className="mt-4 divide-y divide-line">
-        <Row label="Origin chain" value={order.originLabel} />
-        <Row label="Target hub" value="Base · Crux Spot DEX" />
-        <Row label="Clearing mechanism" value={`${BATCH_WINDOW_SECONDS}s Uniform Batch Auction`} />
+      <dl className="mt-3 divide-y divide-line">
+        <Row label="Route" value={`${origin} → solver → ${destination.name}`} hint="No bridge: the solver delivers from its own capital" />
+        <Row label="Destination chain" value={`${destination.name} · ${destination.id}`} />
         <Row
-          label={buying ? "Guaranteed clearing price (cap)" : "Guaranteed clearing price (floor)"}
-          value={`${priceFmt.format(limit)} / $${order.symbol}`}
+          label="Fees"
+          value="0.00% solver fee"
+          hint={SETTLER_DEPLOYED ? "Approval and submission cost a little test ETH gas" : "The signature itself is gasless"}
         />
-        <Row label="Minimum received" value={buying ? `${qtyFmt.format(min)} $${order.symbol}` : usd.format(min)} />
-        <Row label="Max slippage" value={`${(SLIPPAGE_BPS / 100).toFixed(2)}%`} />
-        <Row label="Solver network fee" value="0.00%" accent />
-        <Row label="Settlement" value={SETTLER_DEPLOYED ? `Base Sepolia · ${SETTLER.slice(0, 6)}…${SETTLER.slice(-4)}` : "Awaiting testnet deployment"} />
-        <Row label="Signing as" value={address ? `${address.slice(0, 6)}…${address.slice(-4)} · ${chain?.name ?? `chain ${chainId}`}` : "—"} />
+        <Row
+          label="Clearing"
+          value={`${BATCH_WINDOW_SECONDS}s uniform batch`}
+          hint={`${buying ? "Price cap" : "Price floor"} ${priceFmt.format(limit)} · ${(SLIPPAGE_BPS / 100).toFixed(2)}% max slippage`}
+        />
+        <Row label="Quote" value={`${priceFmt.format(order.price)} / $${order.symbol}`} hint={SETTLER_DEPLOYED ? "Indicative testnet price" : "Indicative price"} />
+        <Row
+          label="Settler"
+          value={SETTLER_DEPLOYED ? `${SETTLER.slice(0, 6)}…${SETTLER.slice(-4)}` : "Not configured"}
+          hint={SETTLER_DEPLOYED ? "CruxSettler on Base Sepolia" : "The signature is checked locally only"}
+        />
+        <Row label="Signing as" value={address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "—"} hint={chain?.name ?? (chainId ? `Chain ${chainId}` : undefined)} />
       </dl>
 
-      {flow.kind === "broadcast" ? (
-        <div role="status" className="mt-5 rounded-xl border border-acid/40 bg-acid/[0.06] p-4">
-          <p className="flex items-center gap-2 text-[13px] font-medium text-acid">
-            {receipt.isSuccess ? (
-              <svg viewBox="0 0 16 16" className="h-4 w-4" aria-hidden="true">
-                <path d="m3.5 8.5 3 3 6-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            ) : (
-              <KineticLoader />
-            )}
-            {receipt.isSuccess ? "Intent opened on Base Sepolia" : receipt.isError ? "Broadcast, confirmation unknown" : "Broadcast · confirming…"}
-          </p>
-          <a
-            href={`${TESTNET_EXPLORER}/tx/${flow.hash}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-2 block break-all font-mono text-[11px] leading-relaxed text-chrome/80 underline decoration-line-2 hover:text-chrome"
-          >
-            {flow.hash} ↗
-          </a>
-          <p className="mt-2 text-[11.5px] text-muted">Queued for the next batch window. Solvers fill at the uniform clearing price.</p>
-          <button type="button" onClick={close} className={buttonClass("outline", "sm", "mt-4 w-full rounded-lg")}>
-            Done
+      {finished ? (
+        <div className="mt-5 space-y-3">
+          {flow.kind === "broadcast" && (
+            <div className="space-y-1.5 text-[12px]">
+              <a
+                href={`${TESTNET_EXPLORER}/tx/${flow.hash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex items-center justify-between gap-3 text-muted transition-colors hover:text-chrome"
+              >
+                <span>Submission (openFor)</span>
+                <span className="inline-flex items-center gap-1.5 font-mono text-chrome/80">
+                  {flow.hash.slice(0, 10)}…{flow.hash.slice(-6)} <ArrowUpRight className="h-3 w-3" />
+                </span>
+              </a>
+              {delivered.data && (
+                <a
+                  href={`${TESTNET_EXPLORER}/tx/${delivered.data.tx}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group flex items-center justify-between gap-3 text-muted transition-colors hover:text-chrome"
+                >
+                  <span>Solver fill</span>
+                  <span className="inline-flex items-center gap-1.5 font-mono text-chrome/80">
+                    {delivered.data.tx.slice(0, 10)}…{delivered.data.tx.slice(-6)} <ArrowUpRight className="h-3 w-3" />
+                  </span>
+                </a>
+              )}
+            </div>
+          )}
+          {flow.kind === "local" && <p className="break-all font-mono text-[11px] leading-relaxed text-chrome/55">{flow.signature}</p>}
+          <button type="button" onClick={close} className={buttonClass("outline", "sm", "w-full rounded-lg")}>
+            {stage === 4 ? "Done" : "Close"}
           </button>
-        </div>
-      ) : flow.kind === "local" ? (
-        <div role="status" className="mt-5 rounded-xl border border-line-2 bg-void/60 p-4">
-          <p className={`flex items-center gap-2 text-[13px] font-medium ${flow.valid ? "text-chrome" : "text-down"}`}>
-            <svg viewBox="0 0 16 16" className="h-4 w-4" aria-hidden="true">
-              <path d="m3.5 8.5 3 3 6-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            {flow.valid ? "Signature valid · verified locally" : "Signature did not verify"}
-          </p>
-          <p className="mt-2 break-all font-mono text-[10.5px] leading-relaxed text-chrome/60">{flow.signature}</p>
-          <p className="mt-3 flex items-center gap-2 text-[12px] text-chrome/80">
-            <span className="h-1.5 w-1.5 rounded-full bg-muted" aria-hidden="true" />
-            Awaiting testnet deployment. Nothing was broadcast.
-          </p>
-          <button type="button" onClick={close} className={buttonClass("outline", "sm", "mt-4 w-full rounded-lg")}>
-            Done
-          </button>
+          {flow.kind === "broadcast" && stage === 3 && !failed && (
+            <p className="text-center text-[11.5px] text-dim">You can close this. My intents keeps tracking it, and refunds open if no solver fills it.</p>
+          )}
         </div>
       ) : (
         <>
-          {flow.kind === "error" && (
-            <p role="alert" className="mt-4 rounded-lg border border-down/30 bg-down/10 px-3 py-2 text-[12px] text-down">
-              {flow.message}
-            </p>
-          )}
           <button
             type="button"
             onClick={confirm}
@@ -274,9 +429,9 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
             {ctaLabel[flow.kind]}
             {!busy && <ArrowUpRight />}
           </button>
-          <p className="mt-3 text-center text-[11px] text-dim">
+          <p className="mt-3 text-center text-[11.5px] text-dim">
             {SETTLER_DEPLOYED
-              ? "Approves test USDC if needed, signs the order, then opens it on Base Sepolia. Testnet only, no real funds."
+              ? "Approves test USDC if needed, signs, then submits on Base Sepolia. Testnet only, no real funds."
               : "Gasless EIP-712 signature. No funds move until a solver fills the batch."}
           </p>
         </>

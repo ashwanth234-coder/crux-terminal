@@ -120,6 +120,7 @@ export function TestnetActivity({ className = "" }: { className?: string }) {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-3.5 text-[12px]">
+        {configured && (
         <a
           href={`${TESTNET_EXPLORER}/address/${SETTLER}`}
           target="_blank"
@@ -129,6 +130,7 @@ export function TestnetActivity({ className = "" }: { className?: string }) {
           Settler <span className="font-mono">{short(SETTLER)}</span>
           <ArrowUpRight className="h-3 w-3" />
         </a>
+        )}
         <Link href="/launches" className="group inline-flex items-center gap-1.5 text-chrome/80 transition-colors hover:text-chrome">
           All launches <ArrowRight className="h-3 w-3" />
         </Link>

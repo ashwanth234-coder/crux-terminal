@@ -26,7 +26,7 @@ FIRST VIEWPORT: Headline painted with the first frame, subcopy, two actions, cha
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "Crux — Every chain. One market. Zero friction.",
+  title: "Crux — Launch once. Clear fairly. Trade everywhere.",
   description:
     "Crux is an omnichain execution protocol: social discovery, intent-based cross-chain execution, canonical liquidity and perpetual markets in one unified trading experience.",
   openGraph: {

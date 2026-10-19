@@ -8,6 +8,7 @@ import { KineticLoader } from "@/components/ui/Modal";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { Logo } from "@/components/site/Logo";
 import { LaunchTokenButton } from "@/components/launch/LaunchTokenButton";
+import { SiteNav } from "@/components/site/SiteNav";
 import { useLiveLaunch, useNow, useSimulatedLaunch, type PreviewParams } from "@/hooks/useLaunchAuction";
 import { TESTNET_EXPLORER } from "@/lib/chains";
 import { FACTORY } from "@/lib/intents";
@@ -17,6 +18,7 @@ import {
   fmtTokens,
   fmtUsdc,
   formatRemaining,
+  impliedMarketCap,
   impliedPrice,
   launchError,
   type AuctionState,
@@ -94,19 +96,23 @@ export function Shell({ mode, children }: { mode: LaunchModel["mode"] | null; ch
     <div className="min-h-svh">
       <header className="border-b border-line">
         <div className="mx-auto flex h-[72px] max-w-[1180px] items-center justify-between gap-4 px-4 sm:px-8">
-          <Link href="/" aria-label="Crux home" className="shrink-0">
-            <Logo />
-          </Link>
+          <div className="flex items-center gap-6 sm:gap-10">
+            <Link href="/" aria-label="Crux home" className="shrink-0">
+              <Logo />
+            </Link>
+            <nav aria-label="Primary">
+              <SiteNav variant="inline" hide={["Docs"]} />
+            </nav>
+          </div>
           <div className="flex items-center gap-3">
             {mode && (
-              <span className="hidden rounded-full border border-line-2 px-3 py-1 text-[11.5px] text-muted sm:inline">
+              <span className="hidden rounded-full border border-line-2 px-3 py-1 text-[11.5px] text-muted xl:inline">
                 {mode === "simulated" ? "Simulated preview" : "Base Sepolia testnet"}
               </span>
             )}
-            <Link href="/launches" className="hidden text-[12.5px] text-chrome/75 transition-colors hover:text-chrome sm:inline">
-              All launches
-            </Link>
-            <AuctionJump />
+            <div className="hidden lg:block">
+              <AuctionJump />
+            </div>
           </div>
         </div>
       </header>
@@ -258,6 +264,17 @@ function LaunchView({ model, auction, id }: { model: LaunchModel; auction: Aucti
           <div className="mt-4">
             <Bar value={phase === "open" ? 1 - left / auction.batchWindow : 1} className={phase === "open" ? "bg-chrome/60" : "bg-line-2"} />
           </div>
+          {/* The guarantee, in one line */}
+          <p className="mt-3 flex items-start gap-2 text-[12.5px] leading-snug text-muted">
+            <svg viewBox="0 0 16 16" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-acid" aria-hidden="true">
+              <path d="M8 1.5 13 3.5v4c0 3.2-2.1 5.6-5 7-2.9-1.4-5-3.8-5-7v-4l5-2Z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+              <path d="m5.6 8 1.7 1.7 3.1-3.4" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span>
+              <span className="text-chrome">Zero MEV slippage.</span> Deposits are sealed until the window closes, then all clear at one price.
+              Arriving first buys nothing.
+            </span>
+          </p>
 
           <div className="mt-8">
             <div className="flex items-baseline justify-between gap-4">
@@ -273,9 +290,10 @@ function LaunchView({ model, auction, id }: { model: LaunchModel; auction: Aucti
           </div>
 
           <dl className="mt-6 divide-y divide-line border-t border-line">
-            <Row label={phase === "graduated" ? "Clearing price (uniform, zero MEV slippage)" : "Uniform price (zero MEV slippage)"}>
+            <Row label={phase === "graduated" ? "Clearing price" : "Clearing price so far"}>
               {phase === "cancelled" ? "None: target missed" : price ? `$${price} per token` : "—"}
             </Row>
+            <Row label="Market cap at this price">{phase === "cancelled" ? "—" : (impliedMarketCap(auction.totalDeposits) ?? "—")}</Row>
             <Row label="On sale (80% of supply)">{model.saleSupply !== null ? `${fmtTokens(model.saleSupply)} ${symbol}` : "—"}</Row>
             <Row label="Token">
               {simulated ? (
@@ -289,8 +307,7 @@ function LaunchView({ model, auction, id }: { model: LaunchModel; auction: Aucti
             {!simulated && <Row label="Creator">{short(auction.creator)}</Row>}
           </dl>
           <p className="mt-4 text-[11.5px] leading-snug text-dim">
-            Everyone pays the same price: total deposits divided by the tokens on sale. Depositing early or late changes nothing. If the
-            target is missed, every deposit is refunded exactly.
+            Price = total deposits ÷ tokens on sale. If the target is missed, every deposit is refunded exactly.
           </p>
         </section>
 

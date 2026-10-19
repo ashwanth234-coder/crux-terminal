@@ -74,6 +74,18 @@ export function impliedPrice(totalDeposits: bigint, saleSupply: bigint | null) {
   return priceFmt.format(Number(formatUnits((totalDeposits * BigInt(10) ** BigInt(30)) / saleSupply, 18)));
 }
 
+const capFmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 2 });
+
+/**
+ * Market cap at the uniform clearing price: price × total supply. The factory
+ * sells 80% of supply (CruxFactory.SALE_BPS), so this is deposits ÷ 0.8.
+ */
+export function impliedMarketCap(totalDeposits: bigint) {
+  if (totalDeposits === BigInt(0)) return null;
+  const cap = Number(formatUnits((totalDeposits * BigInt(10_000)) / BigInt(8_000), USDC_DECIMALS));
+  return cap < 10_000 ? `$${cap.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : capFmt.format(cap);
+}
+
 /** mm:ss, or h:mm:ss for open-sale windows longer than an hour. */
 export function formatRemaining(seconds: number) {
   const s = Math.max(0, Math.ceil(seconds));
