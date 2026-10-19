@@ -194,14 +194,11 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     const receipt = await waitForTransactionReceipt(config, { hash, chainId: TESTNET.id });
     const [created] = parseEventLogs({ abi: cruxFactoryAbi, eventName: "AuctionCreated", logs: receipt.logs });
     if (!created) throw new Error("Deployed, but no AuctionCreated event was found in the receipt.");
-    setPhase({
-      kind: "done",
-      token: created.args.token,
-      simulated: false,
-      hash,
-      auctionId: created.args.auctionId,
-      start: Math.floor(Date.now() / 1000),
-    });
+    // The batch window started with this block, so go straight to the auction:
+    // the creator keeps as much of it as possible to deposit.
+    reset();
+    onClose();
+    router.push(`/launch/${created.args.auctionId.toString()}`);
   };
 
   const submit = async () => {

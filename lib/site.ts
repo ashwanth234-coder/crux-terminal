@@ -17,6 +17,7 @@ export const miniAppEmbed = {
 } as const;
 
 export const NAV_LINKS = [
+  { label: "Explore Launches", href: "/launches" },
   { label: "Protocol", href: "#protocol" },
   { label: "Ecosystem", href: "#ecosystem" },
   { label: "Technology", href: "#technology" },

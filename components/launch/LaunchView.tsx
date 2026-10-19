@@ -88,7 +88,8 @@ function SimulatedLaunch({ params }: { params: PreviewParams }) {
 
 // ------------------------------------------------------------------ chrome
 
-function Shell({ mode, children }: { mode: LaunchModel["mode"] | null; children: ReactNode }) {
+/** Page chrome shared by /launch/[id] and /launches. */
+export function Shell({ mode, children }: { mode: LaunchModel["mode"] | null; children: ReactNode }) {
   return (
     <div className="min-h-svh">
       <header className="border-b border-line">
@@ -102,6 +103,9 @@ function Shell({ mode, children }: { mode: LaunchModel["mode"] | null; children:
                 {mode === "simulated" ? "Simulated preview" : "Base Sepolia testnet"}
               </span>
             )}
+            <Link href="/launches" className="hidden text-[12.5px] text-chrome/75 transition-colors hover:text-chrome sm:inline">
+              All launches
+            </Link>
             <AuctionJump />
           </div>
         </div>

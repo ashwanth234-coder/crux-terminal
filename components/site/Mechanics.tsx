@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { BatchAuctionRings, DerivativesGrid, GlassHelix, LiquidVortex } from "@/components/canvas";
-import { ArrowRight, LinkButton } from "@/components/ui/Button";
+import { ArrowRight, ArrowUpRight, LinkButton } from "@/components/ui/Button";
 import { HyperliquidIcon } from "@/components/ui/icons";
 import { BatchAuctionTracker } from "@/components/terminal/BatchAuctionTracker";
 import { MechanicsTrack } from "./MechanicsTrack";
@@ -11,6 +11,8 @@ type Mechanic = {
   title: [string, string];
   body: string;
   cta: string;
+  /** Where the CTA goes; defaults to the docs anchor. */
+  href?: string;
   /** What the mechanism does, in order or in parts. */
   facts: { sequence: boolean; items: string[] };
   visual: ReactNode;
@@ -31,7 +33,8 @@ const MECHANICS: Mechanic[] = [
     label: "Fair launch",
     title: ["One window.", "One clearing price."],
     body: "A 60-second blind batch auction neutralizes MEV. All buy intents clear at the same uniform price.",
-    cta: "See how it works",
+    cta: "View all live launches",
+    href: "/launches",
     facts: { sequence: true, items: ["Bids sealed for 60s", "One uniform price", "No front-running"] },
     visual: (
       <>
@@ -127,8 +130,8 @@ export function Mechanics() {
               <p className="mt-6 max-w-[26rem] text-[15px] leading-relaxed text-chrome/65">{m.body}</p>
               <Facts facts={m.facts} />
               <div className="mt-10">
-                <LinkButton href="#docs" variant="outline" size="sm">
-                  {m.cta} <ArrowRight />
+                <LinkButton href={m.href ?? "#docs"} variant="outline" size="sm">
+                  {m.cta} {m.href ? <ArrowUpRight /> : <ArrowRight />}
                 </LinkButton>
               </div>
             </div>
