@@ -1,8 +1,8 @@
 "use client";
 
 import { useId, useState } from "react";
-import { parseUnits } from "viem";
-import { useConnection } from "wagmi";
+import { erc20Abi, formatUnits, parseUnits } from "viem";
+import { useConnection, useReadContract } from "wagmi";
 import { ArrowRight, buttonClass } from "@/components/ui/Button";
 import { KineticLoader } from "@/components/ui/Modal";
 import { TokenGlyph } from "./TokenGlyph";
@@ -12,6 +12,8 @@ import { useUnifiedBalance } from "@/hooks/useUnifiedBalance";
 import { useFarcaster } from "@/providers/FarcasterProvider";
 import { useConnectModal } from "@/providers/Web3Provider";
 import type { CruxIntentResult } from "@/lib/farcaster";
+import { TESTNET } from "@/lib/chains";
+import { SETTLER_DEPLOYED, TESTNET_ESCROW_ASSETS, TESTNET_USDC } from "@/lib/intents";
 import { NOVA_ASSET, sourceAsset, type OrderDraft, type Side } from "@/lib/order";
 import { ORB_TOKENS, PAY_SOURCES, usd, type PaySourceId } from "@/lib/tokens";
 
@@ -42,13 +44,28 @@ export function TradeWidget() {
   const inputId = useId();
 
   const balance = useUnifiedBalance();
-  const { isConnected } = useConnection();
+  const { address, isConnected } = useConnection();
   const { isFarcaster, triggerSwap } = useFarcaster();
   const { openConnect } = useConnectModal();
 
+  // With the testnet settler live, browser intents escrow Base Sepolia USDC,
+  // so buying power for the USDC rails is that test balance, not mainnet.
+  const testnet = SETTLER_DEPLOYED && isConnected && !isFarcaster;
+  const testUsdc = useReadContract({
+    address: TESTNET_USDC,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    chainId: TESTNET.id,
+    query: { enabled: testnet && !!address, refetchInterval: 15_000 },
+  });
+  const testUsdcBalance = Number(formatUnits(testUsdc.data ?? BigInt(0), 6));
+  const availableFor = (id: PaySourceId) =>
+    testnet ? (TESTNET_ESCROW_ASSETS.has(sourceAsset(id).caip19) ? testUsdcBalance : 0) : balance.availableFor(id);
+
   const qty = Number.parseFloat(amount) || 0;
   const notional = qty * NOVA.price;
-  const available = balance.availableFor(source);
+  const available = availableFor(source);
   const overBudget = side === "buy" && notional > available;
   const paySource = PAY_SOURCES.find((s) => s.id === source) ?? PAY_SOURCES[0];
 
@@ -161,7 +178,7 @@ export function TradeWidget() {
         <PayWithSelect
           value={source}
           onChange={setSource}
-          availableFor={balance.availableFor}
+          availableFor={availableFor}
           label={side === "buy" ? "Pay with" : "Receive to"}
           unavailable={balance.mode === "live" && !balance.solana.connected ? { "solana-usdc": "Connect a Solana wallet to use" } : {}}
         />
@@ -178,7 +195,7 @@ export function TradeWidget() {
             <KineticLoader /> Opening swap…
           </>
         ) : overBudget ? (
-          "Insufficient buying power"
+          testnet ? "Insufficient test USDC" : "Insufficient buying power"
         ) : (
           <>
             Review Intent <ArrowRight />
@@ -193,6 +210,8 @@ export function TradeWidget() {
           </span>
         ) : !isConnected && !isFarcaster ? (
           <>Connect a wallet to sign · demo balances shown</>
+        ) : testnet ? (
+          <>Testnet · pays with Base Sepolia test USDC · no real funds</>
         ) : (
           <>Fast execution · Best price · Powered by Solvers</>
         )}
