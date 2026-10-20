@@ -31,6 +31,7 @@ import {
   TESTNET_USDC,
   buildGaslessOrder,
 } from "@/lib/intents";
+import { fmtTokenPrice } from "@/lib/launchTrade";
 import { NOVA_ASSET, clearingLimit, minReceived, sourceAsset, type OrderDraft } from "@/lib/order";
 import { usd } from "@/lib/tokens";
 
@@ -51,6 +52,8 @@ const BUSY: Flow["kind"][] = ["switching", "approving", "signing", "broadcasting
 
 const qtyFmt = new Intl.NumberFormat("en-US", { maximumFractionDigits: 4 });
 const priceFmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 4 });
+/** Launch tokens can trade far below a cent; keep their significant digits. */
+const fmtPrice = (v: number) => (v < 0.01 ? fmtTokenPrice(v) : priceFmt.format(v));
 
 // Destination settler on Base Sepolia and its fill event: read-only, to show what the solver delivered.
 const DESTINATION = "0x300a835939D2beBed59C543470DCD9a9c8065822";
@@ -178,37 +181,45 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
         signingChainId = TESTNET.id;
       }
 
+      // A graduated launch token (order.asset) is asked for, or sold, under its own CAIP-19 id; otherwise NOVA.
+      const traded = order.asset;
+      const tokenDecimals = traded?.decimals ?? NOVA_ASSET.decimals;
       const input = buying
         ? { caip19: payAsset.caip19, amount: parseUnits(order.notional.toFixed(payAsset.decimals), payAsset.decimals) }
-        : { caip19: NOVA_ASSET.caip19, amount: parseUnits(order.qty.toFixed(6), NOVA_ASSET.decimals) };
+        : { caip19: traded?.caip19 ?? NOVA_ASSET.caip19, amount: parseUnits(order.qty.toFixed(6), tokenDecimals) };
       const output = buying
         ? {
             // On testnet, ask for MockNOVA: the token the Crux solver holds and can deliver.
-            caip19: SETTLER_DEPLOYED && TESTNET_NOVA_CAIP19 ? TESTNET_NOVA_CAIP19 : NOVA_ASSET.caip19,
-            amount: parseUnits(min.toFixed(6), NOVA_ASSET.decimals),
+            caip19: traded ? traded.caip19 : SETTLER_DEPLOYED && TESTNET_NOVA_CAIP19 ? TESTNET_NOVA_CAIP19 : NOVA_ASSET.caip19,
+            amount: parseUnits(min.toFixed(6), tokenDecimals),
           }
         : { caip19: payAsset.caip19, amount: parseUnits(min.toFixed(payAsset.decimals), payAsset.decimals) };
 
       if (SETTLER_DEPLOYED) {
         // The settler pulls the input into escrow inside openFor, so it needs
-        // the funds and an allowance before the user signs.
-        if (!TESTNET_ESCROW_ASSETS.has(input.caip19)) {
+        // the funds and an allowance before the user signs. A launch-token sell
+        // escrows the token itself (the settler lists it); everything else escrows test USDC.
+        const sellsLaunch = !buying && Boolean(traded);
+        if (!sellsLaunch && !TESTNET_ESCROW_ASSETS.has(input.caip19)) {
           setFlow({ kind: "error", message: "The testnet settler escrows USDC only. Buy with Base USDC to open this intent." });
           return;
         }
-        const usdc = { address: TESTNET_USDC, abi: erc20Abi, chainId: TESTNET.id } as const;
-        const balance = await readContract(config, { ...usdc, functionName: "balanceOf", args: [address] });
+        const escrowed = { address: sellsLaunch ? traded!.address : TESTNET_USDC, abi: erc20Abi, chainId: TESTNET.id } as const;
+        const decimals = sellsLaunch ? tokenDecimals : 6;
+        const balance = await readContract(config, { ...escrowed, functionName: "balanceOf", args: [address] });
         if (balance < input.amount) {
           setFlow({
             kind: "error",
-            message: `Needs ${formatUnits(input.amount, 6)} test USDC on Base Sepolia (you have ${formatUnits(balance, 6)}). Get some free at faucet.circle.com.`,
+            message: sellsLaunch
+              ? `Needs ${formatUnits(input.amount, decimals)} $${order.symbol} on Base Sepolia (you have ${formatUnits(balance, decimals)}).`
+              : `Needs ${formatUnits(input.amount, 6)} test USDC on Base Sepolia (you have ${formatUnits(balance, 6)}). Get some free at faucet.circle.com.`,
           });
           return;
         }
-        const allowance = await readContract(config, { ...usdc, functionName: "allowance", args: [address, SETTLER] });
+        const allowance = await readContract(config, { ...escrowed, functionName: "allowance", args: [address, SETTLER] });
         if (allowance < input.amount) {
           setFlow({ kind: "approving" });
-          const approval = await writeContract({ ...usdc, functionName: "approve", args: [SETTLER, input.amount] });
+          const approval = await writeContract({ ...escrowed, functionName: "approve", args: [SETTLER, input.amount] });
           await waitForTransactionReceipt(config, { hash: approval, chainId: TESTNET.id });
         }
       }
@@ -270,7 +281,10 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
       break;
     case "approving":
       stage = 1;
-      note = `Approve exactly ${usd.format(order.notional)} of test USDC for the settler.`;
+      note =
+        !buying && order.asset
+          ? `Approve exactly ${qtyFmt.format(order.qty)} $${order.symbol} for the settler to escrow.`
+          : `Approve exactly ${usd.format(order.notional)} of test USDC for the settler.`;
       break;
     case "signing":
       stage = 1;
@@ -300,7 +314,11 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
       } else if (escrowStatus === ESCROW_SETTLED) {
         stage = 4;
         note = delivered.data
-          ? `Settlement confirmed. A solver delivered ${qtyFmt.format(Number(formatUnits(delivered.data.amount, 18)))} $${order.symbol} and the escrow was released.`
+          ? `Settlement confirmed. A solver delivered ${
+              buying
+                ? `${qtyFmt.format(Number(formatUnits(delivered.data.amount, order.asset?.decimals ?? 18)))} $${order.symbol}`
+                : `${usd.format(Number(formatUnits(delivered.data.amount, payAsset.decimals)))} test USDC`
+            } and the escrow was released.`
           : "Settlement confirmed. A solver filled your intent and the escrow was released.";
       } else if (escrowStatus === ESCROW_REFUNDED) {
         stage = 3;
@@ -329,11 +347,13 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
 
   const origin = SETTLER_DEPLOYED ? "Base Sepolia" : order.originLabel;
   const destination = SETTLER_DEPLOYED ? { name: "Base Sepolia", id: 84532 } : { name: "Base", id: 8453 };
+  // Launch-token trades on thin testnet pools are often under a cent: show USDC to its 6 decimals.
+  const money = (v: number) => (order.asset && v < 1 ? `$${v.toFixed(6).replace(/0+$/, "").replace(/\.$/, "")}` : usd.format(v));
   const inputLabel = buying
-    ? `${usd.format(order.notional)} ${SETTLER_DEPLOYED ? "test USDC" : "USDC"}`
+    ? `${money(order.notional)} ${SETTLER_DEPLOYED ? "test USDC" : "USDC"}`
     : `${qtyFmt.format(order.qty)} $${order.symbol}`;
-  const outputLabel = buying ? `${qtyFmt.format(order.qty)} $${order.symbol}` : usd.format(order.notional);
-  const minLabel = buying ? `${qtyFmt.format(min)} $${order.symbol}` : usd.format(min);
+  const outputLabel = buying ? `${qtyFmt.format(order.qty)} $${order.symbol}` : money(order.notional);
+  const minLabel = buying ? `${qtyFmt.format(min)} $${order.symbol}` : money(min);
   const finished = flow.kind === "broadcast" || flow.kind === "local";
 
   return (
@@ -364,15 +384,25 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
         <Row label="Destination chain" value={`${destination.name} · ${destination.id}`} />
         <Row
           label="Fees"
-          value="0.00% solver fee"
-          hint={SETTLER_DEPLOYED ? "Approval and submission cost a little test ETH gas" : "The signature itself is gasless"}
+          value={order.asset ? "0.30% solver spread" : "0.00% solver fee"}
+          hint={
+            order.asset
+              ? "Included in the quote, with Uniswap's 0.3% pool fee · gas is a little test ETH"
+              : SETTLER_DEPLOYED
+                ? "Approval and submission cost a little test ETH gas"
+                : "The signature itself is gasless"
+          }
         />
         <Row
           label="Clearing"
           value={`${BATCH_WINDOW_SECONDS}s uniform batch`}
-          hint={`${buying ? "Price cap" : "Price floor"} ${priceFmt.format(limit)} · ${(SLIPPAGE_BPS / 100).toFixed(2)}% max slippage`}
+          hint={`${buying ? "Price cap" : "Price floor"} ${fmtPrice(limit)} · ${(SLIPPAGE_BPS / 100).toFixed(2)}% max slippage`}
         />
-        <Row label="Quote" value={`${priceFmt.format(order.price)} / $${order.symbol}`} hint={SETTLER_DEPLOYED ? "Indicative testnet price" : "Indicative price"} />
+        <Row
+          label="Quote"
+          value={`${fmtPrice(order.price)} / $${order.symbol}`}
+          hint={order.asset ? "From the locked Uniswap V2 pool at this size · testnet" : SETTLER_DEPLOYED ? "Indicative testnet price" : "Indicative price"}
+        />
         <Row
           label="Settler"
           value={SETTLER_DEPLOYED ? `${SETTLER.slice(0, 6)}…${SETTLER.slice(-4)}` : "Not configured"}

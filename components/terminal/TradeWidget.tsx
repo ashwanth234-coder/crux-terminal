@@ -11,9 +11,11 @@ import { IntentModal } from "./IntentModal";
 import { useUnifiedBalance } from "@/hooks/useUnifiedBalance";
 import { useFarcaster } from "@/providers/FarcasterProvider";
 import { useConnectModal } from "@/providers/Web3Provider";
+import type { LaunchMarket } from "@/hooks/useLaunchMarket";
 import type { CruxIntentResult } from "@/lib/farcaster";
 import { TESTNET } from "@/lib/chains";
 import { SETTLER_DEPLOYED, TESTNET_ESCROW_ASSETS, TESTNET_USDC } from "@/lib/intents";
+import { buyCost, fmtTokenPrice, solverQuote } from "@/lib/launchTrade";
 import { NOVA_ASSET, sourceAsset, type OrderDraft, type Side } from "@/lib/order";
 import { ORB_TOKENS, PAY_SOURCES, usd, type PaySourceId } from "@/lib/tokens";
 
@@ -35,9 +37,16 @@ const STATUS_COPY: Record<CruxIntentResult["status"], (r: CruxIntentResult) => s
   unsupported: () => "Swap form is only available inside Farcaster.",
 };
 
-export function TradeWidget() {
+/** A graduated Crux launch to trade instead of the demo NOVA: Base Sepolia only, priced from its locked pool. */
+export type LaunchTrade = { symbol: string; market: LaunchMarket };
+
+const NOT_LISTED = "Not listed for intents yet";
+
+const TEST_USDC_SOURCE = PAY_SOURCES.find((s) => s.id === "base-usdc") ?? PAY_SOURCES[0];
+
+export function TradeWidget({ launch }: { launch?: LaunchTrade } = {}) {
   const [side, setSide] = useState<Side>("buy");
-  const [amount, setAmount] = useState("100");
+  const [amount, setAmount] = useState(launch ? "" : "100");
   const [source, setSource] = useState<PaySourceId>("unified");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [order, setOrder] = useState<OrderDraft | null>(null);
@@ -50,7 +59,8 @@ export function TradeWidget() {
 
   // With the testnet settler live, browser intents escrow Base Sepolia USDC,
   // so buying power for the USDC rails is that test balance, not mainnet.
-  const testnet = SETTLER_DEPLOYED && isConnected && !isFarcaster;
+  // Launch tokens only exist on Base Sepolia, so they always take the testnet intent path.
+  const testnet = SETTLER_DEPLOYED && isConnected && (!isFarcaster || Boolean(launch));
   const testUsdc = useReadContract({
     address: TESTNET_USDC,
     abi: erc20Abi,
@@ -64,19 +74,55 @@ export function TradeWidget() {
     testnet ? (TESTNET_ESCROW_ASSETS.has(sourceAsset(id).caip19) ? testUsdcBalance : 0) : balance.availableFor(id);
 
   const qty = Number.parseFloat(amount) || 0;
-  const notional = qty * NOVA.price;
-  const available = availableFor(source);
-  const overBudget = side === "buy" && notional > available;
-  const paySource = PAY_SOURCES.find((s) => s.id === source) ?? PAY_SOURCES[0];
+  const market = launch?.market;
+  // A launch token's price depends on the size: the pool's quote for it (impact and Uniswap's fee) less the
+  // solver's spread, exactly as the solver clears an order alone in its batch.
+  const launchNotional = (() => {
+    if (!market?.reserves || qty <= 0) return null;
+    let tokens: bigint;
+    try {
+      tokens = parseUnits(qty.toFixed(6), market.decimals);
+    } catch {
+      return null;
+    }
+    const usdcUnits = side === "buy" ? buyCost(tokens, market.reserves) : solverQuote("sell", tokens, market.reserves);
+    return usdcUnits === null ? null : Number(formatUnits(usdcUnits, 6));
+  })();
+  const symbol = launch?.symbol ?? NOVA.symbol;
+  const unitPrice = launch ? (launchNotional && qty > 0 ? launchNotional / qty : (market?.price ?? 0)) : NOVA.price;
+  const notional = launch ? (launchNotional ?? 0) : qty * NOVA.price;
+  const tokenHeld = market?.tokenBalance != null ? Number(formatUnits(market.tokenBalance, market.decimals)) : 0;
+  const available = launch ? testUsdcBalance : availableFor(source);
+  // Launch balances are this wallet's real testnet holdings, so they only count once one is connected.
+  const overBudget = launch && !isConnected ? false : side === "buy" ? notional > available : Boolean(launch) && qty > tokenHeld;
+  const paySource = launch ? TEST_USDC_SOURCE : (PAY_SOURCES.find((s) => s.id === source) ?? PAY_SOURCES[0]);
+  // Why a launch token can't be traded by intent right now (shown on the button).
+  const blocked = !launch
+    ? null
+    : !SETTLER_DEPLOYED
+      ? "Intents aren't live in this build"
+      : !market?.reserves
+        ? market?.loading
+          ? "Reading the pool…"
+          : "Pool unavailable"
+        : !(side === "buy" ? market.listedForBuys : market.listedForSells)
+          ? NOT_LISTED
+          : qty > 0 && launchNotional === null
+            ? "More than the pool holds"
+            : null;
 
   const largestChain = [...balance.chains].sort((a, b) => b.usd - a.usd)[0];
-  const originLabel = source === "unified" ? `Auto-routed · ${largestChain?.usd ? largestChain.label : "Base"}` : ORIGIN[source];
+  const originLabel = launch
+    ? "Base Sepolia"
+    : source === "unified"
+      ? `Auto-routed · ${largestChain?.usd ? largestChain.label : "Base"}`
+      : ORIGIN[source];
 
   const review = async () => {
-    if (qty <= 0 || overBudget) return;
+    if (qty <= 0 || overBudget || blocked) return;
 
     // 1. Inside Farcaster: hand off to the host's native swap form.
-    if (isFarcaster) {
+    if (isFarcaster && !launch) {
       setStatus({ kind: "pending" });
       const pay = sourceAsset(source);
       const result =
@@ -94,20 +140,29 @@ export function TradeWidget() {
     }
 
     // 3. Browser with a wallet: review and sign the ERC-7683 intent.
-    setOrder({ side, symbol: NOVA.symbol, qty, price: NOVA.price, notional, source: paySource, originLabel });
+    setOrder({
+      side,
+      symbol,
+      qty,
+      price: unitPrice,
+      notional,
+      source: paySource,
+      originLabel,
+      asset: market ? { address: market.token, caip19: market.caip19, decimals: market.decimals } : undefined,
+    });
   };
 
   // Validate the amount parses at token precision so signing can't throw later.
   const invalid = (() => {
     try {
-      parseUnits(qty.toFixed(6), NOVA_ASSET.decimals);
+      parseUnits(qty.toFixed(6), market?.decimals ?? NOVA_ASSET.decimals);
       return false;
     } catch {
       return true;
     }
   })();
 
-  const disabled = status.kind === "pending" || qty <= 0 || overBudget || invalid;
+  const disabled = status.kind === "pending" || qty <= 0 || overBudget || invalid || Boolean(blocked);
 
   return (
     <div className="flex h-full flex-col rounded-xl border border-line bg-void/60 p-3">
@@ -133,16 +188,18 @@ export function TradeWidget() {
 
       <div className="mt-3 flex items-center justify-between rounded-lg border border-line px-3 py-2.5">
         <span className="flex items-center gap-2.5">
-          <TokenGlyph symbol="NOVA" className="h-6 w-6" />
-          <span className="font-mono text-[12px] font-semibold">$NOVA</span>
+          <TokenGlyph symbol={symbol} className="h-6 w-6" />
+          <span className="font-mono text-[12px] font-semibold">${symbol}</span>
         </span>
-        <span className="font-mono text-[11px] text-muted">{usd.format(NOVA.price)}</span>
+        <span className="font-mono text-[11px] text-muted">
+          {launch ? (market?.price != null ? `${fmtTokenPrice(market.price)} · pool` : "…") : usd.format(NOVA.price)}
+        </span>
       </div>
 
       <div className="mt-2 rounded-lg border border-line px-3 py-2.5 focus-within:border-line-2">
         <div className="flex items-center justify-between gap-2">
           <label htmlFor={inputId} className="sr-only">
-            Amount of NOVA to {side}
+            Amount of {symbol} to {side}
           </label>
           <input
             id={inputId}
@@ -158,30 +215,61 @@ export function TradeWidget() {
             className="w-full min-w-0 bg-transparent font-mono text-[22px] text-chrome outline-none placeholder:text-dim"
             placeholder="0"
           />
-          <span className="shrink-0 rounded-full border border-line-2 px-2 py-1 font-mono text-[10px] text-muted">NOVA</span>
+          <span className="shrink-0 rounded-full border border-line-2 px-2 py-1 font-mono text-[10px] text-muted">{symbol}</span>
         </div>
         <div className="mt-0.5 flex items-center justify-between font-mono text-[11px]">
-          <span className={overBudget ? "text-down" : "text-muted"}>≈{usd.format(notional)}</span>
-          {side === "buy" && (
+          <span className={overBudget ? "text-down" : "text-muted"}>
+            ≈{usd.format(notional)}
+            {launch && side === "sell" && market?.tokenBalance != null && ` · you hold ${tokenHeld.toLocaleString("en-US", { maximumFractionDigits: 2 })}`}
+          </span>
+          {launch && market?.reserves ? (
             <button
               type="button"
-              onClick={() => setAmount(available > 0 ? (Math.floor((available / NOVA.price) * 100) / 100).toString() : "0")}
+              onClick={() => {
+                const reserves = market.reserves!;
+                // Buy: what the whole test USDC balance gets, after the spread. Sell: the whole balance.
+                const max =
+                  side === "buy"
+                    ? Number(formatUnits(solverQuote("buy", parseUnits(available.toFixed(6), 6), reserves), market.decimals))
+                    : tokenHeld;
+                setAmount(max > 0 ? (Math.floor(max * 100) / 100).toString() : "0");
+              }}
               className="text-dim transition-colors hover:text-acid"
             >
               Max
             </button>
+          ) : (
+            side === "buy" &&
+            !launch && (
+              <button
+                type="button"
+                onClick={() => setAmount(available > 0 ? (Math.floor((available / NOVA.price) * 100) / 100).toString() : "0")}
+                className="text-dim transition-colors hover:text-acid"
+              >
+                Max
+              </button>
+            )
           )}
         </div>
       </div>
 
       <div className="mt-2">
-        <PayWithSelect
-          value={source}
-          onChange={setSource}
-          availableFor={availableFor}
-          label={side === "buy" ? "Pay with" : "Receive to"}
-          unavailable={balance.mode === "live" && !balance.solana.connected ? { "solana-usdc": "Connect a Solana wallet to use" } : {}}
-        />
+        {launch ? (
+          <div className="flex items-center justify-between rounded-lg border border-line px-3 py-2.5 text-[12px]">
+            <span className="text-muted">{side === "buy" ? "Pay with" : "Receive"}</span>
+            <span className="font-mono text-chrome">
+              Base Sepolia test USDC{side === "buy" && isConnected ? ` · ${usd.format(testUsdcBalance)}` : ""}
+            </span>
+          </div>
+        ) : (
+          <PayWithSelect
+            value={source}
+            onChange={setSource}
+            availableFor={availableFor}
+            label={side === "buy" ? "Pay with" : "Receive to"}
+            unavailable={balance.mode === "live" && !balance.solana.connected ? { "solana-usdc": "Connect a Solana wallet to use" } : {}}
+          />
+        )}
       </div>
 
       <button
@@ -194,8 +282,10 @@ export function TradeWidget() {
           <>
             <KineticLoader /> Opening swap…
           </>
+        ) : blocked && isConnected ? (
+          blocked
         ) : overBudget ? (
-          testnet ? "Insufficient test USDC" : "Insufficient buying power"
+          side === "sell" ? `Not enough $${symbol}` : testnet ? "Insufficient test USDC" : "Insufficient buying power"
         ) : (
           <>
             Review Intent <ArrowRight />
@@ -208,6 +298,12 @@ export function TradeWidget() {
           <span className={status.result.status === "submitted" ? "text-acid" : status.result.status === "failed" ? "text-down" : ""}>
             {STATUS_COPY[status.result.status](status.result)}
           </span>
+        ) : launch ? (
+          blocked === NOT_LISTED ? (
+            <>This launch isn&apos;t listed on the intent settlers yet · Base Sepolia testnet</>
+          ) : (
+            <>Base Sepolia testnet · priced from the locked Uniswap pool · test funds only</>
+          )
         ) : !isConnected && !isFarcaster ? (
           <>Connect a wallet to sign · demo balances shown</>
         ) : testnet ? (

@@ -2,11 +2,12 @@
 
 import { useParams } from "next/navigation";
 import { useId, useState, type ReactNode } from "react";
-import { formatUnits, parseUnits, type Address, type Hex } from "viem";
+import { formatUnits, parseUnits, zeroAddress, type Address, type Hex } from "viem";
 import { KineticLoader } from "@/components/ui/Modal";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { SmartAccountNote } from "@/components/ui/SmartAccountNote";
 import { Notice, Shell } from "@/components/launch/LaunchView";
+import { TradeViaIntent } from "@/components/launch/TradeViaIntent";
 import { useNow } from "@/hooks/useLaunchAuction";
 import { useLaunchV2, type LaunchV2Model } from "@/hooks/useLaunchV2";
 import { TESTNET_EXPLORER } from "@/lib/chains";
@@ -213,7 +214,12 @@ function ViewV2({ model, auction, id }: { model: LaunchV2Model; auction: Auction
           </dl>
         </section>
 
-        <ActionPanelV2 model={model} auction={auction} phase={phase} symbol={symbol} />
+        <div className="flex min-w-0 flex-col gap-5">
+          <ActionPanelV2 model={model} auction={auction} phase={phase} symbol={symbol} />
+          {phase === "graduated" && auction.pair !== zeroAddress && (
+            <TradeViaIntent token={auction.token} pair={auction.pair} symbol={model.symbol ?? "TOKEN"} />
+          )}
+        </div>
       </div>
     </Shell>
   );

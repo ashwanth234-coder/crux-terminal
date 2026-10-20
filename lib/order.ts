@@ -1,3 +1,4 @@
+import type { Address } from "viem";
 import { CAIP19, NOVA_CAIP19 } from "./farcaster";
 import { SLIPPAGE_BPS } from "./intents";
 import type { PaySource, PaySourceId } from "./tokens";
@@ -16,7 +17,14 @@ export type OrderDraft = {
   source: PaySource;
   /** Human-readable chain the funds leave from. */
   originLabel: string;
+  /**
+   * The token traded, when it isn't the demo NOVA: a graduated Crux launch on Base Sepolia, priced from its
+   * locked Uniswap pool. Buys escrow test USDC; sells escrow this token.
+   */
+  asset?: TradedAsset;
 };
+
+export type TradedAsset = { address: Address; caip19: string; decimals: number };
 
 export const NOVA_ASSET = { caip19: NOVA_CAIP19, decimals: 18 };
 
