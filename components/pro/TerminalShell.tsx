@@ -9,7 +9,8 @@ import { WalletChip } from "@/components/terminal/WalletChip";
 /** Full-bleed app chrome for the pro terminal: a compact 56px bar, then the terminal fills the viewport. */
 export function TerminalShell({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-svh flex-col bg-void">
+    // Desktop: exactly one screen tall, so the panels scroll inside themselves like a trading terminal.
+    <div className="flex min-h-svh flex-col bg-void lg:h-svh lg:overflow-hidden">
       <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-line px-4 sm:px-5">
         <div className="flex min-w-0 items-center gap-6">
           <Link href="/" aria-label="Crux home" className="shrink-0">
@@ -24,7 +25,7 @@ export function TerminalShell({ children }: { children: ReactNode }) {
           <WalletChip />
         </div>
       </header>
-      <main className="flex min-h-0 flex-1 flex-col">{children}</main>
+      <main className="flex min-h-0 flex-1 flex-col lg:overflow-hidden">{children}</main>
     </div>
   );
 }

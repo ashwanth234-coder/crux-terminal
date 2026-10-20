@@ -63,7 +63,7 @@ export function ProTerminal({
         id={id}
       />
 
-      <div className="grid flex-1 gap-px bg-line lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] lg:grid-rows-[minmax(0,1fr)_minmax(220px,32%)]">
+      <div className="grid flex-1 gap-px bg-line max-lg:pb-28 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] lg:grid-rows-[minmax(0,1fr)_minmax(220px,32%)]">
         <section aria-label="Chart" className="min-h-[340px] bg-void p-3 lg:col-start-1 lg:row-start-1">
           <Pending
             title={mode === "auction" ? "Demand curve" : "Price chart"}
@@ -76,7 +76,7 @@ export function ProTerminal({
         </section>
 
         <aside aria-label="Execution" className="bg-panel lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:overflow-y-auto">
-          <div className="p-3">{execution}</div>
+          {execution}
           <SecurityBadges factory={factory} auction={auction} version={version} />
         </aside>
 

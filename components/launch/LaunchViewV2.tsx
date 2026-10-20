@@ -8,6 +8,7 @@ import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { SmartAccountNote } from "@/components/ui/SmartAccountNote";
 import { Notice, Shell } from "@/components/launch/LaunchView";
 import { TradeViaIntent } from "@/components/launch/TradeViaIntent";
+import { ExecutionPanel } from "@/components/pro/ExecutionPanel";
 import { ProTerminal } from "@/components/pro/ProTerminal";
 import { useNow } from "@/hooks/useLaunchAuction";
 import { useLaunchV2, type LaunchV2Model } from "@/hooks/useLaunchV2";
@@ -90,12 +91,15 @@ function ProViewV2({ factory, model, auction, id, version }: { factory: Address;
       version={version}
       id={id}
       execution={
-        <div className="flex flex-col gap-3">
-          <ActionPanelV2 model={model} auction={auction} phase={phase} symbol={symbol} />
-          {phase === "graduated" && auction.pair !== zeroAddress && (
-            <TradeViaIntent token={auction.token} pair={auction.pair} symbol={model.symbol ?? "TOKEN"} />
-          )}
-        </div>
+        <ExecutionPanel
+          factory={factory}
+          id={id}
+          model={model}
+          auction={auction}
+          phase={phase}
+          version={version}
+          fallback={<ActionPanelV2 model={model} auction={auction} phase={phase} symbol={symbol} />}
+        />
       }
     />
   );
