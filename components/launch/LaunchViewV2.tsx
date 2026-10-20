@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useId, useState, type ReactNode } from "react";
 import { formatUnits, parseUnits, zeroAddress, type Address, type Hex } from "viem";
 import { KineticLoader } from "@/components/ui/Modal";
@@ -8,6 +8,7 @@ import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { SmartAccountNote } from "@/components/ui/SmartAccountNote";
 import { Notice, Shell } from "@/components/launch/LaunchView";
 import { TradeViaIntent } from "@/components/launch/TradeViaIntent";
+import { ProTerminal } from "@/components/pro/ProTerminal";
 import { useNow } from "@/hooks/useLaunchAuction";
 import { useLaunchV2, type LaunchV2Model } from "@/hooks/useLaunchV2";
 import { TESTNET_EXPLORER } from "@/lib/chains";
@@ -56,6 +57,8 @@ export function LaunchRouteV2({ version = 2 }: { version?: BatchVersion }) {
 
 function LiveLaunchV2({ factory, id, version }: { factory: Address; id: string; version: BatchVersion }) {
   const model = useLaunchV2(factory, BigInt(id), version);
+  // Pro terminal preview while it's being built: /launch/v3/[id]?pro=1
+  const pro = useSearchParams().get("pro") === "1";
   if (model.loading) {
     return (
       <Shell mode="live">
@@ -68,7 +71,34 @@ function LiveLaunchV2({ factory, id, version }: { factory: Address; id: string; 
   if (model.error || !model.auction) {
     return <Notice title={`Auction #${id}`}>{model.error ?? "This auction could not be read."}</Notice>;
   }
+  if (pro) return <ProViewV2 factory={factory} model={model} auction={model.auction} id={id} version={version} />;
   return <ViewV2 model={model} auction={model.auction} id={id} />;
+}
+
+/** The same launch in the pro terminal layout; execution reuses the bid / settle / claim panel. */
+function ProViewV2({ factory, model, auction, id, version }: { factory: Address; model: LaunchV2Model; auction: AuctionV2; id: string; version: BatchVersion }) {
+  const now = useNow();
+  const phase = now === null ? "scheduled" : phaseV2(auction, now);
+  const symbol = model.symbol ? `$${model.symbol}` : "tokens";
+  return (
+    <ProTerminal
+      factory={factory}
+      model={model}
+      auction={auction}
+      phase={phase}
+      status={STATUS[phase]}
+      version={version}
+      id={id}
+      execution={
+        <div className="flex flex-col gap-3">
+          <ActionPanelV2 model={model} auction={auction} phase={phase} symbol={symbol} />
+          {phase === "graduated" && auction.pair !== zeroAddress && (
+            <TradeViaIntent token={auction.token} pair={auction.pair} symbol={model.symbol ?? "TOKEN"} />
+          )}
+        </div>
+      }
+    />
+  );
 }
 
 function Row({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
