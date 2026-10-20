@@ -1,14 +1,14 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
-type Variant = "acid" | "outline" | "ghost";
+type Variant = "signal" | "outline" | "ghost";
 type Size = "sm" | "md";
 
 const base =
-  "group inline-flex items-center justify-center gap-2 rounded-full font-medium whitespace-nowrap transition-[background-color,border-color,color,transform] duration-200 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acid active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50";
+  "group inline-flex items-center justify-center gap-2 rounded-md font-medium whitespace-nowrap transition-[background-color,border-color,color,transform] duration-200 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50";
 
 const variants: Record<Variant, string> = {
-  // Flat lime pill: hover lightens, it never glows.
-  acid: "bg-acid text-void hover:bg-[#dcfa98]",
+  // Flat Signal Orange: hover lightens, it never glows.
+  signal: "bg-signal text-void hover:bg-signal-lift",
   outline: "border border-line-2 text-chrome hover:border-chrome/60 hover:bg-white/[0.04]",
   ghost: "text-muted hover:text-chrome",
 };
@@ -18,7 +18,7 @@ const sizes: Record<Size, string> = {
   md: "h-12 px-6 text-[14px]",
 };
 
-export function buttonClass(variant: Variant = "acid", size: Size = "md", extra = "") {
+export function buttonClass(variant: Variant = "signal", size: Size = "md", extra = "") {
   return `${base} ${variants[variant]} ${sizes[size]} ${extra}`;
 }
 
@@ -44,7 +44,7 @@ type LinkButtonProps = ComponentPropsWithoutRef<"a"> & {
   children: ReactNode;
 };
 
-export function LinkButton({ variant = "acid", size = "md", className = "", children, ...props }: LinkButtonProps) {
+export function LinkButton({ variant = "signal", size = "md", className = "", children, ...props }: LinkButtonProps) {
   return (
     <a className={buttonClass(variant, size, className)} {...props}>
       {children}

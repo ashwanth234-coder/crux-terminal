@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { WalletChip } from "@/components/terminal/WalletChip";
+import { StatusTag } from "@/components/ui/StatusTag";
 import { Logo } from "./Logo";
 import { SiteNav } from "./SiteNav";
 
+/** Slim site bar: mark and wordmark left, the five routes centred, CONNECT WALLET right. */
 export function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
@@ -18,59 +21,59 @@ export function Header() {
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
   return (
     <header
-      className={`fixed inset-x-0 top-0 z-50 transition-[background-color,backdrop-filter] duration-300 ${
-        scrolled || open ? "bg-void/85 backdrop-blur-xl" : ""
+      className={`fixed inset-x-0 top-0 z-50 border-b transition-[background-color,border-color] duration-300 ${
+        scrolled || open ? "border-line/80 bg-void/90 backdrop-blur-md" : "border-line/50 bg-void"
       }`}
     >
-      {/* CRUX | Discover | Launch | Terminal | Docs */}
-      <div className="mx-auto flex h-[72px] max-w-[1440px] items-center gap-10 px-4 sm:px-8 lg:px-12">
-        <Link href="/" aria-label="Crux home" className="shrink-0">
-          <Logo />
-        </Link>
+      <div className="mx-auto grid h-16 max-w-[1440px] grid-cols-[1fr_auto] items-center gap-6 px-4 sm:px-8 md:grid-cols-[1fr_auto_1fr] lg:px-12">
+        <div className="flex items-center gap-3">
+          <Link href="/" aria-label="Crux home" className="shrink-0">
+            <Logo />
+          </Link>
+          <StatusTag status="testnet" className="hidden sm:inline-flex" />
+        </div>
 
         <nav aria-label="Primary" className="hidden md:block">
           <SiteNav variant="inline" />
         </nav>
 
-        <div className="ml-auto flex items-center gap-4">
-          <span className="hidden items-center gap-2 text-[12px] text-muted sm:flex">
-            <span className="h-1.5 w-1.5 rounded-full bg-acid" aria-hidden="true" />
-            Base Sepolia testnet
-          </span>
+        <div className="flex items-center justify-end gap-2">
+          <WalletChip variant="header" />
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
             aria-controls="mobile-nav"
             aria-label={open ? "Close menu" : "Open menu"}
-            className="grid h-10 w-10 place-items-center rounded-full border border-line-2 text-chrome md:hidden"
+            className="grid h-9 w-9 place-items-center rounded-[4px] border border-line-2 text-chrome md:hidden"
           >
-            <span className="relative block h-3 w-4">
-              <span className={`absolute left-0 h-px w-4 bg-current transition-transform duration-300 ${open ? "top-1.5 rotate-45" : "top-0"}`} />
-              <span className={`absolute left-0 top-1.5 h-px w-4 bg-current transition-opacity ${open ? "opacity-0" : ""}`} />
-              <span className={`absolute left-0 h-px w-4 bg-current transition-transform duration-300 ${open ? "top-1.5 -rotate-45" : "top-3"}`} />
+            <span className="relative block h-2.5 w-4">
+              <span className={`absolute left-0 h-px w-4 bg-current transition-transform duration-200 ${open ? "top-[5px] rotate-45" : "top-0"}`} />
+              <span className={`absolute left-0 h-px w-4 bg-current transition-transform duration-200 ${open ? "top-[5px] -rotate-45" : "top-2.5"}`} />
             </span>
           </button>
         </div>
       </div>
 
-      {/* A single hairline under the bar */}
-      <div className="absolute inset-x-0 bottom-0 h-px bg-line" aria-hidden="true" />
-
       <nav
         id="mobile-nav"
         aria-label="Primary"
-        className={`overflow-hidden px-4 transition-[max-height,opacity] duration-300 sm:px-8 md:hidden ${open ? "max-h-[80svh] pb-6 opacity-100" : "max-h-0 opacity-0"}`}
+        hidden={!open}
+        className="h-[calc(100svh-64px)] overflow-y-auto border-t border-line px-4 pb-8 sm:px-8 md:hidden"
       >
         <SiteNav variant="rows" onNavigate={() => setOpen(false)} />
-        <p className="mt-5 flex items-center gap-2 text-[12.5px] text-muted sm:hidden">
-          <span className="h-1.5 w-1.5 rounded-full bg-acid" aria-hidden="true" />
-          Base Sepolia testnet
-        </p>
+        <div className="mt-6 flex items-center gap-3 text-[12px] text-muted">
+          <StatusTag status="testnet" />
+          Base Sepolia. Nothing here is on mainnet.
+        </div>
       </nav>
     </header>
   );

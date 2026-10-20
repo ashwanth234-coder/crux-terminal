@@ -9,7 +9,7 @@ export function UnifiedBalanceCard() {
     <div className="relative overflow-hidden rounded-2xl border border-line bg-panel">
       {/* App chrome: only what works */}
       <div className="flex items-center gap-3 border-b border-line px-4 py-3 sm:px-5">
-        <CruxMark className="h-5 w-5 text-acid" />
+        <CruxMark className="h-5 w-5 text-signal" />
         <span className="text-[13.5px] font-medium text-chrome">Terminal</span>
         <span className="rounded-full border border-line-2 px-2 py-0.5 text-[11px] text-muted">Base Sepolia testnet</span>
         <div className="ml-auto">

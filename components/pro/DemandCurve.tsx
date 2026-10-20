@@ -110,7 +110,7 @@ export function DemandCurve({
         <div className="flex items-baseline gap-3">
           <h2 className="text-[13px] font-medium text-chrome">Demand curve</h2>
           <span className="flex items-center gap-1.5 text-[11px] text-muted">
-            <span className="h-px w-3 bg-acid" aria-hidden="true" /> Demand
+            <span className="h-px w-3 bg-signal" aria-hidden="true" /> Demand
           </span>
           <span className="flex items-center gap-1.5 text-[11px] text-muted">
             <span className="h-px w-3 border-t border-dashed border-chrome/50" aria-hidden="true" /> Sale
@@ -156,8 +156,8 @@ export function DemandCurve({
             ))}
 
             {/* Demand: translucent area under a crisp line */}
-            {area && <path d={area} className="fill-acid/[0.07]" />}
-            {line && <path d={line} className="fill-none stroke-acid" strokeWidth={1.5} strokeLinejoin="round" />}
+            {area && <path d={area} className="fill-signal/[0.07]" />}
+            {line && <path d={line} className="fill-none stroke-signal" strokeWidth={1.5} strokeLinejoin="round" />}
 
             {/* Tokens on sale */}
             <line x1={PAD.l} x2={PAD.l + plotW} y1={y(sale)} y2={y(sale)} className="stroke-chrome/50" strokeWidth={1} strokeDasharray="4 4" />
@@ -174,7 +174,7 @@ export function DemandCurve({
             {/* The contract's projected clearing price */}
             {shownClearing && shownClearing >= lo && shownClearing <= hi && (
               <g>
-                <line x1={x(shownClearing)} x2={x(shownClearing)} y1={PAD.t} y2={PAD.t + plotH} className="stroke-acid" strokeWidth={1} />
+                <line x1={x(shownClearing)} x2={x(shownClearing)} y1={PAD.t} y2={PAD.t + plotH} className="stroke-signal" strokeWidth={1} />
                 <text x={clearX + (flipLabel ? -6 : 6)} y={PAD.t + 24} textAnchor={flipLabel ? "end" : "start"} className="fill-chrome text-[11px]">
                   {clearLabel}
                   <tspan className="font-mono">{clearPrice}</tspan>

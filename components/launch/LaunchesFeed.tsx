@@ -79,7 +79,7 @@ export function LaunchesFeed() {
             buys nothing.
           </p>
         </div>
-        <LaunchTokenButton className={buttonClass("acid", "md", "font-semibold")} />
+        <LaunchTokenButton className={buttonClass("signal", "md", "font-semibold")} />
       </div>
 
       {!FACTORY && !FACTORY_V2 && !FACTORY_V3 ? (

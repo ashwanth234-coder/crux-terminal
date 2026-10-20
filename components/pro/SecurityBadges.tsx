@@ -9,7 +9,7 @@ import type { AuctionV2, BatchVersion } from "@/lib/launchV2";
 function Mark({ state }: { state: CheckState }) {
   if (state === "pass") {
     return (
-      <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0 text-acid" aria-label="Verified">
+      <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0 text-signal" aria-label="Verified">
         <path d="m3.5 8.2 2.8 2.8 6.2-6.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );

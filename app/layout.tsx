@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Archivo, JetBrains_Mono } from "next/font/google";
+import { Archivo, Bodoni_Moda, JetBrains_Mono } from "next/font/google";
 import { Providers } from "./providers";
 import { SITE_URL, miniAppEmbed } from "@/lib/site";
 import "./globals.css";
@@ -7,7 +7,15 @@ import "./globals.css";
 const archivo = Archivo({
   variable: "--font-archivo",
   subsets: ["latin"],
-  axes: ["wdth"],
+  display: "swap",
+});
+
+// High-contrast editorial serif for display type; the optical-size axis keeps its hairlines
+// fine at headline sizes and sturdier at title sizes.
+const bodoni = Bodoni_Moda({
+  variable: "--font-bodoni",
+  subsets: ["latin"],
+  axes: ["opsz"],
   display: "swap",
 });
 
@@ -18,19 +26,19 @@ const jetbrains = JetBrains_Mono({
 });
 
 const DIRECTION_CONTRACT = `<!--
-THESIS: Quiet Power. The page proves the mechanism with real Base Sepolia data and static diagrams instead of WebGL, loops and simulated feeds.
-OWN-WORLD: Obsidian #08090B, graphite #111215 surfaces, soft white #F3F3F0 type, acid lime #D0F77A only for actions and outcomes; Archivo for words, JetBrains Mono for numbers; hairlines, no glows.
-STORY: One market across four chains, real testnet activity, the four mechanics with honest status, the planned token, launch.
-FIRST VIEWPORT: Headline painted with the first frame, subcopy, two actions, chains; right, live Base Sepolia activity from the Crux contracts.
+THESIS: Markets without borders. Minimal, cinematic, editorial fintech: expensive through composition, type and restraint, proven with real Base Sepolia data.
+OWN-WORLD: Coal #0A0B0D, graphite #141518 layers, warm white #F5F3EE type, titanium #A7ADB5 detail, Signal Orange #FF642D for the mark, primary actions, selection and live state only; Bodoni Moda for display, Archivo for UI, JetBrains Mono for numbers; hairlines, no glows.
+STORY: Discover real launches, one uniform-price auction, intent in and execution out, liquidity locked on its home chain, value flows (live vs planned), enter.
+FIRST VIEWPORT: Serif MARKETS / WITHOUT / BORDERS. painted with the first frame, one supporting line, one ENTER CRUX link; right, the static chrome CRUX emblem on one circle and one axis.
 -->`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "Crux — Launch on your home chain. Trade from anywhere.",
+  title: "Crux — Markets without borders.",
   description:
     "Crux is a home-chain-first launch protocol with an omnichain execution layer: fair uniform-price batch launches, liquidity locked forever on graduation, and solver-based access from other networks. Testnet on Base Sepolia.",
   openGraph: {
-    title: "Crux — Launch on your home chain. Trade from anywhere.",
+    title: "Crux — Markets without borders.",
     description: "Fair batch launches on the home chain. Liquidity locked forever. Solver-based access from anywhere.",
     type: "website",
   },
@@ -46,7 +54,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#08090b",
+  themeColor: "#0a0b0d",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -54,7 +62,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${archivo.variable} ${jetbrains.variable} antialiased`}>
+    <html lang="en" className={`${archivo.variable} ${bodoni.variable} ${jetbrains.variable} antialiased`}>
       <body className="min-h-svh">
         <div hidden dangerouslySetInnerHTML={{ __html: DIRECTION_CONTRACT }} />
         <Providers>{children}</Providers>

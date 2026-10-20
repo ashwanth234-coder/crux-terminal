@@ -90,7 +90,7 @@ function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: number 
       : intent.status === "refunded"
         ? { dot: "bg-muted", label: "Refunded", tone: "text-muted" }
         : open
-          ? { dot: "bg-acid", label: refundable ? "Unfilled · refund open" : "In escrow · awaiting solver", tone: "text-chrome/85" }
+          ? { dot: "bg-signal", label: refundable ? "Unfilled · refund open" : "In escrow · awaiting solver", tone: "text-chrome/85" }
           : { dot: "bg-line-2", label: "Reading escrow…", tone: "text-dim" };
 
   return (
@@ -130,7 +130,7 @@ function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: number 
             type="button"
             onClick={reclaim}
             disabled={refund.kind === "busy"}
-            className={buttonClass("acid", "sm", "h-8 px-3.5 text-[12px] disabled:opacity-100")}
+            className={buttonClass("signal", "sm", "h-8 px-3.5 text-[12px] disabled:opacity-100")}
           >
             {refund.kind === "busy" ? (
               <>
@@ -147,7 +147,7 @@ function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: number 
             href={`${TESTNET_EXPLORER}/tx/${refund.hash}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2 text-[11px] text-acid sm:justify-end"
+            className="flex items-center gap-2 text-[11px] text-signal sm:justify-end"
           >
             {open && <KineticLoader />}
             {open ? "Refund confirming" : "Refunded"} ↗

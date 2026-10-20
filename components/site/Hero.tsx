@@ -1,52 +1,51 @@
-import { ArrowUpRight, LinkButton } from "@/components/ui/Button";
-import { CHAINS } from "@/components/ui/icons";
-import { LaunchTokenButton } from "@/components/launch/LaunchTokenButton";
-import { TestnetActivity } from "./TestnetActivity";
+import { StatusTag } from "@/components/ui/StatusTag";
+import { CruxEmblem } from "./CruxEmblem";
+import { EnterCrux } from "./EnterCrux";
+
+const ANNOTATION = "font-mono text-[10.5px] uppercase leading-[1.7] tracking-[0.2em] text-muted";
 
 export function Hero() {
   return (
-    <section id="top" className="relative pt-[72px]">
-      <div className="mx-auto grid max-w-[1440px] gap-14 px-4 pb-20 pt-14 sm:px-8 sm:pt-20 lg:grid-cols-12 lg:items-center lg:gap-10 lg:px-12 lg:pb-24 lg:pt-24">
-        <div className="lg:col-span-7">
+    <section id="top" className="relative flex min-h-[100svh] flex-col overflow-hidden pt-16">
+      <div className="mx-auto grid w-full max-w-[1440px] flex-1 items-center gap-6 px-4 pb-10 pt-12 sm:px-8 md:grid-cols-12 md:gap-6 md:py-16 lg:px-12">
+        <div className="relative z-10 md:col-span-7">
           {/* Painted with the first frame: the headline is the LCP and is never held back by an animation. */}
-          <h1 className="font-display text-[clamp(2.4rem,5.4vw,5.1rem)] leading-[0.95]">
-            <span className="block text-bright">Launch on your home chain.</span>
-            <span className="block text-steel">Trade from anywhere.</span>
+          <h1 className="font-display text-[clamp(2.9rem,13.4vw,6.25rem)] uppercase leading-[0.9] md:text-[8.2vw] xl:text-[min(7.8vw,8.75rem)]">
+            <span className="block text-bright">Markets</span>
+            <span className="block text-signal">Without</span>
+            <span className="block text-bright">Borders.</span>
           </h1>
-
-          <p className="mt-8 max-w-[32rem] text-[16px] leading-relaxed text-chrome/70">
-            Native token creation on its home chain, fair price discovery in a uniform-price batch auction, and
-            solver-based access from other networks. On testnet today: Base Sepolia.
-          </p>
-          <p className="mt-4 max-w-[32rem] text-[13.5px] leading-relaxed text-muted">
-            <span className="text-chrome">Built to scale.</span> Auctions settle by price step, not by bidder: tested with{" "}
-            <span className="font-mono text-chrome">5,000</span> bidders, settlement cost stays flat.
-          </p>
-
-          <div className="mt-10 flex flex-wrap items-center gap-3">
-            <LinkButton href="/launches">
-              Explore Markets <ArrowUpRight />
-            </LinkButton>
-            <LaunchTokenButton label="Launch a Token" />
-          </div>
-
-          <div className="mt-16">
-            <p className="text-[12.5px] text-muted">One balance across</p>
-            <ul className="mt-4 flex flex-wrap items-center gap-x-7 gap-y-3">
-              {CHAINS.map((chain) => (
-                <li key={chain.id} className="flex items-center gap-2.5 text-[13.5px] text-chrome/85">
-                  <chain.Icon className="h-[18px] w-[18px]" />
-                  {chain.name}
-                  {"planned" in chain && (
-                    <span className="rounded-full border border-line-2 px-1.5 py-px text-[10.5px] text-muted">Planned</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
+          <p className="mt-7 text-[15px] text-muted md:mt-9 md:text-[17px]">Global markets. One execution layer.</p>
+          <EnterCrux className="mt-9 md:mt-14" />
         </div>
 
-        <TestnetActivity className="lg:col-span-5 xl:col-span-4 xl:col-start-9" />
+        <div className="relative mx-auto w-full max-w-[340px] md:col-span-5 md:max-w-none">
+          <CruxEmblem className="block aspect-square w-full" />
+          <p className={`${ANNOTATION} absolute right-0 top-[3%] hidden text-right lg:block`}>
+            <span className="text-signal">01</span> /<br />
+            Execute everywhere
+          </p>
+          <p className={`${ANNOTATION} absolute bottom-[3%] left-0 hidden lg:block`}>
+            <span className="text-signal">02</span> /<br />
+            One clearing price
+          </p>
+        </div>
+      </div>
+
+      {/* The bottom edge: what network this is, and the way down */}
+      <div className="mx-auto w-full max-w-[1440px] px-4 sm:px-8 lg:px-12">
+        <div className="flex items-center justify-between border-t border-line/70 py-4">
+          <span className="flex items-center gap-3 text-[11.5px] text-muted">
+            <StatusTag status="testnet" />
+            Base Sepolia
+          </span>
+          <a href="#discover" className="group flex items-center gap-3 font-mono text-[10.5px] uppercase tracking-[0.2em] text-muted transition-colors hover:text-chrome">
+            Scroll
+            <span className="relative block h-6 w-px overflow-hidden bg-line-2" aria-hidden="true">
+              <span className="absolute inset-x-0 top-0 h-2 bg-signal transition-transform duration-300 group-hover:translate-y-4" />
+            </span>
+          </a>
+        </div>
       </div>
     </section>
   );

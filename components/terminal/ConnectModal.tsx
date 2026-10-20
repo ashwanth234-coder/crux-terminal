@@ -99,7 +99,7 @@ export function ConnectModal({ open, onClose }: { open: boolean; onClose: () => 
                 type="button"
                 disabled={isPending}
                 onClick={() => connect({ connector: c })}
-                className="flex w-full items-center gap-3 rounded-xl border border-line bg-void/50 px-3.5 py-3 text-left transition-colors hover:border-acid/50 hover:bg-white/[0.03] disabled:opacity-60"
+                className="flex w-full items-center gap-3 rounded-xl border border-line bg-void/50 px-3.5 py-3 text-left transition-colors hover:border-signal/50 hover:bg-white/[0.03] disabled:opacity-60"
               >
                 <ConnectorIcon connector={c} />
                 <span className="min-w-0 flex-1 leading-tight">
@@ -107,7 +107,7 @@ export function ConnectModal({ open, onClose }: { open: boolean; onClose: () => 
                   <span className="block truncate text-[11.5px] text-muted">{detail}</span>
                 </span>
                 {pending ? (
-                  <KineticLoader className="text-acid" />
+                  <KineticLoader className="text-signal" />
                 ) : (
                   <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 text-dim" aria-hidden="true">
                     <path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />

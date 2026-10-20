@@ -19,7 +19,7 @@ export function TerminalTrade() {
     if (loading) {
       return (
         <div className="flex h-full min-h-[320px] items-center justify-center gap-2 rounded-xl border border-line bg-void/60 text-[12px] text-muted">
-          <KineticLoader className="text-acid" /> Reading graduated launches…
+          <KineticLoader className="text-signal" /> Reading graduated launches…
         </div>
       );
     }
@@ -44,7 +44,7 @@ export function TerminalTrade() {
               aria-checked={l.key === selected.key}
               onClick={() => setPicked(l.key)}
               className={`shrink-0 rounded-full border px-2.5 py-1 font-mono text-[11px] transition-colors ${
-                l.key === selected.key ? "border-acid/50 text-chrome" : "border-line-2 text-muted hover:text-chrome"
+                l.key === selected.key ? "border-signal/50 text-chrome" : "border-line-2 text-muted hover:text-chrome"
               }`}
             >
               ${l.symbol}

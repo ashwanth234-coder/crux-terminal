@@ -61,7 +61,7 @@ function Callout({ tone = "info", title, children }: { tone?: "info" | "warn"; t
   return (
     <div className={`rounded-xl border px-4 py-3.5 ${tone === "warn" ? "border-down/40 bg-down/5" : "border-line-2 bg-panel"}`}>
       <p className="flex items-center gap-2 text-[13.5px] font-medium text-chrome">
-        <span className={`h-1.5 w-1.5 rounded-full ${tone === "warn" ? "bg-down" : "bg-acid"}`} aria-hidden="true" />
+        <span className={`h-1.5 w-1.5 rounded-full ${tone === "warn" ? "bg-down" : "bg-signal"}`} aria-hidden="true" />
         {title}
       </p>
       <div className="mt-1.5 text-[13.5px] leading-relaxed text-chrome/70">{children}</div>

@@ -11,18 +11,19 @@ export const miniAppEmbed = {
       name: "Crux",
       url: SITE_URL,
       splashImageUrl: `${SITE_URL}/splash.png`,
-      splashBackgroundColor: "#050505",
+      splashBackgroundColor: "#0a0b0d",
     },
   },
 } as const;
 
 /**
- * Primary navigation: Discover | Launch | Terminal | Docs. Launch opens the
+ * Primary navigation: Discover | Launch | Terminal | Protocol | Docs. Launch opens the
  * token launch modal; the rest are routes, absolute so they work on every page.
  */
 export const NAV_LINKS = [
   { label: "Discover", href: "/launches" },
   { label: "Launch", href: null },
-  { label: "Terminal", href: "/#protocol" },
-  { label: "Docs", href: "/#docs" },
+  { label: "Terminal", href: "/#terminal" },
+  { label: "Protocol", href: "/#protocol" },
+  { label: "Docs", href: "/alpha-guide" },
 ] as const;

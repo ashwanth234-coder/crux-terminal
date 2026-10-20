@@ -150,7 +150,7 @@ function Field({
 }
 
 const inputCls =
-  "w-full rounded-lg border border-line bg-void/60 px-3 py-2.5 text-[14px] text-chrome outline-none transition-colors placeholder:text-dim focus:border-acid/60 aria-[invalid=true]:border-down/60";
+  "w-full rounded-lg border border-line bg-void/60 px-3 py-2.5 text-[14px] text-chrome outline-none transition-colors placeholder:text-dim focus:border-signal/60 aria-[invalid=true]:border-down/60";
 
 export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const uid = useId();
@@ -332,7 +332,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     >
       {phase.kind === "done" ? (
         <div className="space-y-4">
-          <div className={`rounded-xl border p-4 ${phase.simulated ? "border-line-2 bg-void/60" : "border-acid/40 bg-acid/[0.06]"}`}>
+          <div className={`rounded-xl border p-4 ${phase.simulated ? "border-line-2 bg-void/60" : "border-signal/40 bg-signal/[0.06]"}`}>
             <p className="text-[11px] text-muted">{phase.simulated ? "Preview token address (simulated, not on-chain)" : "Token address"}</p>
             <p className="mt-1.5 break-all font-mono text-[13px] text-chrome">{phase.token}</p>
             {!phase.simulated && phase.hash && (
@@ -367,7 +367,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             </div>
           </dl>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <button type="button" onClick={viewInTerminal} className={buttonClass("acid", "md", "flex-1 rounded-xl font-semibold")}>
+            <button type="button" onClick={viewInTerminal} className={buttonClass("signal", "md", "flex-1 rounded-xl font-semibold")}>
               View in Crux Terminal <ArrowUpRight />
             </button>
             <button type="button" onClick={reset} className={buttonClass("outline", "md", "rounded-xl")}>
@@ -385,11 +385,11 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                   <li key={s} className="flex items-center gap-3 rounded-xl border border-line px-4 py-3">
                     <span className="grid h-6 w-6 shrink-0 place-items-center">
                       {state === "done" ? (
-                        <svg viewBox="0 0 16 16" className="h-4 w-4 text-acid" aria-hidden="true">
+                        <svg viewBox="0 0 16 16" className="h-4 w-4 text-signal" aria-hidden="true">
                           <path d="m3.5 8.5 3 3 6-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                       ) : state === "active" ? (
-                        <KineticLoader className="text-acid" />
+                        <KineticLoader className="text-signal" />
                       ) : (
                         <span className="h-1.5 w-1.5 rounded-full bg-line-2" />
                       )}
@@ -402,7 +402,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             </ol>
           ) : (
             <div className="flex flex-col items-center gap-3 py-6 text-center">
-              <KineticLoader className="h-5 text-acid" />
+              <KineticLoader className="h-5 text-signal" />
               <p className="text-[14px] text-chrome">{phase.label}</p>
               {phase.hash && (
                 <a
@@ -627,7 +627,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
               aria-labelledby={id("ba-label")}
               onClick={() => set("batchAuction", !form.batchAuction)}
               className={`relative h-6 w-11 shrink-0 rounded-full border transition-colors ${
-                form.batchAuction ? "border-acid/60 bg-acid" : "border-line-2 bg-line"
+                form.batchAuction ? "border-signal/60 bg-signal" : "border-line-2 bg-line"
               }`}
             >
               <span
@@ -648,7 +648,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
           {LAUNCH_FACTORY && (
             <ul className="space-y-2 rounded-xl border border-line p-4 text-[12.5px] leading-snug text-muted">
               <li className="flex items-start gap-2">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-acid" aria-hidden="true" />
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-signal" aria-hidden="true" />
                 <span>
                   <span className="text-chrome">{V2_FEE.creatorShareBps / 100}% of protocol fees are automatically routed to your wallet upon graduation.</span>{" "}
                   The fee is {V2_FEE.feeBps / 100}% of the raise.
@@ -671,7 +671,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             </ul>
           )}
 
-          <button type="submit" className={buttonClass("acid", "md", "w-full rounded-xl font-semibold")}>
+          <button type="submit" className={buttonClass("signal", "md", "w-full rounded-xl font-semibold")}>
             Deploy Token &amp; Initialize Auction <ArrowUpRight />
           </button>
           {live && !isConnected && <p className="text-center text-[11.5px] text-dim">You&apos;ll be asked to connect a wallet first.</p>}

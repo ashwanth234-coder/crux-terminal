@@ -8,10 +8,10 @@ import { describeLaunch } from "@/lib/launchSummary";
 
 const BADGE: Record<Phase, { label: string; className: string; dot: string }> = {
   scheduled: { label: "Scheduled", className: "border-line-2 text-chrome/80", dot: "bg-chrome/50" },
-  open: { label: "Live", className: "border-acid/50 text-chrome", dot: "bg-acid" },
+  open: { label: "Live", className: "border-signal/50 text-chrome", dot: "bg-signal" },
   closed: { label: "Awaiting settlement", className: "border-line-2 text-chrome/80", dot: "bg-chrome/60" },
   settled: { label: "Settled", className: "border-line-2 text-chrome/80", dot: "bg-chrome/60" },
-  graduated: { label: "Graduated", className: "border-acid bg-acid text-void", dot: "bg-void" },
+  graduated: { label: "Graduated", className: "border-signal bg-signal text-void", dot: "bg-void" },
   cancelled: { label: "Cancelled", className: "border-line text-dim", dot: "bg-dim" },
 };
 
@@ -39,7 +39,7 @@ export function LaunchCard({ launch, phase, now }: { launch: LaunchSummary; phas
   return (
     <Link
       href={launch.href}
-      className="group flex h-full flex-col rounded-2xl border border-line bg-panel p-5 transition-colors duration-200 hover:border-line-2 focus-visible:border-acid/60"
+      className="group flex h-full flex-col rounded-2xl border border-line bg-panel p-5 transition-colors duration-200 hover:border-line-2 focus-visible:border-signal/60"
     >
       {/* Identity */}
       <div className="flex items-center gap-3">
@@ -87,7 +87,7 @@ export function LaunchCard({ launch, phase, now }: { launch: LaunchSummary; phas
           <div>
             <div className="flex items-baseline justify-between gap-3 text-[12px]">
               <span className="text-muted">Sealed window</span>
-              <span className="font-mono text-acid" role="timer">
+              <span className="font-mono text-signal" role="timer">
                 {formatRemaining(left)}
               </span>
             </div>
@@ -105,7 +105,7 @@ export function LaunchCard({ launch, phase, now }: { launch: LaunchSummary; phas
             <span className="font-mono text-muted">{(raised * 100).toFixed(0)}%</span>
           </div>
           <div className="mt-2">
-            <Bar value={raised} className={phase === "cancelled" ? "bg-down/60" : "bg-acid"} />
+            <Bar value={raised} className={phase === "cancelled" ? "bg-down/60" : "bg-signal"} />
           </div>
         </div>
       </div>

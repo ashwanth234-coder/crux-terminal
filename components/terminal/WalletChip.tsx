@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { useConnection, useDisconnect } from "wagmi";
+import { ArrowUpRight } from "@/components/ui/Button";
 import { useConnectModal } from "@/providers/Web3Provider";
 
 const noopSubscribe = () => () => {};
@@ -10,8 +11,12 @@ function short(addr: string) {
   return `${addr.slice(0, 4)}…${addr.slice(-3)}`;
 }
 
-/** Compact wallet control for the terminal header: opens the picker, or disconnects when connected. */
-export function WalletChip() {
+/**
+ * Wallet control: opens the shared picker, or disconnects when connected.
+ * "header" is the outlined Signal Orange CONNECT WALLET ↗ in the site and terminal bars;
+ * "compact" is the small chip inside a panel.
+ */
+export function WalletChip({ variant = "compact" }: { variant?: "header" | "compact" }) {
   const { address, isConnected, isConnecting, isReconnecting } = useConnection();
   const { mutate: disconnect } = useDisconnect();
   const { openConnect } = useConnectModal();
@@ -20,19 +25,51 @@ export function WalletChip() {
 
   const onClick = () => (isConnected ? disconnect() : openConnect());
   const isPending = isConnecting || isReconnecting;
+  const connected = hydrated && isConnected && Boolean(address);
+  const title = isConnected ? "Disconnect wallet" : "Connect wallet";
 
-  const label = !hydrated ? "Connect" : isConnected && address ? short(address) : isPending ? "Connecting" : "Connect";
+  if (variant === "header") {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        title={title}
+        className={`group inline-flex h-9 items-center gap-2 rounded-[4px] border px-3 text-[11px] font-medium uppercase tracking-[0.16em] transition-colors duration-200 sm:px-4 ${
+          connected
+            ? "border-line-2 font-mono normal-case tracking-normal text-chrome hover:border-chrome/50"
+            : "border-signal/80 text-signal hover:border-signal hover:bg-signal/[0.08]"
+        }`}
+      >
+        {connected && address ? (
+          <>
+            <span className="h-1.5 w-1.5 rounded-full bg-signal" aria-hidden="true" />
+            {short(address)}
+          </>
+        ) : (
+          <>
+            {hydrated && isPending ? (
+              "Connecting"
+            ) : (
+              <>
+                Connect<span className="hidden sm:inline">&nbsp;wallet</span>
+              </>
+            )}
+            <ArrowUpRight className="h-3 w-3" />
+          </>
+        )}
+      </button>
+    );
+  }
 
+  const label = connected && address ? short(address) : hydrated && isPending ? "Connecting" : "Connect";
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex h-8 items-center gap-2 rounded-full border border-line-2 bg-void/60 pl-1.5 pr-3 font-mono text-[11px] text-chrome transition-colors hover:border-chrome/40"
-      title={isConnected ? "Disconnect wallet" : "Connect wallet"}
+      className="flex h-8 items-center gap-2 rounded-[4px] border border-line-2 bg-void/60 pl-2.5 pr-3 font-mono text-[11px] text-chrome transition-colors hover:border-chrome/40"
+      title={title}
     >
-      <span className={`grid h-5 w-5 place-items-center rounded-full ${hydrated && isConnected ? "bg-acid/15" : "bg-line-2"}`}>
-        <span className={`h-1.5 w-1.5 rounded-full ${hydrated && isConnected ? "bg-acid" : "bg-dim"}`} />
-      </span>
+      <span className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-signal" : "bg-dim"}`} aria-hidden="true" />
       {label}
       <svg viewBox="0 0 12 12" className="h-2.5 w-2.5 text-muted" aria-hidden="true">
         <path d="m3 4.5 3 3 3-3" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinecap="round" />

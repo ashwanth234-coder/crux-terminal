@@ -31,7 +31,7 @@ export function BalancePanel() {
         <p className="text-[11px] text-muted">Total Buying Power</p>
         <span
           className={`rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-[0.16em] ${
-            b.mode === "live" ? "border-acid/40 text-acid" : "border-line-2 text-dim"
+            b.mode === "live" ? "border-signal/40 text-signal" : "border-line-2 text-dim"
           }`}
         >
           {b.mode === "live" ? "LIVE" : "DEMO"}
@@ -44,7 +44,7 @@ export function BalancePanel() {
       <p className={`mt-1 flex items-center gap-1.5 font-mono text-[12px] ${b.change24h === null ? "text-muted" : up ? "text-up" : "text-down"}`}>
         {b.change24h === null ? (
           <>
-            <span className="h-1.5 w-1.5 rounded-full bg-acid" />
+            <span className="h-1.5 w-1.5 rounded-full bg-signal" />
             Live · refreshes every 30s
           </>
         ) : (
@@ -75,7 +75,7 @@ export function BalancePanel() {
                       className={`shrink-0 rounded-full border px-2 py-0.5 text-[10.5px] transition-colors ${
                         b.solana.connected
                           ? "border-line-2 font-mono text-muted hover:border-chrome/40 hover:text-chrome"
-                          : "border-acid/40 text-acid hover:border-acid hover:bg-acid/10"
+                          : "border-signal/40 text-signal hover:border-signal hover:bg-signal/10"
                       }`}
                       title={b.solana.connected ? "Manage Solana wallet" : "Connect a Solana wallet"}
                     >

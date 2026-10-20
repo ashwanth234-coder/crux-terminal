@@ -85,7 +85,7 @@ export function PayWithSelect({ value, onChange, availableFor, unavailable = {},
         onClick={() => (open ? setOpen(false) : openList())}
         onKeyDown={onKeyDown}
         className={`flex w-full items-center justify-between rounded-lg border px-3 py-2.5 text-left transition-colors ${
-          open ? "border-acid/50" : "border-line hover:border-line-2"
+          open ? "border-signal/50" : "border-line hover:border-line-2"
         }`}
       >
         <span className="flex items-center gap-2.5">
@@ -125,7 +125,7 @@ export function PayWithSelect({ value, onChange, availableFor, unavailable = {},
                 }`}
               >
                 <span className="min-w-0 leading-tight">
-                  <span className={`block text-[12.5px] ${s.id === value ? "text-acid" : "text-chrome"}`}>{s.label}</span>
+                  <span className={`block text-[12.5px] ${s.id === value ? "text-signal" : "text-chrome"}`}>{s.label}</span>
                   <span className="block truncate text-[10.5px] text-muted">{note ?? s.detail}</span>
                 </span>
                 <span className="shrink-0 font-mono text-[11px] text-chrome/80">{usd.format(availableFor(s.id))}</span>

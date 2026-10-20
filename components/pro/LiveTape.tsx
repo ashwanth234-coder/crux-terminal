@@ -29,7 +29,7 @@ function Wallet({ address, me, label }: { address: Address; me: Address | undefi
   const mine = me !== undefined && me.toLowerCase() === address.toLowerCase();
   return (
     <span className="inline-flex items-center gap-1.5">
-      {mine && <span className="h-1.5 w-1.5 rounded-full bg-acid" aria-hidden="true" />}
+      {mine && <span className="h-1.5 w-1.5 rounded-full bg-signal" aria-hidden="true" />}
       <span className={`font-mono ${mine ? "text-chrome" : "text-muted"}`}>{mine ? "You" : (label ?? short(address))}</span>
     </span>
   );

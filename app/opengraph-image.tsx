@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
+import { CRUX_MARK_PATH } from "@/components/site/Logo";
 
-export const alt = "Crux — Every chain. One market. Zero friction.";
+export const alt = "Crux — Markets without borders. Testnet on Base Sepolia.";
 export const size = { width: 1200, height: 800 };
 export const contentType = "image/png";
 
@@ -15,33 +16,25 @@ export default function OpengraphImage() {
           flexDirection: "column",
           justifyContent: "space-between",
           padding: 72,
-          background: "radial-gradient(circle at 78% 40%, #23262c 0%, #0a0a0a 45%, #08090b 100%)",
-          color: "#E0E2EC",
+          background: "#0A0B0D",
+          color: "#F5F3EE",
           fontFamily: "sans-serif",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-          <div
-            style={{
-              width: 44,
-              height: 44,
-              border: "3px solid #d0f77a",
-              borderRadius: 10,
-              transform: "rotate(45deg)",
-            }}
-          />
-          <div style={{ fontSize: 34, letterSpacing: 12, fontWeight: 700 }}>CRUX</div>
+          <svg width="44" height="44" viewBox="0 0 24 24">
+            <path d={CRUX_MARK_PATH} fill="#FF642D" />
+          </svg>
+          <div style={{ fontSize: 30, letterSpacing: 14, fontWeight: 500 }}>CRUX</div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", fontSize: 104, fontWeight: 800, lineHeight: 0.95, letterSpacing: -4 }}>
-          <div>Every chain.</div>
-          <div>One market.</div>
-          <div style={{ color: "#8f949e" }}>Zero friction.</div>
+        <div style={{ display: "flex", flexDirection: "column", fontSize: 116, fontWeight: 400, lineHeight: 0.95, letterSpacing: -2 }}>
+          <div>MARKETS</div>
+          <div style={{ color: "#FF642D" }}>WITHOUT</div>
+          <div>BORDERS.</div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ background: "#d0f77a", color: "#08090b", padding: "14px 30px", borderRadius: 999, fontSize: 28, fontWeight: 700 }}>
-            Launch Crux ↗
-          </div>
-          <div style={{ fontSize: 22, letterSpacing: 6, color: "#8A8F98" }}>OMNICHAIN EXECUTION PROTOCOL</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid #292B2F", paddingTop: 28 }}>
+          <div style={{ fontSize: 24, color: "#A7ADB5" }}>Global markets. One execution layer.</div>
+          <div style={{ fontSize: 18, letterSpacing: 5, color: "#A7ADB5" }}>BASE SEPOLIA TESTNET</div>
         </div>
       </div>
     ),

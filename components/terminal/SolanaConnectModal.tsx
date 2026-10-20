@@ -24,7 +24,7 @@ export function SolanaConnectModal({ open, onClose }: { open: boolean; onClose: 
           differ between server and client render (hydration mismatch). */}
       {!open ? null : connected && publicKey ? (
         <div className="space-y-4">
-          <div className="flex items-center gap-3 rounded-xl border border-acid/40 bg-acid/[0.05] px-3.5 py-3">
+          <div className="flex items-center gap-3 rounded-xl border border-signal/40 bg-signal/[0.05] px-3.5 py-3">
             {wallet?.adapter.icon && (
               // eslint-disable-next-line @next/next/no-img-element -- wallet icons are data URIs from the wallet
               <img src={wallet.adapter.icon} alt="" className="h-7 w-7 rounded-lg" />
@@ -33,10 +33,10 @@ export function SolanaConnectModal({ open, onClose }: { open: boolean; onClose: 
               <span className="block text-[14px] text-chrome">{wallet?.adapter.name ?? "Solana wallet"}</span>
               <span className="block font-mono text-[12px] text-muted">{short(publicKey.toBase58())}</span>
             </span>
-            <span className="text-[12px] text-acid">Connected</span>
+            <span className="text-[12px] text-signal">Connected</span>
           </div>
           <div className="flex gap-2">
-            <button type="button" onClick={onClose} className={buttonClass("acid", "sm", "flex-1 rounded-lg")}>
+            <button type="button" onClick={onClose} className={buttonClass("signal", "sm", "flex-1 rounded-lg")}>
               Done
             </button>
             <button
@@ -60,7 +60,7 @@ export function SolanaConnectModal({ open, onClose }: { open: boolean; onClose: 
                     disabled={connecting}
                     // Selecting is enough: the provider's autoConnect connects the chosen wallet.
                     onClick={() => select(w.adapter.name)}
-                    className="flex w-full items-center gap-3 rounded-xl border border-line bg-void/50 px-3.5 py-3 text-left transition-colors hover:border-acid/50 hover:bg-white/[0.03] disabled:opacity-60"
+                    className="flex w-full items-center gap-3 rounded-xl border border-line bg-void/50 px-3.5 py-3 text-left transition-colors hover:border-signal/50 hover:bg-white/[0.03] disabled:opacity-60"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element -- wallet icons are data URIs from the wallet */}
                     <img src={w.adapter.icon} alt="" className="h-7 w-7 rounded-lg" />
@@ -70,7 +70,7 @@ export function SolanaConnectModal({ open, onClose }: { open: boolean; onClose: 
                         {w.readyState === WalletReadyState.Installed ? "Detected in this browser" : "Opens the web wallet in a popup"}
                       </span>
                     </span>
-                    {pending && <KineticLoader className="text-acid" />}
+                    {pending && <KineticLoader className="text-signal" />}
                   </button>
                 </li>
               );

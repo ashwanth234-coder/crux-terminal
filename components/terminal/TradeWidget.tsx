@@ -234,7 +234,7 @@ export function TradeWidget({ launch }: { launch?: LaunchTrade } = {}) {
                     : tokenHeld;
                 setAmount(max > 0 ? (Math.floor(max * 100) / 100).toString() : "0");
               }}
-              className="text-dim transition-colors hover:text-acid"
+              className="text-dim transition-colors hover:text-signal"
             >
               Max
             </button>
@@ -244,7 +244,7 @@ export function TradeWidget({ launch }: { launch?: LaunchTrade } = {}) {
               <button
                 type="button"
                 onClick={() => setAmount(available > 0 ? (Math.floor((available / NOVA.price) * 100) / 100).toString() : "0")}
-                className="text-dim transition-colors hover:text-acid"
+                className="text-dim transition-colors hover:text-signal"
               >
                 Max
               </button>
@@ -276,7 +276,7 @@ export function TradeWidget({ launch }: { launch?: LaunchTrade } = {}) {
         type="button"
         onClick={review}
         disabled={disabled}
-        className={buttonClass("acid", "sm", "mt-3 h-10 w-full rounded-lg text-[13px] font-semibold")}
+        className={buttonClass("signal", "sm", "mt-3 h-10 w-full rounded-lg text-[13px] font-semibold")}
       >
         {status.kind === "pending" ? (
           <>
@@ -295,7 +295,7 @@ export function TradeWidget({ launch }: { launch?: LaunchTrade } = {}) {
 
       <p aria-live="polite" className="mt-2 min-h-[30px] text-center text-[11px] leading-snug text-muted">
         {status.kind === "done" ? (
-          <span className={status.result.status === "submitted" ? "text-acid" : status.result.status === "failed" ? "text-down" : ""}>
+          <span className={status.result.status === "submitted" ? "text-signal" : status.result.status === "failed" ? "text-down" : ""}>
             {STATUS_COPY[status.result.status](status.result)}
           </span>
         ) : launch ? (

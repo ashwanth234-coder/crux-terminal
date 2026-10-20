@@ -1,26 +1,28 @@
 @import "tailwindcss";
 
 @theme inline {
-  /* Quiet Power: obsidian ground, graphite surfaces, soft white type, lime as a signal only */
-  --color-void: #08090b;
-  --color-void-2: #0c0d10;
-  --color-panel: #111215;
-  --color-panel-2: #16171b;
-  --color-line: #1c1e22;
-  --color-line-2: #2a2d33;
-  --color-acid: #d0f77a;
-  --color-acid-deep: #b2d95c;
-  --color-chrome: #f3f3f0;
-  --color-muted: #8f939b;
-  --color-dim: #767a84;
-  --color-up: #c4ec74;
-  --color-down: #ff7a6b;
+  /* Obsidian & titanium: coal ground, graphite layers, warm white type, Signal Orange as the one accent */
+  --color-void: #0a0b0d;
+  --color-void-2: #0e0f12;
+  --color-panel: #141518;
+  --color-panel-2: #1a1b1f;
+  --color-line: #292b2f;
+  --color-line-2: #3a3d42;
+  --color-signal: #ff642d;
+  --color-signal-lift: #ff7c4d;
+  --color-chrome: #f5f3ee;
+  --color-muted: #a7adb5;
+  --color-dim: #868c94;
+  /* Price direction only, never decoration */
+  --color-up: #5cc08c;
+  --color-down: #e5484d;
 
   --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-bodoni), ui-serif, Georgia, serif;
   --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;
 
   /* Motion is functional only: one entrance, and a spinner while a wallet works. */
-  --animate-rise: rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-rise: rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
   --animate-kinetic: kinetic 0.9s ease-in-out infinite;
 }
 
@@ -38,7 +40,7 @@
 @keyframes rise {
   from {
     opacity: 0.001;
-    transform: translateY(10px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -65,7 +67,7 @@ body {
 }
 
 ::selection {
-  background: var(--color-acid);
+  background: var(--color-signal);
   color: var(--color-void);
 }
 
@@ -91,12 +93,12 @@ html {
 }
 input,
 textarea {
-  caret-color: var(--color-acid);
+  caret-color: var(--color-signal);
 }
 :focus-visible {
-  outline: 2px solid var(--color-acid);
+  outline: 2px solid var(--color-signal);
   outline-offset: 3px;
-  border-radius: 6px;
+  border-radius: 4px;
 }
 a {
   text-underline-offset: 0.22em;
@@ -106,44 +108,42 @@ a {
 }
 
 @layer components {
-  /* Extended display face for section headlines */
+  /* Editorial serif for statements: high contrast, tight but never cramped */
   .font-display {
-    font-family: var(--font-archivo), ui-sans-serif, sans-serif;
-    font-stretch: 112%;
-    font-weight: 600;
-    letter-spacing: -0.04em;
-    line-height: 0.92;
+    font-family: var(--font-serif);
+    font-weight: 400;
+    letter-spacing: -0.015em;
+    line-height: 0.95;
     text-wrap: balance;
   }
 
+  /* The same serif for titles inside the app: modals, launch headings, the token bar */
   .font-display-md {
-    font-family: var(--font-archivo), ui-sans-serif, sans-serif;
-    font-stretch: 108%;
-    font-weight: 600;
-    letter-spacing: -0.03em;
-    line-height: 1.02;
+    font-family: var(--font-serif);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1.05;
     text-wrap: balance;
   }
 
-  /* Field labels on data (amounts, balances); never a kicker above a heading */
+  /* Field labels on data (amounts, balances) and chapter numbers */
   .label-mono {
     font-family: var(--font-jetbrains), ui-monospace, monospace;
     font-size: 10.5px;
-    letter-spacing: 0.2em;
+    letter-spacing: 0.18em;
     text-transform: uppercase;
     color: var(--color-muted);
   }
 
-  /* Solid lettering: emphasis comes from weight and value, not gradients */
+  /* Solid lettering: emphasis comes from value and the one accent, never gradients */
   .text-bright {
-    color: #f3f3f0;
+    color: var(--color-chrome);
   }
 
-  /* The answering line of a two-line headline: 5.6:1 on obsidian */
+  /* The answering line of a two-line headline */
   .text-steel {
-    color: #80848d;
+    color: var(--color-muted);
   }
-
 
   /* Graphite surface: tone, not sheen or glow */
   .panel-sheen {
@@ -160,5 +160,6 @@ a {
   *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
   }
 }

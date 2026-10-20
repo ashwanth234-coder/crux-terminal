@@ -182,7 +182,7 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
 
   if (!model.account) {
     return (
-      <button type="button" onClick={model.connect} className={buttonClass("acid", "md", "w-full rounded-xl font-semibold")}>
+      <button type="button" onClick={model.connect} className={buttonClass("signal", "md", "w-full rounded-xl font-semibold")}>
         Connect wallet to bid
       </button>
     );
@@ -216,7 +216,7 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
         <span>
           Limit price <span className="text-muted">(maxPricePerToken){limitOn ? "" : " · off"}</span>
         </span>
-        <span className={`h-4 w-7 rounded-full border transition-colors ${limitOn ? "border-acid/60 bg-acid" : "border-line-2 bg-line"}`} aria-hidden="true" />
+        <span className={`h-4 w-7 rounded-full border transition-colors ${limitOn ? "border-signal/60 bg-signal" : "border-line-2 bg-line"}`} aria-hidden="true" />
       </button>
       {limitOn && (
         <div>
@@ -249,7 +249,7 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
       {rows.length > 0 && <RiskPreview rows={rows} />}
       <ProtectionRow>No front-running inside the batch: every filled bid pays the same price, whenever it arrived.</ProtectionRow>
 
-      <button type="button" disabled={disabled} onClick={() => void submit()} className={buttonClass("acid", "md", "w-full rounded-xl font-semibold max-lg:hidden")}>
+      <button type="button" disabled={disabled} onClick={() => void submit()} className={buttonClass("signal", "md", "w-full rounded-xl font-semibold max-lg:hidden")}>
         {label} <ArrowUpRight />
       </button>
       <Status busy={busy} error={error} done={done} />
@@ -259,7 +259,7 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
           <div className="min-w-0 flex-1">
             <AmountField id={`${uid}-dock`} value={amount} onChange={setAmount} unit="USDC" compact />
           </div>
-          <button type="button" disabled={disabled} onClick={() => void submit()} className={buttonClass("acid", "md", "shrink-0 rounded-xl px-4 font-semibold")}>
+          <button type="button" disabled={disabled} onClick={() => void submit()} className={buttonClass("signal", "md", "shrink-0 rounded-xl px-4 font-semibold")}>
             {busy ? "…" : overCap ? "Over cap" : "Bid"}
           </button>
         </div>
@@ -277,7 +277,7 @@ function Status({ busy, error, done }: { busy: Busy; error: string | null; done:
   if (busy) {
     return (
       <p role="status" className="flex items-center gap-2 text-[12px] text-chrome">
-        <KineticLoader className="text-acid" /> {busy.label}
+        <KineticLoader className="text-signal" /> {busy.label}
       </p>
     );
   }
@@ -467,7 +467,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
       {rows.length > 0 && <RiskPreview rows={rows} note={tooBig ? `The solver skips orders that move a pool more than ${SOLVER_MAX_IMPACT_PCT}% in one batch. Trade smaller.` : undefined} />}
       <ProtectionRow>Your signed minimum is enforced on-chain: the fill can&apos;t come in below it.</ProtectionRow>
 
-      <button type="button" disabled={isConnected && disabled} onClick={sign} className={buttonClass("acid", "md", "w-full rounded-xl font-semibold max-lg:hidden")}>
+      <button type="button" disabled={isConnected && disabled} onClick={sign} className={buttonClass("signal", "md", "w-full rounded-xl font-semibold max-lg:hidden")}>
         {isConnected ? label : "Connect wallet to trade"} <ArrowUpRight />
       </button>
 
@@ -476,7 +476,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
           <div className="min-w-0 flex-1">
             <AmountField id={`${uid}-dock`} value={amount} onChange={setAmount} unit={side === "buy" ? "USDC" : symbol} compact />
           </div>
-          <button type="button" disabled={isConnected && disabled} onClick={sign} className={buttonClass("acid", "md", "shrink-0 rounded-xl px-4 font-semibold capitalize")}>
+          <button type="button" disabled={isConnected && disabled} onClick={sign} className={buttonClass("signal", "md", "shrink-0 rounded-xl px-4 font-semibold capitalize")}>
             {isConnected ? (tooBig ? "Too big" : side) : "Connect"}
           </button>
         </div>

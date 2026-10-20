@@ -140,7 +140,7 @@ export function TokenBar({
           </a>
           <IconButton label={copied ? "Copied" : "Copy contract address"} onClick={() => void copyCa()}>
             {copied ? (
-              <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 text-acid" aria-hidden="true">
+              <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 text-signal" aria-hidden="true">
                 <path d="m3.5 8.2 2.8 2.8 6.2-6.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             ) : (

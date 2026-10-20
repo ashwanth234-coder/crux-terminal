@@ -94,7 +94,7 @@ function Lifecycle({ stage, tone }: { stage: number; tone: Tone }) {
           <li key={label} aria-current={current ? "step" : undefined}>
             <span
               className={`block h-0.5 rounded-full ${
-                done ? "bg-chrome/70" : current ? (tone === "failed" ? "bg-down" : tone === "halted" ? "bg-line-2" : "bg-acid") : "bg-line-2"
+                done ? "bg-chrome/70" : current ? (tone === "failed" ? "bg-down" : tone === "halted" ? "bg-line-2" : "bg-signal") : "bg-line-2"
               }`}
               aria-hidden="true"
             />
@@ -360,7 +360,7 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
     <Modal open={open} onClose={close} locked={busy} title="Review intent" subtitle="ERC-7683 order, signed with EIP-712.">
       <Lifecycle stage={stage} tone={failed ? "failed" : halted ? "halted" : "active"} />
       <p role="status" aria-live="polite" className={`mt-3 flex items-start gap-2 text-[12.5px] leading-snug ${failed ? "text-down" : "text-chrome/85"}`}>
-        {working && <KineticLoader className="mt-0.5 shrink-0 text-acid" />}
+        {working && <KineticLoader className="mt-0.5 shrink-0 text-signal" />}
         <span>{note}</span>
       </p>
       <SmartAccountNote address={address} className="mt-2" />
@@ -455,7 +455,7 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
             type="button"
             onClick={confirm}
             disabled={busy || !address}
-            className={buttonClass("acid", "md", "mt-5 w-full rounded-xl font-semibold disabled:opacity-100")}
+            className={buttonClass("signal", "md", "mt-5 w-full rounded-xl font-semibold disabled:opacity-100")}
           >
             {busy && <KineticLoader />}
             {ctaLabel[flow.kind]}

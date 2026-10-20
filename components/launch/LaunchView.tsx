@@ -72,7 +72,7 @@ function LiveLaunch({ factory, id }: { factory: Address; id: string }) {
     return (
       <Shell mode="live">
         <div className="flex items-center gap-3 py-24 text-[14px] text-muted">
-          <KineticLoader className="text-acid" /> Reading auction #{id} from Base Sepolia…
+          <KineticLoader className="text-signal" /> Reading auction #{id} from Base Sepolia…
         </div>
       </Shell>
     );
@@ -146,7 +146,7 @@ function AuctionJump() {
         placeholder="id"
         value={value}
         onChange={(e) => setValue(e.target.value.replace(/[^0-9]/g, ""))}
-        className="h-9 w-16 rounded-lg border border-line bg-void/60 px-2.5 font-mono text-[13px] text-chrome outline-none placeholder:text-dim focus:border-acid/60"
+        className="h-9 w-16 rounded-lg border border-line bg-void/60 px-2.5 font-mono text-[13px] text-chrome outline-none placeholder:text-dim focus:border-signal/60"
       />
       <button type="submit" className={buttonClass("outline", "sm")}>
         Open
@@ -162,7 +162,7 @@ export function Notice({ title, children }: { title: string; children: ReactNode
         <h1 className="font-display-md text-[28px] text-chrome">{title}</h1>
         <p className="mt-3 text-[14px] leading-relaxed text-muted">{children}</p>
         <div className="mt-8 flex flex-col justify-center gap-2 sm:flex-row">
-          <LaunchTokenButton className={buttonClass("acid", "md", "font-semibold")} />
+          <LaunchTokenButton className={buttonClass("signal", "md", "font-semibold")} />
           <Link href="/" className={buttonClass("outline", "md")}>
             Back to Crux
           </Link>
@@ -194,7 +194,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function Bar({ value, className = "bg-acid" }: { value: number; className?: string }) {
+function Bar({ value, className = "bg-signal" }: { value: number; className?: string }) {
   return (
     <div className="h-1 overflow-hidden rounded-full bg-line" aria-hidden="true">
       <div className={`h-full rounded-full transition-[width] duration-1000 ease-linear ${className}`} style={{ width: `${Math.min(100, Math.max(0, value * 100))}%` }} />
@@ -236,11 +236,11 @@ function LaunchView({ model, auction, id }: { model: LaunchModel; auction: Aucti
         </div>
         <span
           className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] ${
-            status.live ? "border-acid/40 text-chrome" : phase === "cancelled" ? "border-down/40 text-chrome" : "border-line-2 text-chrome"
+            status.live ? "border-signal/40 text-chrome" : phase === "cancelled" ? "border-down/40 text-chrome" : "border-line-2 text-chrome"
           }`}
         >
           <span
-            className={`h-1.5 w-1.5 rounded-full ${status.live ? "bg-acid" : phase === "cancelled" ? "bg-down" : phase === "graduated" ? "bg-acid" : "bg-dim"}`}
+            className={`h-1.5 w-1.5 rounded-full ${status.live ? "bg-signal" : phase === "cancelled" ? "bg-down" : phase === "graduated" ? "bg-signal" : "bg-dim"}`}
             aria-hidden="true"
           />
           {status.label}
@@ -267,7 +267,7 @@ function LaunchView({ model, auction, id }: { model: LaunchModel; auction: Aucti
           </div>
           {/* The guarantee, in one line */}
           <p className="mt-3 flex items-start gap-2 text-[12.5px] leading-snug text-muted">
-            <svg viewBox="0 0 16 16" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-acid" aria-hidden="true">
+            <svg viewBox="0 0 16 16" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-signal" aria-hidden="true">
               <path d="M8 1.5 13 3.5v4c0 3.2-2.1 5.6-5 7-2.9-1.4-5-3.8-5-7v-4l5-2Z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
               <path d="m5.6 8 1.7 1.7 3.1-3.4" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -286,7 +286,7 @@ function LaunchView({ model, auction, id }: { model: LaunchModel; auction: Aucti
               ${fmtUsdc(auction.totalDeposits)} <span className="text-[14px] text-dim">/ ${fmtUsdc(auction.graduationTarget)} USDC</span>
             </p>
             <div className="mt-3">
-              <Bar value={raised} className={phase === "cancelled" ? "bg-down/70" : "bg-acid"} />
+              <Bar value={raised} className={phase === "cancelled" ? "bg-down/70" : "bg-signal"} />
             </div>
           </div>
 
@@ -386,7 +386,7 @@ function ActionPanel({ model, auction, phase, symbol }: { model: LaunchModel; au
   if (busy) {
     body = (
       <div className="flex flex-col items-center gap-3 py-10 text-center">
-        <KineticLoader className="h-5 text-acid" />
+        <KineticLoader className="h-5 text-signal" />
         <p className="text-[14px] text-chrome">{busy.label}</p>
         {busy.hash && <TxLink hash={busy.hash} />}
       </div>
@@ -395,7 +395,7 @@ function ActionPanel({ model, auction, phase, symbol }: { model: LaunchModel; au
     body = (
       <>
         <p className="text-[13px] leading-relaxed text-muted">Connect a wallet on Base Sepolia to deposit, settle or claim.</p>
-        <button type="button" onClick={model.connect} className={buttonClass("acid", "md", "mt-5 w-full rounded-xl font-semibold")}>
+        <button type="button" onClick={model.connect} className={buttonClass("signal", "md", "mt-5 w-full rounded-xl font-semibold")}>
           Connect wallet
         </button>
       </>
@@ -429,7 +429,7 @@ function ActionPanel({ model, auction, phase, symbol }: { model: LaunchModel; au
             aria-invalid={overBalance}
             aria-describedby={`${uid}-msg`}
             onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1"))}
-            className="w-full rounded-lg border border-line bg-void/60 py-3 pl-7 pr-28 font-mono text-[16px] text-chrome outline-none placeholder:text-dim focus:border-acid/60 aria-[invalid=true]:border-down/60"
+            className="w-full rounded-lg border border-line bg-void/60 py-3 pl-7 pr-28 font-mono text-[16px] text-chrome outline-none placeholder:text-dim focus:border-signal/60 aria-[invalid=true]:border-down/60"
           />
           <span className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-2">
             <span className="text-[12px] text-dim">USDC</span>
@@ -458,7 +458,7 @@ function ActionPanel({ model, auction, phase, symbol }: { model: LaunchModel; au
           </p>
         )}
 
-        <button type="submit" disabled={overBalance} className={buttonClass("acid", "md", "mt-5 w-full rounded-xl font-semibold")}>
+        <button type="submit" disabled={overBalance} className={buttonClass("signal", "md", "mt-5 w-full rounded-xl font-semibold")}>
           {needsApproval ? "Approve & deposit" : "Deposit"} <ArrowUpRight />
         </button>
         <p className="mt-2 text-center text-[11.5px] text-dim">
@@ -482,7 +482,7 @@ function ActionPanel({ model, auction, phase, symbol }: { model: LaunchModel; au
         <button
           type="button"
           onClick={() => void run(model.settle, willGraduate ? "Settled: the token graduated." : "Settled: the launch was cancelled.")}
-          className={buttonClass("acid", "md", "mt-5 w-full rounded-xl font-semibold")}
+          className={buttonClass("signal", "md", "mt-5 w-full rounded-xl font-semibold")}
         >
           Settle auction <ArrowUpRight />
         </button>
@@ -520,7 +520,7 @@ function ActionPanel({ model, auction, phase, symbol }: { model: LaunchModel; au
                 refund ? `Refunded $${fmtUsdc(model.myDeposit)} ${unit}.` : `Claimed ${fmtTokens(model.allocation)} ${symbol}.`,
               ).then(setClaimed)
             }
-            className={buttonClass("acid", "md", "mt-5 w-full rounded-xl font-semibold")}
+            className={buttonClass("signal", "md", "mt-5 w-full rounded-xl font-semibold")}
           >
             {refund ? `Claim refund · $${fmtUsdc(model.myDeposit)}` : `Claim ${fmtTokens(model.allocation)} ${symbol}`} <ArrowUpRight />
           </button>
@@ -554,7 +554,7 @@ function ActionPanel({ model, auction, phase, symbol }: { model: LaunchModel; au
         </p>
       )}
       {done && !busy && (
-        <p role="status" className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-acid/30 bg-acid/[0.06] px-3 py-2 text-[12px] text-chrome">
+        <p role="status" className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-signal/30 bg-signal/[0.06] px-3 py-2 text-[12px] text-chrome">
           {done.text}
           {done.hash && <TxLink hash={done.hash} />}
         </p>

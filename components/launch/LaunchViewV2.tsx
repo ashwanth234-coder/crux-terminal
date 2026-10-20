@@ -35,9 +35,9 @@ const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
 const STATUS: Record<PhaseV2, { label: string; tone: string; dot: string }> = {
   scheduled: { label: "Scheduled", tone: "border-line-2 text-chrome", dot: "bg-chrome/50" },
-  open: { label: "Deposits open", tone: "border-acid/40 text-chrome", dot: "bg-acid" },
+  open: { label: "Deposits open", tone: "border-signal/40 text-chrome", dot: "bg-signal" },
   closed: { label: "Window closed · awaiting settlement", tone: "border-line-2 text-chrome", dot: "bg-dim" },
-  graduated: { label: "Graduated", tone: "border-line-2 text-chrome", dot: "bg-acid" },
+  graduated: { label: "Graduated", tone: "border-line-2 text-chrome", dot: "bg-signal" },
   cancelled: { label: "Cancelled · refunds open", tone: "border-down/40 text-chrome", dot: "bg-down" },
 };
 
@@ -64,7 +64,7 @@ function LiveLaunchV2({ factory, id, version }: { factory: Address; id: string; 
     return (
       <Shell mode="live">
         <div className="flex items-center gap-3 py-24 text-[14px] text-muted">
-          <KineticLoader className="text-acid" /> Reading auction #{id} from Base Sepolia…
+          <KineticLoader className="text-signal" /> Reading auction #{id} from Base Sepolia…
         </div>
       </Shell>
     );
@@ -127,7 +127,7 @@ function Bar({ value, className }: { value: number; className: string }) {
 
 function LockIcon() {
   return (
-    <svg viewBox="0 0 16 16" className="h-4 w-4 shrink-0 text-acid" aria-hidden="true">
+    <svg viewBox="0 0 16 16" className="h-4 w-4 shrink-0 text-signal" aria-hidden="true">
       <rect x="3" y="7" width="10" height="7" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.3" />
       <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" fill="none" stroke="currentColor" strokeWidth="1.3" />
     </svg>
@@ -203,7 +203,7 @@ function ViewV2({ model, auction, id }: { model: LaunchV2Model; auction: Auction
               ${fmtUsdc(auction.totalDeposits)} <span className="text-[14px] text-dim">/ ${fmtUsdc(auction.graduationTarget)} USDC</span>
             </p>
             <div className="mt-3">
-              <Bar value={raised} className={phase === "cancelled" ? "bg-down/70" : "bg-acid"} />
+              <Bar value={raised} className={phase === "cancelled" ? "bg-down/70" : "bg-signal"} />
             </div>
           </div>
 
@@ -309,7 +309,7 @@ function ActionPanelV2({ model, auction, phase, symbol }: { model: LaunchV2Model
     body = (
       <>
         <p className="text-[13px] text-muted">Connect a wallet on Base Sepolia to bid, settle or claim.</p>
-        <button type="button" onClick={model.connect} className={buttonClass("acid", "md", "mt-5 w-full rounded-xl font-semibold")}>
+        <button type="button" onClick={model.connect} className={buttonClass("signal", "md", "mt-5 w-full rounded-xl font-semibold")}>
           Connect wallet
         </button>
       </>
@@ -317,7 +317,7 @@ function ActionPanelV2({ model, auction, phase, symbol }: { model: LaunchV2Model
   } else if (busy) {
     body = (
       <div className="flex items-start gap-3 py-2">
-        <KineticLoader className="mt-1 text-acid" />
+        <KineticLoader className="mt-1 text-signal" />
         <div>
           <p className="text-[14px] text-chrome">{busy.label}</p>
           {busy.hash && (
@@ -398,7 +398,7 @@ function ActionPanelV2({ model, auction, phase, symbol }: { model: LaunchV2Model
           className="mt-5 flex w-full items-center justify-between rounded-lg border border-line px-3 py-2.5 text-left text-[13px] text-chrome transition-colors hover:border-line-2"
         >
           <span>Limit price {limitOn ? "" : <span className="text-muted">· off, accept any clearing price</span>}</span>
-          <span className={`h-4 w-7 rounded-full border transition-colors ${limitOn ? "border-acid/60 bg-acid" : "border-line-2 bg-line"}`} aria-hidden="true" />
+          <span className={`h-4 w-7 rounded-full border transition-colors ${limitOn ? "border-signal/60 bg-signal" : "border-line-2 bg-line"}`} aria-hidden="true" />
         </button>
         {limitOn && (
           <div className="mt-3">
@@ -439,7 +439,7 @@ function ActionPanelV2({ model, auction, phase, symbol }: { model: LaunchV2Model
         <button
           type="submit"
           disabled={!parsed || overBalance || overCap || Boolean(limitError) || (limitOn && !limitPrice)}
-          className={buttonClass("acid", "md", "mt-5 w-full rounded-xl font-semibold")}
+          className={buttonClass("signal", "md", "mt-5 w-full rounded-xl font-semibold")}
         >
           {overBalance ? "Not enough test USDC" : overCap ? "Over this wallet's cap" : needsApproval ? "Approve & bid" : "Place bid"} <ArrowUpRight />
         </button>
@@ -452,7 +452,7 @@ function ActionPanelV2({ model, auction, phase, symbol }: { model: LaunchV2Model
           The window has closed. Anyone can crank the settlement: it finds the clearing price, seeds the locked pool and pays
           the creator&apos;s {V2_FEE.creatorShareBps / 100}% share of the {V2_FEE.feeBps / 100}% fee.
         </p>
-        <button type="button" onClick={() => void run(model.settle, "Settled.")} className={buttonClass("acid", "md", "mt-5 w-full rounded-xl font-semibold")}>
+        <button type="button" onClick={() => void run(model.settle, "Settled.")} className={buttonClass("signal", "md", "mt-5 w-full rounded-xl font-semibold")}>
           Settle batch auction <ArrowUpRight />
         </button>
       </>
@@ -477,7 +477,7 @@ function ActionPanelV2({ model, auction, phase, symbol }: { model: LaunchV2Model
             </>
           )}
         </p>
-        <button type="button" onClick={() => void run(model.claim, "Claimed.")} className={buttonClass("acid", "md", "mt-5 w-full rounded-xl font-semibold")}>
+        <button type="button" onClick={() => void run(model.claim, "Claimed.")} className={buttonClass("signal", "md", "mt-5 w-full rounded-xl font-semibold")}>
           {phase === "cancelled" ? `Claim refund · $${fmtUsdc(model.myClaim.refund)}` : "Claim tokens"} <ArrowUpRight />
         </button>
       </>
