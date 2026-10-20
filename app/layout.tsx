@@ -26,12 +26,12 @@ FIRST VIEWPORT: Headline painted with the first frame, subcopy, two actions, cha
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "Crux — Launch once. Clear fairly. Trade everywhere.",
+  title: "Crux — Launch on your home chain. Trade from anywhere.",
   description:
-    "Crux is an omnichain execution protocol: social discovery, intent-based cross-chain execution, canonical liquidity and perpetual markets in one unified trading experience.",
+    "Crux is a home-chain-first launch protocol with an omnichain execution layer: fair uniform-price batch launches, liquidity locked forever on graduation, and solver-based access from other networks. Testnet on Base Sepolia.",
   openGraph: {
-    title: "Crux — Omnichain markets for a borderless future",
-    description: "One balance. Every chain. Intent in, execution out.",
+    title: "Crux — Launch on your home chain. Trade from anywhere.",
+    description: "Fair batch launches on the home chain. Liquidity locked forever. Solver-based access from anywhere.",
     type: "website",
   },
   twitter: { card: "summary_large_image" },

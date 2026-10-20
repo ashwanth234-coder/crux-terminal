@@ -78,7 +78,7 @@ export function BatchAuctionTracker() {
           Couldn&apos;t reach Base Sepolia. Retrying shortly.
         </p>
       ) : !latest ? (
-        <p className="px-5 py-6 text-[13px] text-muted">No launches yet. Launch a token to open the first 60-second batch.</p>
+        <p className="px-5 py-6 text-[13px] text-muted">No launches yet. Launch a token to open the first batch auction.</p>
       ) : (
         <Latest launch={latest} now={now} />
       )}

@@ -10,8 +10,8 @@ export function Experience() {
             <span className="block text-steel">Every chain.</span>
           </h2>
           <p className="mt-7 max-w-sm text-[15px] leading-relaxed text-chrome/65">
-            Trade any asset, on any chain, with a single, unified buying power. No switching networks. No bridging.
-            Just intent.
+            One buying power across your wallets. You sign an intent; solvers handle the cross-chain leg, so you never
+            bridge. On testnet, intents settle on Base Sepolia.
           </p>
 
           {/* 4 in, 1 out, 0 between: read as an equation, not a stat strip */}

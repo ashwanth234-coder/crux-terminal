@@ -272,7 +272,7 @@ function LaunchView({ model, auction, id }: { model: LaunchModel; auction: Aucti
               <path d="m5.6 8 1.7 1.7 3.1-3.4" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             <span>
-              <span className="text-chrome">Zero MEV slippage.</span> Deposits are sealed until the window closes, then all clear at one price.
+              <span className="text-chrome">No front-running inside the batch.</span> Every deposit in the window clears at one price.
               Arriving first buys nothing.
             </span>
           </p>

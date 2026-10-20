@@ -132,8 +132,11 @@ function ViewV2({ model, auction, id }: { model: LaunchV2Model; auction: Auction
       <p className="mt-6 flex items-center gap-2.5 rounded-xl border border-line bg-panel px-4 py-3 text-[13.5px] text-chrome">
         <LockIcon />
         <span>
-          Liquidity is automatically locked forever on graduation.{" "}
-          <span className="text-muted">The creator never receives the raise directly; their share vests over {V2_VESTING_DAYS} days.</span>
+          Liquidity is automatically paired and locked forever to 0x…dEaD upon graduation.{" "}
+          <span className="text-muted">
+            {V2_FEE.creatorShareBps / 100}% of the {V2_FEE.feeBps / 100}% protocol fee routes directly to the creator; their share of the raise vests over{" "}
+            {V2_VESTING_DAYS} days.
+          </span>
         </span>
       </p>
 
@@ -152,7 +155,7 @@ function ViewV2({ model, auction, id }: { model: LaunchV2Model; auction: Auction
             <Bar value={phase === "open" ? 1 - closesIn / auction.batchWindow : phase === "scheduled" ? 0 : 1} className={phase === "open" ? "bg-chrome/60" : "bg-line-2"} />
           </div>
           <p className="mt-3 text-[12.5px] leading-snug text-muted">
-            <span className="text-chrome">Zero MEV slippage.</span> Every bid clears at one price, so arriving first buys nothing.
+            <span className="text-chrome">No front-running inside the batch.</span> Every bid clears at one price, so arriving first buys nothing.
           </p>
 
           <div className="mt-8">

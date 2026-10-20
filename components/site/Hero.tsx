@@ -10,14 +10,17 @@ export function Hero() {
         <div className="lg:col-span-7">
           {/* Painted with the first frame: the headline is the LCP and is never held back by an animation. */}
           <h1 className="font-display text-[clamp(2.4rem,5.4vw,5.1rem)] leading-[0.95]">
-            <span className="block text-bright">Launch once.</span>
-            <span className="block text-bright">Clear fairly.</span>
-            <span className="block text-steel">Trade everywhere.</span>
+            <span className="block text-bright">Launch on your home chain.</span>
+            <span className="block text-steel">Trade from anywhere.</span>
           </h1>
 
-          <p className="mt-8 max-w-[30rem] text-[16px] leading-relaxed text-chrome/70">
-            From social discovery to cross-chain execution, canonical liquidity and perpetual markets. One unified
-            trading experience.
+          <p className="mt-8 max-w-[32rem] text-[16px] leading-relaxed text-chrome/70">
+            Native token creation on its home chain, fair price discovery in a uniform-price batch auction, and
+            solver-based access from other networks. On testnet today: Base Sepolia.
+          </p>
+          <p className="mt-4 max-w-[32rem] text-[13.5px] leading-relaxed text-muted">
+            <span className="text-chrome">Built to scale.</span> Auctions settle by price step, not by bidder: tested with{" "}
+            <span className="font-mono text-chrome">5,000</span> bidders, settlement cost stays flat.
           </p>
 
           <div className="mt-10 flex flex-wrap items-center gap-3">
@@ -28,7 +31,7 @@ export function Hero() {
           </div>
 
           <div className="mt-16">
-            <p className="text-[12.5px] text-muted">Natively connected</p>
+            <p className="text-[12.5px] text-muted">One balance across</p>
             <ul className="mt-4 flex flex-wrap items-center gap-x-7 gap-y-3">
               {CHAINS.map(({ id, name, Icon }) => (
                 <li key={id} className="flex items-center gap-2.5 text-[13.5px] text-chrome/85">

@@ -143,7 +143,7 @@ export function LaunchesFeed() {
                     ? "No batch is open right now."
                     : "No launches have graduated yet."}
               </p>
-              <p className="mt-2 text-[13px] text-muted">Launch a token to open a 60-second uniform-price batch.</p>
+              <p className="mt-2 text-[13px] text-muted">Launch a token to open a uniform-price batch auction.</p>
             </div>
           ) : (
             <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

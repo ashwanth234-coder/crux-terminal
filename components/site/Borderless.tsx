@@ -4,7 +4,7 @@ import { FarcasterIcon, HyperliquidIcon, IntentStandardIcon, LayerZeroIcon } fro
 const ECOSYSTEM = [
   { name: "Farcaster", role: "Social distribution", Icon: FarcasterIcon },
   { name: "LayerZero", role: "Omnichain messaging", Icon: LayerZeroIcon },
-  { name: "ERC-7683", role: "Intent standard", Icon: IntentStandardIcon },
+  { name: "ERC-7683", role: "EVM intent standard", Icon: IntentStandardIcon },
   { name: "Hyperliquid", role: "Perpetual markets", Icon: HyperliquidIcon },
 ];
 

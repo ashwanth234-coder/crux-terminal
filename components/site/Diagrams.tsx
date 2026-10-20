@@ -100,36 +100,43 @@ export function BatchWindowDiagram() {
         <span className="absolute inset-x-0 top-7 h-px bg-line" aria-hidden="true" />
       </div>
       <figcaption className="mt-2 flex justify-between border-t border-line pt-3 font-mono text-[11px] text-dim">
-        <span>0s</span>
-        <span>Sealed window</span>
-        <span>60s</span>
+        <span>Opens</span>
+        <span>Batch window</span>
+        <span>Closes</span>
       </figcaption>
     </figure>
   );
 }
 
-// ------------------------------------------------------------------ 04 Liquidity (planned)
+// ------------------------------------------------------------------ 04 Liquidity (live on testnet; expansion planned)
 
 export function LiquidityDiagram() {
   return (
-    <figure className="rounded-xl border border-dashed border-line-2 p-5 sm:p-6">
+    <figure className="rounded-xl border border-line bg-panel p-5 sm:p-6">
       <div className="grid items-center gap-4 sm:grid-cols-[1fr_auto_1fr]">
         <ul className="space-y-3">
-          {["Graduated token", "RWA yield asset"].map((t) => (
+          {["30% of supply", "Half the raise"].map((t) => (
             <li key={t} className="rounded-lg border border-line px-4 py-3 text-[13.5px] text-chrome/85">
               {t}
             </li>
           ))}
         </ul>
         <svg viewBox="0 0 40 60" className="mx-auto hidden h-16 w-10 text-line-2 sm:block" aria-hidden="true">
-          <path d="M0 14h14q6 0 6 6v20q0 6-6 6H0M20 30h18m-5-5 5 5-5 5" fill="none" stroke="currentColor" strokeWidth="1" strokeDasharray="3 3" />
+          <path d="M0 14h14q6 0 6 6v20q0 6-6 6H0M20 30h18m-5-5 5 5-5 5" fill="none" stroke="currentColor" strokeWidth="1" />
         </svg>
         <div className="rounded-lg border border-line-2 px-4 py-4">
-          <p className="text-[14px] text-chrome">Crux Spot DEX</p>
-          <p className="mt-1 text-[12.5px] text-muted">Canonical pool on Base</p>
+          <p className="text-[14px] text-chrome">One Uniswap V2 pool</p>
+          <p className="mt-1 text-[12.5px] text-muted">LP minted to 0x…dEaD, locked forever</p>
         </div>
       </div>
-      <figcaption className="mt-5 border-t border-line pt-3 text-[12px] text-muted">Planned. Not deployed on testnet yet.</figcaption>
+      <figcaption className="mt-5 space-y-2 border-t border-line pt-3 text-[12px] leading-snug text-muted">
+        <p>Live on Base Sepolia testnet: every graduation seeds the pool at its clearing price.</p>
+        <p>
+          <span className="text-chrome/80">Planned: Phase 2 expansion (OFT/NTT).</span> A token would extend beyond its home chain only once it
+          clears economic gates (deep executable liquidity, sustained 24h volume and low volatility), not a market-cap number. So
+          liquidity is only spread across chains when the asset can support depth on each.
+        </p>
+      </figcaption>
     </figure>
   );
 }
@@ -153,11 +160,11 @@ export function SyndicationDiagram() {
         </p>
       </div>
 
-      {/* Market cap over time, and the line it must cross to syndicate */}
+      {/* A token's depth over time, and the gate it must clear to syndicate */}
       <div className="relative mt-8 h-32" aria-hidden="true">
         <span className="absolute inset-x-0 border-t border-dashed border-chrome/30" style={{ bottom: "50%" }} />
         <span className="absolute right-0 text-[11.5px] text-muted" style={{ bottom: "calc(50% + 6px)" }}>
-          $10M market cap
+          Depth, volume &amp; volatility gate
         </span>
         <div className="absolute inset-0 flex items-end gap-1.5">
           {CAP.map((v, i) => (
@@ -170,7 +177,7 @@ export function SyndicationDiagram() {
         </div>
       </div>
       <figcaption className="mt-5 flex items-center justify-between gap-4 border-t border-line pt-3 text-[12px] text-muted">
-        <span>Crosses $10M: syndicated to HIP-3 deployers for perpetual markets.</span>
+        <span>Clears the gate: syndicated to HIP-3 deployers for perpetual markets.</span>
         <span className="shrink-0">Planned</span>
       </figcaption>
     </figure>

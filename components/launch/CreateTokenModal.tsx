@@ -54,9 +54,9 @@ const INITIAL: Form = {
 };
 
 const SIM_STEPS = [
-  "Compiling LayerZero OFT bytecode…",
-  "Configuring 60s Batch Auction parameters…",
-  "Staging canonical Base liquidity pool…",
+  "Compiling token bytecode…",
+  "Configuring batch auction parameters…",
+  "Staging the canonical liquidity pool…",
 ];
 
 type Phase =
@@ -326,7 +326,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             ? "Simulated preview: the launch contracts are awaiting testnet deployment."
             : "Deployed on Base Sepolia with its batch auction initialised."
           : live
-            ? "Deploys on Base Sepolia (testnet) through the Crux factory."
+            ? "Home chain: Base Sepolia (testnet). The token, its auction and its pool all live there."
             : "Preview mode: the launch contracts are awaiting testnet deployment."
       }
     >
@@ -659,6 +659,13 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                 <span>
                   Liquidity is locked forever: {V2_SPLIT.lpBps / 100}% of supply and half the raise seed a Uniswap pool whose LP is burned. Your{" "}
                   {V2_SPLIT.creatorBps / 100}% and your share of the raise vest over 30 days.
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-chrome/40" aria-hidden="true" />
+                <span>
+                  <span className="text-chrome">One canonical pool.</span> All launch liquidity sits in a single Uniswap V2 pool on the home
+                  chain, so the market is never split across chains and trades against one price.
                 </span>
               </li>
             </ul>

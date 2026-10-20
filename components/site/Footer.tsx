@@ -16,7 +16,7 @@ export function Footer() {
       <div id="docs" className="mx-auto flex max-w-[1440px] flex-col gap-8 px-4 pt-12 sm:px-8 md:flex-row md:items-center md:justify-between lg:px-12">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-10">
           <Logo />
-          <p className="text-[13px] text-muted">Omnichain markets for a borderless future.</p>
+          <p className="text-[13px] text-muted">Launch on your home chain. Trade from anywhere.</p>
         </div>
         <nav aria-label="Footer">
           <ul className="flex flex-wrap items-center gap-x-8 gap-y-3">
