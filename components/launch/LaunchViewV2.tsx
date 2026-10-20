@@ -58,8 +58,8 @@ export function LaunchRouteV2({ version = 2 }: { version?: BatchVersion }) {
 
 function LiveLaunchV2({ factory, id, version }: { factory: Address; id: string; version: BatchVersion }) {
   const model = useLaunchV2(factory, BigInt(id), version);
-  // Pro terminal preview while it's being built: /launch/v3/[id]?pro=1
-  const pro = useSearchParams().get("pro") === "1";
+  // The pro terminal is the default; the original single-column view stays at ?view=classic.
+  const pro = useSearchParams().get("view") !== "classic";
   if (model.loading) {
     return (
       <Shell mode="live">

@@ -51,9 +51,9 @@ Add Base Sepolia to your wallet (MetaMask: Settings → Networks → Add network
 
 **Bid** (everyone):
 1. Open the auction link. When the status turns **Deposits open**, the bid panel appears.
-2. Type an amount, or tap **Max**: your test USDC balance or your remaining wallet cap, whichever is lower.
+2. Type an amount, or tap **25%**, **50%** or **MAX**. MAX is the most you can bid: your test USDC balance or your remaining wallet cap, whichever is lower.
 3. Optional: turn on **Limit price** and set the most you'll pay per token (the contract's `maxPricePerToken`). It rounds down to the nearest 1% price step. If the batch clears above your limit, your whole bid is refunded.
-4. Click **Approve & bid**. The first time, your wallet asks twice: approve the exact amount, then place the bid. Watch **Clearing price if it closed now** update as others bid.
+4. Read the **Risk preview**: your worst price, the minimum you receive, and what selling everything at graduation would return. Then click **Submit batch bid**. The first time, your wallet asks twice: approve the exact amount, then place the bid. Watch the **Demand curve** and the **Projected clearing** price move as others bid.
 5. When the window closes, the Crux keeper settles it automatically within about 15 seconds (anyone can also press Settle). Then **Claim tokens**: your tokens at the clearing price plus any unused USDC. If demand missed the target, it cancels and you **Claim refund** in full.
 
 **The anti-sniper guarantee:** arriving first buys nothing. Whether you bid in the first second or the last, every filled bid pays the same clearing price, and per-wallet caps stop one address from taking the sale. Bids are public on-chain while the window is open (not sealed), so use a limit price if you care about the ceiling.
@@ -65,8 +65,8 @@ On graduation, 30% of supply and half the raise seed a Uniswap V2 pool whose LP 
 ## 4. Workflow 2: trading via intents
 
 1. On the home page **Terminal** card, pick a graduated token ($V3, $QC2 or a new one), or open a graduated launch's page and use **Trade via intent**.
-2. Choose Buy or Sell and enter a small amount. Review the quote, the minimum you'll receive and the fees.
-3. Confirm: approve the exact amount, sign the order (an EIP-712 signature, which is free), then submit it. Approving and submitting each cost a little test ETH. Your funds go into the settler's escrow.
+2. Choose Buy or Sell and enter a small amount (or tap **$0.01** / **$0.05**). Read the **Risk preview**: what you receive, the minimum signed into your order, the slippage and the cost of selling straight back.
+3. Click **Sign trade intent**: approve the exact amount, sign the order (an EIP-712 signature, which is free), then submit it. Approving and submitting each cost a little test ETH. Your funds go into the settler's escrow.
 4. Within about a minute, the solver's next batch swaps in the token's Uniswap V2 pool and delivers to your wallet; then the escrow settles. The screen shows **Settlement confirmed**.
 
 > ⚠️ **Keep trades tiny: $0.01 to $0.05.** Testnet pools hold only a few dollars ($V3 about $1.50, $QC2 about $3). A $0.02 buy already moves the price 1 to 2%. Bigger orders get heavy slippage by design of an AMM, and the solver skips orders that would move a pool more than 10% in one batch. Your order's minimum-received limit protects you: if it can't be met, nothing fills and you refund.

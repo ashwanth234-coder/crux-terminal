@@ -206,8 +206,8 @@ export default function AlphaGuidePage() {
               items={[
                 <>Open the auction link. When the status turns {b("Deposits open")}, the bid panel appears.</>,
                 <>
-                  Type an amount, or tap {b("Max")}: the most you can bid, i.e. your test USDC balance or your remaining wallet cap,
-                  whichever is lower.
+                  Type an amount, or tap {b("25%")}, {b("50%")} or {b("MAX")}. MAX is the most you can bid: your test USDC balance or
+                  your remaining wallet cap, whichever is lower.
                 </>,
                 <>
                   Optional: turn on {b("Limit price")} and set the most you&apos;ll pay per token (the contract&apos;s{" "}
@@ -215,8 +215,9 @@ export default function AlphaGuidePage() {
                   batch clears above your limit, your whole bid is refunded.
                 </>,
                 <>
-                  Click {b("Approve & bid")}. The first time, your wallet asks twice: approve the exact amount, then place the bid.
-                  Watch {b("Clearing price if it closed now")} update as others bid.
+                  Read the {b("Risk preview")}: your worst price, the minimum you receive, and what selling everything at graduation
+                  would return. Then click {b("Submit batch bid")}. The first time, your wallet asks twice: approve the exact amount,
+                  then place the bid. Watch the {b("Demand curve")} and the {b("Projected clearing")} price move as others bid.
                 </>,
                 <>
                   When the window closes, the Crux keeper settles the auction automatically within about 15 seconds (anyone can also
@@ -244,10 +245,13 @@ export default function AlphaGuidePage() {
                   On the home page {b("Terminal")} card, pick a graduated token ($V3, $QC2 or a new one), or open a graduated
                   launch&apos;s page and use {b("Trade via intent")}.
                 </>,
-                <>Choose Buy or Sell and enter a small amount. Review the quote, the minimum you&apos;ll receive and the fees.</>,
                 <>
-                  Confirm: approve the exact amount, sign the order (an EIP-712 signature, which is free), then submit it. Approving and
-                  submitting each cost a little test ETH. Your funds go into the settler&apos;s escrow.
+                  Choose Buy or Sell and enter a small amount (or tap {b("$0.01")} / {b("$0.05")}). Read the {b("Risk preview")}: what
+                  you receive, the minimum signed into your order, the slippage and the cost of selling straight back.
+                </>,
+                <>
+                  Click {b("Sign trade intent")}: approve the exact amount, sign the order (an EIP-712 signature, which is free), then
+                  submit it. Approving and submitting each cost a little test ETH. Your funds go into the settler&apos;s escrow.
                 </>,
                 <>
                   Within about a minute, the solver&apos;s next batch swaps in the token&apos;s Uniswap V2 pool and delivers to your
