@@ -33,7 +33,9 @@ type ScanCache = { scannedTo: string; orders: OpenedOrder[] };
 const NONE: OpenedOrder[] = [];
 
 export type MyIntent = OpenedOrder & {
-  /** Escrowed input in token base units (test USDC, 6 decimals). */
+  /** Escrowed input token: test USDC, or a launch token for a sell. */
+  token: Address | null;
+  /** Escrowed input in that token's base units. */
   amount: bigint | null;
   fillDeadline: number | null;
   /** Unix seconds after which refund() succeeds (fillDeadline + REFUND_GRACE). */
@@ -125,10 +127,11 @@ export function useMyIntents() {
     () =>
       orders.map((o, i) => {
         const escrow = escrows.data?.[i]?.result;
-        if (!escrow) return { ...o, amount: null, fillDeadline: null, refundAt: null, status: null };
-        const [, , amount, fillDeadline, status] = escrow;
+        if (!escrow) return { ...o, token: null, amount: null, fillDeadline: null, refundAt: null, status: null };
+        const [, token, amount, fillDeadline, status] = escrow;
         return {
           ...o,
+          token,
           amount,
           fillDeadline,
           refundAt: fillDeadline + REFUND_GRACE_SECONDS,

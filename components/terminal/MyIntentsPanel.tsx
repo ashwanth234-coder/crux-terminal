@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
-import { formatUnits, type Hex } from "viem";
-import { useConfig, useConnection, useSwitchChain, useWriteContract } from "wagmi";
+import { erc20Abi, formatUnits, type Hex } from "viem";
+import { useConfig, useConnection, useReadContract, useSwitchChain, useWriteContract } from "wagmi";
 import { waitForTransactionReceipt } from "wagmi/actions";
 import { buttonClass } from "@/components/ui/Button";
 import { KineticLoader } from "@/components/ui/Modal";
@@ -10,7 +10,7 @@ import { cruxSettlerAbi } from "@/contracts/abis/erc7683";
 import { useMyIntents, type MyIntent } from "@/hooks/useMyIntents";
 import { useBatchClock } from "@/lib/batch";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
-import { SETTLER, SETTLER_DEPLOYED } from "@/lib/intents";
+import { SETTLER, SETTLER_DEPLOYED, TESTNET_USDC } from "@/lib/intents";
 
 const noopSubscribe = () => () => {};
 
@@ -42,6 +42,16 @@ function errorMessage(err: unknown) {
 type Refund = { kind: "idle" } | { kind: "busy"; label: string } | { kind: "sent"; hash: Hex } | { kind: "error"; message: string };
 
 function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: number | null; onRefunded: () => void }) {
+  // Buys escrow test USDC; a launch-token sell escrows the token itself (Crux launch tokens have 18 decimals).
+  const escrowsUsdc = intent.token === null || intent.token.toLowerCase() === TESTNET_USDC.toLowerCase();
+  const { data: tokenSymbol } = useReadContract({
+    address: intent.token ?? undefined,
+    abi: erc20Abi,
+    functionName: "symbol",
+    chainId: TESTNET.id,
+    query: { enabled: !escrowsUsdc, staleTime: Infinity },
+  });
+  const unit = escrowsUsdc ? "USDC" : tokenSymbol ? `$${tokenSymbol}` : "tokens";
   const config = useConfig();
   const { chainId } = useConnection();
   const { mutateAsync: switchChain } = useSwitchChain();
@@ -102,8 +112,8 @@ function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: number 
       </div>
 
       <p className="text-right font-mono text-[12.5px] tabular-nums text-chrome">
-        {intent.amount === null ? "—" : usdcFmt.format(Number(formatUnits(intent.amount, 6)))}
-        <span className="ml-1 text-[11px] text-muted">USDC</span>
+        {intent.amount === null ? "—" : usdcFmt.format(Number(formatUnits(intent.amount, escrowsUsdc ? 6 : 18)))}
+        <span className="ml-1 text-[11px] text-muted">{unit}</span>
       </p>
 
       <div className="col-span-2 flex flex-col items-stretch gap-1 sm:col-span-1 sm:items-end">
@@ -128,7 +138,7 @@ function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: number 
                 {refund.label}
               </>
             ) : (
-              "Refund test USDC"
+              `Refund ${escrowsUsdc ? "test USDC" : unit}`
             )}
           </button>
         )}
@@ -188,8 +198,8 @@ export function MyIntentsPanel() {
         </div>
       </div>
       <p className="mt-1.5 max-w-[46rem] text-[11.5px] leading-relaxed text-muted">
-        Orders opened from this wallet escrow test USDC until a solver fills them. No solver network runs on testnet yet,
-        so unfilled orders can be refunded 1 hour after their fill deadline.
+        Orders opened from this wallet escrow their input (test USDC, or the launch token you sell) until a solver fills
+        them. Testnet only: unfilled orders can be refunded 1 hour after their fill deadline.
       </p>
 
       {error && intents.length === 0 ? (

@@ -1,7 +1,7 @@
 import { CruxMark } from "@/components/site/Logo";
 import { BalancePanel } from "./BalancePanel";
 import { MyIntentsPanel } from "./MyIntentsPanel";
-import { TradeWidget } from "./TradeWidget";
+import { TerminalTrade } from "./TerminalTrade";
 import { WalletChip } from "./WalletChip";
 
 export function UnifiedBalanceCard() {
@@ -22,7 +22,7 @@ export function UnifiedBalanceCard() {
           <BalancePanel />
         </div>
         <div className="p-3">
-          <TradeWidget />
+          <TerminalTrade />
         </div>
       </div>
 

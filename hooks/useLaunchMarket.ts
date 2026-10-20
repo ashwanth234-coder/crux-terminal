@@ -3,11 +3,13 @@
 import { erc20Abi, getAddress, keccak256, parseAbi, toHex, zeroAddress, type Address } from "viem";
 import { useConnection, useReadContracts } from "wagmi";
 import { TESTNET } from "@/lib/chains";
-import { SETTLER, SETTLER_DEPLOYED, TESTNET_USDC } from "@/lib/intents";
+import { useLaunchesV2 } from "@/hooks/useLaunches";
+import { FACTORY_V2, FACTORY_V3, SETTLER, SETTLER_DEPLOYED, TESTNET_USDC } from "@/lib/intents";
 import { launchCaip19, midPrice, type PoolReserves } from "@/lib/launchTrade";
+import type { BatchVersion } from "@/lib/launchV2";
 
 /** CruxDestinationSettler on Base Sepolia: delivers what a buy intent asks for. */
-const DESTINATION_SETTLER = "0x300a835939D2beBed59C543470DCD9a9c8065822";
+const DESTINATION_SETTLER: Address = "0x300a835939D2beBed59C543470DCD9a9c8065822";
 
 const pairAbi = parseAbi([
   "function token0() view returns (address)",
@@ -71,4 +73,56 @@ export function useLaunchMarket(token: Address, pair: Address): LaunchMarket {
     tokenBalance: address && bal?.result !== undefined ? bal.result : null,
     loading: reads.isLoading,
   };
+}
+
+export type GraduatedLaunch = {
+  /** "v3#0" */
+  key: string;
+  version: BatchVersion;
+  id: number;
+  symbol: string;
+  token: Address;
+  pair: Address;
+  /** Listed on the destination settler, so buy intents can open (the solver serves every listed launch). */
+  listed: boolean;
+  href: string;
+};
+
+/**
+ * Every graduated V2/V3 launch (newest first per factory, listed ones first): the markets the trade widget
+ * offers. Discovered from the factories like the solver does, so a new graduation shows up without a deploy.
+ */
+export function useGraduatedLaunches(): { launches: GraduatedLaunch[]; loading: boolean } {
+  const v3 = useLaunchesV2(FACTORY_V3, 3);
+  const v2 = useLaunchesV2(FACTORY_V2, 2);
+  const graduated = [...v3.launches, ...v2.launches].filter((l) => l.v2?.status === 1 && l.v2.pair !== zeroAddress);
+
+  const listing = useReadContracts({
+    contracts: graduated.map((l) => ({
+      chainId: TESTNET.id,
+      address: DESTINATION_SETTLER,
+      abi: registryAbi,
+      functionName: "assetToken" as const,
+      args: [keccak256(toHex(launchCaip19(l.v2!.token)))] as const,
+    })),
+    query: { enabled: graduated.length > 0, refetchInterval: 30_000 },
+  });
+
+  const launches = graduated.map((l, i) => {
+    const listed = listing.data?.[i]?.result;
+    return {
+      key: `v${l.version}#${l.id}`,
+      version: l.version as BatchVersion,
+      id: l.id,
+      symbol: l.symbol ?? "TOKEN",
+      token: l.v2!.token,
+      pair: l.v2!.pair,
+      listed: SETTLER_DEPLOYED && Boolean(listed) && getAddress(listed as Address) === getAddress(l.v2!.token),
+      href: l.href,
+    };
+  });
+  launches.sort((a, b) => Number(b.listed) - Number(a.listed));
+  // A factory that isn't configured never loads (its query is disabled), so it doesn't count as loading.
+  const factoriesLoading = (FACTORY_V3 !== null && v3.loading) || (FACTORY_V2 !== null && v2.loading);
+  return { launches, loading: factoriesLoading || (graduated.length > 0 && listing.isPending) };
 }
