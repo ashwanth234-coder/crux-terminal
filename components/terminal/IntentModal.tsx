@@ -18,6 +18,7 @@ import { useConfig, useConnection, useReadContract, useSignTypedData, useSwitchC
 import { readContract, waitForTransactionReceipt } from "wagmi/actions";
 import { Modal, KineticLoader } from "@/components/ui/Modal";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
+import { SmartAccountNote } from "@/components/ui/SmartAccountNote";
 import { cruxSettlerAbi, originSettlerAbi } from "@/contracts/abis/erc7683";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import {
@@ -342,6 +343,7 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
         {working && <KineticLoader className="mt-0.5 shrink-0 text-acid" />}
         <span>{note}</span>
       </p>
+      <SmartAccountNote address={address} className="mt-2" />
 
       {/* Pre-signature quote: what goes in, what comes out, and how it gets there */}
       <div className="mt-5 grid grid-cols-1 gap-3 rounded-xl border border-line bg-void/60 p-4 min-[420px]:grid-cols-2">

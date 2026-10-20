@@ -2,9 +2,10 @@
 
 import { useParams } from "next/navigation";
 import { useId, useState, type ReactNode } from "react";
-import { parseUnits, type Address, type Hex } from "viem";
+import { formatUnits, parseUnits, type Address, type Hex } from "viem";
 import { KineticLoader } from "@/components/ui/Modal";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
+import { SmartAccountNote } from "@/components/ui/SmartAccountNote";
 import { Notice, Shell } from "@/components/launch/LaunchView";
 import { useNow } from "@/hooks/useLaunchAuction";
 import { useLaunchV2, type LaunchV2Model } from "@/hooks/useLaunchV2";
@@ -242,6 +243,9 @@ function ActionPanelV2({ model, auction, phase, symbol }: { model: LaunchV2Model
   // V3 caps each wallet's total deposit; what this wallet can still add.
   const capLeft = model.maxDeposit !== null ? (model.maxDeposit > model.myBid.quote ? model.maxDeposit - model.myBid.quote : BigInt(0)) : null;
   const overCap = parsed !== null && capLeft !== null && parsed > capLeft;
+  // Max: everything this wallet can bid. Bids are paid in USDC (gas is ETH), so no buffer is held back.
+  const maxBid =
+    model.usdcBalance === null ? null : capLeft !== null && capLeft < model.usdcBalance ? capLeft : model.usdcBalance;
   const needsApproval = parsed !== null && model.allowance !== null && parsed > model.allowance;
   const isCreator = model.account !== null && model.account.toLowerCase() === auction.creator.toLowerCase();
 
@@ -323,6 +327,15 @@ function ActionPanelV2({ model, auction, phase, symbol }: { model: LaunchV2Model
             onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
             className="w-full min-w-0 bg-transparent font-mono text-[20px] text-chrome outline-none placeholder:text-dim"
           />
+          <button
+            type="button"
+            disabled={!maxBid}
+            onClick={() => maxBid && setAmount(formatUnits(maxBid, USDC_DECIMALS))}
+            className="shrink-0 rounded-md border border-line-2 px-2 py-1 text-[11.5px] text-chrome transition-colors hover:border-chrome/50 disabled:opacity-40"
+            aria-label={maxBid ? `Bid the maximum, $${fmtUsdc(maxBid)}` : "Bid the maximum"}
+          >
+            Max
+          </button>
           <span className="text-[12px] text-muted">USDC</span>
         </div>
         {capLeft !== null ? (
@@ -438,6 +451,9 @@ function ActionPanelV2({ model, auction, phase, symbol }: { model: LaunchV2Model
       <h2 className="text-[15px] font-medium text-chrome">{phase === "open" || phase === "scheduled" ? "Bid" : phase === "closed" ? "Settle" : "Claim"}</h2>
       <p className="mt-1 text-[12px] text-muted">Base Sepolia testnet · test USDC only</p>
       <div className="mt-5">{body}</div>
+      {model.account && (phase === "open" || phase === "closed" || phase === "graduated" || phase === "cancelled") && (
+        <SmartAccountNote address={model.account} className="mt-4" />
+      )}
       {error && (
         <p role="alert" className="mt-4 rounded-lg border border-down/30 bg-down/10 px-3 py-2 text-[12.5px] text-down">
           {error}
