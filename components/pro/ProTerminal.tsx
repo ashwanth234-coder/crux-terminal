@@ -4,21 +4,12 @@ import type { ReactNode } from "react";
 import type { Address } from "viem";
 import { DemandCurve } from "@/components/pro/DemandCurve";
 import { LiveTape } from "@/components/pro/LiveTape";
+import { PriceChart } from "@/components/pro/PriceChart";
 import { SecurityBadges } from "@/components/pro/SecurityBadges";
 import { TerminalShell } from "@/components/pro/TerminalShell";
 import { TokenBar, type PhaseStatus } from "@/components/pro/TokenBar";
 import type { LaunchV2Model } from "@/hooks/useLaunchV2";
 import type { AuctionV2, BatchVersion, PhaseV2 } from "@/lib/launchV2";
-
-/** Placeholder for a panel still being built; shown only in the ?pro=1 preview. */
-function Pending({ title, detail }: { title: string; detail: string }) {
-  return (
-    <div className="flex h-full min-h-[inherit] flex-col items-center justify-center gap-2 border border-dashed border-line-2 px-6 py-10 text-center">
-      <p className="text-[13px] text-chrome">{title}</p>
-      <p className="max-w-sm text-[12px] leading-snug text-dim">{detail}</p>
-    </div>
-  );
-}
 
 /**
  * The pro terminal: one launch, two modes. Auction mode (scheduled, open, closed, cancelled) and trade mode
@@ -65,7 +56,8 @@ export function ProTerminal({
         id={id}
       />
 
-      <div className="grid flex-1 gap-px bg-line max-lg:pb-28 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] lg:grid-rows-[minmax(0,1fr)_minmax(220px,32%)]">
+      {/* minmax(0,1fr) on phones: wide content (the tape's table scrolls sideways) must never widen the column. */}
+      <div className="grid flex-1 grid-cols-[minmax(0,1fr)] gap-px bg-line max-lg:pb-28 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] lg:grid-rows-[minmax(0,1fr)_minmax(220px,32%)]">
         <section aria-label="Chart" className="min-h-[340px] bg-void p-3 lg:col-start-1 lg:row-start-1">
           {mode === "auction" ? (
             <DemandCurve
@@ -79,7 +71,7 @@ export function ProTerminal({
               symbol={model.symbol ? `$${model.symbol}` : "tokens"}
             />
           ) : (
-            <Pending title="Price chart" detail="Next build step: candles built from the locked pool's on-chain swaps." />
+            <PriceChart auction={auction} symbol={model.symbol ? `$${model.symbol}` : "Token"} />
           )}
         </section>
 
