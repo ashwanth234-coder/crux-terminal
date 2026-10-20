@@ -15,6 +15,23 @@ export const V2_VESTING_DAYS = 30;
 /** Contract minimum is 60s; the form asks for more so the transaction lands in time. */
 export const V2_MIN_LEAD_SECONDS = 180;
 
+/** Batch factory generation: V2 (bidder list, max 200) or V3 (1% price ticks, no bidder limit). */
+export type BatchVersion = 2 | 3;
+
+/** CruxFactoryV3 prices limits on a grid 1% apart; a limit rounds down to its step. */
+export const V3_TICK_STEP_PERCENT = 1;
+/** CruxFactoryV3.TICK_COUNT: steps floor × 1.01^0 … floor × 1.01^2047. */
+export const TICK_COUNT_V3 = 2048;
+
+/**
+ * V3's per-wallet cap in quote: maxAllocationPerWallet × floorPrice / 1e36, rounded up (CruxFactoryV3._maxDeposit).
+ * Bidding never clears below the floor, so this much buys at most the token cap.
+ */
+export function maxDepositV3(a: Pick<AuctionV2, "maxAllocationPerWallet" | "floorPrice">) {
+  const product = a.maxAllocationPerWallet * a.floorPrice;
+  return (product + PRICE_DENOMINATOR - BigInt(1)) / PRICE_DENOMINATOR;
+}
+
 export type AuctionV2 = {
   token: `0x${string}`;
   creator: `0x${string}`;

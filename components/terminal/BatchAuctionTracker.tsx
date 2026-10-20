@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ArrowRight } from "@/components/ui/Button";
 import { useAllLaunches, type LaunchSummary } from "@/hooks/useLaunches";
 import { useNow } from "@/hooks/useLaunchAuction";
-import { FACTORY, FACTORY_V2 } from "@/lib/intents";
+import { FACTORY, FACTORY_V2, FACTORY_V3 } from "@/lib/intents";
 import { fmtUsdc, formatRemaining, type Phase } from "@/lib/launch";
 import { describeLaunch } from "@/lib/launchSummary";
 
@@ -54,7 +54,7 @@ function Latest({ launch, now }: { launch: LaunchSummary; now: number | null }) 
  */
 export function BatchAuctionTracker() {
   const now = useNow();
-  const { launches, loading, error } = useAllLaunches(FACTORY, FACTORY_V2);
+  const { launches, loading, error } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3);
   const latest = launches[0];
 
   return (
@@ -66,7 +66,7 @@ export function BatchAuctionTracker() {
         <span className="text-[11.5px] text-muted">Base Sepolia testnet</span>
       </div>
 
-      {!FACTORY && !FACTORY_V2 ? (
+      {!FACTORY && !FACTORY_V2 && !FACTORY_V3 ? (
         <p className="px-5 py-6 text-[13px] text-muted">No factory is configured for this build.</p>
       ) : loading ? (
         <div className="space-y-2.5 px-5 py-6" aria-busy="true" aria-label="Reading launches">

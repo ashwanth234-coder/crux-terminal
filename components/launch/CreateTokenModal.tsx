@@ -7,9 +7,9 @@ import { useConfig, useConnection, useSwitchChain, useWriteContract } from "wagm
 import { waitForTransactionReceipt } from "wagmi/actions";
 import { Modal, KineticLoader } from "@/components/ui/Modal";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
-import { cruxFactoryAbi, cruxFactoryV2Abi } from "@/contracts/abis/batchAuction";
+import { cruxBatchFactoryAbi, cruxFactoryAbi } from "@/contracts/abis/batchAuction";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
-import { BATCH_WINDOW_SECONDS, FACTORY, FACTORY_V2 } from "@/lib/intents";
+import { BATCH_WINDOW_SECONDS, FACTORY, LAUNCH_FACTORY } from "@/lib/intents";
 import { V2_FEE, V2_MIN_LEAD_SECONDS, V2_SPLIT, V2_WINDOWS, buyersNeeded, windowLabel } from "@/lib/launchV2";
 import { previewHref } from "@/lib/launch";
 
@@ -17,7 +17,7 @@ import { previewHref } from "@/lib/launch";
 const OPEN_SALE_HOURS = 24;
 
 /** CruxFactory only needs a target above zero; testnet faucets hand out ~10 USDC, so the floor drops there. */
-const MIN_TARGET = FACTORY || FACTORY_V2 ? 1 : 1_000;
+const MIN_TARGET = FACTORY || LAUNCH_FACTORY ? 1 : 1_000;
 import { useConnectModal } from "@/providers/Web3Provider";
 
 type Form = {
@@ -46,7 +46,7 @@ const INITIAL: Form = {
   farcaster: "",
   website: "",
   supply: "1,000,000,000",
-  target: FACTORY || FACTORY_V2 ? "10" : "50,000",
+  target: FACTORY || LAUNCH_FACTORY ? "10" : "50,000",
   batchAuction: true,
   startsIn: "10",
   walletCap: "5",
@@ -77,7 +77,7 @@ function validate(f: Form) {
   if (!supply || supply < 1_000) errors.supply = "Supply must be at least 1,000.";
   const target = Number(digits(f.target));
   if (!target || target < MIN_TARGET) errors.target = `Set a graduation target of at least $${MIN_TARGET.toLocaleString("en-US")}.`;
-  if (FACTORY_V2) {
+  if (LAUNCH_FACTORY) {
     const minutes = Number(f.startsIn);
     if (!Number.isFinite(minutes) || minutes * 60 < V2_MIN_LEAD_SECONDS || minutes > 30 * 24 * 60) {
       errors.startsIn = `Schedule the start ${V2_MIN_LEAD_SECONDS / 60} minutes to 30 days ahead.`;
@@ -89,10 +89,16 @@ function validate(f: Form) {
 }
 
 /** How many wallets a cap needs before the sale can fill (and so graduate). */
-function capHint(walletCap: string) {
+function capHint(walletCap: string, target: string) {
   const cap = Number(walletCap);
   if (!Number.isFinite(cap) || cap < 0.1 || cap > 100) return "Share of the sale one wallet can receive; the excess is refunded";
   const n = buyersNeeded(cap);
+  if (LAUNCH_FACTORY?.version === 3) {
+    // V3 enforces the cap as a deposit limit: the cap's worth of tokens at the floor price, i.e. cap% of the target.
+    const usd = (Number(digits(target)) * cap) / 100;
+    const each = `Each wallet can deposit up to $${usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return n === 1 ? `${each}; one wallet can fill the whole sale` : `${each}; needs at least ${n} buyers to fill the sale and graduate`;
+  }
   return n === 1
     ? "One wallet can fill the whole sale; anything over the cap is refunded"
     : `Needs at least ${n} buyers to fill the sale and graduate; each wallet's excess is refunded`;
@@ -163,7 +169,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
   const errors = validate(form);
   const showErr = (k: keyof Form) => (touched ? errors[k] : undefined);
   const busy = phase.kind === "simulating" || phase.kind === "deploying";
-  const live = FACTORY !== null || FACTORY_V2 !== null;
+  const live = FACTORY !== null || LAUNCH_FACTORY !== null;
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -193,8 +199,8 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     setPhase({ kind: "done", token: preview, simulated: true, start: Math.floor(Date.now() / 1000) });
   };
 
-  /** CruxFactoryV2: scheduled start, per-wallet cap, locked liquidity. */
-  const deployV2 = async (factory: Address) => {
+  /** CruxFactoryV2/V3: scheduled start, per-wallet cap, locked liquidity (same createAuction on both). */
+  const deployV2 = async (factory: Address, version: 2 | 3) => {
     if (!isConnected || !address) {
       openConnect();
       return;
@@ -209,7 +215,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     setPhase({ kind: "deploying", label: "Confirm the launch in your wallet…" });
     const hash = await writeContract({
       address: factory,
-      abi: cruxFactoryV2Abi,
+      abi: cruxBatchFactoryAbi,
       functionName: "createAuction",
       chainId: TESTNET.id,
       args: [
@@ -227,15 +233,15 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     });
     setPhase({ kind: "deploying", label: "Deploying token and auction…", hash });
     const receipt = await waitForTransactionReceipt(config, { hash, chainId: TESTNET.id });
-    const [created] = parseEventLogs({ abi: cruxFactoryV2Abi, eventName: "AuctionCreated", logs: receipt.logs });
+    const [created] = parseEventLogs({ abi: cruxBatchFactoryAbi, eventName: "AuctionCreated", logs: receipt.logs });
     if (!created) throw new Error("Deployed, but no AuctionCreated event was found in the receipt.");
     reset();
     onClose();
-    router.push(`/launch/v2/${created.args.auctionId.toString()}`);
+    router.push(`/launch/v${version}/${created.args.auctionId.toString()}`);
   };
 
   const deploy = async () => {
-    if (FACTORY_V2) return deployV2(FACTORY_V2);
+    if (LAUNCH_FACTORY) return deployV2(LAUNCH_FACTORY.address, LAUNCH_FACTORY.version);
     if (!FACTORY) return;
     if (!isConnected || !address) {
       openConnect();
@@ -352,7 +358,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             <div className="col-span-2 rounded-lg border border-line p-3">
               <dt className="text-muted">Launch mechanism</dt>
               <dd className="mt-1 text-chrome">
-                {FACTORY_V2
+                {LAUNCH_FACTORY
                   ? `${windowLabel(Number(form.window))} uniform-price batch auction`
                   : form.batchAuction
                     ? `${BATCH_WINDOW_SECONDS}s uniform-price batch auction`
@@ -513,7 +519,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             </Field>
           </div>
 
-          {FACTORY_V2 && (
+          {LAUNCH_FACTORY && (
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
                 id={id("startsIn")}
@@ -538,7 +544,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                 id={id("walletCap")}
                 label="Max allocation per wallet"
                 error={showErr("walletCap")}
-                hint={capHint(form.walletCap)}
+                hint={capHint(form.walletCap, form.target)}
               >
                 <div className="relative">
                   <input
@@ -557,7 +563,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
           )}
 
           {/* V2: every launch is a uniform-price batch; the creator picks how long it stays open */}
-          {FACTORY_V2 && (
+          {LAUNCH_FACTORY && (
             <fieldset className="rounded-xl border border-line p-4">
               <legend className="px-1 text-[13px] text-chrome">Batch window</legend>
               <div role="radiogroup" aria-label="Batch window" className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -586,7 +592,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
           )}
 
           {/* Batch auction toggle with an explanatory tooltip (also exposed as its description) */}
-          {!FACTORY_V2 && (
+          {!LAUNCH_FACTORY && (
           <div className="flex items-start justify-between gap-4 rounded-xl border border-line p-4">
             <div className="min-w-0">
               <p className="flex items-center gap-2 text-[13px] text-chrome">
@@ -639,7 +645,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             </p>
           )}
 
-          {FACTORY_V2 && (
+          {LAUNCH_FACTORY && (
             <ul className="space-y-2 rounded-xl border border-line p-4 text-[12.5px] leading-snug text-muted">
               <li className="flex items-start gap-2">
                 <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-acid" aria-hidden="true" />

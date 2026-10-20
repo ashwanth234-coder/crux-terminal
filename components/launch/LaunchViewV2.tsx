@@ -9,19 +9,21 @@ import { Notice, Shell } from "@/components/launch/LaunchView";
 import { useNow } from "@/hooks/useLaunchAuction";
 import { useLaunchV2, type LaunchV2Model } from "@/hooks/useLaunchV2";
 import { TESTNET_EXPLORER } from "@/lib/chains";
-import { FACTORY_V2 } from "@/lib/intents";
+import { FACTORY_V2, FACTORY_V3 } from "@/lib/intents";
 import { USDC_DECIMALS, fmtTokens, fmtUsdc, formatRemaining, launchError, type TxStep } from "@/lib/launch";
 import {
   NO_LIMIT,
   V2_FEE,
   V2_SPLIT,
   V2_VESTING_DAYS,
+  V3_TICK_STEP_PERCENT,
   marketCapUsd,
   parsePriceUsd,
   phaseV2,
   priceUsd,
   windowLabel,
   type AuctionV2,
+  type BatchVersion,
   type PhaseV2,
 } from "@/lib/launchV2";
 
@@ -35,22 +37,23 @@ const STATUS: Record<PhaseV2, { label: string; tone: string; dot: string }> = {
   cancelled: { label: "Cancelled · refunds open", tone: "border-down/40 text-chrome", dot: "bg-down" },
 };
 
-/** /launch/v2/[id]: an auction on CruxFactoryV2. */
-export function LaunchRouteV2() {
+/** /launch/v2/[id] and /launch/v3/[id]: an auction on CruxFactoryV2 or CruxFactoryV3 (same launch, same screen). */
+export function LaunchRouteV2({ version = 2 }: { version?: BatchVersion }) {
   const { id } = useParams<{ id: string }>();
+  const factory = version === 3 ? FACTORY_V3 : FACTORY_V2;
   if (!/^\d+$/.test(id)) return <Notice title="That isn't an auction id">Auction ids are whole numbers, starting at 0.</Notice>;
-  if (!FACTORY_V2) {
+  if (!factory) {
     return (
       <Notice title={`Auction #${id} can't be read here`}>
-        This build has no V2 factory configured (NEXT_PUBLIC_CRUX_FACTORY_V2).
+        This build has no V{version} factory configured (NEXT_PUBLIC_CRUX_FACTORY_V{version}).
       </Notice>
     );
   }
-  return <LiveLaunchV2 factory={FACTORY_V2} id={id} />;
+  return <LiveLaunchV2 factory={factory} id={id} version={version} />;
 }
 
-function LiveLaunchV2({ factory, id }: { factory: Address; id: string }) {
-  const model = useLaunchV2(factory, BigInt(id));
+function LiveLaunchV2({ factory, id, version }: { factory: Address; id: string; version: BatchVersion }) {
+  const model = useLaunchV2(factory, BigInt(id), version);
   if (model.loading) {
     return (
       <Shell mode="live">
@@ -180,7 +183,13 @@ function ViewV2({ model, auction, id }: { model: LaunchV2Model; auction: Auction
             </Row>
             <Row label="Market cap at this price">{price !== null && phase !== "cancelled" ? marketCapUsd(price, auction.totalSupply) : "—"}</Row>
             <Row label="Floor price" hint="Bids must allow at least this">{`$${priceUsd(auction.floorPrice)}`}</Row>
-            <Row label="Max per wallet" hint={`${capShare.toFixed(1)}% of the sale`}>{`${fmtTokens(auction.maxAllocationPerWallet)} ${symbol}`}</Row>
+            {model.maxDeposit !== null ? (
+              <Row label="Max deposit per wallet" hint={`Buys at most ${fmtTokens(auction.maxAllocationPerWallet)} ${symbol} (${capShare.toFixed(1)}% of the sale)`}>
+                {`$${fmtUsdc(model.maxDeposit)}`}
+              </Row>
+            ) : (
+              <Row label="Max per wallet" hint={`${capShare.toFixed(1)}% of the sale`}>{`${fmtTokens(auction.maxAllocationPerWallet)} ${symbol}`}</Row>
+            )}
             <Row label="Supply split" hint={`Creator share vests over ${V2_VESTING_DAYS} days`}>
               {`${V2_SPLIT.saleBps / 100}% sale · ${V2_SPLIT.lpBps / 100}% locked pool · ${V2_SPLIT.creatorBps / 100}% creator`}
             </Row>
@@ -227,6 +236,9 @@ function ActionPanelV2({ model, auction, phase, symbol }: { model: LaunchV2Model
   const limitError =
     limitOn && limit && (!limitPrice || limitPrice < auction.floorPrice) ? `Set at least the floor, $${priceUsd(auction.floorPrice)} per token.` : null;
   const overBalance = parsed !== null && model.usdcBalance !== null && parsed > model.usdcBalance;
+  // V3 caps each wallet's total deposit; what this wallet can still add.
+  const capLeft = model.maxDeposit !== null ? (model.maxDeposit > model.myBid.quote ? model.maxDeposit - model.myBid.quote : BigInt(0)) : null;
+  const overCap = parsed !== null && capLeft !== null && parsed > capLeft;
   const needsApproval = parsed !== null && model.allowance !== null && parsed > model.allowance;
   const isCreator = model.account !== null && model.account.toLowerCase() === auction.creator.toLowerCase();
 
@@ -282,7 +294,7 @@ function ActionPanelV2({ model, auction, phase, symbol }: { model: LaunchV2Model
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (!parsed || parsed <= BigInt(0) || overBalance || !limitPrice || limitError) return;
+          if (!parsed || parsed <= BigInt(0) || overBalance || overCap || !limitPrice || limitError) return;
           void run(
             (s) => model.deposit(parsed!, limitPrice, s),
             `Bid placed: $${fmtUsdc(parsed!)} ${limitOn ? `up to $${limit} per token` : "at any clearing price"}.`,
@@ -310,10 +322,17 @@ function ActionPanelV2({ model, auction, phase, symbol }: { model: LaunchV2Model
           />
           <span className="text-[12px] text-muted">USDC</span>
         </div>
-        <p className="mt-1.5 text-[11.5px] text-dim">
-          Balance {model.usdcBalance !== null ? `$${fmtUsdc(model.usdcBalance)}` : "…"} test USDC · each wallet gets at most{" "}
-          {fmtTokens(auction.maxAllocationPerWallet)} {symbol}; anything beyond that is refunded.
-        </p>
+        {capLeft !== null ? (
+          <p className={`mt-1.5 text-[11.5px] ${overCap ? "text-down" : "text-dim"}`}>
+            Balance {model.usdcBalance !== null ? `$${fmtUsdc(model.usdcBalance)}` : "…"} test USDC · this wallet can deposit{" "}
+            {model.myBid.quote > BigInt(0) ? `$${fmtUsdc(capLeft)} more` : `up to $${fmtUsdc(capLeft)}`}.
+          </p>
+        ) : (
+          <p className="mt-1.5 text-[11.5px] text-dim">
+            Balance {model.usdcBalance !== null ? `$${fmtUsdc(model.usdcBalance)}` : "…"} test USDC · each wallet gets at most{" "}
+            {fmtTokens(auction.maxAllocationPerWallet)} {symbol}; anything beyond that is refunded.
+          </p>
+        )}
 
         {/* Advanced: a limit price */}
         <button
@@ -343,7 +362,10 @@ function ActionPanelV2({ model, auction, phase, symbol }: { model: LaunchV2Model
               />
             </div>
             <p className={`mt-1.5 text-[11.5px] ${limitError ? "text-down" : "text-dim"}`}>
-              {limitError ?? `If the batch clears above your limit, your whole bid is refunded. Floor $${priceUsd(auction.floorPrice)}.`}
+              {limitError ??
+                `If the batch clears above your limit, your whole bid is refunded. Floor $${priceUsd(auction.floorPrice)}.${
+                  model.version === 3 ? ` Limits round down to the nearest ${V3_TICK_STEP_PERCENT}% price step.` : ""
+                }`}
             </p>
           </div>
         )}
@@ -351,16 +373,19 @@ function ActionPanelV2({ model, auction, phase, symbol }: { model: LaunchV2Model
         {model.myBid.quote > BigInt(0) && (
           <p className="mt-4 text-[12px] text-muted">
             Your bid: <span className="font-mono text-chrome">${fmtUsdc(model.myBid.quote)}</span>
-            {model.myBid.maxPrice === NO_LIMIT ? " at any price" : ` up to $${priceUsd(model.myBid.maxPrice)} per token`}. Adding to it replaces the limit.
+            {model.myBid.maxPrice === NO_LIMIT || (model.topTickPrice !== null && model.myBid.maxPrice >= model.topTickPrice)
+              ? " at any price"
+              : ` up to $${priceUsd(model.myBid.maxPrice)} per token`}
+            . Adding to it replaces the limit.
           </p>
         )}
 
         <button
           type="submit"
-          disabled={!parsed || overBalance || Boolean(limitError) || (limitOn && !limitPrice)}
+          disabled={!parsed || overBalance || overCap || Boolean(limitError) || (limitOn && !limitPrice)}
           className={buttonClass("acid", "md", "mt-5 w-full rounded-xl font-semibold")}
         >
-          {overBalance ? "Not enough test USDC" : needsApproval ? "Approve & bid" : "Place bid"} <ArrowUpRight />
+          {overBalance ? "Not enough test USDC" : overCap ? "Over this wallet's cap" : needsApproval ? "Approve & bid" : "Place bid"} <ArrowUpRight />
         </button>
       </form>
     );

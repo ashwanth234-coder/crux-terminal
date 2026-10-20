@@ -50,7 +50,7 @@ export function LaunchCard({ launch, phase, now }: { launch: LaunchSummary; phas
           <h2 className="truncate text-[17px] font-medium leading-tight text-chrome">${ticker}</h2>
           <p className="mt-0.5 truncate text-[12.5px] text-muted">
             {launch.name ?? "Unnamed token"} <span className="font-mono text-dim">· #{id}</span>
-            {launch.version === 2 && <span className="text-dim"> · LP locked</span>}
+            {launch.version >= 2 && <span className="text-dim"> · LP locked</span>}
           </p>
         </div>
         <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${badge.className}`}>

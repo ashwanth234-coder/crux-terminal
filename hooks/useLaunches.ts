@@ -2,10 +2,10 @@
 
 import { erc20Abi, zeroAddress, type Address } from "viem";
 import { useReadContract, useReadContracts } from "wagmi";
-import { cruxFactoryAbi, cruxFactoryV2Abi } from "@/contracts/abis/batchAuction";
+import { cruxBatchFactoryAbi, cruxFactoryAbi } from "@/contracts/abis/batchAuction";
 import { TESTNET } from "@/lib/chains";
 import type { AuctionState } from "@/lib/launch";
-import { V2_SPLIT, toAuctionV2, type AuctionV2 } from "@/lib/launchV2";
+import { V2_SPLIT, toAuctionV2, type AuctionV2, type BatchVersion } from "@/lib/launchV2";
 
 /** Newest launches read per page load; older ones stay reachable by id. */
 const MAX_LAUNCHES = 60;
@@ -17,10 +17,10 @@ export type LaunchSummary = {
   saleSupply: bigint | null;
   name: string | null;
   symbol: string | null;
-  version: 1 | 2;
-  /** Where the auction page lives: /launch/[id] (V1) or /launch/v2/[id]. */
+  version: 1 | BatchVersion;
+  /** Where the auction page lives: /launch/[id] (V1), /launch/v2/[id] or /launch/v3/[id]. */
   href: string;
-  /** The V2 auction as the contract returns it; null on V1. */
+  /** The V2/V3 auction as the contract returns it (same struct on both); null on V1. */
   v2: AuctionV2 | null;
 };
 
@@ -90,9 +90,9 @@ export function useLaunches(factory: Address | null) {
   };
 }
 
-/** Every auction on CruxFactoryV2, newest first, in the same summary shape as V1. */
-export function useLaunchesV2(factory: Address | null) {
-  const fac = { address: factory ?? zeroAddress, abi: cruxFactoryV2Abi, chainId: TESTNET.id } as const;
+/** Every auction on a batch factory (V2 or V3), newest first, in the same summary shape as V1. */
+export function useLaunchesV2(factory: Address | null, version: BatchVersion = 2) {
+  const fac = { address: factory ?? zeroAddress, abi: cruxBatchFactoryAbi, chainId: TESTNET.id } as const;
   const count = useReadContract({ ...fac, functionName: "auctionCount", query: { enabled: factory !== null, refetchInterval: 15_000 } });
   const total = Number(count.data ?? BigInt(0));
   const ids = Array.from({ length: Math.min(total, MAX_LAUNCHES) }, (_, i) => total - 1 - i);
@@ -133,8 +133,8 @@ export function useLaunchesV2(factory: Address | null) {
       saleSupply: (v2.totalSupply * BigInt(V2_SPLIT.saleBps)) / BigInt(10_000),
       name: typeof name === "string" ? name : null,
       symbol: typeof symbol === "string" ? symbol : null,
-      version: 2,
-      href: `/launch/v2/${id}`,
+      version,
+      href: `/launch/v${version}/${id}`,
       v2,
     });
   });
@@ -142,17 +142,18 @@ export function useLaunchesV2(factory: Address | null) {
   return { total, launches, loading: count.isPending || (ids.length > 0 && auctions.isPending), error: count.error ?? auctions.error };
 }
 
-/** V2 launches first (newest), then V1. */
-export function useAllLaunches(v1: Address | null, v2: Address | null) {
-  const a = useLaunchesV2(v2);
+/** Newest factory first: V3, then V2, then V1. */
+export function useAllLaunches(v1: Address | null, v2: Address | null, v3: Address | null = null) {
+  const c = useLaunchesV2(v3, 3);
+  const a = useLaunchesV2(v2, 2);
   const b = useLaunches(v1);
-  const launches = [...a.launches, ...b.launches];
+  const launches = [...c.launches, ...a.launches, ...b.launches];
   return {
-    total: a.total + b.total,
+    total: c.total + a.total + b.total,
     launches,
     // Show whatever has loaded; only wait while there is nothing to show yet.
-    loading: launches.length === 0 && ((v2 !== null && a.loading) || (v1 !== null && b.loading)),
-    // One factory being unreachable must not hide the other's launches.
-    error: launches.length > 0 ? null : (a.error ?? b.error),
+    loading: launches.length === 0 && ((v3 !== null && c.loading) || (v2 !== null && a.loading) || (v1 !== null && b.loading)),
+    // One factory being unreachable must not hide the others' launches.
+    error: launches.length > 0 ? null : (c.error ?? a.error ?? b.error),
   };
 }

@@ -183,11 +183,37 @@ export const cruxFactoryAbi = [
 ] as const;
 
 /**
- * CruxFactoryV2 (crux-contracts/src/CruxFactoryV2.sol), generated from the forge artifact.
- * Limit-price bids, per-wallet caps, scheduled starts, LP locked forever on graduation, 1% fee
- * with a 70% creator kickback. Status: 0 Live, 1 Graduated, 2 Cancelled.
+ * CruxFactoryV3 ABI (crux-contracts branch v3-price-ticks), plus V2-only errors. Every V2 call the terminal
+ * makes (createAuction, deposit, settleAuction, claim, claimCreatorVesting and the views) has the same
+ * signature on V3, so this one ABI drives both factories. Generated from the forge artifacts.
  */
-export const cruxFactoryV2Abi = [
+export const cruxBatchFactoryAbi = [
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "quoteAsset_",
+        "type": "address",
+        "internalType": "contract IERC20"
+      },
+      {
+        "name": "dexFactory_",
+        "type": "address",
+        "internalType": "contract IUniswapV2Factory"
+      },
+      {
+        "name": "treasury_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "owner_",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
   {
     "type": "function",
     "name": "CREATOR_FEE_SHARE_BPS",
@@ -195,7 +221,8 @@ export const cruxFactoryV2Abi = [
     "outputs": [
       {
         "name": "",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -207,7 +234,8 @@ export const cruxFactoryV2Abi = [
     "outputs": [
       {
         "name": "",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -219,7 +247,8 @@ export const cruxFactoryV2Abi = [
     "outputs": [
       {
         "name": "",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -231,7 +260,8 @@ export const cruxFactoryV2Abi = [
     "outputs": [
       {
         "name": "",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -243,7 +273,8 @@ export const cruxFactoryV2Abi = [
     "outputs": [
       {
         "name": "",
-        "type": "address"
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -255,19 +286,60 @@ export const cruxFactoryV2Abi = [
     "outputs": [
       {
         "name": "",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "MAX_BIDDERS",
+    "name": "MAX_START_DELAY",
     "inputs": [],
     "outputs": [
       {
         "name": "",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_SUPPLY",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_WINDOW",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_FLOOR_PRICE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -279,7 +351,47 @@ export const cruxFactoryV2Abi = [
     "outputs": [
       {
         "name": "",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_SUPPLY",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_WINDOW",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "PRICE_DENOMINATOR",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -291,10 +403,31 @@ export const cruxFactoryV2Abi = [
     "outputs": [
       {
         "name": "",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "TICK_COUNT",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "acceptOwnership",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -303,7 +436,8 @@ export const cruxFactoryV2Abi = [
     "outputs": [
       {
         "name": "",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -314,21 +448,25 @@ export const cruxFactoryV2Abi = [
     "inputs": [
       {
         "name": "auctionId",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       },
       {
         "name": "account",
-        "type": "address"
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "outputs": [
       {
         "name": "quote",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       },
       {
         "name": "maxPrice",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -339,7 +477,8 @@ export const cruxFactoryV2Abi = [
     "inputs": [
       {
         "name": "auctionId",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [],
@@ -351,7 +490,8 @@ export const cruxFactoryV2Abi = [
     "inputs": [
       {
         "name": "auctionId",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [],
@@ -363,21 +503,25 @@ export const cruxFactoryV2Abi = [
     "inputs": [
       {
         "name": "auctionId",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       },
       {
         "name": "account",
-        "type": "address"
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "outputs": [
       {
         "name": "tokens",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       },
       {
         "name": "refund",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -389,38 +533,47 @@ export const cruxFactoryV2Abi = [
       {
         "name": "params",
         "type": "tuple",
+        "internalType": "struct CruxFactoryV3.LaunchParams",
         "components": [
           {
             "name": "name",
-            "type": "string"
+            "type": "string",
+            "internalType": "string"
           },
           {
             "name": "symbol",
-            "type": "string"
+            "type": "string",
+            "internalType": "string"
           },
           {
             "name": "metadataURI",
-            "type": "string"
+            "type": "string",
+            "internalType": "string"
           },
           {
             "name": "totalSupply",
-            "type": "uint256"
+            "type": "uint256",
+            "internalType": "uint256"
           },
           {
             "name": "graduationTarget",
-            "type": "uint256"
+            "type": "uint256",
+            "internalType": "uint256"
           },
           {
             "name": "startTime",
-            "type": "uint64"
+            "type": "uint64",
+            "internalType": "uint64"
           },
           {
             "name": "batchWindow",
-            "type": "uint32"
+            "type": "uint32",
+            "internalType": "uint32"
           },
           {
             "name": "maxAllocationPerWallet",
-            "type": "uint256"
+            "type": "uint256",
+            "internalType": "uint256"
           }
         ]
       }
@@ -428,11 +581,13 @@ export const cruxFactoryV2Abi = [
     "outputs": [
       {
         "name": "auctionId",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       },
       {
         "name": "token",
-        "type": "address"
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "nonpayable"
@@ -443,17 +598,20 @@ export const cruxFactoryV2Abi = [
     "inputs": [
       {
         "name": "auctionId",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [
       {
         "name": "quote",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       },
       {
         "name": "tokens",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -464,17 +622,20 @@ export const cruxFactoryV2Abi = [
     "inputs": [
       {
         "name": "auctionId",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       },
       {
         "name": "price",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [
       {
         "name": "",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -485,15 +646,18 @@ export const cruxFactoryV2Abi = [
     "inputs": [
       {
         "name": "auctionId",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       },
       {
         "name": "quoteAmount",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       },
       {
         "name": "maxPricePerToken",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [],
@@ -501,21 +665,37 @@ export const cruxFactoryV2Abi = [
   },
   {
     "type": "function",
+    "name": "dexFactory",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IUniswapV2Factory"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "findClearingPrice",
     "inputs": [
       {
         "name": "auctionId",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [
       {
         "name": "graduates",
-        "type": "bool"
+        "type": "bool",
+        "internalType": "bool"
       },
       {
         "name": "price",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -526,73 +706,90 @@ export const cruxFactoryV2Abi = [
     "inputs": [
       {
         "name": "auctionId",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [
       {
         "name": "",
         "type": "tuple",
+        "internalType": "struct CruxFactoryV3.Auction",
         "components": [
           {
             "name": "token",
-            "type": "address"
+            "type": "address",
+            "internalType": "address"
           },
           {
             "name": "creator",
-            "type": "address"
+            "type": "address",
+            "internalType": "address"
           },
           {
             "name": "startTime",
-            "type": "uint64"
+            "type": "uint64",
+            "internalType": "uint64"
           },
           {
             "name": "batchWindow",
-            "type": "uint32"
+            "type": "uint32",
+            "internalType": "uint32"
           },
           {
             "name": "status",
-            "type": "uint8"
+            "type": "uint8",
+            "internalType": "uint8"
           },
           {
             "name": "bidderCount",
-            "type": "uint32"
+            "type": "uint32",
+            "internalType": "uint32"
           },
           {
             "name": "settledAt",
-            "type": "uint64"
+            "type": "uint64",
+            "internalType": "uint64"
           },
           {
             "name": "pair",
-            "type": "address"
+            "type": "address",
+            "internalType": "address"
           },
           {
             "name": "totalSupply",
-            "type": "uint256"
+            "type": "uint256",
+            "internalType": "uint256"
           },
           {
             "name": "saleSupply",
-            "type": "uint256"
+            "type": "uint256",
+            "internalType": "uint256"
           },
           {
             "name": "graduationTarget",
-            "type": "uint256"
+            "type": "uint256",
+            "internalType": "uint256"
           },
           {
             "name": "floorPrice",
-            "type": "uint256"
+            "type": "uint256",
+            "internalType": "uint256"
           },
           {
             "name": "maxAllocationPerWallet",
-            "type": "uint256"
+            "type": "uint256",
+            "internalType": "uint256"
           },
           {
             "name": "totalDeposits",
-            "type": "uint256"
+            "type": "uint256",
+            "internalType": "uint256"
           },
           {
             "name": "clearingPrice",
-            "type": "uint256"
+            "type": "uint256",
+            "internalType": "uint256"
           }
         ]
       }
@@ -605,43 +802,102 @@ export const cruxFactoryV2Abi = [
     "inputs": [
       {
         "name": "auctionId",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [
       {
         "name": "",
         "type": "tuple",
+        "internalType": "struct CruxFactoryV3.Settlement",
         "components": [
           {
             "name": "aboveDemand",
-            "type": "uint256"
+            "type": "uint256",
+            "internalType": "uint256"
           },
           {
             "name": "marginalDemand",
-            "type": "uint256"
+            "type": "uint256",
+            "internalType": "uint256"
           },
           {
             "name": "raised",
-            "type": "uint256"
+            "type": "uint256",
+            "internalType": "uint256"
           },
           {
             "name": "creatorQuote",
-            "type": "uint256"
+            "type": "uint256",
+            "internalType": "uint256"
           },
           {
             "name": "creatorTokens",
-            "type": "uint256"
+            "type": "uint256",
+            "internalType": "uint256"
           },
           {
             "name": "creatorQuoteClaimed",
-            "type": "uint256"
+            "type": "uint256",
+            "internalType": "uint256"
           },
           {
             "name": "creatorTokensClaimed",
-            "type": "uint256"
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "clearingTick",
+            "type": "uint256",
+            "internalType": "uint256"
           }
         ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "maxDepositPerWallet",
+    "inputs": [
+      {
+        "name": "auctionId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "owner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingOwner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -653,10 +909,68 @@ export const cruxFactoryV2Abi = [
     "outputs": [
       {
         "name": "",
-        "type": "address"
+        "type": "address",
+        "internalType": "contract IERC20"
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "quoteAtTick",
+    "inputs": [
+      {
+        "name": "auctionId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "tick",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "renounceOwnership",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setTreasury",
+    "inputs": [
+      {
+        "name": "treasury_",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "settle",
+    "inputs": [
+      {
+        "name": "auctionId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -664,11 +978,79 @@ export const cruxFactoryV2Abi = [
     "inputs": [
       {
         "name": "auctionId",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       },
       {
         "name": "clearingPrice",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "tickAt",
+    "inputs": [
+      {
+        "name": "auctionId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "price",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "tick",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "tickPrice_",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "tickPrice",
+    "inputs": [
+      {
+        "name": "auctionId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "tick",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "transferOwnership",
+    "inputs": [
+      {
+        "name": "newOwner",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "outputs": [],
@@ -681,7 +1063,8 @@ export const cruxFactoryV2Abi = [
     "outputs": [
       {
         "name": "",
-        "type": "address"
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -693,7 +1076,8 @@ export const cruxFactoryV2Abi = [
       {
         "name": "auctionId",
         "type": "uint256",
-        "indexed": true
+        "indexed": true,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -705,37 +1089,44 @@ export const cruxFactoryV2Abi = [
       {
         "name": "auctionId",
         "type": "uint256",
-        "indexed": true
+        "indexed": true,
+        "internalType": "uint256"
       },
       {
         "name": "token",
         "type": "address",
-        "indexed": true
+        "indexed": true,
+        "internalType": "address"
       },
       {
         "name": "creator",
         "type": "address",
-        "indexed": true
+        "indexed": true,
+        "internalType": "address"
       },
       {
         "name": "startTime",
         "type": "uint64",
-        "indexed": false
+        "indexed": false,
+        "internalType": "uint64"
       },
       {
         "name": "batchWindow",
         "type": "uint32",
-        "indexed": false
+        "indexed": false,
+        "internalType": "uint32"
       },
       {
         "name": "graduationTarget",
         "type": "uint256",
-        "indexed": false
+        "indexed": false,
+        "internalType": "uint256"
       },
       {
         "name": "maxAllocationPerWallet",
         "type": "uint256",
-        "indexed": false
+        "indexed": false,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -747,27 +1138,32 @@ export const cruxFactoryV2Abi = [
       {
         "name": "auctionId",
         "type": "uint256",
-        "indexed": true
+        "indexed": true,
+        "internalType": "uint256"
       },
       {
         "name": "clearingPrice",
         "type": "uint256",
-        "indexed": false
+        "indexed": false,
+        "internalType": "uint256"
       },
       {
         "name": "raised",
         "type": "uint256",
-        "indexed": false
+        "indexed": false,
+        "internalType": "uint256"
       },
       {
         "name": "pair",
         "type": "address",
-        "indexed": false
+        "indexed": false,
+        "internalType": "address"
       },
       {
         "name": "liquidity",
         "type": "uint256",
-        "indexed": false
+        "indexed": false,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -779,27 +1175,32 @@ export const cruxFactoryV2Abi = [
       {
         "name": "auctionId",
         "type": "uint256",
-        "indexed": true
+        "indexed": true,
+        "internalType": "uint256"
       },
       {
         "name": "account",
         "type": "address",
-        "indexed": true
+        "indexed": true,
+        "internalType": "address"
       },
       {
         "name": "quoteAdded",
         "type": "uint256",
-        "indexed": false
+        "indexed": false,
+        "internalType": "uint256"
       },
       {
         "name": "totalQuote",
         "type": "uint256",
-        "indexed": false
+        "indexed": false,
+        "internalType": "uint256"
       },
       {
         "name": "maxPrice",
         "type": "uint256",
-        "indexed": false
+        "indexed": false,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -811,22 +1212,26 @@ export const cruxFactoryV2Abi = [
       {
         "name": "auctionId",
         "type": "uint256",
-        "indexed": true
+        "indexed": true,
+        "internalType": "uint256"
       },
       {
         "name": "account",
         "type": "address",
-        "indexed": true
+        "indexed": true,
+        "internalType": "address"
       },
       {
         "name": "tokens",
         "type": "uint256",
-        "indexed": false
+        "indexed": false,
+        "internalType": "uint256"
       },
       {
         "name": "refund",
         "type": "uint256",
-        "indexed": false
+        "indexed": false,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -838,17 +1243,20 @@ export const cruxFactoryV2Abi = [
       {
         "name": "auctionId",
         "type": "uint256",
-        "indexed": true
+        "indexed": true,
+        "internalType": "uint256"
       },
       {
         "name": "creator",
         "type": "address",
-        "indexed": true
+        "indexed": true,
+        "internalType": "address"
       },
       {
         "name": "amount",
         "type": "uint256",
-        "indexed": false
+        "indexed": false,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -860,25 +1268,96 @@ export const cruxFactoryV2Abi = [
       {
         "name": "auctionId",
         "type": "uint256",
-        "indexed": true
+        "indexed": true,
+        "internalType": "uint256"
       },
       {
         "name": "creator",
         "type": "address",
-        "indexed": true
+        "indexed": true,
+        "internalType": "address"
       },
       {
         "name": "quote",
         "type": "uint256",
-        "indexed": false
+        "indexed": false,
+        "internalType": "uint256"
       },
       {
         "name": "tokens",
         "type": "uint256",
-        "indexed": false
+        "indexed": false,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnershipTransferStarted",
+    "inputs": [
+      {
+        "name": "previousOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnershipTransferred",
+    "inputs": [
+      {
+        "name": "previousOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "TreasuryUpdated",
+    "inputs": [
+      {
+        "name": "treasury",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "DepositCapExceeded",
+    "inputs": [
+      {
+        "name": "totalQuote",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxQuote",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
   },
   {
     "type": "error",
@@ -888,6 +1367,11 @@ export const cruxFactoryV2Abi = [
   {
     "type": "error",
     "name": "InvalidParams",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidTick",
     "inputs": []
   },
   {
@@ -916,7 +1400,8 @@ export const cruxFactoryV2Abi = [
     "inputs": [
       {
         "name": "owner",
-        "type": "address"
+        "type": "address",
+        "internalType": "address"
       }
     ]
   },
@@ -926,7 +1411,8 @@ export const cruxFactoryV2Abi = [
     "inputs": [
       {
         "name": "account",
-        "type": "address"
+        "type": "address",
+        "internalType": "address"
       }
     ]
   },
@@ -946,11 +1432,13 @@ export const cruxFactoryV2Abi = [
     "inputs": [
       {
         "name": "bits",
-        "type": "uint8"
+        "type": "uint8",
+        "internalType": "uint8"
       },
       {
         "name": "value",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ]
   },
@@ -960,14 +1448,10 @@ export const cruxFactoryV2Abi = [
     "inputs": [
       {
         "name": "token",
-        "type": "address"
+        "type": "address",
+        "internalType": "address"
       }
     ]
-  },
-  {
-    "type": "error",
-    "name": "TooManyBidders",
-    "inputs": []
   },
   {
     "type": "error",
@@ -992,6 +1476,11 @@ export const cruxFactoryV2Abi = [
   {
     "type": "error",
     "name": "ZeroAmount",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TooManyBidders",
     "inputs": []
   }
 ] as const;

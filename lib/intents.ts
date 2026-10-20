@@ -23,8 +23,18 @@ export const REFUND_GRACE_SECONDS = 3600;
 /** Launch + batch-auction factory on Base Sepolia, once deployed (NEXT_PUBLIC_CRUX_FACTORY). */
 export const FACTORY = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY);
 
-/** CruxFactoryV2 on Base Sepolia, once deployed (NEXT_PUBLIC_CRUX_FACTORY_V2): new launches go here. */
+/** CruxFactoryV2 on Base Sepolia (NEXT_PUBLIC_CRUX_FACTORY_V2). */
 export const FACTORY_V2 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V2);
+
+/** CruxFactoryV3 (price ticks, no bidder limit) on Base Sepolia, once deployed (NEXT_PUBLIC_CRUX_FACTORY_V3). */
+export const FACTORY_V3 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V3);
+
+/** Where new launches go: the newest batch factory configured. */
+export const LAUNCH_FACTORY: { address: Address; version: 2 | 3 } | null = FACTORY_V3
+  ? { address: FACTORY_V3, version: 3 }
+  : FACTORY_V2
+    ? { address: FACTORY_V2, version: 2 }
+    : null;
 
 /** Circle USDC on Base Sepolia: what the testnet settler escrows. */
 export const TESTNET_USDC = "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as Address;

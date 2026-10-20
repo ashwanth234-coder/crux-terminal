@@ -106,6 +106,8 @@ const REVERTS: Record<string, string> = {
   NotStarted: "Deposits haven't opened yet. They open at the scheduled start.",
   PriceBelowFloor: "Your limit is below the floor price. Raise it to at least the floor.",
   TooManyBidders: "This auction is full: it has reached the maximum number of bidders.",
+  DepositCapExceeded: "That would take this wallet past its deposit cap for this launch. Lower the amount.",
+  InvalidTick: "That price step doesn't exist on this auction.",
   InvalidClearingPrice: "The clearing price changed. Refresh and settle again.",
   NotSettled: "The auction hasn't been settled yet.",
   InvalidParams: "Those launch settings aren't allowed. Check the start time, window, supply and wallet cap.",

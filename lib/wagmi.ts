@@ -35,7 +35,8 @@ export const wagmiConfig = createConfig({
     [base.id]: http(),
     [bsc.id]: http(),
     [robinhoodChain.id]: http(),
-    [baseSepolia.id]: http(),
+    // Optional override (e.g. a local Anvil fork for testing); unset uses the chain's public RPC.
+    [baseSepolia.id]: http(process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || undefined),
   },
   ssr: true,
 });

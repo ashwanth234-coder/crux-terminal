@@ -4,11 +4,11 @@ import { useCallback } from "react";
 import { BaseError, ContractFunctionRevertedError, ContractFunctionZeroDataError, erc20Abi, zeroAddress, type Address, type Hex } from "viem";
 import { useConfig, useConnection, useReadContract, useReadContracts, useSwitchChain, useWriteContract } from "wagmi";
 import { readContract, waitForTransactionReceipt } from "wagmi/actions";
-import { cruxFactoryV2Abi } from "@/contracts/abis/batchAuction";
+import { cruxBatchFactoryAbi } from "@/contracts/abis/batchAuction";
 import { TESTNET } from "@/lib/chains";
 import { TESTNET_USDC } from "@/lib/intents";
 import { launchError, type OnStep } from "@/lib/launch";
-import { toAuctionV2, type AuctionV2 } from "@/lib/launchV2";
+import { TICK_COUNT_V3, maxDepositV3, toAuctionV2, type AuctionV2, type BatchVersion } from "@/lib/launchV2";
 import { useConnectModal } from "@/providers/Web3Provider";
 
 const POLL_MS = 4_000;
@@ -20,7 +20,12 @@ function isUnknownAuction(err: unknown) {
 }
 
 export type LaunchV2Model = {
+  version: BatchVersion;
   auction: AuctionV2 | null;
+  /** V3 only: most quote one wallet may deposit in total (null on V2, whose cap is in tokens). */
+  maxDeposit: bigint | null;
+  /** V3 only: the top price step. A no-limit bid sits there, so a bid at it reads as "any price". */
+  topTickPrice: bigint | null;
   name: string | null;
   symbol: string | null;
   loading: boolean;
@@ -41,15 +46,15 @@ export type LaunchV2Model = {
   claimVesting: (onStep: OnStep) => Promise<Hex | undefined>;
 };
 
-/** One auction on the deployed CruxFactoryV2 (Base Sepolia), with its writes. */
-export function useLaunchV2(factory: Address, id: bigint): LaunchV2Model {
+/** One auction on a deployed batch factory (CruxFactoryV2 or V3, Base Sepolia), with its writes. */
+export function useLaunchV2(factory: Address, id: bigint, version: BatchVersion = 2): LaunchV2Model {
   const config = useConfig();
   const { address, chainId } = useConnection();
   const { openConnect } = useConnectModal();
   const { mutateAsync: writeContract } = useWriteContract();
   const { mutateAsync: switchChain } = useSwitchChain();
 
-  const fac = { address: factory, abi: cruxFactoryV2Abi, chainId: TESTNET.id } as const;
+  const fac = { address: factory, abi: cruxBatchFactoryAbi, chainId: TESTNET.id } as const;
   const usdc = { address: TESTNET_USDC, abi: erc20Abi, chainId: TESTNET.id } as const;
   const me = address ?? zeroAddress;
 
@@ -87,6 +92,14 @@ export function useLaunchV2(factory: Address, id: bigint): LaunchV2Model {
     query: { enabled: Boolean(auction), refetchInterval: live ? POLL_MS : 15_000 },
   });
 
+  // V3 stores a bid's limit as its price step; NO_LIMIT lands in the top one (TICK_COUNT - 1).
+  const topTick = useReadContract({
+    ...fac,
+    functionName: "tickPrice",
+    args: [id, BigInt(TICK_COUNT_V3 - 1)],
+    query: { enabled: version === 3 && Boolean(auction), staleTime: Infinity },
+  });
+
   const meta = useReadContracts({
     contracts: [
       { address: auction?.token ?? zeroAddress, abi: erc20Abi, chainId: TESTNET.id, functionName: "name" },
@@ -97,9 +110,9 @@ export function useLaunchV2(factory: Address, id: bigint): LaunchV2Model {
 
   const error = core.error
     ? isUnknownAuction(core.error)
-      ? `No auction #${id.toString()} exists on the V2 factory yet.`
+      ? `No auction #${id.toString()} exists on the V${version} factory yet.`
       : core.error instanceof BaseError && core.error.walk((e) => e instanceof ContractFunctionZeroDataError)
-        ? "The V2 factory isn't deployed at the configured address on Base Sepolia yet."
+        ? `The V${version} factory isn't deployed at the configured address on Base Sepolia yet.`
         : `Couldn't read the auction: ${launchError(core.error)}`
     : null;
 
@@ -197,7 +210,10 @@ export function useLaunchV2(factory: Address, id: bigint): LaunchV2Model {
   const settledPrice = auction && auction.status === 1 ? auction.clearingPrice : null;
 
   return {
+    version,
     auction,
+    maxDeposit: version === 3 && auction ? maxDepositV3(auction) : null,
+    topTickPrice: version === 3 ? (topTick.data ?? null) : null,
     name: meta.data?.[0]?.result ?? null,
     symbol: meta.data?.[1]?.result ?? null,
     loading: core.isPending,

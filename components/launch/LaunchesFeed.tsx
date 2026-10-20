@@ -7,7 +7,7 @@ import { LaunchCard } from "@/components/launch/LaunchCard";
 import { Shell } from "@/components/launch/LaunchView";
 import { useAllLaunches, type LaunchSummary } from "@/hooks/useLaunches";
 import { useNow } from "@/hooks/useLaunchAuction";
-import { FACTORY, FACTORY_V2 } from "@/lib/intents";
+import { FACTORY, FACTORY_V2, FACTORY_V3 } from "@/lib/intents";
 import { type Phase } from "@/lib/launch";
 import { describeLaunch } from "@/lib/launchSummary";
 
@@ -48,7 +48,7 @@ function sortRows(rows: Row[], sort: Sort) {
 export function LaunchesFeed() {
   const uid = useId();
   const now = useNow();
-  const { total, launches, loading, error } = useAllLaunches(FACTORY, FACTORY_V2);
+  const { total, launches, loading, error } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3);
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<Sort>("ending");
 
@@ -68,7 +68,7 @@ export function LaunchesFeed() {
   );
 
   return (
-    <Shell mode={FACTORY || FACTORY_V2 ? "live" : null}>
+    <Shell mode={FACTORY || FACTORY_V2 || FACTORY_V3 ? "live" : null}>
       <div className="flex flex-wrap items-end justify-between gap-6">
         <div>
           <h1 className="font-display-md text-[clamp(2rem,5vw,3.4rem)] leading-[0.95] text-chrome">
@@ -82,7 +82,7 @@ export function LaunchesFeed() {
         <LaunchTokenButton className={buttonClass("acid", "md", "font-semibold")} />
       </div>
 
-      {!FACTORY && !FACTORY_V2 ? (
+      {!FACTORY && !FACTORY_V2 && !FACTORY_V3 ? (
         <p className="mt-12 rounded-2xl border border-line p-8 text-center text-[14px] text-muted">
           This build has no Crux factory configured (NEXT_PUBLIC_CRUX_FACTORY), so there are no on-chain launches to list.
         </p>
