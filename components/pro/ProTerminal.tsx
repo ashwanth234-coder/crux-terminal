@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { Address } from "viem";
+import { DemandCurve } from "@/components/pro/DemandCurve";
 import { SecurityBadges } from "@/components/pro/SecurityBadges";
 import { TerminalShell } from "@/components/pro/TerminalShell";
 import { TokenBar, type PhaseStatus } from "@/components/pro/TokenBar";
@@ -65,14 +66,20 @@ export function ProTerminal({
 
       <div className="grid flex-1 gap-px bg-line max-lg:pb-28 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] lg:grid-rows-[minmax(0,1fr)_minmax(220px,32%)]">
         <section aria-label="Chart" className="min-h-[340px] bg-void p-3 lg:col-start-1 lg:row-start-1">
-          <Pending
-            title={mode === "auction" ? "Demand curve" : "Price chart"}
-            detail={
-              mode === "auction"
-                ? "Next build step: cumulative bid demand by 1% price step, with the projected clearing price, read live from the auction's tick book."
-                : "Next build step: candles built from the locked pool's on-chain swaps."
-            }
-          />
+          {mode === "auction" ? (
+            <DemandCurve
+              factory={factory}
+              id={id}
+              auction={auction}
+              version={version}
+              clearing={model.indicativePrice}
+              wouldGraduate={model.wouldGraduate}
+              live={phase === "open" || phase === "scheduled"}
+              symbol={model.symbol ? `$${model.symbol}` : "tokens"}
+            />
+          ) : (
+            <Pending title="Price chart" detail="Next build step: candles built from the locked pool's on-chain swaps." />
+          )}
         </section>
 
         <aside aria-label="Execution" className="bg-panel lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:overflow-y-auto">
