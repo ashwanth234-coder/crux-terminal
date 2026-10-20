@@ -1,9 +1,10 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { parseAbiItem, type Address, type Hex } from "viem";
 import type { AuctionV2 } from "@/lib/launchV2";
-import { BLOCK_SECONDS, LOG_CHUNK, MAX_LOG_CHUNKS, logClient, logRanges } from "@/lib/logs";
+import { logClient, pollInterval, scanLogs, tracked, type LogScan } from "@/lib/logs";
 
 /** Same signature on CruxFactoryV2 and V3. On V3, maxPrice is the bid's tick price, the limit the contract uses. */
 const BID_PLACED = parseAbiItem(
@@ -16,6 +17,7 @@ export type BidEvent = {
   totalQuote: bigint;
   maxPrice: bigint;
   blockNumber: bigint;
+  logIndex: number;
   txHash: Hex;
   /** Unix seconds, from the block number (Base blocks are exactly 2s apart). */
   time: number;
@@ -31,45 +33,52 @@ export type AuctionBids = {
   truncated: boolean;
 };
 
-async function fetchBids(factory: Address, id: bigint, startTime: number): Promise<AuctionBids> {
-  const head = await logClient.getBlock();
-  const elapsed = Math.max(0, Number(head.timestamp) - startTime);
-  // No bid can land before startTime: begin a little earlier than that block.
-  const wanted = head.number - BigInt(Math.ceil(elapsed / BLOCK_SECONDS) + 300);
-  const floorBlock = head.number - LOG_CHUNK * BigInt(MAX_LOG_CHUNKS);
-  const from = wanted > floorBlock ? wanted : floorBlock;
-  const truncated = wanted < floorBlock;
-
-  const ranges = logRanges(from, head.number);
-  const chunks = await Promise.all(
-    ranges.map(([fromBlock, toBlock]) => logClient.getLogs({ address: factory, event: BID_PLACED, args: { auctionId: id }, fromBlock, toBlock })),
-  );
-
-  const events: BidEvent[] = chunks
-    .flat()
-    .sort((a, b) => (a.blockNumber === b.blockNumber ? a.logIndex - b.logIndex : a.blockNumber < b.blockNumber ? -1 : 1))
-    .map((l) => ({
-      account: l.args.account!,
-      quoteAdded: l.args.quoteAdded!,
-      totalQuote: l.args.totalQuote!,
-      maxPrice: l.args.maxPrice!,
-      blockNumber: l.blockNumber,
-      txHash: l.transactionHash,
-      time: Number(head.timestamp) - Number(head.number - l.blockNumber) * BLOCK_SECONDS,
-    }));
-
+function toBids(scan: LogScan<BidEvent>): AuctionBids {
   // A top-up replaces the wallet's limit and reports its new total, so the latest event per wallet is its bid.
   const latest = new Map<string, BookEntry>();
-  for (const e of events) latest.set(e.account.toLowerCase(), { account: e.account, quote: e.totalQuote, maxPrice: e.maxPrice });
-  return { events, book: [...latest.values()], truncated };
+  for (const e of scan.items) latest.set(e.account.toLowerCase(), { account: e.account, quote: e.totalQuote, maxPrice: e.maxPrice });
+  return { events: scan.items, book: [...latest.values()], truncated: scan.truncated };
 }
 
-/** Every bid in one auction, read from BidPlaced logs; polls while deposits are open. */
+/** Every bid in one auction, read from BidPlaced logs; polls only new blocks while deposits are open. */
 export function useAuctionBids(factory: Address, auction: AuctionV2, id: bigint, live: boolean) {
-  return useQuery({
-    queryKey: ["auction-bids", factory, id.toString(), auction.status, auction.bidderCount],
-    queryFn: () => fetchBids(factory, id, auction.startTime),
-    refetchInterval: live ? 6_000 : false,
+  const queryKey = ["auction-bids", factory, id.toString()];
+  const pollId = queryKey.join(":");
+  const query = useQuery({
+    queryKey,
+    queryFn: ({ client }) =>
+      tracked(pollId, () =>
+        scanLogs(client.getQueryData<LogScan<BidEvent>>(queryKey), auction.startTime, async (fromBlock, toBlock, timeOf) => {
+          const logs = await logClient.getLogs({ address: factory, event: BID_PLACED, args: { auctionId: id }, fromBlock, toBlock });
+          return logs.map((l) => ({
+            account: l.args.account!,
+            quoteAdded: l.args.quoteAdded!,
+            totalQuote: l.args.totalQuote!,
+            maxPrice: l.args.maxPrice!,
+            blockNumber: l.blockNumber,
+            logIndex: l.logIndex,
+            txHash: l.transactionHash,
+            time: timeOf(l.blockNumber),
+          }));
+        }),
+      ),
+    select: toBids,
+    refetchInterval: () => pollInterval(pollId, live ? 6_000 : false),
     staleTime: live ? 0 : 60_000,
+    // viem already retries and falls back between RPCs within one read; a failed poll waits for the backoff.
+    retry: false,
   });
+
+  // A new bidder or a status change (deposits closing) means new logs: read the new blocks now, not at the next tick.
+  // Every component on the page runs this; cancelRefetch: false folds them into one read.
+  const { refetch } = query;
+  const seen = useRef(`${auction.status}:${auction.bidderCount}`);
+  useEffect(() => {
+    const now = `${auction.status}:${auction.bidderCount}`;
+    if (seen.current === now) return;
+    seen.current = now;
+    void refetch({ cancelRefetch: false });
+  }, [auction.status, auction.bidderCount, refetch]);
+
+  return query;
 }

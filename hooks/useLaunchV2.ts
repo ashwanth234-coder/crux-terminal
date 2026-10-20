@@ -89,7 +89,8 @@ export function useLaunchV2(factory: Address, id: bigint, version: BatchVersion 
       { ...usdc, functionName: "balanceOf", args: [me] },
       { ...usdc, functionName: "allowance", args: [me, factory] },
     ],
-    query: { enabled: Boolean(auction), refetchInterval: live ? POLL_MS : 15_000 },
+    // With no wallet these are zero-address reads; only creatorVested moves, so a slow poll is enough.
+    query: { enabled: Boolean(auction), refetchInterval: live && address ? POLL_MS : 15_000 },
   });
 
   // V3 stores a bid's limit as its price step; NO_LIMIT lands in the top one (TICK_COUNT - 1).
