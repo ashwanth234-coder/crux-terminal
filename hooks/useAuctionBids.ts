@@ -1,25 +1,14 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { createPublicClient, fallback, http, parseAbiItem, type Address, type Hex } from "viem";
-import { baseSepolia } from "viem/chains";
+import { parseAbiItem, type Address, type Hex } from "viem";
 import type { AuctionV2 } from "@/lib/launchV2";
-
-// sepolia.base.org caps eth_getLogs at 200 blocks; publicnode allows 50k per call, Tenderly is the fallback.
-const LOGS_RPCS = [process.env.NEXT_PUBLIC_BASE_SEPOLIA_LOGS_RPC, "https://base-sepolia-rpc.publicnode.com", "https://base-sepolia.gateway.tenderly.co"].filter(
-  (u): u is string => Boolean(u),
-);
-const logClient = createPublicClient({ chain: baseSepolia, transport: fallback(LOGS_RPCS.map((u) => http(u, { timeout: 15_000 }))) });
+import { BLOCK_SECONDS, LOG_CHUNK, MAX_LOG_CHUNKS, logClient, logRanges } from "@/lib/logs";
 
 /** Same signature on CruxFactoryV2 and V3. On V3, maxPrice is the bid's tick price, the limit the contract uses. */
 const BID_PLACED = parseAbiItem(
   "event BidPlaced(uint256 indexed auctionId, address indexed account, uint256 quoteAdded, uint256 totalQuote, uint256 maxPrice)",
 );
-
-const BLOCK_SECONDS = 2; // Base Sepolia
-const CHUNK = BigInt(45_000);
-/** About six days of blocks; older history isn't fetched (and the page says so). */
-const MAX_CHUNKS = 6;
 
 export type BidEvent = {
   account: Address;
@@ -47,15 +36,11 @@ async function fetchBids(factory: Address, id: bigint, startTime: number): Promi
   const elapsed = Math.max(0, Number(head.timestamp) - startTime);
   // No bid can land before startTime: begin a little earlier than that block.
   const wanted = head.number - BigInt(Math.ceil(elapsed / BLOCK_SECONDS) + 300);
-  const floorBlock = head.number - CHUNK * BigInt(MAX_CHUNKS);
+  const floorBlock = head.number - LOG_CHUNK * BigInt(MAX_LOG_CHUNKS);
   const from = wanted > floorBlock ? wanted : floorBlock;
   const truncated = wanted < floorBlock;
 
-  const ranges: [bigint, bigint][] = [];
-  for (let start = from < BigInt(0) ? BigInt(0) : from; start <= head.number; start += CHUNK) {
-    const end = start + CHUNK - BigInt(1);
-    ranges.push([start, end > head.number ? head.number : end]);
-  }
+  const ranges = logRanges(from, head.number);
   const chunks = await Promise.all(
     ranges.map(([fromBlock, toBlock]) => logClient.getLogs({ address: factory, event: BID_PLACED, args: { auctionId: id }, fromBlock, toBlock })),
   );

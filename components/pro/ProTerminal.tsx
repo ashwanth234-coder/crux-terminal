@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import type { Address } from "viem";
 import { DemandCurve } from "@/components/pro/DemandCurve";
+import { LiveTape } from "@/components/pro/LiveTape";
 import { SecurityBadges } from "@/components/pro/SecurityBadges";
 import { TerminalShell } from "@/components/pro/TerminalShell";
 import { TokenBar, type PhaseStatus } from "@/components/pro/TokenBar";
@@ -88,9 +89,13 @@ export function ProTerminal({
         </aside>
 
         <section aria-label="Trades" className="min-h-[220px] bg-void p-3 lg:col-start-1 lg:row-start-2">
-          <Pending
-            title={mode === "auction" ? "Bid tape" : "Trade tape"}
-            detail={mode === "auction" ? "Next build step: every BidPlaced event, newest first." : "Next build step: pool swaps and intent fills, newest first."}
+          <LiveTape
+            factory={factory}
+            id={id}
+            auction={auction}
+            graduated={mode === "trade"}
+            live={phase === "open" || phase === "scheduled"}
+            symbol={model.symbol ? `$${model.symbol}` : "tokens"}
           />
         </section>
       </div>

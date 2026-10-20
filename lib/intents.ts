@@ -29,6 +29,9 @@ export const FACTORY_V2 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V2);
 /** CruxFactoryV3 (price ticks, no bidder limit) on Base Sepolia, once deployed (NEXT_PUBLIC_CRUX_FACTORY_V3). */
 export const FACTORY_V3 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V3);
 
+/** The Crux solver's wallet: fills intents (and swaps in launch pools to do it). NEXT_PUBLIC_CRUX_SOLVER overrides. */
+export const CRUX_SOLVER: Address = envAddress(process.env.NEXT_PUBLIC_CRUX_SOLVER) ?? "0x69E422d3Cca945a44210684b57F85f556212AD67";
+
 /** Where new launches go: the newest batch factory configured. */
 export const LAUNCH_FACTORY: { address: Address; version: 2 | 3 } | null = FACTORY_V3
   ? { address: FACTORY_V3, version: 3 }
