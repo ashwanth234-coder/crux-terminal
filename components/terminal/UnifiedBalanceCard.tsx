@@ -20,6 +20,10 @@ export function UnifiedBalanceCard() {
       <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         <div className="border-b border-line p-5 md:border-b-0 md:border-r">
           <BalancePanel />
+          <p className="mt-4 border-t border-line pt-3 text-[11.5px] leading-snug text-dim">
+            Balances are for display: sample figures until you connect, then your live wallet balances. On this testnet,
+            trades execute with Base Sepolia test USDC, and gas is paid in Base Sepolia ETH.
+          </p>
         </div>
         <div className="p-3">
           <TerminalTrade />

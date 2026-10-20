@@ -91,5 +91,6 @@ export const CHAINS = [
   { id: "base", name: "Base", Icon: BaseIcon },
   { id: "solana", name: "Solana", Icon: SolanaIcon },
   { id: "bsc", name: "BSC", Icon: BscIcon },
-  { id: "robinhood", name: "Robinhood Chain", short: "Robinhood", Icon: RobinhoodIcon },
+  // No public RPC yet: balances there aren't read and nothing settles there.
+  { id: "robinhood", name: "Robinhood Chain", short: "Robinhood", Icon: RobinhoodIcon, planned: true },
 ] as const;

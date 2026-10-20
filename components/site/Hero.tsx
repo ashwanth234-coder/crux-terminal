@@ -33,10 +33,13 @@ export function Hero() {
           <div className="mt-16">
             <p className="text-[12.5px] text-muted">One balance across</p>
             <ul className="mt-4 flex flex-wrap items-center gap-x-7 gap-y-3">
-              {CHAINS.map(({ id, name, Icon }) => (
-                <li key={id} className="flex items-center gap-2.5 text-[13.5px] text-chrome/85">
-                  <Icon className="h-[18px] w-[18px]" />
-                  {name}
+              {CHAINS.map((chain) => (
+                <li key={chain.id} className="flex items-center gap-2.5 text-[13.5px] text-chrome/85">
+                  <chain.Icon className="h-[18px] w-[18px]" />
+                  {chain.name}
+                  {"planned" in chain && (
+                    <span className="rounded-full border border-line-2 px-1.5 py-px text-[10.5px] text-muted">Planned</span>
+                  )}
                 </li>
               ))}
             </ul>
