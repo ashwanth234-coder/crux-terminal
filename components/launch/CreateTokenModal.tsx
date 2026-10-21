@@ -3,7 +3,7 @@
 import { useId, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { getAddress, keccak256, parseEventLogs, parseUnits, toHex, type Address, type Hex } from "viem";
-import { useConfig, useConnection, useSwitchChain, useWriteContract } from "wagmi";
+import { useConfig, useConnection, useSwitchChain } from "wagmi";
 import { waitForTransactionReceipt } from "wagmi/actions";
 import { Modal, KineticLoader } from "@/components/ui/Modal";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
@@ -11,7 +11,8 @@ import { cruxBatchFactoryAbi, cruxFactoryAbi } from "@/contracts/abis/batchAucti
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import { BATCH_WINDOW_SECONDS, FACTORY, LAUNCH_FACTORY } from "@/lib/intents";
 import { V2_FEE, V2_MIN_LEAD_SECONDS, V2_SPLIT, V2_WINDOWS, buyersNeeded, windowLabel } from "@/lib/launchV2";
-import { previewHref } from "@/lib/launch";
+import { launchError, previewHref } from "@/lib/launch";
+import { simulateThenWrite } from "@/lib/preflight";
 
 /** With the batch auction off, CruxFactory runs one pro-rata sale over OPEN_SALE_WINDOW (1 day). */
 const OPEN_SALE_HOURS = 24;
@@ -163,7 +164,6 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
   const config = useConfig();
   const { address, chainId, isConnected } = useConnection();
   const { mutateAsync: switchChain } = useSwitchChain();
-  const { mutateAsync: writeContract } = useWriteContract();
   const { openConnect } = useConnectModal();
 
   const [form, setForm] = useState<Form>(INITIAL);
@@ -217,8 +217,8 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     const totalSupply = parseUnits(digits(form.supply), 18);
     const sale = (totalSupply * BigInt(V2_SPLIT.saleBps)) / BigInt(10_000);
     const capBps = BigInt(Math.round(Number(form.walletCap) * 100));
-    setPhase({ kind: "deploying", label: "Confirm the launch in your wallet…" });
-    const hash = await writeContract({
+    setPhase({ kind: "deploying", label: "Checking the launch settings…" });
+    const hash = await simulateThenWrite(config, address, {
       address: factory,
       abi: cruxBatchFactoryAbi,
       functionName: "createAuction",
@@ -235,7 +235,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
           maxAllocationPerWallet: (sale * capBps) / BigInt(10_000),
         },
       ],
-    });
+    }, () => setPhase({ kind: "deploying", label: "Confirm the launch in your wallet…" }));
     setPhase({ kind: "deploying", label: "Deploying token and auction…", hash });
     const receipt = await waitForTransactionReceipt(config, { hash, chainId: TESTNET.id });
     const [created] = parseEventLogs({ abi: cruxBatchFactoryAbi, eventName: "AuctionCreated", logs: receipt.logs });
@@ -256,8 +256,8 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
       setPhase({ kind: "deploying", label: "Switching to Base Sepolia…" });
       await switchChain({ chainId: TESTNET.id });
     }
-    setPhase({ kind: "deploying", label: "Confirm the launch in your wallet…" });
-    const hash = await writeContract({
+    setPhase({ kind: "deploying", label: "Checking the launch settings…" });
+    const hash = await simulateThenWrite(config, address, {
       address: FACTORY,
       abi: cruxFactoryAbi,
       functionName: "createAuction",
@@ -273,7 +273,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
           batchWindow: form.batchAuction ? BATCH_WINDOW_SECONDS : 0,
         },
       ],
-    });
+    }, () => setPhase({ kind: "deploying", label: "Confirm the launch in your wallet…" }));
     setPhase({ kind: "deploying", label: "Deploying token and auction…", hash });
     const receipt = await waitForTransactionReceipt(config, { hash, chainId: TESTNET.id });
     const [created] = parseEventLogs({ abi: cruxFactoryAbi, eventName: "AuctionCreated", logs: receipt.logs });
@@ -292,8 +292,8 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     try {
       await (live ? deploy() : simulate());
     } catch (err) {
-      const e = err as { name?: string; shortMessage?: string; message?: string };
-      setError(e.name === "UserRejectedRequestError" ? "Launch rejected in wallet." : (e.shortMessage ?? e.message?.split("\n")[0] ?? "Launch failed"));
+      // Readable reasons for the factory's reverts (caught by the pre-flight check) and wallet rejections.
+      setError(launchError(err));
       setPhase({ kind: "form" });
     }
   };

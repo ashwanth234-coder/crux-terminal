@@ -2,7 +2,7 @@
 
 import { useState, useSyncExternalStore } from "react";
 import { erc20Abi, formatUnits, type Hex } from "viem";
-import { useConfig, useConnection, useReadContract, useSwitchChain, useWriteContract } from "wagmi";
+import { useConfig, useConnection, useReadContract, useSwitchChain } from "wagmi";
 import { waitForTransactionReceipt } from "wagmi/actions";
 import { buttonClass } from "@/components/ui/Button";
 import { KineticLoader } from "@/components/ui/Modal";
@@ -12,6 +12,7 @@ import { useBatchClock } from "@/lib/batch";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import { SETTLER, SETTLER_DEPLOYED, TESTNET_USDC } from "@/lib/intents";
 import { StatusTag } from "@/components/ui/StatusTag";
+import { simulateThenWrite } from "@/lib/preflight";
 
 const noopSubscribe = () => () => {};
 
@@ -54,9 +55,8 @@ export function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: 
   });
   const unit = escrowsUsdc ? "USDC" : tokenSymbol ? `$${tokenSymbol}` : "tokens";
   const config = useConfig();
-  const { chainId } = useConnection();
+  const { address, chainId } = useConnection();
   const { mutateAsync: switchChain } = useSwitchChain();
-  const { mutateAsync: writeContract } = useWriteContract();
   const [refund, setRefund] = useState<Refund>({ kind: "idle" });
 
   const open = intent.status === "open";
@@ -64,19 +64,20 @@ export function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: 
   const refundable = left !== null && left <= 0;
 
   const reclaim = async () => {
+    if (!address) return;
     try {
       if (chainId !== TESTNET.id) {
         setRefund({ kind: "busy", label: "Switching…" });
         await switchChain({ chainId: TESTNET.id });
       }
-      setRefund({ kind: "busy", label: "Confirm in wallet…" });
-      const hash = await writeContract({
-        address: SETTLER,
-        abi: cruxSettlerAbi,
-        functionName: "refund",
-        args: [intent.orderId],
-        chainId: TESTNET.id,
-      });
+      setRefund({ kind: "busy", label: "Checking…" });
+      // Simulated first: a refund that would revert (too early, already settled) stops here with its reason.
+      const hash = await simulateThenWrite(
+        config,
+        address,
+        { address: SETTLER, abi: cruxSettlerAbi, functionName: "refund", args: [intent.orderId], chainId: TESTNET.id },
+        () => setRefund({ kind: "busy", label: "Confirm in wallet…" }),
+      );
       setRefund({ kind: "sent", hash });
       await waitForTransactionReceipt(config, { hash, chainId: TESTNET.id });
       onRefunded();

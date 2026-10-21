@@ -2,14 +2,15 @@
 
 import { useCallback } from "react";
 import { BaseError, ContractFunctionRevertedError, ContractFunctionZeroDataError, erc20Abi, zeroAddress, type Address, type Hex } from "viem";
-import { useConfig, useConnection, useReadContract, useReadContracts, useSwitchChain, useWriteContract } from "wagmi";
-import { readContract, waitForTransactionReceipt } from "wagmi/actions";
+import { useConfig, useConnection, useReadContract, useReadContracts, useSwitchChain } from "wagmi";
+import { readContract, simulateContract, waitForTransactionReceipt } from "wagmi/actions";
 import { cruxBatchFactoryAbi } from "@/contracts/abis/batchAuction";
 import { TESTNET } from "@/lib/chains";
 import { TESTNET_USDC } from "@/lib/intents";
 import { launchError, type OnStep } from "@/lib/launch";
 import { TICK_COUNT_V3, maxDepositV3, toAuctionV2, type AuctionV2, type BatchVersion } from "@/lib/launchV2";
 import { useExactApproval } from "@/hooks/useExactApproval";
+import { revertedOnAllowance, simulateThenWrite, type WriteRequest } from "@/lib/preflight";
 import { useConnectModal } from "@/providers/Web3Provider";
 
 const POLL_MS = 4_000;
@@ -53,7 +54,6 @@ export function useLaunchV2(factory: Address, id: bigint, version: BatchVersion 
   const approveExact = useExactApproval();
   const { address, chainId } = useConnection();
   const { openConnect } = useConnectModal();
-  const { mutateAsync: writeContract } = useWriteContract();
   const { mutateAsync: switchChain } = useSwitchChain();
 
   const fac = { address: factory, abi: cruxBatchFactoryAbi, chainId: TESTNET.id } as const;
@@ -123,21 +123,25 @@ export function useLaunchV2(factory: Address, id: bigint, version: BatchVersion 
     await Promise.all([core.refetch(), mine.refetch(), clearing.refetch()]);
   }, [core, mine, clearing]);
 
-  /** Switch to Base Sepolia, send one write, wait for it to land. */
+  /**
+   * Switch to Base Sepolia, simulate the write, send it, wait for it to land. A write that would revert stops at the
+   * simulation with its reason, so the wallet never opens on a transaction it would flag as expected to fail.
+   */
   const send = useCallback(
-    async (label: string, request: Parameters<typeof writeContract>[0], onStep: OnStep): Promise<Hex> => {
+    async (label: string, request: WriteRequest, onStep: OnStep): Promise<Hex> => {
+      if (!address) throw new Error("Connect a wallet first.");
       if (chainId !== TESTNET.id) {
         onStep({ label: "Switching to Base Sepolia…" });
         await switchChain({ chainId: TESTNET.id });
       }
-      onStep({ label: "Confirm in your wallet…" });
-      const hash = await writeContract(request);
+      onStep({ label: "Checking it will go through…" });
+      const hash = await simulateThenWrite(config, address, request, () => onStep({ label: "Confirm in your wallet…" }));
       onStep({ label, hash });
       const receipt = await waitForTransactionReceipt(config, { hash, chainId: TESTNET.id });
       if (receipt.status !== "success") throw new Error("The transaction reverted on Base Sepolia.");
       return hash;
     },
-    [chainId, config, switchChain, writeContract],
+    [address, chainId, config, switchChain],
   );
 
   const deposit = useCallback(
@@ -149,6 +153,14 @@ export function useLaunchV2(factory: Address, id: bigint, version: BatchVersion 
       onStep({ label: "Checking test USDC…" });
       const balance = await readContract(config, { ...usdc, functionName: "balanceOf", args: [address] });
       if (balance < amount) throw new Error("Not enough test USDC on Base Sepolia. Get some free at faucet.circle.com.");
+      // Pre-flight before any approval prompt: the auction checks its own rules (window, cap, price) before it
+      // pulls USDC, so a revert other than the missing allowance means the bid would fail. Stop here if so.
+      onStep({ label: "Checking the bid…" });
+      try {
+        await simulateContract(config, { ...fac, functionName: "deposit", args: [id, amount, maxPrice], account: address });
+      } catch (err) {
+        if (!revertedOnAllowance(err)) throw err;
+      }
       // Exactly this deposit, never an unlimited allowance; skipped when the allowance already covers it.
       await approveExact(
         { token: TESTNET_USDC, owner: address, spender: factory, amount },
