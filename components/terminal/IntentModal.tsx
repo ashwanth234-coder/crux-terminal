@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   createPublicClient,
@@ -18,6 +18,7 @@ import { useConfig, useConnection, useReadContract, useSignTypedData, useSwitchC
 import { readContract, waitForTransactionReceipt } from "wagmi/actions";
 import { Modal, KineticLoader } from "@/components/ui/Modal";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
+import { SubmitKey } from "@/components/pro/hotkeys";
 import { SmartAccountNote } from "@/components/ui/SmartAccountNote";
 import { cruxSettlerAbi, originSettlerAbi } from "@/contracts/abis/erc7683";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
@@ -161,6 +162,21 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
     setFlow({ kind: "idle" });
     onClose();
   };
+
+  // ⌘/Ctrl + Enter presses Confirm: the same button, so a disabled or busy state blocks it, and the
+  // wallet still asks for every approval and signature.
+  const confirmRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key === "Enter" && !e.repeat) {
+        e.preventDefault();
+        confirmRef.current?.click();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
 
   if (!order) return null;
 
@@ -452,6 +468,7 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
       ) : (
         <>
           <button
+            ref={confirmRef}
             type="button"
             onClick={confirm}
             disabled={busy || !address}
@@ -460,6 +477,7 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
             {busy && <KineticLoader />}
             {ctaLabel[flow.kind]}
             {!busy && <ArrowUpRight />}
+            {!busy && <SubmitKey />}
           </button>
           <p className="mt-3 text-center text-[11.5px] text-dim">
             {SETTLER_DEPLOYED

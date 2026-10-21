@@ -34,10 +34,10 @@ export function WalletChip({ variant = "compact" }: { variant?: "header" | "comp
         type="button"
         onClick={onClick}
         title={title}
-        className={`group inline-flex h-9 items-center gap-2 rounded-[4px] border px-3 text-[11px] font-medium uppercase tracking-[0.16em] transition-colors duration-200 sm:px-4 ${
+        className={`group inline-flex h-9 items-center gap-2 rounded-[4px] border px-3 text-[11px] font-medium transition-colors duration-200 sm:px-4 ${
           connected
-            ? "border-line-2 font-mono normal-case tracking-normal text-chrome hover:border-chrome/50"
-            : "border-signal/80 text-signal hover:border-signal hover:bg-signal/[0.08]"
+            ? "border-line-2 font-mono text-chrome hover:border-chrome/50"
+            : "border-signal/80 uppercase tracking-[0.16em] text-signal hover:border-signal hover:bg-signal/[0.08]"
         }`}
       >
         {connected && address ? (

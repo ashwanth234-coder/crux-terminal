@@ -6,6 +6,7 @@ import { useConnection, useReadContract } from "wagmi";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { KineticLoader } from "@/components/ui/Modal";
 import { IntentModal } from "@/components/terminal/IntentModal";
+import { PresetKey, SubmitKey, useExecutionHotkeys } from "@/components/pro/hotkeys";
 import { ProtectionRow, RiskPreview, type RiskRow } from "@/components/pro/RiskPreview";
 import { cruxBatchFactoryAbi } from "@/contracts/abis/batchAuction";
 import { useLaunchMarket } from "@/hooks/useLaunchMarket";
@@ -37,15 +38,16 @@ function parse(value: string, decimals: number): bigint | null {
 function Presets({ items, onPick }: { items: { label: string; value: bigint | null }[]; onPick: (v: bigint) => void }) {
   return (
     <div className="flex gap-1.5">
-      {items.map((p) => (
+      {items.map((p, i) => (
         <button
           key={p.label}
           type="button"
           disabled={!p.value}
           onClick={() => p.value && onPick(p.value)}
-          className="h-7 flex-1 rounded-[4px] border border-line-2 text-[11.5px] text-muted transition-colors hover:border-chrome/60 hover:text-chrome disabled:opacity-40"
+          className="inline-flex h-7 flex-1 items-center justify-center gap-1.5 rounded-[4px] border border-line-2 text-[11.5px] text-muted transition-colors hover:border-chrome/60 hover:text-chrome disabled:opacity-40"
         >
           {p.label}
+          <PresetKey n={i + 1} />
         </button>
       ))}
     </div>
@@ -179,6 +181,15 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
 
   const pick = (v: bigint) => setAmount(formatUnits(v, USDC_DECIMALS));
   const preset = (n: number) => (maxBid ? (maxBid * BigInt(n)) / BigInt(100) : null);
+  const presets = [
+    { label: "25%", value: preset(25) },
+    { label: "50%", value: preset(50) },
+    { label: "MAX", value: maxBid },
+  ];
+  useExecutionHotkeys({
+    presets: presets.map((p) => () => p.value && pick(p.value)),
+    onSubmit: () => (model.account ? void submit() : model.connect()),
+  });
 
   if (!model.account) {
     return (
@@ -196,7 +207,7 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
       </div>
       <p className="-mt-2 text-[11px] text-dim">Other chains: planned.</p>
 
-      <Presets items={[{ label: "25%", value: preset(25) }, { label: "50%", value: preset(50) }, { label: "MAX", value: maxBid }]} onPick={pick} />
+      <Presets items={presets} onPick={pick} />
       <label htmlFor={`${uid}-amt`} className="sr-only">
         Bid amount
       </label>
@@ -251,6 +262,7 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
 
       <button type="button" disabled={disabled} onClick={() => void submit()} className={buttonClass("signal", "md", "w-full rounded-xl font-semibold max-lg:hidden")}>
         {label} <ArrowUpRight />
+        <SubmitKey />
       </button>
       <Status busy={busy} error={error} done={done} />
 
@@ -409,18 +421,14 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
 
   const pick = (v: bigint) => setAmount(formatUnits(v, decimals));
   const fraction = (v: bigint | null, n: number) => (v ? (v * BigInt(n)) / BigInt(100) : null);
-  const presets =
-    side === "buy"
-      ? [
-          { label: "$0.01", value: BigInt(10_000) },
-          { label: "$0.05", value: BigInt(50_000) },
-          { label: "MAX", value: usdcBalance },
-        ]
-      : [
-          { label: "25%", value: fraction(tokenBalance, 25) },
-          { label: "50%", value: fraction(tokenBalance, 50) },
-          { label: "MAX", value: tokenBalance },
-        ];
+  // The same three sizes on both sides: a share of what this wallet can spend (test USDC) or sell.
+  const spendable = side === "buy" ? usdcBalance : tokenBalance;
+  const presets = [
+    { label: "25%", value: fraction(spendable, 25) },
+    { label: "50%", value: fraction(spendable, 50) },
+    { label: "MAX", value: spendable },
+  ];
+  useExecutionHotkeys({ presets: presets.map((p) => () => p.value && pick(p.value)), onSubmit: sign });
 
   return (
     <div className="flex flex-col gap-3">
@@ -469,6 +477,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
 
       <button type="button" disabled={isConnected && disabled} onClick={sign} className={buttonClass("signal", "md", "w-full rounded-xl font-semibold max-lg:hidden")}>
         {isConnected ? label : "Connect wallet to trade"} <ArrowUpRight />
+        <SubmitKey />
       </button>
 
       <MobileDock>

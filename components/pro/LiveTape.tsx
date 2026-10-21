@@ -5,6 +5,7 @@ import { formatUnits, type Address } from "viem";
 import { useConnection } from "wagmi";
 import { useAuctionBids } from "@/hooks/useAuctionBids";
 import { useNow } from "@/hooks/useLaunchAuction";
+import { useLaunchMarket } from "@/hooks/useLaunchMarket";
 import { usePoolSwaps } from "@/hooks/usePoolSwaps";
 import { TESTNET_EXPLORER } from "@/lib/chains";
 import { fmtTokens } from "@/lib/launch";
@@ -31,6 +32,25 @@ function Wallet({ address, me, label }: { address: Address; me: Address | undefi
     <span className="inline-flex items-center gap-1.5">
       {mine && <span className="h-1.5 w-1.5 rounded-full bg-signal" aria-hidden="true" />}
       <span className={`font-mono ${mine ? "text-chrome" : "text-muted"}`}>{mine ? "You" : (label ?? short(address))}</span>
+    </span>
+  );
+}
+
+/** A trade larger than this share of the pool's liquidity (both sides, as the token bar shows it) is a whale. */
+const WHALE_SHARE_BPS = 500;
+
+const TAGS = {
+  whale: { label: "Whale", title: `Over ${WHALE_SHARE_BPS / 100}% of the pool's liquidity, measured against today's reserves` },
+  // Placeholder: no smart-money classifier exists yet, so nothing passes "smart" and the tag never renders.
+  smart: { label: "Smart", title: "Smart wallet" },
+} as const;
+
+/** A quiet marker beside the wallet, in the same voice as the Intent tag. */
+function WalletTag({ kind }: { kind: keyof typeof TAGS }) {
+  return (
+    <span title={TAGS[kind].title} className="inline-flex items-center gap-1 rounded-[3px] border border-line-2 px-1.5 py-px font-mono text-[9.5px] uppercase tracking-[0.12em] text-chrome/80">
+      <span className={`h-[5px] w-[5px] rounded-full ${kind === "whale" ? "bg-chrome" : "border border-muted"}`} aria-hidden="true" />
+      {TAGS[kind].label}
     </span>
   );
 }
@@ -63,6 +83,10 @@ export function LiveTape({
   const [shown, setShown] = useState(PAGE);
   const bids = useAuctionBids(factory, auction, BigInt(id), live);
   const swaps = usePoolSwaps(auction.pair, auction.settledAt, graduated);
+  const market = useLaunchMarket(auction.token, auction.pair);
+  // Pool liquidity = 2 × the USDC side; a whale trade is more than WHALE_SHARE_BPS of it.
+  const isWhale = (usdc: bigint) =>
+    market.reserves !== null && market.reserves.usdc > BigInt(0) && usdc * BigInt(10_000) > market.reserves.usdc * BigInt(2 * WHALE_SHARE_BPS);
   const noLimitAbove = auction.floorPrice * BigInt(1_000_000);
 
   // Newest first; a wallet's second and later bids are top-ups (they also replace its limit).
@@ -145,7 +169,10 @@ export function LiveTape({
                     <td className={`${td} text-right font-mono text-chrome/90`}>{fmtTokens(t.tokens)}</td>
                     <td className={`${td} text-right font-mono text-muted`}>{fmtTokenPrice(t.price)}</td>
                     <td className={td}>
-                      <Wallet address={t.to} me={address} label={t.viaIntent ? "Crux solver" : undefined} />
+                      <span className="inline-flex items-center gap-2">
+                        <Wallet address={t.to} me={address} label={t.viaIntent ? "Crux solver" : undefined} />
+                        {isWhale(t.usdc) && <WalletTag kind="whale" />}
+                      </span>
                     </td>
                   </tr>
                 ))

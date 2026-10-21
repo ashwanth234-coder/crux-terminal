@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { useNow } from "@/hooks/useLaunchAuction";
 import { useLaunchMarket } from "@/hooks/useLaunchMarket";
+import { usePoolSwaps } from "@/hooks/usePoolSwaps";
 import { TESTNET_EXPLORER } from "@/lib/chains";
 import { fmtUsdc, formatRemaining } from "@/lib/launch";
 import { fmtTokenPrice } from "@/lib/launchTrade";
@@ -13,6 +14,11 @@ export type PhaseStatus = { label: string; tone: string; dot: string };
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const usdCompact = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+/** Testnet volume is often cents: keep sub-dollar amounts to their significant digits. */
+const usdVolume = (units: bigint) => {
+  const v = Number(units) / 1e6;
+  return v >= 1 || v === 0 ? usdCompact.format(v) : `$${v.toLocaleString("en-US", { maximumSignificantDigits: 3 })}`;
+};
 
 function Metric({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
@@ -66,6 +72,10 @@ export function TokenBar({
   const [copied, setCopied] = useState(false);
   const ticker = symbol ? `$${symbol}` : "Token";
   const graduated = phase === "graduated";
+  // Same query (and cache) as the tape's trades: no extra reads for the 24h figure.
+  const swaps = usePoolSwaps(auction.pair, auction.settledAt, graduated);
+  const volume24h =
+    swaps.data && now !== null ? swaps.data.trades.filter((t) => t.time >= now - 86_400).reduce((sum, t) => sum + t.usdc, BigInt(0)) : null;
 
   const copyCa = async () => {
     try {
@@ -114,6 +124,11 @@ export function TokenBar({
             {price}
           </Metric>
           <Metric label="Market cap">{mcap}</Metric>
+          {graduated && (
+            <Metric label="24H volume" hint="USDC traded through the locked pool in the last 24 hours, intent fills included">
+              {volume24h !== null ? usdVolume(volume24h) : swaps.isError ? "—" : "…"}
+            </Metric>
+          )}
           {graduated ? (
             <Metric label="Pool liquidity" hint="Both sides of the locked pool, in USDC">
               {market.reserves ? usdCompact.format((Number(market.reserves.usdc) / 1e6) * 2) : "…"}
