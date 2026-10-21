@@ -7,18 +7,19 @@ import { fmtUsdc, formatRemaining, type Phase } from "@/lib/launch";
 import { describeLaunch } from "@/lib/launchSummary";
 
 const BADGE: Record<Phase, { label: string; className: string; dot: string }> = {
-  scheduled: { label: "Scheduled", className: "border-line-2 text-chrome/80", dot: "bg-chrome/50" },
-  open: { label: "Live", className: "border-signal/50 text-chrome", dot: "bg-signal" },
-  closed: { label: "Awaiting settlement", className: "border-line-2 text-chrome/80", dot: "bg-chrome/60" },
-  settled: { label: "Settled", className: "border-line-2 text-chrome/80", dot: "bg-chrome/60" },
-  graduated: { label: "Graduated", className: "border-signal bg-signal text-void", dot: "bg-void" },
-  cancelled: { label: "Cancelled", className: "border-line text-dim", dot: "bg-dim" },
+  scheduled: { label: "Scheduled", className: "border-line-2 text-chrome/80", dot: "bg-muted" },
+  // Orange means bidding is open right now; nothing else on the card is orange.
+  open: { label: "Live", className: "border-signal/60 text-chrome", dot: "bg-signal" },
+  closed: { label: "Awaiting settlement", className: "border-line-2 text-chrome/80", dot: "bg-muted" },
+  settled: { label: "Settled", className: "border-line-2 text-chrome/80", dot: "bg-muted" },
+  graduated: { label: "Graduated", className: "border-chrome/40 text-chrome", dot: "bg-chrome" },
+  cancelled: { label: "Cancelled", className: "border-dashed border-line-2 text-dim", dot: "border border-dim" },
 };
 
 function Bar({ value, className }: { value: number; className: string }) {
   return (
-    <div className="h-1 overflow-hidden rounded-full bg-line" aria-hidden="true">
-      <div className={`h-full rounded-full ${className}`} style={{ width: `${Math.min(100, Math.max(0, value * 100))}%` }} />
+    <div className="h-px overflow-hidden bg-line" aria-hidden="true">
+      <div className={`h-full ${className}`} style={{ width: `${Math.min(100, Math.max(0, value * 100))}%` }} />
     </div>
   );
 }
@@ -39,7 +40,7 @@ export function LaunchCard({ launch, phase, now }: { launch: LaunchSummary; phas
   return (
     <Link
       href={launch.href}
-      className="group flex h-full flex-col rounded-2xl border border-line bg-panel p-5 transition-colors duration-200 hover:border-line-2 focus-visible:border-signal/60"
+      className="group flex h-full flex-col rounded-md border border-line bg-void p-5 transition-colors duration-200 hover:border-line-2 hover:bg-panel/60 focus-visible:border-signal/60"
     >
       {/* Identity */}
       <div className="flex items-center gap-3">
@@ -53,8 +54,8 @@ export function LaunchCard({ launch, phase, now }: { launch: LaunchSummary; phas
             {launch.version >= 2 && <span className="text-dim"> · LP locked</span>}
           </p>
         </div>
-        <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${badge.className}`}>
-          <span className={`h-1.5 w-1.5 rounded-full ${badge.dot}`} aria-hidden="true" />
+        <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-[3px] border px-1.5 py-[3px] font-mono text-[9.5px] uppercase leading-none tracking-[0.16em] ${badge.className}`}>
+          <span className={`h-[5px] w-[5px] rounded-full ${badge.dot}`} aria-hidden="true" />
           {badge.label}
         </span>
       </div>
@@ -73,7 +74,7 @@ export function LaunchCard({ launch, phase, now }: { launch: LaunchSummary; phas
         </p>
       </div>
 
-      {/* Progress: the sealed window, then the raise */}
+      {/* Progress: the batch window, then the raise */}
       <div className="mt-6 space-y-4 border-t border-line pt-4">
         {phase === "scheduled" && (
           <div className="flex items-baseline justify-between gap-3 text-[12px]">
@@ -86,7 +87,7 @@ export function LaunchCard({ launch, phase, now }: { launch: LaunchSummary; phas
         {phase === "open" && (
           <div>
             <div className="flex items-baseline justify-between gap-3 text-[12px]">
-              <span className="text-muted">Sealed window</span>
+              <span className="text-muted">Batch window</span>
               <span className="font-mono text-signal" role="timer">
                 {formatRemaining(left)}
               </span>
@@ -105,7 +106,7 @@ export function LaunchCard({ launch, phase, now }: { launch: LaunchSummary; phas
             <span className="font-mono text-muted">{(raised * 100).toFixed(0)}%</span>
           </div>
           <div className="mt-2">
-            <Bar value={raised} className={phase === "cancelled" ? "bg-down/60" : "bg-signal"} />
+            <Bar value={raised} className={phase === "cancelled" ? "bg-dim" : phase === "open" ? "bg-signal" : "bg-chrome/70"} />
           </div>
         </div>
       </div>

@@ -37,8 +37,8 @@ const STATUS: Record<PhaseV2, { label: string; tone: string; dot: string }> = {
   scheduled: { label: "Scheduled", tone: "border-line-2 text-chrome", dot: "bg-chrome/50" },
   open: { label: "Deposits open", tone: "border-signal/40 text-chrome", dot: "bg-signal" },
   closed: { label: "Window closed · awaiting settlement", tone: "border-line-2 text-chrome", dot: "bg-dim" },
-  graduated: { label: "Graduated", tone: "border-line-2 text-chrome", dot: "bg-signal" },
-  cancelled: { label: "Cancelled · refunds open", tone: "border-down/40 text-chrome", dot: "bg-down" },
+  graduated: { label: "Graduated", tone: "border-chrome/40 text-chrome", dot: "bg-chrome" },
+  cancelled: { label: "Cancelled · refunds open", tone: "border-dashed border-line-2 text-chrome", dot: "border border-muted" },
 };
 
 /** /launch/v2/[id] and /launch/v3/[id]: an auction on CruxFactoryV2 or CruxFactoryV3 (same launch, same screen). */

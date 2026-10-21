@@ -577,7 +577,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                       aria-checked={active}
                       onClick={() => set("window", String(w.seconds))}
                       className={`h-10 rounded-lg border text-[13px] transition-colors ${
-                        active ? "border-chrome/60 bg-line-2 text-chrome" : "border-line text-muted hover:text-chrome"
+                        active ? "border-signal/70 bg-panel-2 text-chrome" : "border-line text-muted hover:text-chrome"
                       }`}
                     >
                       {w.label}
