@@ -22,14 +22,20 @@ export const SETTLER = (configuredSettler ?? PLACEHOLDER_SETTLER) as Address;
 export const SETTLER_DEPLOYED = configuredSettler !== null;
 export const SETTLER_VERSION: 1 | 2 = settlerV2 ? 2 : 1;
 
-/** v1's deploy block (crux-contracts/broadcast/Deploy.s.sol/84532/run-latest.json). */
+/** Deploy blocks (crux-contracts/broadcast/Deploy*.s.sol/84532/run-latest.json); log scans start here. */
 const SETTLER_V1_DEPLOY_BLOCK = BigInt(48311115);
+const SETTLER_V2_DEPLOY_BLOCK = BigInt(48410403);
 
-/** Block the active settler was deployed in; log scans start here. v2's comes from its deploy script's output. */
-export const SETTLER_DEPLOY_BLOCK =
-  settlerV2 && process.env.NEXT_PUBLIC_CRUX_SETTLER_V2_BLOCK
-    ? BigInt(process.env.NEXT_PUBLIC_CRUX_SETTLER_V2_BLOCK)
-    : SETTLER_V1_DEPLOY_BLOCK;
+/**
+ * Block the active settler was deployed in. NEXT_PUBLIC_CRUX_SETTLER_V2_BLOCK may override v2's (for a redeploy);
+ * anything but a plain number is ignored, so a malformed value can never break the build.
+ */
+const v2BlockOverride = process.env.NEXT_PUBLIC_CRUX_SETTLER_V2_BLOCK?.trim();
+export const SETTLER_DEPLOY_BLOCK = settlerV2
+  ? v2BlockOverride && /^\d+$/.test(v2BlockOverride)
+    ? BigInt(v2BlockOverride)
+    : SETTLER_V2_DEPLOY_BLOCK
+  : SETTLER_V1_DEPLOY_BLOCK;
 
 /** CruxSettler.REFUND_GRACE: refunds open this long after an order's fillDeadline. */
 export const REFUND_GRACE_SECONDS = 3600;
