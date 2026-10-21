@@ -1,24 +1,44 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { formatUnits } from "viem";
 import { useNow } from "@/hooks/useLaunchAuction";
 import { useLaunchMarket } from "@/hooks/useLaunchMarket";
 import { usePoolSwaps } from "@/hooks/usePoolSwaps";
 import { TESTNET_EXPLORER } from "@/lib/chains";
 import { fmtUsdc, formatRemaining } from "@/lib/launch";
 import { fmtTokenPrice } from "@/lib/launchTrade";
-import { marketCapUsd, priceUsd, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
+import { PRICE_DECIMALS, marketCapUsd, priceUsd, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
+import { priceChange, usdAmount } from "@/lib/orderflow";
 import { SITE_URL } from "@/lib/site";
 
 export type PhaseStatus = { label: string; tone: string; dot: string };
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const usdCompact = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
-/** Testnet volume is often cents: keep sub-dollar amounts to their significant digits. */
-const usdVolume = (units: bigint) => {
-  const v = Number(units) / 1e6;
-  return v >= 1 || v === 0 ? usdCompact.format(v) : `$${v.toLocaleString("en-US", { maximumSignificantDigits: 3 })}`;
-};
+const FRAMES = [
+  { label: "5M", seconds: 300 },
+  { label: "1H", seconds: 3_600 },
+  { label: "4H", seconds: 14_400 },
+  { label: "1D", seconds: 86_400 },
+] as const;
+
+/** Price change over 5M / 1H / 4H / 1D, from executed pool trades (see lib/orderflow priceChange). */
+function Changes({ changes }: { changes: { label: string; pct: number | null }[] }) {
+  return (
+    <ul aria-label="Price change" className="flex items-center gap-1.5" title="Last trade versus the last trade before each window (the clearing price if none)">
+      {changes.map((c) => {
+        const tone = c.pct === null || Math.abs(c.pct) < 0.005 ? "text-muted" : c.pct > 0 ? "text-up" : "text-down";
+        return (
+          <li key={c.label} className="flex items-baseline gap-1.5 rounded-[3px] border border-line px-1.5 py-1 font-mono text-[10.5px] leading-none">
+            <span className="text-dim">{c.label}</span>
+            <span className={tone}>{c.pct === null ? "—" : `${c.pct > 0 ? "+" : ""}${c.pct.toFixed(Math.abs(c.pct) >= 100 ? 0 : 2)}%`}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
 function Metric({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
@@ -76,6 +96,11 @@ export function TokenBar({
   const swaps = usePoolSwaps(auction.pair, auction.settledAt, graduated);
   const volume24h =
     swaps.data && now !== null ? swaps.data.trades.filter((t) => t.time >= now - 86_400).reduce((sum, t) => sum + t.usdc, BigInt(0)) : null;
+  const openPrice = Number(formatUnits(auction.clearingPrice, PRICE_DECIMALS));
+  const changes =
+    graduated && swaps.data && now !== null
+      ? FRAMES.map((f) => ({ label: f.label, pct: priceChange(swaps.data.trades, now, f.seconds, openPrice) }))
+      : null;
 
   const copyCa = async () => {
     try {
@@ -126,7 +151,7 @@ export function TokenBar({
           <Metric label="Market cap">{mcap}</Metric>
           {graduated && (
             <Metric label="24H volume" hint="USDC traded through the locked pool in the last 24 hours, intent fills included">
-              {volume24h !== null ? usdVolume(volume24h) : swaps.isError ? "—" : "…"}
+              {volume24h !== null ? usdAmount(volume24h) : swaps.isError ? "—" : "…"}
             </Metric>
           )}
           {graduated ? (
@@ -141,6 +166,7 @@ export function TokenBar({
           {phase === "scheduled" && opensIn !== null && <Metric label="Opens in">{formatRemaining(opensIn)}</Metric>}
           {phase === "open" && closesIn !== null && <Metric label="Window closes">{formatRemaining(closesIn)}</Metric>}
         </div>
+        {changes && <Changes changes={changes} />}
 
         {/* Contract + share */}
         <div className="flex items-center gap-2 sm:ml-auto">

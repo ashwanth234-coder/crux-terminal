@@ -1,11 +1,12 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { Address } from "viem";
+import { zeroAddress, type Address } from "viem";
 import { DemandCurve } from "@/components/pro/DemandCurve";
 import { LiveTape } from "@/components/pro/LiveTape";
 import { PriceChart } from "@/components/pro/PriceChart";
-import { SecurityBadges } from "@/components/pro/SecurityBadges";
+import { NoticeBanner } from "@/components/pro/NoticeBanner";
+import { Orderflow } from "@/components/pro/Orderflow";
 import { TerminalShell } from "@/components/pro/TerminalShell";
 import { TokenBar, type PhaseStatus } from "@/components/pro/TokenBar";
 import type { LaunchV2Model } from "@/hooks/useLaunchV2";
@@ -15,11 +16,14 @@ import type { AuctionV2, BatchVersion, PhaseV2 } from "@/lib/launchV2";
  * The pro terminal: one launch, two modes. Auction mode (scheduled, open, closed, cancelled) and trade mode
  * (graduated) share the grid; each panel switches its data source by mode.
  *
- *   lg+:  ┌───────────────┬────────────┐       phones: TokenBar → chart → execution
- *         │ chart         │ execution  │               → trust checks → tape
- *         ├───────────────┤ trust      │
- *         │ tape          │            │
+ *         notice banner (only when this wallet has something to claim or release)
+ *         token bar
+ *   lg+:  ┌───────────────┬────────────┐       phones: banner → TokenBar → chart → execution
+ *         │ chart         │ execution  │               → order flow → desk
+ *         ├───────────────┤ order flow │
+ *         │ desk (tabs)   │            │
  *         └───────────────┴────────────┘
+ *   The desk's tabs: trades tape, auction bids, holders & PnL, trust radar.
  */
 export function ProTerminal({
   factory,
@@ -42,9 +46,11 @@ export function ProTerminal({
   execution: ReactNode;
 }) {
   const mode = phase === "graduated" ? "trade" : "auction";
+  const symbol = model.symbol ? `$${model.symbol}` : "tokens";
 
   return (
     <TerminalShell>
+      <NoticeBanner model={model} auction={auction} phase={phase} symbol={symbol} />
       <TokenBar
         auction={auction}
         symbol={model.symbol}
@@ -77,7 +83,7 @@ export function ProTerminal({
 
         <aside aria-label="Execution" className="bg-panel lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:overflow-y-auto">
           {execution}
-          <SecurityBadges factory={factory} auction={auction} version={version} />
+          {mode === "trade" && auction.pair !== zeroAddress && <Orderflow auction={auction} />}
           <p className="border-t border-line px-4 py-3 text-[11.5px] text-dim">
             Prefer a simpler layout?{" "}
             <a href={`/launch/v${version}/${id}?view=classic`} className="text-muted underline decoration-line-2 hover:text-chrome">
@@ -86,14 +92,15 @@ export function ProTerminal({
           </p>
         </aside>
 
-        <section aria-label="Trades" className="min-h-[220px] bg-void p-3 lg:col-start-1 lg:row-start-2">
+        <section aria-label="Trades, holders and trust" className="min-h-[260px] bg-void p-3 lg:col-start-1 lg:row-start-2">
           <LiveTape
             factory={factory}
             id={id}
             auction={auction}
             graduated={mode === "trade"}
             live={phase === "open" || phase === "scheduled"}
-            symbol={model.symbol ? `$${model.symbol}` : "tokens"}
+            symbol={symbol}
+            version={version}
           />
         </section>
       </div>

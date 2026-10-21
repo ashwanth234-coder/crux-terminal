@@ -2,13 +2,16 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { useConnection } from "wagmi";
 import { Logo } from "@/components/site/Logo";
 import { SiteNav } from "@/components/site/SiteNav";
 import { WalletChip } from "@/components/terminal/WalletChip";
+import { SmartAccountHint } from "@/components/ui/SmartAccountNote";
 import { StatusTag } from "@/components/ui/StatusTag";
 
 /** Full-bleed app chrome for the pro terminal: a compact 56px bar, then the terminal fills the viewport. */
 export function TerminalShell({ children }: { children: ReactNode }) {
+  const { address } = useConnection();
   return (
     // Desktop: exactly one screen tall, so the panels scroll inside themselves like a trading terminal.
     <div className="flex min-h-svh flex-col bg-void lg:h-svh lg:overflow-hidden">
@@ -23,7 +26,10 @@ export function TerminalShell({ children }: { children: ReactNode }) {
         </div>
         <div className="flex items-center gap-3">
           <StatusTag status="testnet" label="Base Sepolia" className="hidden sm:inline-flex" />
-          <WalletChip variant="header" />
+          <span className="flex items-center gap-1">
+            <WalletChip variant="header" />
+            <SmartAccountHint address={address} />
+          </span>
         </div>
       </header>
       <main className="flex min-h-0 flex-1 flex-col lg:overflow-hidden">{children}</main>

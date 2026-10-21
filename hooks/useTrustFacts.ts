@@ -23,7 +23,7 @@ const day = (s: number) => new Date(s * 1000).toLocaleDateString(undefined, { da
  * LP lock (pool LP held by 0x…dEaD), creator vesting (the factory's own constant and the settle time),
  * fee split, admin powers, fixed token supply, per-wallet cap and the home chain.
  */
-export function useTrustFacts(factory: Address, auction: AuctionV2, version: BatchVersion, explorer: string): { checks: TrustCheck[]; loading: boolean } {
+export function useTrustFacts(factory: Address, auction: AuctionV2, version: BatchVersion, explorer: string): { checks: TrustCheck[]; loading: boolean; vestingDays: number | null } {
   const graduated = auction.status === 1;
   const cancelled = auction.status === 2;
   const hasPool = graduated && auction.pair !== zeroAddress;
@@ -173,5 +173,7 @@ export function useTrustFacts(factory: Address, auction: AuctionV2, version: Bat
   return {
     checks: [lpCheck, vestCheck, feeCheck, adminCheck, supplyCheck, capCheck, chainCheck],
     loading: facts.isPending,
+    /** The factory's own creator-vesting length, read live; null until read. */
+    vestingDays: vestDays,
   };
 }

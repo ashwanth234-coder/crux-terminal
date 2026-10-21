@@ -10,7 +10,9 @@ import { usePoolSwaps } from "@/hooks/usePoolSwaps";
 import { TESTNET_EXPLORER } from "@/lib/chains";
 import { fmtTokens } from "@/lib/launch";
 import { fmtTokenPrice } from "@/lib/launchTrade";
-import { priceUsd, type AuctionV2 } from "@/lib/launchV2";
+import { priceUsd, type AuctionV2, type BatchVersion } from "@/lib/launchV2";
+import { HoldersTable } from "@/components/pro/HoldersTable";
+import { TrustRadar } from "@/components/pro/TrustRadar";
 
 const PAGE = 25;
 /** Testnet trades are often cents: keep USDC to its 6 decimals (at least 2). */
@@ -58,9 +60,14 @@ function WalletTag({ kind }: { kind: keyof typeof TAGS }) {
 const th = "px-3 py-2 text-left text-[11px] font-normal text-dim";
 const td = "px-3 py-1.5 text-[12px]";
 
+type Tab = "trades" | "bids" | "holders" | "trust";
+
+const TAB_LABEL: Record<Tab, string> = { trades: "Trades tape", bids: "Auction bids", holders: "Holders & PnL", trust: "Trust radar" };
+
 /**
- * The tape: what actually happened, newest first. Bids come from the auction's BidPlaced events; after
- * graduation, trades are every swap on the locked Uniswap V2 pool (the solver's swaps are intent fills).
+ * The bottom desk. The tape is what actually happened, newest first: bids from the auction's BidPlaced events
+ * and, after graduation, every swap on the locked Uniswap V2 pool (the solver's swaps are intent fills).
+ * Holders & PnL and the trust radar share the same space as tabs.
  */
 export function LiveTape({
   factory,
@@ -69,6 +76,7 @@ export function LiveTape({
   graduated,
   live,
   symbol,
+  version,
 }: {
   factory: Address;
   id: string;
@@ -76,10 +84,12 @@ export function LiveTape({
   graduated: boolean;
   live: boolean;
   symbol: string;
+  version: BatchVersion;
 }) {
   const { address } = useConnection();
   const now = useNow();
-  const [tab, setTab] = useState<"trades" | "bids">(graduated ? "trades" : "bids");
+  const [tab, setTab] = useState<Tab>(graduated ? "trades" : "bids");
+  const tabs: Tab[] = graduated ? ["trades", "bids", "holders", "trust"] : ["bids", "trust"];
   const [shown, setShown] = useState(PAGE);
   const bids = useAuctionBids(factory, auction, BigInt(id), live);
   const swaps = usePoolSwaps(auction.pair, auction.settledAt, graduated);
@@ -108,8 +118,8 @@ export function LiveTape({
   return (
     <div className="flex h-full min-h-[inherit] flex-col">
       <div className="flex items-center justify-between gap-3 px-1 pb-2">
-        <div role="tablist" aria-label="Tape" className="flex gap-1">
-          {(graduated ? (["trades", "bids"] as const) : (["bids"] as const)).map((t) => (
+        <div role="tablist" aria-label="Desk" className="flex gap-1 overflow-x-auto">
+          {tabs.map((t) => (
             <button
               key={t}
               role="tab"
@@ -119,33 +129,40 @@ export function LiveTape({
                 setTab(t);
                 setShown(PAGE);
               }}
-              className={`rounded-[4px] px-3 py-1 text-[12px] transition-colors ${tab === t ? "bg-panel-2 text-chrome ring-1 ring-inset ring-signal/60" : "text-muted hover:text-chrome"}`}
+              className={`shrink-0 rounded-[4px] px-3 py-1 text-[12px] transition-colors ${tab === t ? "bg-panel-2 text-chrome ring-1 ring-inset ring-signal/60" : "text-muted hover:text-chrome"}`}
             >
-              {t === "trades" ? "Trades" : graduated ? "Auction bids" : "Bids"}{" "}
-              <span className="font-mono text-dim">{t === "trades" ? tradeRows.length : bidRows.length}</span>
+              {t === "bids" && !graduated ? "Bids" : TAB_LABEL[t]}
+              {(t === "trades" || t === "bids") && <span className="ml-1.5 font-mono text-dim">{t === "trades" ? tradeRows.length : bidRows.length}</span>}
             </button>
           ))}
         </div>
-        <span className="text-[11px] text-dim">{live || graduated ? "Updates live" : "Final"} · Base Sepolia</span>
+        <span className="hidden shrink-0 text-[11px] text-dim sm:inline">{live || graduated ? "Updates live" : "Final"} · Base Sepolia</span>
       </div>
 
+      {tab === "holders" ? (
+        <HoldersTable factory={factory} id={id} auction={auction} />
+      ) : tab === "trust" ? (
+        <TrustRadar factory={factory} auction={auction} version={version} />
+      ) : (
+      <>
       <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-line">
         <table className="w-full min-w-[520px] border-collapse">
           <thead className="sticky top-0 bg-void">
             {tab === "trades" ? (
               <tr className="border-b border-line">
                 <th className={th}>Time</th>
-                <th className={th}>Type</th>
-                <th className={`${th} text-right`}>USDC</th>
+                <th className={th}>Side</th>
+                <th className={`${th} text-right`}>Amount (USDC)</th>
                 <th className={`${th} text-right`}>{symbol}</th>
                 <th className={`${th} text-right`}>Price</th>
                 <th className={th}>Wallet</th>
+                <th className={th}>Badge</th>
               </tr>
             ) : (
               <tr className="border-b border-line">
                 <th className={th}>Time</th>
                 <th className={th}>Type</th>
-                <th className={`${th} text-right`}>Amount</th>
+                <th className={`${th} text-right`}>Amount (USDC)</th>
                 <th className={`${th} text-right`}>Wallet total</th>
                 <th className={`${th} text-right`}>Limit</th>
                 <th className={th}>Wallet</th>
@@ -163,14 +180,21 @@ export function LiveTape({
                     </td>
                     <td className={td}>
                       <span className={t.side === "buy" ? "text-up" : "text-down"}>{t.side === "buy" ? "Buy" : "Sell"}</span>
-                      {t.viaIntent && <span className="ml-1.5 rounded-[3px] border border-line-2 px-1.5 py-px font-mono text-[9.5px] uppercase tracking-[0.12em] text-muted">Intent</span>}
                     </td>
                     <td className={`${td} text-right font-mono text-chrome/90`}>{usd(t.usdc)}</td>
                     <td className={`${td} text-right font-mono text-chrome/90`}>{fmtTokens(t.tokens)}</td>
                     <td className={`${td} text-right font-mono text-muted`}>{fmtTokenPrice(t.price)}</td>
                     <td className={td}>
-                      <span className="inline-flex items-center gap-2">
-                        <Wallet address={t.to} me={address} label={t.viaIntent ? "Crux solver" : undefined} />
+                      <Wallet address={t.to} me={address} label={t.viaIntent ? "Crux solver" : undefined} />
+                    </td>
+                    <td className={td}>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span
+                          title={t.viaIntent ? "Filled by the Crux solver for a signed intent, in a batch" : "A direct swap on the pool"}
+                          className="rounded-[3px] border border-line-2 px-1.5 py-px font-mono text-[9.5px] uppercase tracking-[0.12em] text-muted"
+                        >
+                          {t.viaIntent ? "Solver fill" : "Direct"}
+                        </span>
                         {isWhale(t.usdc) && <WalletTag kind="whale" />}
                       </span>
                     </td>
@@ -213,6 +237,8 @@ export function LiveTape({
         )}
       </div>
       {truncated && <p className="px-1 pt-1.5 text-[11px] text-dim">Only the last six days are shown.</p>}
+      </>
+      )}
     </div>
   );
 }

@@ -9,7 +9,7 @@ import { launchCaip19, midPrice, type PoolReserves } from "@/lib/launchTrade";
 import type { BatchVersion } from "@/lib/launchV2";
 
 /** CruxDestinationSettler on Base Sepolia: delivers what a buy intent asks for. */
-const DESTINATION_SETTLER: Address = "0x300a835939D2beBed59C543470DCD9a9c8065822";
+export const DESTINATION_SETTLER: Address = "0x300a835939D2beBed59C543470DCD9a9c8065822";
 
 const pairAbi = parseAbi([
   "function token0() view returns (address)",

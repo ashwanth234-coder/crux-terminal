@@ -37,7 +37,7 @@ function parse(value: string, decimals: number): bigint | null {
 
 function Presets({ items, onPick }: { items: { label: string; value: bigint | null }[]; onPick: (v: bigint) => void }) {
   return (
-    <div className="flex gap-1.5">
+    <div className="flex gap-1.5" role="group" aria-label="Size presets">
       {items.map((p, i) => (
         <button
           key={p.label}
@@ -68,6 +68,28 @@ function AmountField({ id, value, onChange, unit, compact }: { id: string; value
         className={`w-full min-w-0 bg-transparent font-mono text-chrome outline-none placeholder:text-dim ${compact ? "text-[16px]" : "text-[20px]"}`}
       />
       <span className="shrink-0 text-[12px] text-muted">{unit}</span>
+    </div>
+  );
+}
+
+/** Quick dollar sizes for buys: plain amounts of test USDC, unavailable beyond the wallet's balance. */
+function DollarChips({ amounts, balance, onPick }: { amounts: number[]; balance: bigint | null; onPick: (v: bigint) => void }) {
+  return (
+    <div className="flex gap-1.5" role="group" aria-label="Quick amounts">
+      {amounts.map((usd) => {
+        const value = BigInt(usd) * BigInt(1_000_000);
+        return (
+          <button
+            key={usd}
+            type="button"
+            disabled={balance !== null && value > balance}
+            onClick={() => onPick(value)}
+            className="h-6 flex-1 rounded-[4px] border border-line font-mono text-[11px] text-dim transition-colors hover:border-chrome/60 hover:text-chrome disabled:opacity-40"
+          >
+            ${usd}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -184,6 +206,7 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
   const presets = [
     { label: "25%", value: preset(25) },
     { label: "50%", value: preset(50) },
+    { label: "75%", value: preset(75) },
     { label: "MAX", value: maxBid },
   ];
   useExecutionHotkeys({
@@ -207,11 +230,11 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
       </div>
       <p className="-mt-2 text-[11px] text-dim">Other chains: planned.</p>
 
-      <Presets items={presets} onPick={pick} />
       <label htmlFor={`${uid}-amt`} className="sr-only">
         Bid amount
       </label>
       <AmountField id={`${uid}-amt`} value={amount} onChange={setAmount} unit="USDC" />
+      <Presets items={presets} onPick={pick} />
       {capLeft !== null && (
         <p className={`-mt-1.5 text-[11px] ${overCap ? "text-down" : "text-dim"}`}>
           {model.myBid.quote > BigInt(0) ? `You've bid $${fmtUsdc(model.myBid.quote)}; ` : ""}this wallet can add up to ${fmtUsdc(capLeft)}.
@@ -385,29 +408,22 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
             hint: "The solver's quote from the locked pool, alone in its batch.",
           },
           {
-            label: "Minimum received",
-            value: side === "buy" ? `${signedMin.toLocaleString("en-US", { maximumFractionDigits: 2 })} ${symbol}` : `$${signedMin.toFixed(6)}`,
-            hint: `Signed into your intent (${(SLIPPAGE_BPS / 100).toFixed(1)}% under the quote). It can't fill below this.`,
-          },
-          {
-            label: "Estimated slippage",
+            label: "Expected slippage",
             value: pct(risk.slippagePct),
             tone: risk.slippagePct > 5 ? "danger" : risk.slippagePct > 2 ? "caution" : "plain",
             hint: `Versus the pool's mid price: ${risk.poolImpactPct.toFixed(2)}% pool impact (incl. Uniswap's 0.3% fee) plus the 0.3% solver spread.`,
           },
-          side === "buy" && risk.roundTrip
-            ? {
-                label: "Exit liquidity",
-                value: `${usd6(risk.roundTrip.usdcBack)} (${pct(risk.roundTrip.lossPct)})`,
-                tone: risk.roundTrip.lossPct > 5 ? "caution" : "plain",
-                hint: "Selling these tokens straight back into the pool after your buy.",
-              }
-            : {
-                label: "Pool impact",
-                value: pct(risk.poolImpactPct),
-                tone: risk.poolImpactPct > 5 ? "caution" : "plain",
-                hint: "How far your sale moves the locked pool's price.",
-              },
+          {
+            label: "Min. received",
+            value: side === "buy" ? `${signedMin.toLocaleString("en-US", { maximumFractionDigits: 2 })} ${symbol}` : `$${signedMin.toFixed(6)}`,
+            hint: `Guaranteed on-chain: signed into your intent, ${(SLIPPAGE_BPS / 100).toFixed(1)}% under the quote. It can't fill below this.`,
+          },
+          {
+            label: "Liquidity impact",
+            value: pct(risk.poolImpactPct),
+            tone: risk.poolImpactPct > 5 ? "caution" : "plain",
+            hint: `How far this trade moves the locked pool's price. The solver skips anything over ${SOLVER_MAX_IMPACT_PCT}%.`,
+          },
         ]
       : [];
 
@@ -426,6 +442,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   const presets = [
     { label: "25%", value: fraction(spendable, 25) },
     { label: "50%", value: fraction(spendable, 50) },
+    { label: "75%", value: fraction(spendable, 75) },
     { label: "MAX", value: spendable },
   ];
   useExecutionHotkeys({ presets: presets.map((p) => () => p.value && pick(p.value)), onSubmit: sign });
@@ -450,27 +467,19 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
         ))}
       </div>
 
-      <div className="flex items-baseline justify-between text-[11.5px] text-muted">
-        <span>{side === "buy" ? "Paying with: Base Sepolia test USDC" : `Selling: ${symbol}`}</span>
-        <span className="font-mono text-chrome/80">
-          {side === "buy" ? (usdcBalance !== null ? usd6(usdcBalance) : "…") : tokenBalance !== null ? fmtTokens(tokenBalance) : "…"}
-        </span>
-      </div>
-      {side === "buy" && <p className="-mt-2 text-[11px] text-dim">Other chains: planned.</p>}
-
-      <Presets items={presets} onPick={pick} />
       <label htmlFor={`${uid}-amt`} className="sr-only">
         {side === "buy" ? "USDC to spend" : `${symbol} to sell`}
       </label>
       <AmountField id={`${uid}-amt`} value={amount} onChange={setAmount} unit={side === "buy" ? "USDC" : symbol} />
+      <div className="-mt-1.5 flex items-baseline justify-between text-[11px] text-dim">
+        <span>{side === "buy" ? "Base Sepolia test USDC · other chains planned" : `Selling ${symbol}`}</span>
+        <span className="font-mono text-muted">
+          Bal {side === "buy" ? (usdcBalance !== null ? usd6(usdcBalance) : "…") : tokenBalance !== null ? fmtTokens(tokenBalance) : "…"}
+        </span>
+      </div>
 
-      <p className="text-[11px] leading-snug text-dim">
-        Route: your intent → Crux solver → Uniswap V2 pool{" "}
-        <a href={`${TESTNET_EXPLORER}/address/${auction.pair}`} target="_blank" rel="noopener noreferrer" className="font-mono underline decoration-line-2">
-          {short(auction.pair)}
-        </a>
-        {market.price !== null && <> at {fmtTokenPrice(market.price)}</>}. Filled in the next batch (about a minute), or refundable after its deadline.
-      </p>
+      <Presets items={presets} onPick={pick} />
+      {side === "buy" && <DollarChips amounts={[5, 10, 25]} balance={usdcBalance} onPick={pick} />}
 
       {rows.length > 0 && <RiskPreview rows={rows} note={tooBig ? `The solver skips orders that move a pool more than ${SOLVER_MAX_IMPACT_PCT}% in one batch. Trade smaller.` : undefined} />}
       <ProtectionRow>Your signed minimum is enforced on-chain: the fill can&apos;t come in below it.</ProtectionRow>
@@ -479,6 +488,14 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
         {isConnected ? label : "Connect wallet to trade"} <ArrowUpRight />
         <SubmitKey />
       </button>
+
+      <p className="text-[11px] leading-snug text-dim">
+        Route: your intent → Crux solver → Uniswap V2 pool{" "}
+        <a href={`${TESTNET_EXPLORER}/address/${auction.pair}`} target="_blank" rel="noopener noreferrer" className="font-mono underline decoration-line-2">
+          {short(auction.pair)}
+        </a>
+        {market.price !== null && <> at {fmtTokenPrice(market.price)}</>}. Filled in the next batch (about a minute), or refundable after its deadline.
+      </p>
 
       <MobileDock>
         <div className="flex items-center gap-2">
@@ -504,9 +521,9 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
 // ------------------------------------------------------------------ panel
 
 /**
- * The pro execution panel. Deposits open: a batch bid with a limit and a risk preview. Graduated: claim (if
- * this wallet has anything) plus an intent trade with a risk preview. Every other phase (scheduled, settling,
- * cancelled refunds) uses the standard action panel passed in as `fallback`.
+ * The pro execution panel. Deposits open: a batch bid with a limit and a risk preview. Graduated: an intent
+ * trade with a risk preview. Cancelled: a short note (refunds are claimed from the notice banner). Scheduled
+ * and settling use the standard action panel passed in as `fallback`.
  */
 export function ExecutionPanel({
   factory,
@@ -526,8 +543,6 @@ export function ExecutionPanel({
   fallback: ReactNode;
 }) {
   const symbol = model.symbol ? `$${model.symbol}` : "tokens";
-  const isCreator = model.account !== null && model.account.toLowerCase() === auction.creator.toLowerCase();
-  const hasClaim = model.myClaim.tokens > BigInt(0) || model.myClaim.refund > BigInt(0);
 
   if (phase === "open") {
     return (
@@ -537,15 +552,24 @@ export function ExecutionPanel({
       </section>
     );
   }
+  // Claims and creator vesting live in the notice banner above the terminal, so the desk stays the desk.
   if (phase === "graduated" && auction.pair !== zeroAddress) {
     return (
-      <div className="flex flex-col">
-        {(hasClaim || isCreator) && <div className="border-b border-line p-3">{fallback}</div>}
-        <section aria-label="Trade via intent" className="p-4">
-          <h2 className="mb-3 text-[14px] font-medium text-chrome">Trade via intent</h2>
-          <TradeForm auction={auction} symbol={symbol} />
-        </section>
-      </div>
+      <section aria-label="Trade via intent" className="p-4">
+        <h2 className="mb-3 text-[14px] font-medium text-chrome">Trade via intent</h2>
+        <TradeForm auction={auction} symbol={symbol} />
+      </section>
+    );
+  }
+  if (phase === "cancelled") {
+    return (
+      <section aria-label="Cancelled" className="p-4">
+        <h2 className="text-[14px] font-medium text-chrome">Launch cancelled</h2>
+        <p className="mt-2 text-[12.5px] leading-relaxed text-muted">
+          Demand stayed below the floor, so no tokens were sold and every deposit is refundable in full. If this wallet bid, its refund is
+          in the notice above.
+        </p>
+      </section>
     );
   }
   return <div className="p-3">{fallback}</div>;

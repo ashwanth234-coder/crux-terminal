@@ -14,7 +14,7 @@ function isEditable(target: EventTarget | null) {
 }
 
 /**
- * Keyboard execution for the pro panel: 1 / 2 / 3 pick the three sizing presets, ⌘/Ctrl + Enter runs the
+ * Keyboard execution for the pro panel: 1 / 2 / 3 / 4 pick the sizing presets in order, ⌘/Ctrl + Enter runs the
  * panel's main action. Number keys are left alone while typing in a field (they are digits there), and
  * nothing fires while a dialog is open: the review window owns the keyboard then. The main action is
  * the same one the button runs, so it can only submit a bid or open the intent review, never sign blind.
@@ -28,7 +28,7 @@ export function useExecutionHotkeys({ presets, onSubmit }: { presets: (() => voi
       return;
     }
     if (e.metaKey || e.ctrlKey || e.altKey || isEditable(e.target)) return;
-    const index = ["1", "2", "3"].indexOf(e.key);
+    const index = ["1", "2", "3", "4"].indexOf(e.key);
     if (index >= 0 && presets[index]) {
       e.preventDefault();
       presets[index]();
