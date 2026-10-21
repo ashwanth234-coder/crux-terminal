@@ -95,7 +95,7 @@ export function LiveTape({
                 setTab(t);
                 setShown(PAGE);
               }}
-              className={`rounded-full px-3 py-1 text-[12px] transition-colors ${tab === t ? "bg-line-2 text-chrome" : "text-muted hover:text-chrome"}`}
+              className={`rounded-[4px] px-3 py-1 text-[12px] transition-colors ${tab === t ? "bg-panel-2 text-chrome ring-1 ring-inset ring-signal/60" : "text-muted hover:text-chrome"}`}
             >
               {t === "trades" ? "Trades" : graduated ? "Auction bids" : "Bids"}{" "}
               <span className="font-mono text-dim">{t === "trades" ? tradeRows.length : bidRows.length}</span>
@@ -139,7 +139,7 @@ export function LiveTape({
                     </td>
                     <td className={td}>
                       <span className={t.side === "buy" ? "text-up" : "text-down"}>{t.side === "buy" ? "Buy" : "Sell"}</span>
-                      {t.viaIntent && <span className="ml-1.5 rounded-full border border-line-2 px-1.5 py-px text-[10px] text-muted">Intent</span>}
+                      {t.viaIntent && <span className="ml-1.5 rounded-[3px] border border-line-2 px-1.5 py-px font-mono text-[9.5px] uppercase tracking-[0.12em] text-muted">Intent</span>}
                     </td>
                     <td className={`${td} text-right font-mono text-chrome/90`}>{usd(t.usdc)}</td>
                     <td className={`${td} text-right font-mono text-chrome/90`}>{fmtTokens(t.tokens)}</td>

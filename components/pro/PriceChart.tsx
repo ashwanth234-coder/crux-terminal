@@ -125,7 +125,7 @@ export function PriceChart({ auction, symbol }: { auction: AuctionV2; symbol: st
               role="radio"
               aria-checked={pick === i.seconds}
               onClick={() => setPick(i.seconds)}
-              className={`rounded-full px-2 py-0.5 font-mono text-[11px] transition-colors ${pick === i.seconds ? "bg-line-2 text-chrome" : "text-dim hover:text-chrome"}`}
+              className={`rounded-[3px] px-2 py-0.5 font-mono text-[11px] transition-colors ${pick === i.seconds ? "bg-panel-2 text-chrome ring-1 ring-inset ring-signal/60" : "text-dim hover:text-chrome"}`}
             >
               {i.label}
             </button>

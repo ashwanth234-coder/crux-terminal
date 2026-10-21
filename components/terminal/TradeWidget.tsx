@@ -178,7 +178,7 @@ export function TradeWidget({ launch }: { launch?: LaunchTrade } = {}) {
               setStatus({ kind: "idle" });
             }}
             className={`h-8 rounded-md text-[12px] capitalize transition-colors ${
-              side === s ? (s === "buy" ? "bg-line-2 text-chrome" : "bg-down/15 text-down") : "text-muted hover:text-chrome"
+              side === s ? (s === "buy" ? "bg-panel-2 text-chrome ring-1 ring-inset ring-signal/60" : "bg-down/15 text-down") : "text-muted hover:text-chrome"
             }`}
           >
             {s}
@@ -215,7 +215,7 @@ export function TradeWidget({ launch }: { launch?: LaunchTrade } = {}) {
             className="w-full min-w-0 bg-transparent font-mono text-[22px] text-chrome outline-none placeholder:text-dim"
             placeholder="0"
           />
-          <span className="shrink-0 rounded-full border border-line-2 px-2 py-1 font-mono text-[10px] text-muted">{symbol}</span>
+          <span className="shrink-0 rounded-[3px] border border-line-2 px-2 py-1 font-mono text-[10px] text-muted">{symbol}</span>
         </div>
         <div className="mt-0.5 flex items-center justify-between font-mono text-[11px]">
           <span className={overBudget ? "text-down" : "text-muted"}>

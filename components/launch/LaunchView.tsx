@@ -103,7 +103,7 @@ export function Shell({ mode, children }: { mode: LaunchModel["mode"] | null; ch
               <Logo />
             </Link>
             <nav aria-label="Primary" className="hidden lg:block">
-              <SiteNav variant="inline" hide={["Docs"]} />
+              <SiteNav variant="inline" />
             </nav>
           </div>
           <div className="flex items-center gap-3">
@@ -122,7 +122,7 @@ export function Shell({ mode, children }: { mode: LaunchModel["mode"] | null; ch
         </div>
         {/* Below lg the routes sit on their own slim row, scrolling sideways if they must */}
         <nav aria-label="Primary" className="overflow-x-auto border-t border-line px-4 sm:px-8 lg:hidden">
-          <SiteNav variant="inline" hide={["Docs"]} />
+          <SiteNav variant="inline" />
         </nav>
       </header>
       <main className="mx-auto max-w-[1180px] px-4 pb-24 pt-8 sm:px-8 sm:pt-12">{children}</main>

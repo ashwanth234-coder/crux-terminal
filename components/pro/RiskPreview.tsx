@@ -43,7 +43,7 @@ export function RiskPreview({ rows, note }: { rows: RiskRow[]; note?: string }) 
 export function ProtectionRow({ children }: { children: ReactNode }) {
   return (
     <p className="flex items-start gap-2 text-[11.5px] leading-snug text-muted">
-      <svg viewBox="0 0 16 16" className="mt-px h-3.5 w-3.5 shrink-0 text-signal" aria-hidden="true">
+      <svg viewBox="0 0 16 16" className="mt-px h-3.5 w-3.5 shrink-0 text-chrome/70" aria-hidden="true">
         <path d="M8 1.5 13 3.5v4c0 3.2-2.1 5.6-5 7-2.9-1.4-5-3.8-5-7v-4l5-2Z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
         <path d="m5.6 8 1.7 1.7 3.1-3.4" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
       </svg>

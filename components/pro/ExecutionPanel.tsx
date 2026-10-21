@@ -43,7 +43,7 @@ function Presets({ items, onPick }: { items: { label: string; value: bigint | nu
           type="button"
           disabled={!p.value}
           onClick={() => p.value && onPick(p.value)}
-          className="h-7 flex-1 rounded-full border border-line-2 text-[11.5px] text-muted transition-colors hover:border-chrome/60 hover:text-chrome disabled:opacity-40"
+          className="h-7 flex-1 rounded-[4px] border border-line-2 text-[11.5px] text-muted transition-colors hover:border-chrome/60 hover:text-chrome disabled:opacity-40"
         >
           {p.label}
         </button>
@@ -435,7 +435,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
               setSide(s);
               setAmount("");
             }}
-            className={`h-8 rounded-md text-[12.5px] capitalize transition-colors ${side === s ? "bg-line-2 text-chrome" : "text-muted hover:text-chrome"}`}
+            className={`h-8 rounded-md text-[12.5px] capitalize transition-colors ${side === s ? "bg-panel-2 text-chrome ring-1 ring-inset ring-signal/60" : "text-muted hover:text-chrome"}`}
           >
             {s}
           </button>

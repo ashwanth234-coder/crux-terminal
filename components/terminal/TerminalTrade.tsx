@@ -43,7 +43,7 @@ export function TerminalTrade() {
               role="radio"
               aria-checked={l.key === selected.key}
               onClick={() => setPicked(l.key)}
-              className={`shrink-0 rounded-full border px-2.5 py-1 font-mono text-[11px] transition-colors ${
+              className={`shrink-0 rounded-[4px] border px-2.5 py-1 font-mono text-[11px] transition-colors ${
                 l.key === selected.key ? "border-signal/50 text-chrome" : "border-line-2 text-muted hover:text-chrome"
               }`}
             >

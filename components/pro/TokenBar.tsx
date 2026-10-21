@@ -102,8 +102,8 @@ export function TokenBar({
             {ticker}
             {name && <span className="ml-2 text-[15px] text-steel">{name}</span>}
           </h1>
-          <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] ${status.tone}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} aria-hidden="true" />
+          <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-[3px] border px-1.5 py-[3px] font-mono text-[9.5px] uppercase leading-none tracking-[0.16em] ${status.tone}`}>
+            <span className={`h-[5px] w-[5px] rounded-full ${status.dot}`} aria-hidden="true" />
             {status.label}
           </span>
         </div>
@@ -133,7 +133,7 @@ export function TokenBar({
             href={`${TESTNET_EXPLORER}/token/${auction.token}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-full border border-line px-2.5 py-1 font-mono text-[11.5px] text-muted transition-colors hover:text-chrome"
+            className="rounded-[4px] border border-line px-2.5 py-1 font-mono text-[11.5px] text-muted transition-colors hover:text-chrome"
             title="Contract on Basescan"
           >
             CA {short(auction.token)}

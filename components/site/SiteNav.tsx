@@ -7,7 +7,7 @@ import { LaunchTokenButton } from "@/components/launch/LaunchTokenButton";
 import { NAV_LINKS } from "@/lib/site";
 
 const INLINE =
-  "relative py-2 text-[11.5px] font-medium uppercase tracking-[0.18em] text-chrome/75 transition-colors duration-200 hover:text-chrome aria-[current=page]:text-signal";
+  "relative inline-flex items-center py-2 text-[11.5px] font-medium uppercase leading-none tracking-[0.18em] text-chrome/75 transition-colors duration-200 hover:text-chrome aria-[current=page]:text-signal";
 
 const ROW =
   "group flex w-full items-center justify-between border-b border-line py-4 text-[13px] font-medium uppercase tracking-[0.18em] text-chrome aria-[current=page]:text-signal";
