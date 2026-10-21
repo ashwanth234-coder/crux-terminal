@@ -67,7 +67,7 @@ const logClient = createPublicClient({ chain: baseSepolia, transport: http("http
 const ESCROW_SETTLED = 2;
 const ESCROW_REFUNDED = 3;
 
-const STEPS = ["Quote ready", "Wallet signature", "Intent submitted", "Settlement confirmed"] as const;
+const STEPS = ["Quote ready", "Awaiting signature", "Intent submitted", "Settlement confirmed"] as const;
 
 function Row({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (

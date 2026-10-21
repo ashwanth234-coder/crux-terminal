@@ -305,7 +305,7 @@ export function TradeWidget({ launch }: { launch?: LaunchTrade } = {}) {
             <>Base Sepolia testnet · priced from the locked Uniswap pool · test funds only</>
           )
         ) : !isConnected && !isFarcaster ? (
-          <>Connect a wallet to sign · demo balances shown</>
+          <>Connect a wallet to sign</>
         ) : testnet ? (
           <>Testnet · pays with Base Sepolia test USDC · no real funds</>
         ) : (

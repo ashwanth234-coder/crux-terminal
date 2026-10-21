@@ -11,6 +11,7 @@ import { useMyIntents, type MyIntent } from "@/hooks/useMyIntents";
 import { useBatchClock } from "@/lib/batch";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import { SETTLER, SETTLER_DEPLOYED, TESTNET_USDC } from "@/lib/intents";
+import { StatusTag } from "@/components/ui/StatusTag";
 
 const noopSubscribe = () => () => {};
 
@@ -184,7 +185,7 @@ export function MyIntentsPanel() {
           <h3 id="my-intents-title" className="text-[13px] text-chrome">
             My intents
           </h3>
-          <span className="rounded-full border border-line-2 px-2 py-0.5 text-[10px] text-muted">Base Sepolia · testnet</span>
+          <StatusTag status="testnet" label="Base Sepolia" />
         </div>
         <div className="flex items-center gap-3 text-[11px] text-dim">
           {intents.length > 0 && (
