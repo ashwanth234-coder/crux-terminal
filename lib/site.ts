@@ -17,13 +17,19 @@ export const miniAppEmbed = {
 } as const;
 
 /**
+ * Opens the pro terminal on the newest live V3 launch (resolved on-chain by app/terminal/route.ts).
+ * Link to it with a plain <a>: it is a redirect, so it must not be prefetched or routed client-side.
+ */
+export const TERMINAL_HREF = "/terminal";
+
+/**
  * Primary navigation: Discover | Launch | Terminal | Protocol | Docs. Launch opens the
  * token launch modal; the rest are routes, absolute so they work on every page.
  */
 export const NAV_LINKS = [
   { label: "Discover", href: "/launches" },
   { label: "Launch", href: null },
-  { label: "Terminal", href: "/#terminal" },
+  { label: "Terminal", href: TERMINAL_HREF },
   { label: "Protocol", href: "/#protocol" },
   { label: "Docs", href: "/alpha-guide" },
 ] as const;

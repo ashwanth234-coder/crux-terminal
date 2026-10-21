@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowUpRight } from "@/components/ui/Button";
 import { LaunchTokenButton } from "@/components/launch/LaunchTokenButton";
-import { NAV_LINKS } from "@/lib/site";
+import { NAV_LINKS, TERMINAL_HREF } from "@/lib/site";
 
 const INLINE =
   "relative inline-flex items-center py-2 text-[11.5px] font-medium uppercase leading-none tracking-[0.18em] text-chrome/75 transition-colors duration-200 hover:text-chrome aria-[current=page]:text-signal";
@@ -31,6 +31,17 @@ export function SiteNav({ variant, onNavigate, hide = [] }: { variant: "inline" 
               icon={variant === "rows"}
               className={variant === "inline" ? INLINE : ROW}
             />
+          ) : link.href === TERMINAL_HREF ? (
+            // A redirect to the newest live launch: a plain anchor, never prefetched. Current on any auction page.
+            <a
+              href={link.href}
+              onClick={onNavigate}
+              aria-current={pathname.startsWith("/launch/") ? "page" : undefined}
+              className={variant === "inline" ? INLINE : ROW}
+            >
+              {link.label}
+              {variant === "rows" && <ArrowUpRight className="h-4 w-4 text-dim" />}
+            </a>
           ) : (
             <Link
               href={link.href}
