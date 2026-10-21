@@ -3,10 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
+  BaseError,
+  ContractFunctionRevertedError,
   createPublicClient,
   erc20Abi,
   formatUnits,
   http,
+  parseAbi,
   parseAbiItem,
   parseEventLogs,
   parseUnits,
@@ -15,11 +18,13 @@ import {
 } from "viem";
 import { baseSepolia } from "viem/chains";
 import { useConfig, useConnection, useReadContract, useSignTypedData, useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
-import { readContract, waitForTransactionReceipt } from "wagmi/actions";
+import { readContract, simulateContract } from "wagmi/actions";
 import { Modal, KineticLoader } from "@/components/ui/Modal";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { SubmitKey } from "@/components/pro/hotkeys";
 import { SmartAccountNote } from "@/components/ui/SmartAccountNote";
+import { useExactApproval } from "@/hooks/useExactApproval";
+import { verifySettlerDomain } from "@/lib/settlerDomain";
 import { cruxSettlerAbi, originSettlerAbi } from "@/contracts/abis/erc7683";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import {
@@ -110,7 +115,37 @@ function Lifecycle({ stage, tone }: { stage: number; tone: Tone }) {
   );
 }
 
+/** CruxSettler's custom errors, so a failed pre-flight simulation can say what went wrong. */
+const settlerErrorsAbi = parseAbi([
+  "error WrongSettler()",
+  "error WrongChain()",
+  "error OpenDeadlinePassed()",
+  "error InvalidFillDeadline()",
+  "error UnknownOrderDataType()",
+  "error NonceAlreadyUsed()",
+  "error InvalidSignature()",
+  "error UnsupportedInputAsset(bytes32 assetId)",
+  "error ZeroAmount()",
+]);
+const openForAbi = [...originSettlerAbi, ...settlerErrorsAbi] as const;
+
+const SETTLER_ERRORS: Record<string, string> = {
+  InvalidSignature:
+    "The settler couldn't verify your wallet's signature. Smart-account (EIP-7702) wallets need ERC-1271 support for this. Nothing was sent.",
+  OpenDeadlinePassed: "This quote expired before it was submitted. Nothing was sent; review and sign again.",
+  InvalidFillDeadline: "This quote expired before it was submitted. Nothing was sent; review and sign again.",
+  NonceAlreadyUsed: "This intent was already submitted. Nothing new was sent.",
+  UnsupportedInputAsset: "The settler doesn't escrow this asset yet. Nothing was sent.",
+  ZeroAmount: "Enter an amount above zero.",
+  WrongChain: "Switch your wallet to Base Sepolia and try again. Nothing was sent.",
+};
+
 function errorMessage(err: unknown) {
+  if (err instanceof BaseError) {
+    const revert = err.walk((e) => e instanceof ContractFunctionRevertedError);
+    const name = revert instanceof ContractFunctionRevertedError ? revert.data?.errorName : undefined;
+    if (name && SETTLER_ERRORS[name]) return SETTLER_ERRORS[name];
+  }
   const e = err as { name?: string; shortMessage?: string; message?: string };
   if (e.name === "UserRejectedRequestError" || /reject/i.test(e.shortMessage ?? "")) return "Request rejected in wallet.";
   return e.shortMessage ?? e.message?.split("\n")[0] ?? "Something went wrong";
@@ -122,6 +157,7 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
   const { mutateAsync: signTypedData } = useSignTypedData();
   const { mutateAsync: switchChain } = useSwitchChain();
   const { mutateAsync: writeContract } = useWriteContract();
+  const approveExact = useExactApproval();
   const [flow, setFlow] = useState<Flow>({ kind: "idle" });
 
   const receipt = useWaitForTransactionReceipt({
@@ -232,13 +268,12 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
           });
           return;
         }
-        const allowance = await readContract(config, { ...escrowed, functionName: "allowance", args: [address, SETTLER] });
-        if (allowance < input.amount) {
-          setFlow({ kind: "approving" });
-          const approval = await writeContract({ ...escrowed, functionName: "approve", args: [SETTLER, input.amount] });
-          await waitForTransactionReceipt(config, { hash: approval, chainId: TESTNET.id });
-        }
+        // Exactly this order's input, never an unlimited allowance; skipped when the allowance already covers it.
+        await approveExact({ token: escrowed.address, owner: address, spender: SETTLER, amount: input.amount }, { onPrompt: () => setFlow({ kind: "approving" }) });
       }
+
+      // Never ask for a signature the deployed settler wouldn't accept under its own EIP-712 domain.
+      if (SETTLER_DEPLOYED) await verifySettlerDomain(config);
 
       const typed = buildGaslessOrder({
         user: address,
@@ -261,14 +296,18 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
         return;
       }
 
-      setFlow({ kind: "broadcasting" });
-      const hash = await writeContract({
+      // Pre-flight: run openFor against the chain first. If it would revert, the wallet never opens a
+      // transaction it would flag as "expected to fail"; the reason is shown here instead.
+      const { request } = await simulateContract(config, {
         address: SETTLER,
-        abi: originSettlerAbi,
+        abi: openForAbi,
         functionName: "openFor",
         args: [typed.message, signature, "0x"],
+        account: address,
         chainId: TESTNET.id,
       });
+      setFlow({ kind: "broadcasting" });
+      const hash = await writeContract(request);
       setFlow({ kind: "broadcast", hash });
     } catch (err) {
       setFlow({ kind: "error", message: errorMessage(err) });

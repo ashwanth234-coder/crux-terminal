@@ -9,6 +9,7 @@ import { TESTNET } from "@/lib/chains";
 import { TESTNET_USDC } from "@/lib/intents";
 import { launchError, type OnStep } from "@/lib/launch";
 import { TICK_COUNT_V3, maxDepositV3, toAuctionV2, type AuctionV2, type BatchVersion } from "@/lib/launchV2";
+import { useExactApproval } from "@/hooks/useExactApproval";
 import { useConnectModal } from "@/providers/Web3Provider";
 
 const POLL_MS = 4_000;
@@ -49,6 +50,7 @@ export type LaunchV2Model = {
 /** One auction on a deployed batch factory (CruxFactoryV2 or V3, Base Sepolia), with its writes. */
 export function useLaunchV2(factory: Address, id: bigint, version: BatchVersion = 2): LaunchV2Model {
   const config = useConfig();
+  const approveExact = useExactApproval();
   const { address, chainId } = useConnection();
   const { openConnect } = useConnectModal();
   const { mutateAsync: writeContract } = useWriteContract();
@@ -147,18 +149,18 @@ export function useLaunchV2(factory: Address, id: bigint, version: BatchVersion 
       onStep({ label: "Checking test USDC…" });
       const balance = await readContract(config, { ...usdc, functionName: "balanceOf", args: [address] });
       if (balance < amount) throw new Error("Not enough test USDC on Base Sepolia. Get some free at faucet.circle.com.");
-      const allowance = await readContract(config, { ...usdc, functionName: "allowance", args: [address, factory] });
-      if (allowance < amount) {
-        // Approve exactly this deposit, never an unlimited allowance.
-        await send("Approving test USDC…", { ...usdc, functionName: "approve", args: [factory, amount] }, onStep);
-      }
+      // Exactly this deposit, never an unlimited allowance; skipped when the allowance already covers it.
+      await approveExact(
+        { token: TESTNET_USDC, owner: address, spender: factory, amount },
+        { onPrompt: () => onStep({ label: "Confirm the approval in your wallet…" }), onSent: (hash) => onStep({ label: "Approving test USDC…", hash }) },
+      );
       const hash = await send("Placing your bid…", { ...fac, functionName: "deposit", args: [id, amount, maxPrice] }, onStep);
       await refetch();
       return hash;
     },
     // fac/usdc are rebuilt each render from stable inputs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [address, config, factory, id, openConnect, refetch, send],
+    [address, approveExact, config, factory, id, openConnect, refetch, send],
   );
 
   const settle = useCallback(

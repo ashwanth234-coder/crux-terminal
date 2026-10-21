@@ -1,4 +1,5 @@
 import { encodeAbiParameters, getAddress, isAddress, keccak256, toHex, type Address, type Hex } from "viem";
+import { TESTNET } from "./chains";
 
 // Only used as the EIP-712 verifyingContract for local signature checks while
 // nothing is deployed; never sent to a chain.
@@ -76,6 +77,28 @@ export function assetId(caip19: string): Hex {
   return keccak256(toHex(caip19));
 }
 
+/**
+ * The settler's EIP-712 domain, pinned: CruxSettler's constructor runs OpenZeppelin `EIP712("CruxSettler", "1")`,
+ * so a signature only verifies for this name, version, chain and contract. Intents are always signed for this
+ * exact domain, whatever chain the wallet happens to be on; lib/settlerDomain.ts checks it against the
+ * deployed contract's own `eip712Domain()` before any signature is requested.
+ */
+export const SETTLER_DOMAIN = {
+  name: "CruxSettler",
+  version: "1",
+  chainId: TESTNET.id,
+  verifyingContract: SETTLER,
+} as const;
+
+/**
+ * Unique per order and increasing over time: milliseconds since epoch × 10⁶ plus a random tail, so two orders
+ * signed in the same millisecond still differ. The settler rejects any nonce it has seen for this user.
+ */
+export function orderNonce() {
+  const tail = Math.floor(Math.random() * 1_000_000);
+  return BigInt(Date.now()) * BigInt(1_000_000) + BigInt(tail);
+}
+
 /** EIP-712 types for ERC-7683 `GaslessCrossChainOrder`. */
 export const GASLESS_ORDER_TYPES = {
   GaslessCrossChainOrder: [
@@ -102,6 +125,11 @@ export type IntentDraft = {
 };
 
 export function buildGaslessOrder(draft: IntentDraft) {
+  // With a live settler the domain is pinned; signing it from another chain would give a signature the settler rejects.
+  if (SETTLER_DEPLOYED && draft.chainId !== SETTLER_DOMAIN.chainId) {
+    throw new Error(`Switch your wallet to Base Sepolia (chain ${SETTLER_DOMAIN.chainId}) to sign this intent.`);
+  }
+  const domain = SETTLER_DEPLOYED ? SETTLER_DOMAIN : { ...SETTLER_DOMAIN, chainId: draft.chainId };
   const now = Math.floor(Date.now() / 1000);
   const orderData = encodeAbiParameters(
     [
@@ -123,14 +151,14 @@ export function buildGaslessOrder(draft: IntentDraft) {
   );
 
   return {
-    domain: { name: "CruxSettler", version: "1", chainId: draft.chainId, verifyingContract: SETTLER },
+    domain,
     types: GASLESS_ORDER_TYPES,
     primaryType: "GaslessCrossChainOrder" as const,
     message: {
       originSettler: SETTLER,
       user: draft.user,
-      nonce: BigInt(Date.now()),
-      originChainId: BigInt(draft.chainId),
+      nonce: orderNonce(),
+      originChainId: BigInt(domain.chainId),
       // Intent must be opened inside the current batch window and filled within 10 minutes.
       openDeadline: now + BATCH_WINDOW_SECONDS,
       fillDeadline: now + 600,
