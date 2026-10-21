@@ -20,7 +20,7 @@ Intent-based, bridge-free execution with a 60-second uniform-price batch auction
 
 ## Operating Context
 
-Landing page and terminal live at https://crux-terminal.vercel.app and run as a Farcaster mini app (swap hand-off via `sdk.actions.swapToken`). Wallets: Coinbase Smart Wallet, injected, WalletConnect (when configured), Farcaster wallet in-client.
+Landing page and terminal live at https://cruxprotocol.xyz and run as a Farcaster mini app (swap hand-off via `sdk.actions.swapToken`). Wallets: Coinbase Smart Wallet, injected, WalletConnect (when configured), Farcaster wallet in-client.
 
 ## Capabilities and Constraints
 

@@ -1,6 +1,6 @@
 # Crux Alpha Tester Guide (Base Sepolia testnet)
 
-Web version: https://crux-terminal.vercel.app/alpha-guide
+Web version: https://cruxprotocol.xyz/alpha-guide
 
 Every token here is a **test token with no value**. The contracts are **unaudited**. Never use a wallet that holds real funds, and never share a private key or seed phrase with anyone, including us.
 
