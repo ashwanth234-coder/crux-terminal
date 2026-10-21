@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { Logo } from "@/components/site/Logo";
 import { SiteNav } from "@/components/site/SiteNav";
 import { WalletChip } from "@/components/terminal/WalletChip";
+import { StatusTag } from "@/components/ui/StatusTag";
 
 /** Full-bleed app chrome for the pro terminal: a compact 56px bar, then the terminal fills the viewport. */
 export function TerminalShell({ children }: { children: ReactNode }) {
@@ -16,13 +17,13 @@ export function TerminalShell({ children }: { children: ReactNode }) {
           <Link href="/" aria-label="Crux home" className="shrink-0">
             <Logo />
           </Link>
-          <nav aria-label="Primary" className="hidden md:block">
+          <nav aria-label="Primary" className="hidden lg:block">
             <SiteNav variant="inline" hide={["Docs"]} />
           </nav>
         </div>
         <div className="flex items-center gap-3">
-          <span className="hidden rounded-full border border-line-2 px-2.5 py-1 text-[11px] text-muted sm:inline">Base Sepolia testnet</span>
-          <WalletChip />
+          <StatusTag status="testnet" label="Base Sepolia" className="hidden sm:inline-flex" />
+          <WalletChip variant="header" />
         </div>
       </header>
       <main className="flex min-h-0 flex-1 flex-col lg:overflow-hidden">{children}</main>

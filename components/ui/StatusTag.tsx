@@ -13,9 +13,11 @@ const STYLE: Record<Status, { label: string; box: string; dot: string }> = {
 
 export function StatusTag({ status, label, className = "" }: { status: Status; label?: string; className?: string }) {
   const s = STYLE[status];
+  // A caller that hides the tag at some widths ("hidden sm:inline-flex") owns its display.
+  const display = /(^|\s)hidden(\s|$)/.test(className) ? "" : "inline-flex";
   return (
     <span
-      className={`inline-flex shrink-0 items-center gap-1.5 rounded-[3px] border px-1.5 py-[3px] font-mono text-[9.5px] uppercase leading-none tracking-[0.16em] ${s.box} ${className}`}
+      className={`${display} shrink-0 items-center gap-1.5 rounded-[3px] border px-1.5 py-[3px] font-mono text-[9.5px] uppercase leading-none tracking-[0.16em] ${s.box} ${className}`}
     >
       <span className={`h-[5px] w-[5px] rounded-full ${s.dot}`} aria-hidden="true" />
       {label ?? s.label}

@@ -9,6 +9,8 @@ import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { Logo } from "@/components/site/Logo";
 import { LaunchTokenButton } from "@/components/launch/LaunchTokenButton";
 import { SiteNav } from "@/components/site/SiteNav";
+import { WalletChip } from "@/components/terminal/WalletChip";
+import { StatusTag } from "@/components/ui/StatusTag";
 import { useLiveLaunch, useNow, useSimulatedLaunch, type PreviewParams } from "@/hooks/useLaunchAuction";
 import { TESTNET_EXPLORER } from "@/lib/chains";
 import { FACTORY } from "@/lib/intents";
@@ -100,21 +102,28 @@ export function Shell({ mode, children }: { mode: LaunchModel["mode"] | null; ch
             <Link href="/" aria-label="Crux home" className="shrink-0">
               <Logo />
             </Link>
-            <nav aria-label="Primary">
+            <nav aria-label="Primary" className="hidden lg:block">
               <SiteNav variant="inline" hide={["Docs"]} />
             </nav>
           </div>
           <div className="flex items-center gap-3">
             {mode && (
-              <span className="hidden rounded-full border border-line-2 px-3 py-1 text-[11.5px] text-muted xl:inline">
-                {mode === "simulated" ? "Simulated preview" : "Base Sepolia testnet"}
-              </span>
+              <StatusTag
+                status={mode === "simulated" ? "demo" : "testnet"}
+                label={mode === "simulated" ? "Simulated preview" : "Base Sepolia"}
+                className="hidden sm:inline-flex"
+              />
             )}
-            <div className="hidden lg:block">
+            <div className="hidden xl:block">
               <AuctionJump />
             </div>
+            <WalletChip variant="header" />
           </div>
         </div>
+        {/* Below lg the routes sit on their own slim row, scrolling sideways if they must */}
+        <nav aria-label="Primary" className="overflow-x-auto border-t border-line px-4 sm:px-8 lg:hidden">
+          <SiteNav variant="inline" hide={["Docs"]} />
+        </nav>
       </header>
       <main className="mx-auto max-w-[1180px] px-4 pb-24 pt-8 sm:px-8 sm:pt-12">{children}</main>
     </div>

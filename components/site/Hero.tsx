@@ -8,9 +8,9 @@ export function Hero() {
   return (
     <section id="top" className="relative flex min-h-[100svh] flex-col overflow-hidden pt-16">
       <div className="mx-auto grid w-full max-w-[1440px] flex-1 items-center gap-6 px-4 pb-10 pt-12 sm:px-8 md:grid-cols-12 md:gap-6 md:py-16 lg:px-12">
-        <div className="relative z-10 md:col-span-7">
+        <div className="relative z-10 min-w-0 md:col-span-7">
           {/* Painted with the first frame: the headline is the LCP and is never held back by an animation. */}
-          <h1 className="font-display text-[clamp(2.9rem,13.4vw,6.25rem)] uppercase leading-[0.9] md:text-[8.2vw] xl:text-[min(7.8vw,8.75rem)]">
+          <h1 className="font-display text-[clamp(2.6rem,12.8vw,5.75rem)] uppercase leading-[0.9] md:text-[7.4vw] xl:text-[min(7.4vw,7.25rem)]">
             <span className="block text-bright">Markets</span>
             <span className="block text-signal">Without</span>
             <span className="block text-bright">Borders.</span>
@@ -19,7 +19,7 @@ export function Hero() {
           <EnterCrux className="mt-9 md:mt-14" />
         </div>
 
-        <div className="relative mx-auto w-full max-w-[340px] md:col-span-5 md:max-w-none">
+        <div className="relative mx-auto w-full min-w-0 max-w-[340px] md:col-span-5 md:max-w-none">
           <CruxEmblem className="block aspect-square w-full" />
           <p className={`${ANNOTATION} absolute right-0 top-[3%] hidden text-right lg:block`}>
             <span className="text-signal">01</span> /<br />
