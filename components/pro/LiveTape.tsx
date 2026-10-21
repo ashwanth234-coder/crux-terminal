@@ -13,6 +13,7 @@ import { fmtTokenPrice } from "@/lib/launchTrade";
 import { priceUsd, type AuctionV2, type BatchVersion } from "@/lib/launchV2";
 import { HoldersTable } from "@/components/pro/HoldersTable";
 import { TrustRadar } from "@/components/pro/TrustRadar";
+import { MyOrders } from "@/components/pro/MyOrders";
 
 const PAGE = 25;
 /** Testnet trades are often cents: keep USDC to its 6 decimals (at least 2). */
@@ -60,9 +61,9 @@ function WalletTag({ kind }: { kind: keyof typeof TAGS }) {
 const th = "px-3 py-2 text-left text-[11px] font-normal text-dim";
 const td = "px-3 py-1.5 text-[12px]";
 
-type Tab = "trades" | "bids" | "holders" | "trust";
+type Tab = "trades" | "bids" | "orders" | "holders" | "trust";
 
-const TAB_LABEL: Record<Tab, string> = { trades: "Trades tape", bids: "Auction bids", holders: "Holders & PnL", trust: "Trust radar" };
+const TAB_LABEL: Record<Tab, string> = { trades: "Trades tape", bids: "Auction bids", orders: "My orders", holders: "Holders & PnL", trust: "Trust radar" };
 
 /**
  * The bottom desk. The tape is what actually happened, newest first: bids from the auction's BidPlaced events
@@ -89,7 +90,7 @@ export function LiveTape({
   const { address } = useConnection();
   const now = useNow();
   const [tab, setTab] = useState<Tab>(graduated ? "trades" : "bids");
-  const tabs: Tab[] = graduated ? ["trades", "bids", "holders", "trust"] : ["bids", "trust"];
+  const tabs: Tab[] = graduated ? ["trades", "orders", "bids", "holders", "trust"] : ["bids", "trust"];
   const [shown, setShown] = useState(PAGE);
   const bids = useAuctionBids(factory, auction, BigInt(id), live);
   const swaps = usePoolSwaps(auction.pair, auction.settledAt, graduated);
@@ -139,7 +140,9 @@ export function LiveTape({
         <span className="hidden shrink-0 text-[11px] text-dim sm:inline">{live || graduated ? "Updates live" : "Final"} · Base Sepolia</span>
       </div>
 
-      {tab === "holders" ? (
+      {tab === "orders" ? (
+        <MyOrders token={auction.token} symbol={symbol} />
+      ) : tab === "holders" ? (
         <HoldersTable factory={factory} id={id} auction={auction} />
       ) : tab === "trust" ? (
         <TrustRadar factory={factory} auction={auction} version={version} />

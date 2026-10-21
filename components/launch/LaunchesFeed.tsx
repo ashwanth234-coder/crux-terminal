@@ -10,14 +10,16 @@ import { useNow } from "@/hooks/useLaunchAuction";
 import { FACTORY, FACTORY_V2, FACTORY_V3 } from "@/lib/intents";
 import { type Phase } from "@/lib/launch";
 import { describeLaunch } from "@/lib/launchSummary";
+import { launchKey, useWatchlist } from "@/lib/watchlist";
 
-type Filter = "all" | "active" | "graduated";
+type Filter = "all" | "active" | "graduated" | "watchlist";
 type Sort = "ending" | "newest" | "raised";
 
 const FILTERS: { id: Filter; label: string }[] = [
   { id: "all", label: "All launches" },
   { id: "active", label: "Active batches" },
   { id: "graduated", label: "Graduated" },
+  { id: "watchlist", label: "Watchlist" },
 ];
 
 const SORTS: { id: Sort; label: string }[] = [
@@ -51,6 +53,7 @@ export function LaunchesFeed() {
   const { total, launches, loading, error } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3);
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<Sort>("ending");
+  const watchlist = useWatchlist();
 
   const rows: Row[] = launches.map((launch) => ({
     launch,
@@ -61,11 +64,17 @@ export function LaunchesFeed() {
     all: rows.length,
     active: rows.filter((r) => r.phase === "open" || r.phase === "scheduled").length,
     graduated: rows.filter((r) => r.phase === "graduated").length,
+    watchlist: rows.filter((r) => watchlist.has(launchKey(r.launch.version, r.launch.id))).length,
   };
-  const visible = sortRows(
-    rows.filter((r) => filter === "all" || (filter === "active" ? r.phase === "open" || r.phase === "scheduled" : r.phase === "graduated")),
-    sort,
-  );
+  const matches = (r: Row) =>
+    filter === "all"
+      ? true
+      : filter === "active"
+        ? r.phase === "open" || r.phase === "scheduled"
+        : filter === "watchlist"
+          ? watchlist.has(launchKey(r.launch.version, r.launch.id))
+          : r.phase === "graduated";
+  const visible = sortRows(rows.filter(matches), sort);
 
   return (
     <Shell mode={FACTORY || FACTORY_V2 || FACTORY_V3 ? "live" : null}>
@@ -144,9 +153,15 @@ export function LaunchesFeed() {
                   ? "No launches yet."
                   : filter === "active"
                     ? "No batch is open right now."
-                    : "No launches have graduated yet."}
+                    : filter === "watchlist"
+                      ? "Your watchlist is empty."
+                      : "No launches have graduated yet."}
               </p>
-              <p className="mt-2 text-[13px] text-muted">Launch a token to open a uniform-price batch auction.</p>
+              <p className="mt-2 text-[13px] text-muted">
+                {filter === "watchlist"
+                  ? "Star a launch from its terminal header to keep it here. Stars stay in this browser."
+                  : "Launch a token to open a uniform-price batch auction."}
+              </p>
             </div>
           ) : (
             <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

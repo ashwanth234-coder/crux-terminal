@@ -42,7 +42,7 @@ function errorMessage(err: unknown) {
 
 type Refund = { kind: "idle" } | { kind: "busy"; label: string } | { kind: "sent"; hash: Hex } | { kind: "error"; message: string };
 
-function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: number | null; onRefunded: () => void }) {
+export function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: number | null; onRefunded: () => void }) {
   // Buys escrow test USDC; a launch-token sell escrows the token itself (Crux launch tokens have 18 decimals).
   const escrowsUsdc = intent.token === null || intent.token.toLowerCase() === TESTNET_USDC.toLowerCase();
   const { data: tokenSymbol } = useReadContract({

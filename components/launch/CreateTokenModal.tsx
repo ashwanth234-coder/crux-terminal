@@ -24,6 +24,8 @@ type Form = {
   name: string;
   symbol: string;
   description: string;
+  /** Optional https logo URL, stored with the metadata. */
+  logo: string;
   x: string;
   farcaster: string;
   website: string;
@@ -42,6 +44,7 @@ const INITIAL: Form = {
   name: "",
   symbol: "",
   description: "",
+  logo: "",
   x: "",
   farcaster: "",
   website: "",
@@ -73,6 +76,7 @@ function validate(f: Form) {
   if (f.name.trim().length < 2) errors.name = "Give the token a name (2–32 characters).";
   if (!/^[A-Z0-9]{2,10}$/.test(f.symbol)) errors.symbol = "2–10 letters or numbers, e.g. CRUX.";
   if (f.website && !/^https?:\/\/\S+\.\S+/.test(f.website)) errors.website = "Use a full URL starting with https://";
+  if (f.logo.trim() && !/^https:\/\/\S+\.\S+/.test(f.logo.trim())) errors.logo = "Use an https:// image URL.";
   const supply = Number(digits(f.supply));
   if (!supply || supply < 1_000) errors.supply = "Supply must be at least 1,000.";
   const target = Number(digits(f.target));
@@ -110,6 +114,7 @@ function metadataURI(f: Form) {
     name: f.name.trim(),
     symbol: f.symbol,
     description: f.description.trim(),
+    ...(f.logo.trim() ? { image: f.logo.trim() } : {}),
     links: { x: f.x.trim(), farcaster: f.farcaster.trim(), website: f.website.trim() },
   });
   return `data:application/json;base64,${btoa(unescape(encodeURIComponent(json)))}`;
@@ -466,6 +471,19 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
               value={form.description}
               aria-describedby={`${id("desc")}-msg`}
               onChange={(e) => set("description", e.target.value)}
+            />
+          </Field>
+
+          <Field id={id("logo")} label="Logo URL" error={showErr("logo")} hint="Optional, https image">
+            <input
+              id={id("logo")}
+              className={inputCls}
+              placeholder="https://…/logo.png"
+              inputMode="url"
+              value={form.logo}
+              aria-invalid={Boolean(showErr("logo"))}
+              aria-describedby={`${id("logo")}-msg`}
+              onChange={(e) => set("logo", e.target.value)}
             />
           </Field>
 

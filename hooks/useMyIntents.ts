@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { createPublicClient, fallback, getAbiItem, http, isAddressEqual, type Address, type Hex } from "viem";
+import { createPublicClient, fallback, getAbiItem, getAddress, http, isAddressEqual, type Address, type Hex } from "viem";
 import { baseSepolia } from "viem/chains";
 import { useConnection, useReadContracts } from "wagmi";
 import { cruxSettlerAbi, originSettlerAbi } from "@/contracts/abis/erc7683";
@@ -28,7 +28,11 @@ const logClient = createPublicClient({
 export const ESCROW_STATUS = ["none", "open", "settled", "refunded"] as const;
 export type EscrowStatus = (typeof ESCROW_STATUS)[number];
 
-type OpenedOrder = { orderId: Hex; txHash: Hex; block: string };
+/**
+ * From the Open event: the asset the user receives (maxSpent[0].token, a keccak256 CAIP-19 id) with its signed
+ * minimum, and the token escrowed (minReceived[0].token, an address). Amounts are decimal strings (cached as JSON).
+ */
+type OpenedOrder = { orderId: Hex; txHash: Hex; block: string; outAsset?: Hex; minOut?: string; inToken?: Address };
 type ScanCache = { scannedTo: string; orders: OpenedOrder[] };
 const NONE: OpenedOrder[] = [];
 
@@ -44,7 +48,8 @@ export type MyIntent = OpenedOrder & {
 };
 
 function cacheKey(user: Address) {
-  return `crux:intents:84532:${SETTLER.toLowerCase()}:${user.toLowerCase()}`;
+  // v2: orders carry their assets; older caches lack them, so they rescan once.
+  return `crux:intents:v2:84532:${SETTLER.toLowerCase()}:${user.toLowerCase()}`;
 }
 
 function readCache(user: Address): ScanCache | null {
@@ -88,7 +93,16 @@ async function scanOpenedOrders(user: Address): Promise<OpenedOrder[]> {
     for (const log of batches.flat()) {
       const { orderId, resolvedOrder } = log.args;
       if (!orderId || !resolvedOrder || !isAddressEqual(resolvedOrder.user, user)) continue;
-      orders.set(orderId, { orderId, txHash: log.transactionHash, block: log.blockNumber.toString() });
+      const out = resolvedOrder.maxSpent[0];
+      const input = resolvedOrder.minReceived[0];
+      orders.set(orderId, {
+        orderId,
+        txHash: log.transactionHash,
+        block: log.blockNumber.toString(),
+        outAsset: out?.token,
+        minOut: out?.amount.toString(),
+        inToken: input ? getAddress(`0x${input.token.slice(-40)}`) : undefined,
+      });
     }
     writeCache(user, { scannedTo: ranges[ranges.length - 1][1].toString(), orders: [...orders.values()] });
   }
