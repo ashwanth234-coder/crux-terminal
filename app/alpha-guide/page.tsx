@@ -112,7 +112,7 @@ export default function AlphaGuidePage() {
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
               {["Base Sepolia · 84532", "Test tokens only", "Unaudited contracts"].map((t) => (
-                <span key={t} className="rounded-full border border-line-2 px-3 py-1 text-[11.5px] text-muted">
+                <span key={t} className="rounded-[4px] border border-line-2 px-3 py-1 text-[11.5px] text-muted">
                   {t}
                 </span>
               ))}

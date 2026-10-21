@@ -1,15 +1,15 @@
 import Link from "next/link";
 import { Logo } from "./Logo";
-import { XIcon } from "@/components/ui/icons";
 import { StatusTag } from "@/components/ui/StatusTag";
+import { TESTNET_EXPLORER } from "@/lib/chains";
+import { SETTLER } from "@/lib/intents";
 
+// Only destinations that exist: no social accounts or legal pages have been published yet.
 const LINKS = [
-  { label: "X", href: "https://x.com", icon: true },
-  { label: "Farcaster", href: "https://farcaster.xyz" },
-  { label: "GitHub", href: "https://github.com" },
+  { label: "Discover", href: "/launches" },
+  { label: "Protocol", href: "/#protocol" },
   { label: "Docs", href: "/alpha-guide" },
-  { label: "Terms", href: "#terms" },
-  { label: "Privacy", href: "#privacy" },
+  { label: "Settler on Basescan", href: `${TESTNET_EXPLORER}/address/${SETTLER}` },
 ];
 
 export function Footer() {
@@ -33,9 +33,8 @@ export function Footer() {
                   href={l.href}
                   {...(l.href.startsWith("http") ? { target: "_blank", rel: "noopener noreferrer" } : {})}
                   className="flex items-center text-[11.5px] font-medium uppercase tracking-[0.16em] text-chrome/70 transition-colors duration-200 hover:text-chrome"
-                  aria-label={l.icon ? "Crux on X" : undefined}
                 >
-                  {l.icon ? <XIcon className="h-3.5 w-3.5" /> : l.label}
+                  {l.label}
                 </a>
               </li>
             ))}
