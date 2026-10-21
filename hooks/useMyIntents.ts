@@ -7,6 +7,7 @@ import { baseSepolia } from "viem/chains";
 import { useConnection, useReadContracts } from "wagmi";
 import { cruxSettlerAbi, originSettlerAbi } from "@/contracts/abis/erc7683";
 import { REFUND_GRACE_SECONDS, SETTLER, SETTLER_DEPLOYED, SETTLER_DEPLOY_BLOCK } from "@/lib/intents";
+import { HEAD_LAG } from "@/lib/logs";
 
 const OPEN_EVENT = getAbiItem({ abi: originSettlerAbi, name: "Open" });
 
@@ -77,7 +78,8 @@ function writeCache(user: Address, cache: ScanCache) {
 async function scanOpenedOrders(user: Address): Promise<OpenedOrder[]> {
   const cached = readCache(user);
   const orders = new Map((cached?.orders ?? []).map((o) => [o.orderId, o]));
-  const head = await logClient.getBlockNumber();
+  // A couple of blocks behind the head, so a lagging pool node never rejects the range (lib/logs.ts).
+  const head = (await logClient.getBlockNumber()) - HEAD_LAG;
   let from = cached ? BigInt(cached.scannedTo) + BigInt(1) : SETTLER_DEPLOY_BLOCK;
 
   while (from <= head) {

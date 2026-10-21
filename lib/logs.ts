@@ -30,6 +30,13 @@ export function logRanges(from: bigint, head: bigint): [bigint, bigint][] {
  */
 const REORG_BLOCKS = BigInt(20);
 
+/**
+ * Blocks every scan stays behind the reported head. Public RPCs are pools of nodes a block or two apart, and a
+ * node rejects eth_getLogs past its own head ("block range extends beyond current head block"), so a head read
+ * from one node and a range served by another would fail now and then.
+ */
+export const HEAD_LAG = BigInt(2);
+
 type Positioned = { blockNumber: bigint; logIndex: number; txHash: Hex };
 
 /** One data set of logs (an auction's bids, a pool's swaps), kept in the query cache and extended by each poll. */
@@ -65,7 +72,7 @@ async function readRanges<T>(from: bigint, head: bigint, read: ReadLogs<T>, time
 export async function scanLogs<T extends Positioned>(prev: LogScan<T> | undefined, since: number, read: ReadLogs<T>): Promise<LogScan<T>> {
   if (prev) {
     // Reuse a head at most one block old, so the bid and swap polls on one page can share it.
-    const head = await logClient.getBlockNumber({ cacheTime: BLOCK_SECONDS * 1000 });
+    const head = (await logClient.getBlockNumber({ cacheTime: BLOCK_SECONDS * 1000 })) - HEAD_LAG;
     if (head <= prev.scannedTo) return prev;
     const margin = prev.scannedTo - REORG_BLOCKS + BigInt(1);
     const from = margin > prev.floor ? margin : prev.floor;
@@ -87,8 +94,9 @@ export async function scanLogs<T extends Positioned>(prev: LogScan<T> | undefine
   const floorBlock = head.number - LOG_CHUNK * BigInt(MAX_LOG_CHUNKS);
   const floor = wanted > floorBlock ? wanted : floorBlock < BigInt(0) ? BigInt(0) : floorBlock;
   const anchor = { block: head.number, time: Number(head.timestamp) };
-  const items = await readRanges(floor, head.number, read, (b) => anchor.time - Number(anchor.block - b) * BLOCK_SECONDS);
-  return { items: items.sort(byPosition), floor, scannedTo: head.number, truncated: wanted < floorBlock, anchor };
+  const end = head.number - HEAD_LAG;
+  const items = await readRanges(floor, end, read, (b) => anchor.time - Number(anchor.block - b) * BLOCK_SECONDS);
+  return { items: items.sort(byPosition), floor, scannedTo: end, truncated: wanted < floorBlock, anchor };
 }
 
 const MAX_BACKOFF_MS = 120_000;
