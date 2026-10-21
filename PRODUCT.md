@@ -30,7 +30,7 @@ Landing page and terminal live at https://crux-terminal.vercel.app and run as a 
 
 ## Brand Commitments
 
-Name CRUX with the four-point wireframe star mark. Visual world (2026-10-19, "Quiet Power"): obsidian #08090B, graphite #111215 surfaces, soft white #F3F3F0 type, acid lime #D0F77A only for actions and outcomes, extended sans display, monospace for financial data. No WebGL, no looping motion; mechanisms are shown as static diagrams and real testnet data. Section copy from the master brief is binding.
+Name CRUX with the geometric four-point mark (four equal tapered arms; never a cross). Visual world (2026-10-21, "Markets without borders"): coal black #0A0B0D, graphite #141518 layers, warm white #F5F3EE type, titanium #A7ADB5 detail, borders #292B2F, Signal Orange #FF642D only for the mark, primary actions, selection and live state. Bodoni Moda display serif, Archivo UI, JetBrains Mono for financial data. No WebGL, no looping motion; the hero emblem is static SVG and every figure is real testnet data or labelled DEMO / PLANNED. Hero copy: MARKETS / WITHOUT / BORDERS. · "Global markets. One execution layer." · ENTER CRUX.
 
 ## Evidence on Hand
 
