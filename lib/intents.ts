@@ -1,5 +1,5 @@
-import { encodeAbiParameters, getAddress, isAddress, keccak256, toHex, type Address, type Hex } from "viem";
-import { TESTNET } from "./chains";
+import { encodeAbiParameters, getAddress, isAddress, keccak256, toHex, type Address, type Hex, type TypedDataDefinition } from "viem";
+import { baseSepolia } from "viem/chains";
 
 // Only used as the EIP-712 verifyingContract for local signature checks while
 // nothing is deployed; never sent to a chain.
@@ -9,14 +9,27 @@ function envAddress(value: string | undefined): Address | null {
   return value && isAddress(value) ? (value as Address) : null;
 }
 
-const configuredSettler = envAddress(process.env.NEXT_PUBLIC_CRUX_SETTLER);
+const settlerV1 = envAddress(process.env.NEXT_PUBLIC_CRUX_SETTLER);
+const settlerV2 = envAddress(process.env.NEXT_PUBLIC_CRUX_SETTLER_V2);
+const configuredSettler = settlerV2 ?? settlerV1;
 
-/** ERC-7683 origin settler on Base Sepolia, once deployed (NEXT_PUBLIC_CRUX_SETTLER). */
+/**
+ * ERC-7683 origin settler on Base Sepolia. CruxSettlerV2 (NEXT_PUBLIC_CRUX_SETTLER_V2) takes over once set:
+ * its orders are signed as plain readable fields and it accepts EIP-7702 accounts' own keys. Otherwise
+ * CruxSettler v1 (NEXT_PUBLIC_CRUX_SETTLER).
+ */
 export const SETTLER = (configuredSettler ?? PLACEHOLDER_SETTLER) as Address;
 export const SETTLER_DEPLOYED = configuredSettler !== null;
+export const SETTLER_VERSION: 1 | 2 = settlerV2 ? 2 : 1;
 
-/** Block the settler was deployed in (crux-contracts/broadcast/Deploy.s.sol/84532/run-latest.json); log scans start here. */
-export const SETTLER_DEPLOY_BLOCK = BigInt(48311115);
+/** v1's deploy block (crux-contracts/broadcast/Deploy.s.sol/84532/run-latest.json). */
+const SETTLER_V1_DEPLOY_BLOCK = BigInt(48311115);
+
+/** Block the active settler was deployed in; log scans start here. v2's comes from its deploy script's output. */
+export const SETTLER_DEPLOY_BLOCK =
+  settlerV2 && process.env.NEXT_PUBLIC_CRUX_SETTLER_V2_BLOCK
+    ? BigInt(process.env.NEXT_PUBLIC_CRUX_SETTLER_V2_BLOCK)
+    : SETTLER_V1_DEPLOY_BLOCK;
 
 /** CruxSettler.REFUND_GRACE: refunds open this long after an order's fillDeadline. */
 export const REFUND_GRACE_SECONDS = 3600;
@@ -85,8 +98,8 @@ export function assetId(caip19: string): Hex {
  */
 export const SETTLER_DOMAIN = {
   name: "CruxSettler",
-  version: "1",
-  chainId: TESTNET.id,
+  version: SETTLER_VERSION === 2 ? "2" : "1",
+  chainId: baseSepolia.id,
   verifyingContract: SETTLER,
 } as const;
 
@@ -99,7 +112,33 @@ export function orderNonce() {
   return BigInt(Date.now()) * BigInt(1_000_000) + BigInt(tail);
 }
 
-/** EIP-712 types for ERC-7683 `GaslessCrossChainOrder`. */
+/** CruxSettlerV2's `orderDataType`: the order fields carried in `orderData`. */
+const V2_ORDER_DATA_TYPE = keccak256(
+  toHex(
+    "CruxOrderData(address tokenIn,uint256 amountIn,string tokenOut,uint256 minAmountOut,uint256 destinationChainId,uint32 batchWindow)",
+  ),
+);
+
+/**
+ * What a CruxSettlerV2 order looks like in the wallet: one flat struct, every field readable. `tokenIn` is the
+ * exact ERC-20 the settler pulls; `tokenOut` is the CAIP-19 id of what the user receives.
+ */
+export const CRUX_ORDER_TYPES = {
+  CruxOrder: [
+    { name: "user", type: "address" },
+    { name: "tokenIn", type: "address" },
+    { name: "amountIn", type: "uint256" },
+    { name: "tokenOut", type: "string" },
+    { name: "minAmountOut", type: "uint256" },
+    { name: "destinationChainId", type: "uint256" },
+    { name: "openDeadline", type: "uint32" },
+    { name: "fillDeadline", type: "uint32" },
+    { name: "batchWindow", type: "uint32" },
+    { name: "nonce", type: "uint256" },
+  ],
+} as const;
+
+/** EIP-712 types for ERC-7683 `GaslessCrossChainOrder` (CruxSettler v1). */
 export const GASLESS_ORDER_TYPES = {
   GaslessCrossChainOrder: [
     { name: "originSettler", type: "address" },
@@ -118,19 +157,67 @@ export type IntentDraft = {
   /** Chain the wallet is on; the EIP-712 domain must match it. */
   chainId: number;
   inputCaip19: string;
+  /** The ERC-20 the settler escrows (v2 signs it by address). */
+  inputToken: Address;
   inputAmount: bigint;
   outputCaip19: string;
   minOutputAmount: bigint;
   destinationChainId: number;
 };
 
-export function buildGaslessOrder(draft: IntentDraft) {
+/** The ERC-7683 envelope `openFor` takes, plus the EIP-712 payload the wallet signs for it. */
+export function buildGaslessOrder(draft: IntentDraft): {
+  order: { originSettler: Address; user: Address; nonce: bigint; originChainId: bigint; openDeadline: number; fillDeadline: number; orderDataType: Hex; orderData: Hex };
+  /** Either version's payload; typed loosely so one signTypedData call serves both. */
+  typed: TypedDataDefinition;
+} {
   // With a live settler the domain is pinned; signing it from another chain would give a signature the settler rejects.
   if (SETTLER_DEPLOYED && draft.chainId !== SETTLER_DOMAIN.chainId) {
     throw new Error(`Switch your wallet to Base Sepolia (chain ${SETTLER_DOMAIN.chainId}) to sign this intent.`);
   }
   const domain = SETTLER_DEPLOYED ? SETTLER_DOMAIN : { ...SETTLER_DOMAIN, chainId: draft.chainId };
   const now = Math.floor(Date.now() / 1000);
+  const nonce = orderNonce();
+  // Intent must be opened inside the current batch window and filled within 10 minutes.
+  const openDeadline = now + BATCH_WINDOW_SECONDS;
+  const fillDeadline = now + 600;
+  const envelope = {
+    originSettler: SETTLER,
+    user: draft.user,
+    nonce,
+    originChainId: BigInt(domain.chainId),
+    openDeadline,
+    fillDeadline,
+  };
+
+  if (SETTLER_VERSION === 2) {
+    const tokenIn = getAddress(draft.inputToken);
+    const orderData = encodeAbiParameters(
+      [{ type: "address" }, { type: "uint256" }, { type: "string" }, { type: "uint256" }, { type: "uint256" }, { type: "uint32" }],
+      [tokenIn, draft.inputAmount, draft.outputCaip19, draft.minOutputAmount, BigInt(draft.destinationChainId), BATCH_WINDOW_SECONDS],
+    );
+    return {
+      order: { ...envelope, orderDataType: V2_ORDER_DATA_TYPE, orderData },
+      typed: {
+        domain,
+        types: CRUX_ORDER_TYPES,
+        primaryType: "CruxOrder" as const,
+        message: {
+          user: draft.user,
+          tokenIn,
+          amountIn: draft.inputAmount,
+          tokenOut: draft.outputCaip19,
+          minAmountOut: draft.minOutputAmount,
+          destinationChainId: BigInt(draft.destinationChainId),
+          openDeadline,
+          fillDeadline,
+          batchWindow: BATCH_WINDOW_SECONDS,
+          nonce,
+        },
+      },
+    };
+  }
+
   const orderData = encodeAbiParameters(
     [
       { type: "bytes32" },
@@ -149,21 +236,9 @@ export function buildGaslessOrder(draft: IntentDraft) {
       BATCH_WINDOW_SECONDS,
     ],
   );
-
+  const order = { ...envelope, orderDataType: ORDER_DATA_TYPE, orderData };
   return {
-    domain,
-    types: GASLESS_ORDER_TYPES,
-    primaryType: "GaslessCrossChainOrder" as const,
-    message: {
-      originSettler: SETTLER,
-      user: draft.user,
-      nonce: orderNonce(),
-      originChainId: BigInt(domain.chainId),
-      // Intent must be opened inside the current batch window and filled within 10 minutes.
-      openDeadline: now + BATCH_WINDOW_SECONDS,
-      fillDeadline: now + 600,
-      orderDataType: ORDER_DATA_TYPE,
-      orderData,
-    },
+    order,
+    typed: { domain, types: GASLESS_ORDER_TYPES, primaryType: "GaslessCrossChainOrder" as const, message: order },
   };
 }

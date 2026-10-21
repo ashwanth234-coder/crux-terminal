@@ -125,6 +125,8 @@ const settlerErrorsAbi = parseAbi([
   "error NonceAlreadyUsed()",
   "error InvalidSignature()",
   "error UnsupportedInputAsset(bytes32 assetId)",
+  "error UnsupportedInputToken(address token)",
+  "error InvalidOutputAsset()",
   "error ZeroAmount()",
 ]);
 const openForAbi = [...originSettlerAbi, ...settlerErrorsAbi] as const;
@@ -136,6 +138,8 @@ const SETTLER_ERRORS: Record<string, string> = {
   InvalidFillDeadline: "This quote expired before it was submitted. Nothing was sent; review and sign again.",
   NonceAlreadyUsed: "This intent was already submitted. Nothing new was sent.",
   UnsupportedInputAsset: "The settler doesn't escrow this asset yet. Nothing was sent.",
+  UnsupportedInputToken: "The settler doesn't escrow this token yet. Nothing was sent.",
+  InvalidOutputAsset: "This order has no output asset. Nothing was sent.",
   ZeroAmount: "Enter an amount above zero.",
   WrongChain: "Switch your wallet to Base Sepolia and try again. Nothing was sent.",
 };
@@ -275,10 +279,12 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
       // Never ask for a signature the deployed settler wouldn't accept under its own EIP-712 domain.
       if (SETTLER_DEPLOYED) await verifySettlerDomain(config);
 
-      const typed = buildGaslessOrder({
+      const { order: gasless, typed } = buildGaslessOrder({
         user: address,
         chainId: signingChainId,
         inputCaip19: input.caip19,
+        // The token the settler pulls: the launch token for a sell, test USDC otherwise.
+        inputToken: !buying && traded ? traded.address : TESTNET_USDC,
         inputAmount: input.amount,
         outputCaip19: output.caip19,
         minOutputAmount: output.amount,
@@ -302,7 +308,7 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
         address: SETTLER,
         abi: openForAbi,
         functionName: "openFor",
-        args: [typed.message, signature, "0x"],
+        args: [gasless, signature, "0x"],
         account: address,
         chainId: TESTNET.id,
       });
