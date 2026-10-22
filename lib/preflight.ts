@@ -1,6 +1,7 @@
 import { BaseError, ContractFunctionRevertedError, type Abi, type Address, type Hex } from "viem";
 import type { Config } from "wagmi";
 import { simulateContract, writeContract, type SimulateContractParameters } from "wagmi/actions";
+import { feeHeadroom } from "./fees";
 
 export type WriteRequest = {
   address: Address;
@@ -18,8 +19,9 @@ export type WriteRequest = {
  */
 export async function simulateThenWrite(config: Config, account: Address, request: WriteRequest, onPrompt?: () => void): Promise<Hex> {
   const { request: checked } = await simulateContract(config, { ...request, account } as SimulateContractParameters);
+  const fees = await feeHeadroom(config, request.chainId);
   onPrompt?.();
-  return writeContract(config, checked);
+  return writeContract(config, { ...checked, ...fees } as typeof checked);
 }
 
 /**

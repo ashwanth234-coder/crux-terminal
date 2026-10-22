@@ -20,6 +20,7 @@ import { Modal, KineticLoader } from "@/components/ui/Modal";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { SubmitKey } from "@/components/pro/hotkeys";
 import { logClient } from "@/lib/logs";
+import { feeHeadroom } from "@/lib/fees";
 import { SmartAccountNote } from "@/components/ui/SmartAccountNote";
 import { useExactApproval } from "@/hooks/useExactApproval";
 import { verifySettlerDomain } from "@/lib/settlerDomain";
@@ -328,8 +329,9 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
       });
       // Cross-chain: the solver fills on Base after this, so Base's current block bounds where its fill can be.
       const baseFrom = cross ? await getBlockNumber(config, { chainId: TESTNET.id }) : undefined;
+      const fees = await feeHeadroom(config, originChain.id);
       setFlow({ kind: "broadcasting" });
-      const hash = await writeContract(request);
+      const hash = await writeContract({ ...request, ...fees } as typeof request);
       setFlow({ kind: "broadcast", hash, baseFrom });
     } catch (err) {
       setFlow({ kind: "error", message: errorMessage(err) });

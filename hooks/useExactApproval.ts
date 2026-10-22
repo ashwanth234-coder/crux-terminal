@@ -6,6 +6,7 @@ import { useConfig } from "wagmi";
 import { getConnection, readContract, simulateContract, switchChain, waitForTransactionReceipt, writeContract } from "wagmi/actions";
 import { TESTNET } from "@/lib/chains";
 import { ARBITRUM } from "@/lib/crosschain";
+import { feeHeadroom } from "@/lib/fees";
 
 /** Anything at or above half of uint256 is treated as an "unlimited" approval and refused outright. */
 const UNLIMITED_FLOOR = maxUint256 / BigInt(2);
@@ -53,8 +54,9 @@ export function useExactApproval() {
         account: owner,
         chainId,
       });
+      const fees = await feeHeadroom(config, chainId);
       hooks.onPrompt?.();
-      const hash = await writeContract(config, request);
+      const hash = await writeContract(config, { ...request, ...fees } as typeof request);
       hooks.onSent?.(hash);
       const receipt = await waitForTransactionReceipt(config, { hash, chainId });
       if (receipt.status !== "success") throw new Error(`The approval reverted on ${chainId === ARBITRUM.id ? "Arbitrum" : "Base"} Sepolia.`);
