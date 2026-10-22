@@ -2,7 +2,7 @@ import { connection } from "next/server";
 import { createPublicClient, http } from "viem";
 import { baseSepolia } from "viem/chains";
 import { cruxBatchFactoryAbi } from "@/contracts/abis/batchAuction";
-import { FACTORY_V3 } from "@/lib/intents";
+import { FACTORY_V3, FACTORY_V4 } from "@/lib/intents";
 import { phaseV2, toAuctionV2, type AuctionV2 } from "@/lib/launchV2";
 
 /** How many of the newest V3 auctions to consider. */
@@ -26,8 +26,11 @@ function pickTerminal(auctions: { id: number; auction: AuctionV2 }[], now: numbe
 }
 
 async function latestTerminal(): Promise<string> {
-  if (!FACTORY_V3) return FALLBACK;
-  const factory = { address: FACTORY_V3, abi: cruxBatchFactoryAbi } as const;
+  // The newest factory first: V4 once deployed, else V3.
+  const version = FACTORY_V4 ? 4 : 3;
+  const address = FACTORY_V4 ?? FACTORY_V3;
+  if (!address) return FALLBACK;
+  const factory = { address, abi: cruxBatchFactoryAbi } as const;
   const count = Number(await client.readContract({ ...factory, functionName: "auctionCount" }));
   const ids = Array.from({ length: Math.min(count, LOOKBACK) }, (_, i) => count - 1 - i);
   if (ids.length === 0) return FALLBACK;
@@ -39,7 +42,7 @@ async function latestTerminal(): Promise<string> {
     return r.status === "success" ? [{ id, auction: toAuctionV2(r.result) }] : [];
   });
   const id = pickTerminal(auctions, Math.floor(Date.now() / 1000));
-  return id === null ? FALLBACK : `/launch/v3/${id}`;
+  return id === null ? FALLBACK : `/launch/v${version}/${id}`;
 }
 
 /** /terminal: one click from the nav into the live pro trading view, resolved on-chain per request. */

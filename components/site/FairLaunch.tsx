@@ -7,7 +7,7 @@ import { ArrowUpRight } from "@/components/ui/Button";
 import { StatusTag } from "@/components/ui/StatusTag";
 import { useAllLaunches, type LaunchSummary } from "@/hooks/useLaunches";
 import { useNow } from "@/hooks/useLaunchAuction";
-import { FACTORY, FACTORY_V2, FACTORY_V3 } from "@/lib/intents";
+import { FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4 } from "@/lib/intents";
 import { fmtUsdc, type Phase } from "@/lib/launch";
 import { describeLaunch } from "@/lib/launchSummary";
 import { V2_SPLIT, V3_TICK_STEP_PERCENT, priceUsd } from "@/lib/launchV2";
@@ -100,8 +100,8 @@ function Latest({ launch, now }: { launch: LaunchSummary; now: number | null }) 
 /** 02 Fair launch: the uniform-price batch auction as implemented, and the newest real one. */
 export function FairLaunch() {
   const now = useNow();
-  const configured = Boolean(FACTORY || FACTORY_V2 || FACTORY_V3);
-  const { launches, loading, error } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3);
+  const configured = Boolean(FACTORY || FACTORY_V2 || FACTORY_V3 || FACTORY_V4);
+  const { launches, loading, error } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4);
   const latest = launches[0];
 
   return (

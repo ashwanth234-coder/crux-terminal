@@ -13,7 +13,9 @@ import { ProTerminal } from "@/components/pro/ProTerminal";
 import { useNow } from "@/hooks/useLaunchAuction";
 import { useLaunchV2, type LaunchV2Model } from "@/hooks/useLaunchV2";
 import { TESTNET_EXPLORER } from "@/lib/chains";
-import { FACTORY_V2, FACTORY_V3 } from "@/lib/intents";
+import { batchFactory } from "@/lib/intents";
+import { useCreatorVestingDays } from "@/hooks/useCreatorVesting";
+import { VestingBadge } from "@/components/ui/VestingBadge";
 import { USDC_DECIMALS, fmtTokens, fmtUsdc, formatRemaining, launchError, type TxStep } from "@/lib/launch";
 import {
   NO_LIMIT,
@@ -29,6 +31,7 @@ import {
   type AuctionV2,
   type BatchVersion,
   type PhaseV2,
+  usesTicks,
 } from "@/lib/launchV2";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
@@ -41,10 +44,10 @@ const STATUS: Record<PhaseV2, { label: string; tone: string; dot: string }> = {
   cancelled: { label: "Cancelled · refunds open", tone: "border-dashed border-line-2 text-chrome", dot: "border border-muted" },
 };
 
-/** /launch/v2/[id] and /launch/v3/[id]: an auction on CruxFactoryV2 or CruxFactoryV3 (same launch, same screen). */
+/** /launch/v2|v3|v4/[id]: an auction on CruxFactoryV2, V3 or V4 (same launch, same screen; V4 adds the vesting choice). */
 export function LaunchRouteV2({ version = 2 }: { version?: BatchVersion }) {
   const { id } = useParams<{ id: string }>();
-  const factory = version === 3 ? FACTORY_V3 : FACTORY_V2;
+  const factory = batchFactory(version);
   if (!/^\d+$/.test(id)) return <Notice title="That isn't an auction id">Auction ids are whole numbers, starting at 0.</Notice>;
   if (!factory) {
     return (
@@ -135,6 +138,7 @@ function LockIcon() {
 }
 
 function ViewV2({ model, auction, id }: { model: LaunchV2Model; auction: AuctionV2; id: string }) {
+  const vestDays = useCreatorVestingDays(batchFactory(model.version), BigInt(id), model.version);
   const now = useNow();
   const phase = now === null ? "scheduled" : phaseV2(auction, now);
   const status = STATUS[phase];
@@ -158,10 +162,13 @@ function ViewV2({ model, auction, id }: { model: LaunchV2Model; auction: Auction
             <span className="font-mono text-chrome">${fmtUsdc(auction.graduationTarget)}</span> test USDC
           </p>
         </div>
-        <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] ${status.tone}`}>
-          <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} aria-hidden="true" />
-          {status.label}
-        </span>
+        <div className="flex flex-col items-end gap-2">
+          <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] ${status.tone}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} aria-hidden="true" />
+            {status.label}
+          </span>
+          <VestingBadge days={vestDays} />
+        </div>
       </div>
 
       {/* The anti-rug promise, stated once and plainly */}
@@ -170,8 +177,10 @@ function ViewV2({ model, auction, id }: { model: LaunchV2Model; auction: Auction
         <span>
           Liquidity is automatically paired and locked forever to 0x…dEaD upon graduation.{" "}
           <span className="text-muted">
-            {V2_FEE.creatorShareBps / 100}% of the {V2_FEE.feeBps / 100}% protocol fee routes directly to the creator; their share of the raise vests over{" "}
-            {V2_VESTING_DAYS} days.
+            {V2_FEE.creatorShareBps / 100}% of the {V2_FEE.feeBps / 100}% protocol fee routes directly to the creator;{" "}
+            {vestDays === 0
+              ? "the creator chose an instant unlock, so their share of the raise and their tokens are released at graduation."
+              : `their share of the raise vests over ${vestDays ?? V2_VESTING_DAYS} days.`}
           </span>
         </span>
       </p>
@@ -229,7 +238,7 @@ function ViewV2({ model, auction, id }: { model: LaunchV2Model; auction: Auction
             ) : (
               <Row label="Max per wallet" hint={`${capShare.toFixed(1)}% of the sale`}>{`${fmtTokens(auction.maxAllocationPerWallet)} ${symbol}`}</Row>
             )}
-            <Row label="Supply split" hint={`Creator share vests over ${V2_VESTING_DAYS} days`}>
+            <Row label="Supply split" hint={vestDays === 0 ? "Creator share unlocks at graduation" : `Creator share vests over ${vestDays ?? V2_VESTING_DAYS} days`}>
               {`${V2_SPLIT.saleBps / 100}% sale · ${V2_SPLIT.lpBps / 100}% locked pool · ${V2_SPLIT.creatorBps / 100}% creator`}
             </Row>
             {phase === "graduated" && (
@@ -249,7 +258,7 @@ function ViewV2({ model, auction, id }: { model: LaunchV2Model; auction: Auction
         </section>
 
         <div className="flex min-w-0 flex-col gap-5">
-          <ActionPanelV2 model={model} auction={auction} phase={phase} symbol={symbol} />
+          <ActionPanelV2 model={model} auction={auction} phase={phase} symbol={symbol} vestDays={vestDays} />
           {phase === "graduated" && auction.pair !== zeroAddress && (
             <TradeViaIntent token={auction.token} pair={auction.pair} symbol={model.symbol ?? "TOKEN"} />
           )}
@@ -261,7 +270,7 @@ function ViewV2({ model, auction, id }: { model: LaunchV2Model; auction: Auction
 
 type Busy = TxStep | null;
 
-function ActionPanelV2({ model, auction, phase, symbol }: { model: LaunchV2Model; auction: AuctionV2; phase: PhaseV2; symbol: string }) {
+function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { model: LaunchV2Model; auction: AuctionV2; phase: PhaseV2; symbol: string; vestDays?: number | null }) {
   const uid = useId();
   const [amount, setAmount] = useState("");
   const [limitOn, setLimitOn] = useState(false);
@@ -420,7 +429,7 @@ function ActionPanelV2({ model, auction, phase, symbol }: { model: LaunchV2Model
             <p className={`mt-1.5 text-[11.5px] ${limitError ? "text-down" : "text-dim"}`}>
               {limitError ??
                 `If the batch clears above your limit, your whole bid is refunded. Floor $${priceUsd(auction.floorPrice)}.${
-                  model.version === 3 ? ` Limits round down to the nearest ${V3_TICK_STEP_PERCENT}% price step.` : ""
+                  usesTicks(model.version) ? ` Limits round down to the nearest ${V3_TICK_STEP_PERCENT}% price step.` : ""
                 }`}
             </p>
           </div>
@@ -514,7 +523,8 @@ function ActionPanelV2({ model, auction, phase, symbol }: { model: LaunchV2Model
         <div className="mt-6 border-t border-line pt-5">
           <h3 className="text-[13.5px] font-medium text-chrome">Your creator share</h3>
           <p className="mt-1 text-[12px] text-muted">
-            {V2_FEE.creatorShareBps / 100}% of the protocol fee was paid to you at graduation. The rest vests linearly over {V2_VESTING_DAYS} days.
+            {V2_FEE.creatorShareBps / 100}% of the protocol fee was paid to you at graduation.{" "}
+            {vestDays === 0 ? "You chose an instant unlock, so the rest is releasable now." : `The rest vests linearly over ${vestDays ?? V2_VESTING_DAYS} days.`}
           </p>
           <p className="mt-3 text-[12.5px] text-muted">
             Releasable now: <span className="font-mono text-chrome">${fmtUsdc(model.creatorVested.quote)}</span> USDC and{" "}

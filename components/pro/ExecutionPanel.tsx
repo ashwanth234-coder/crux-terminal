@@ -15,7 +15,7 @@ import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import { SETTLER_DEPLOYED, SLIPPAGE_BPS, TESTNET_USDC } from "@/lib/intents";
 import { USDC_DECIMALS, fmtTokens, fmtUsdc, launchError, type TxStep } from "@/lib/launch";
 import { fmtTokenPrice } from "@/lib/launchTrade";
-import { NO_LIMIT, V3_TICK_STEP_PERCENT, parsePriceUsd, priceUsd, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
+import { NO_LIMIT, V3_TICK_STEP_PERCENT, parsePriceUsd, priceUsd, usesTicks, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
 import { minReceived, type OrderDraft, type Side } from "@/lib/order";
 import { SOLVER_MAX_IMPACT_PCT, bidRisk, tradeRisk } from "@/lib/risk";
 import { PAY_SOURCES } from "@/lib/tokens";
@@ -126,9 +126,9 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
     functionName: "tickAt",
     args: [BigInt(id), rawLimit ?? BigInt(0)],
     chainId: TESTNET.id,
-    query: { enabled: version === 3 && rawLimit !== null && !limitTooLow },
+    query: { enabled: usesTicks(version) && rawLimit !== null && !limitTooLow },
   });
-  const effectiveLimit = !limitOn || !rawLimit || limitTooLow ? null : version === 3 ? (tick.data?.[1] ?? null) : rawLimit;
+  const effectiveLimit = !limitOn || !rawLimit || limitTooLow ? null : usesTicks(version) ? (tick.data?.[1] ?? null) : rawLimit;
 
   const capLeft = model.maxDeposit !== null ? (model.maxDeposit > model.myBid.quote ? model.maxDeposit - model.myBid.quote : BigInt(0)) : null;
   const balance = model.usdcBalance;
@@ -163,7 +163,7 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
           value: risk.worstPrice ? `$${priceUsd(risk.worstPrice)}` : "Any price",
           tone: risk.worstPrice ? "plain" : "caution",
           hint: risk.worstPrice
-            ? `${version === 3 ? `Your limit, rounded down to its ${V3_TICK_STEP_PERCENT}% step. ` : ""}If the batch clears above it, your whole bid is refunded.`
+            ? `${usesTicks(version) ? `Your limit, rounded down to its ${V3_TICK_STEP_PERCENT}% step. ` : ""}If the batch clears above it, your whole bid is refunded.`
             : "No limit: you accept whatever price the batch clears at. Set a limit to cap it.",
         },
         {
@@ -273,7 +273,7 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
           <p className={`mt-1 text-[11px] ${limitTooLow ? "text-down" : "text-dim"}`}>
             {limitTooLow
               ? `Set at least the floor, $${priceUsd(auction.floorPrice)}.`
-              : effectiveLimit && version === 3 && rawLimit && effectiveLimit < rawLimit
+              : effectiveLimit && usesTicks(version) && rawLimit && effectiveLimit < rawLimit
                 ? `Rounds down to $${priceUsd(effectiveLimit)} (the ${V3_TICK_STEP_PERCENT}% step at or below your limit).`
                 : `Floor $${priceUsd(auction.floorPrice)}.`}
           </p>

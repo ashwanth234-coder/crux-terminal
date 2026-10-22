@@ -22,7 +22,7 @@ function entry(l: FeedLaunch) {
     symbol,
     decimals: l.decimals,
     ...(l.metadata.image ? { logoURI: l.metadata.image } : {}),
-    tags: ["crux", "lpburned"],
+    tags: l.creatorVestingDays > 0 ? ["crux", "lpburned", "vested"] : ["crux", "lpburned", "instant"],
     extensions: {
       cruxLaunch: l.key,
       pool: l.pool,
@@ -50,6 +50,8 @@ export async function GET() {
         // tokenlists.org allows only letters, digits, spaces and . , : in tag descriptions.
         crux: { name: "Crux graduated", description: "Sold in a uniform price batch auction on Crux, then seeded into a Uniswap V2 pool." },
         lpburned: { name: "LP burned", description: "The pool LP tokens were burned at graduation: its liquidity can never be pulled." },
+        vested: { name: "Creator vested", description: "The creator share of tokens and of the raise vests linearly over 30 days." },
+        instant: { name: "Instant unlock", description: "The creator chose an instant unlock: their share was released at graduation, with no vesting." },
       },
       tokens,
     });

@@ -7,12 +7,13 @@ import { useConfig, useConnection, useSwitchChain } from "wagmi";
 import { waitForTransactionReceipt } from "wagmi/actions";
 import { Modal, KineticLoader } from "@/components/ui/Modal";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
-import { cruxBatchFactoryAbi, cruxFactoryAbi } from "@/contracts/abis/batchAuction";
+import { cruxBatchFactoryAbi, cruxFactoryAbi, factoryV4Abi } from "@/contracts/abis/batchAuction";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import { BATCH_WINDOW_SECONDS, FACTORY, LAUNCH_FACTORY } from "@/lib/intents";
 import { V2_FEE, V2_MIN_LEAD_SECONDS, V2_SPLIT, V2_WINDOWS, buyersNeeded, windowLabel } from "@/lib/launchV2";
 import { launchError, previewHref } from "@/lib/launch";
 import { simulateThenWrite } from "@/lib/preflight";
+import { VestingBadge } from "@/components/ui/VestingBadge";
 
 /** With the batch auction off, CruxFactory runs one pro-rata sale over OPEN_SALE_WINDOW (1 day). */
 const OPEN_SALE_HOURS = 24;
@@ -33,6 +34,8 @@ type Form = {
   supply: string;
   target: string;
   batchAuction: boolean;
+  /** V4: release the creator's share at graduation instead of vesting it over 30 days. */
+  instantUnlock: boolean;
   /** V2: minutes from now until deposits open. */
   startsIn: string;
   /** V2: most of the sale one wallet can receive, as a percentage. */
@@ -52,6 +55,7 @@ const INITIAL: Form = {
   supply: "1,000,000,000",
   target: FACTORY || LAUNCH_FACTORY ? "10" : "50,000",
   batchAuction: true,
+  instantUnlock: false,
   startsIn: "10",
   walletCap: "5",
   window: "60",
@@ -98,7 +102,7 @@ function capHint(walletCap: string, target: string) {
   const cap = Number(walletCap);
   if (!Number.isFinite(cap) || cap < 0.1 || cap > 100) return "Share of the sale one wallet can receive; the excess is refunded";
   const n = buyersNeeded(cap);
-  if (LAUNCH_FACTORY?.version === 3) {
+  if (LAUNCH_FACTORY && LAUNCH_FACTORY.version >= 3) {
     // V3 enforces the cap as a deposit limit: the cap's worth of tokens at the floor price, i.e. cap% of the target.
     const usd = (Number(digits(target)) * cap) / 100;
     const each = `Each wallet can deposit up to $${usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -205,7 +209,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
   };
 
   /** CruxFactoryV2/V3: scheduled start, per-wallet cap, locked liquidity (same createAuction on both). */
-  const deployV2 = async (factory: Address, version: 2 | 3) => {
+  const deployV2 = async (factory: Address, version: 2 | 3 | 4) => {
     if (!isConnected || !address) {
       openConnect();
       return;
@@ -218,24 +222,32 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     const sale = (totalSupply * BigInt(V2_SPLIT.saleBps)) / BigInt(10_000);
     const capBps = BigInt(Math.round(Number(form.walletCap) * 100));
     setPhase({ kind: "deploying", label: "Checking the launch settings…" });
-    const hash = await simulateThenWrite(config, address, {
-      address: factory,
-      abi: cruxBatchFactoryAbi,
-      functionName: "createAuction",
-      chainId: TESTNET.id,
-      args: [
-        {
-          name: form.name.trim(),
-          symbol: form.symbol,
-          metadataURI: metadataURI(form),
-          totalSupply,
-          graduationTarget: parseUnits(digits(form.target), 6),
-          startTime: BigInt(Math.floor(Date.now() / 1000) + Math.round(Number(form.startsIn) * 60)),
-          batchWindow: Number(form.window),
-          maxAllocationPerWallet: (sale * capBps) / BigInt(10_000),
-        },
-      ],
-    }, () => setPhase({ kind: "deploying", label: "Confirm the launch in your wallet…" }));
+    const params = {
+      name: form.name.trim(),
+      symbol: form.symbol,
+      metadataURI: metadataURI(form),
+      totalSupply,
+      graduationTarget: parseUnits(digits(form.target), 6),
+      startTime: BigInt(Math.floor(Date.now() / 1000) + Math.round(Number(form.startsIn) * 60)),
+      batchWindow: Number(form.window),
+      maxAllocationPerWallet: (sale * capBps) / BigInt(10_000),
+    };
+    const onPrompt = () => setPhase({ kind: "deploying", label: "Confirm the launch in your wallet…" });
+    // V4 records the creator's vesting choice; V2/V3 always vest over 30 days.
+    const hash =
+      version === 4
+        ? await simulateThenWrite(
+            config,
+            address,
+            { address: factory, abi: factoryV4Abi, functionName: "createAuctionWithVesting", chainId: TESTNET.id, args: [params, form.instantUnlock] },
+            onPrompt,
+          )
+        : await simulateThenWrite(
+            config,
+            address,
+            { address: factory, abi: cruxBatchFactoryAbi, functionName: "createAuction", chainId: TESTNET.id, args: [params] },
+            onPrompt,
+          );
     setPhase({ kind: "deploying", label: "Deploying token and auction…", hash });
     const receipt = await waitForTransactionReceipt(config, { hash, chainId: TESTNET.id });
     const [created] = parseEventLogs({ abi: cruxBatchFactoryAbi, eventName: "AuctionCreated", logs: receipt.logs });
@@ -609,6 +621,37 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             </fieldset>
           )}
 
+          {LAUNCH_FACTORY?.version === 4 && (
+            <fieldset className="rounded-xl border border-line p-4">
+              <legend className="px-1 text-[13px] text-chrome">Creator vesting</legend>
+              <div role="radiogroup" aria-label="Creator vesting" className="mt-1 grid gap-2 sm:grid-cols-2">
+                {[
+                  { instant: false, title: "30-day vesting", note: "Recommended. Your 10% and share of the raise unlock linearly. Earns a trust badge." },
+                  { instant: true, title: "Instant unlock", note: "Everything is released at graduation. Shown to buyers with a warning badge." },
+                ].map((o) => {
+                  const active = form.instantUnlock === o.instant;
+                  return (
+                    <button
+                      key={o.title}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => set("instantUnlock", o.instant)}
+                      className={`rounded-lg border p-3 text-left transition-colors ${active ? "border-signal/70 bg-panel-2" : "border-line hover:border-line-2"}`}
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span className={`text-[13px] ${active ? "text-chrome" : "text-muted"}`}>{o.title}</span>
+                        <VestingBadge days={o.instant ? 0 : 30} />
+                      </span>
+                      <span className="mt-1.5 block text-[11.5px] leading-snug text-dim">{o.note}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-3 text-[11.5px] leading-snug text-dim">Fixed on-chain at launch: it can&apos;t be changed later, and buyers see it before they bid.</p>
+            </fieldset>
+          )}
+
           {/* Batch auction toggle with an explanatory tooltip (also exposed as its description) */}
           {!LAUNCH_FACTORY && (
           <div className="flex items-start justify-between gap-4 rounded-xl border border-line p-4">
@@ -676,7 +719,8 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                 <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-chrome/40" aria-hidden="true" />
                 <span>
                   Liquidity is locked forever: {V2_SPLIT.lpBps / 100}% of supply and half the raise seed a Uniswap pool whose LP is burned. Your{" "}
-                  {V2_SPLIT.creatorBps / 100}% and your share of the raise vest over 30 days.
+                  {V2_SPLIT.creatorBps / 100}% and your share of the raise{" "}
+                  {LAUNCH_FACTORY?.version === 4 && form.instantUnlock ? "unlock at graduation (instant unlock)." : "vest over 30 days."}
                 </span>
               </li>
               <li className="flex items-start gap-2">

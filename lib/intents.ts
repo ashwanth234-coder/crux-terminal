@@ -86,12 +86,23 @@ export const FACTORY_V3 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V3);
 /** The Crux solver's wallet: fills intents (and swaps in launch pools to do it). NEXT_PUBLIC_CRUX_SOLVER overrides. */
 export const CRUX_SOLVER: Address = envAddress(process.env.NEXT_PUBLIC_CRUX_SOLVER) ?? "0x69E422d3Cca945a44210684b57F85f556212AD67";
 
+/** CruxFactoryV4 (V3 + the creator's choice of 30-day vesting or an instant unlock), once deployed. */
+const FACTORY_V4_ADDRESS: Address | null = null;
+export const FACTORY_V4 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V4) ?? FACTORY_V4_ADDRESS;
+
+/** The batch factory behind a launch version (/launch/v2|v3|v4/[id]). */
+export function batchFactory(version: 2 | 3 | 4): Address | null {
+  return version === 4 ? FACTORY_V4 : version === 3 ? FACTORY_V3 : FACTORY_V2;
+}
+
 /** Where new launches go: the newest batch factory configured. */
-export const LAUNCH_FACTORY: { address: Address; version: 2 | 3 } | null = FACTORY_V3
-  ? { address: FACTORY_V3, version: 3 }
-  : FACTORY_V2
-    ? { address: FACTORY_V2, version: 2 }
-    : null;
+export const LAUNCH_FACTORY: { address: Address; version: 2 | 3 | 4 } | null = FACTORY_V4
+  ? { address: FACTORY_V4, version: 4 }
+  : FACTORY_V3
+    ? { address: FACTORY_V3, version: 3 }
+    : FACTORY_V2
+      ? { address: FACTORY_V2, version: 2 }
+      : null;
 
 /** Circle USDC on Base Sepolia: what the testnet settler escrows. */
 export const TESTNET_USDC = "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as Address;

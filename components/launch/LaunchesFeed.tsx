@@ -7,7 +7,7 @@ import { LaunchCard } from "@/components/launch/LaunchCard";
 import { Shell } from "@/components/launch/LaunchView";
 import { useAllLaunches, type LaunchSummary } from "@/hooks/useLaunches";
 import { useNow } from "@/hooks/useLaunchAuction";
-import { FACTORY, FACTORY_V2, FACTORY_V3 } from "@/lib/intents";
+import { FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4 } from "@/lib/intents";
 import { type Phase } from "@/lib/launch";
 import { describeLaunch } from "@/lib/launchSummary";
 import { launchKey, useWatchlist } from "@/lib/watchlist";
@@ -50,7 +50,7 @@ function sortRows(rows: Row[], sort: Sort) {
 export function LaunchesFeed() {
   const uid = useId();
   const now = useNow();
-  const { total, launches, loading, error } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3);
+  const { total, launches, loading, error } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4);
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<Sort>("ending");
   const watchlist = useWatchlist();
@@ -77,7 +77,7 @@ export function LaunchesFeed() {
   const visible = sortRows(rows.filter(matches), sort);
 
   return (
-    <Shell mode={FACTORY || FACTORY_V2 || FACTORY_V3 ? "live" : null}>
+    <Shell mode={FACTORY || FACTORY_V2 || FACTORY_V3 || FACTORY_V4 ? "live" : null}>
       <div className="flex flex-wrap items-end justify-between gap-6">
         <div>
           <p className="label-mono">
@@ -94,7 +94,7 @@ export function LaunchesFeed() {
         <LaunchTokenButton className={buttonClass("signal", "md", "font-semibold")} />
       </div>
 
-      {!FACTORY && !FACTORY_V2 && !FACTORY_V3 ? (
+      {!FACTORY && !FACTORY_V2 && !FACTORY_V3 && !FACTORY_V4 ? (
         <p className="mt-12 border-y border-line py-10 text-center text-[14px] text-muted">
           This build has no Crux factory configured (NEXT_PUBLIC_CRUX_FACTORY), so there are no on-chain launches to list.
         </p>

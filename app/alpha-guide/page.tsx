@@ -235,7 +235,9 @@ export default function AlphaGuidePage() {
             </Callout>
             <p className="text-[14px] text-chrome/65">
               On graduation, 30% of supply and half the raise seed a Uniswap V2 pool whose LP tokens go to 0x…dEaD, locked forever.
-              Creators receive 70% of the 1% protocol fee at once; their share of the raise and their 10% of supply vest over 30 days.
+              Creators receive 70% of the 1% protocol fee at once; their share of the raise and their 10% of supply vest over 30 days,
+              unless the creator chose an instant unlock at launch. Every launch shows which with a badge: {b("30D vested")} or a red{" "}
+              {b("Instant unlock")}.
             </p>
           </Section>
 

@@ -3,6 +3,7 @@
 import { erc20Abi, parseAbi, zeroAddress, type Address } from "viem";
 import { useBytecode, useReadContracts } from "wagmi";
 import { cruxBatchFactoryAbi } from "@/contracts/abis/batchAuction";
+import { useCreatorVestingDays } from "@/hooks/useCreatorVesting";
 import { useNow } from "@/hooks/useLaunchAuction";
 import { TESTNET } from "@/lib/chains";
 import { fmtUsdc, fmtTokens } from "@/lib/launch";
@@ -23,7 +24,15 @@ const day = (s: number) => new Date(s * 1000).toLocaleDateString(undefined, { da
  * LP lock (pool LP held by 0x…dEaD), creator vesting (the factory's own constant and the settle time),
  * fee split, admin powers, fixed token supply, per-wallet cap and the home chain.
  */
-export function useTrustFacts(factory: Address, auction: AuctionV2, version: BatchVersion, explorer: string): { checks: TrustCheck[]; loading: boolean; vestingDays: number | null } {
+export function useTrustFacts(
+  factory: Address,
+  auction: AuctionV2,
+  version: BatchVersion,
+  explorer: string,
+  id: string | null = null,
+): { checks: TrustCheck[]; loading: boolean; vestingDays: number | null } {
+  // V4 launches each carry the creator's choice; V2/V3 use the factory's constant.
+  const chosenDays = useCreatorVestingDays(factory, id === null ? null : BigInt(id), version);
   const graduated = auction.status === 1;
   const cancelled = auction.status === 2;
   const hasPool = graduated && auction.pair !== zeroAddress;
@@ -82,9 +91,19 @@ export function useTrustFacts(factory: Address, auction: AuctionV2, version: Bat
   }
 
   // 2. Creator vesting: the factory's own constant, measured from the on-chain settle time.
-  const vestDays = typeof vesting === "bigint" ? Number(vesting) / 86_400 : null;
+  const vestDays = version === 4 ? chosenDays : typeof vesting === "bigint" ? Number(vesting) / 86_400 : null;
   let vestCheck: TrustCheck;
-  if (vestDays === null) {
+  if (vestDays === 0) {
+    vestCheck = {
+      key: "vesting",
+      label: "Creator vesting",
+      state: "fail",
+      value: "Instant unlock",
+      detail: graduated
+        ? "The creator chose an instant unlock: their 10% and their share of the raise were released at graduation and can be sold at once."
+        : "The creator chose an instant unlock: at graduation their 10% and their share of the raise are released at once, with no vesting.",
+    };
+  } else if (vestDays === null) {
     vestCheck = { key: "vesting", label: "Creator vesting", state: "loading", value: "Checking…", detail: "Reading the factory's vesting schedule." };
   } else if (graduated) {
     const pct = now === null ? 0 : Math.max(0, Math.min(100, ((now - auction.settledAt) / (vestDays * 86_400)) * 100));
@@ -142,7 +161,7 @@ export function useTrustFacts(factory: Address, auction: AuctionV2, version: Bat
 
   // 6. Per-wallet cap (anti-whale), from the auction itself.
   const capCheck: TrustCheck =
-    version === 3
+    version >= 3
       ? {
           key: "cap",
           label: "Wallet cap",
@@ -165,7 +184,7 @@ export function useTrustFacts(factory: Address, auction: AuctionV2, version: Bat
     state: code.data ? "pass" : code.isPending ? "loading" : "fail",
     value: `Base Sepolia · ${TESTNET.id}`,
     detail: code.data
-      ? `Factory ${short(factory)} read live from Base Sepolia testnet${version === 3 ? "; source verified on Basescan and Sourcify" : ""}.`
+      ? `Factory ${short(factory)} read live from Base Sepolia testnet${version >= 3 ? "; source verified on Basescan and Sourcify" : ""}.`
       : "Couldn't read the factory's code from Base Sepolia.",
     href: `${explorer}/address/${factory}#code`,
   };

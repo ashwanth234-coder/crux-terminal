@@ -7,7 +7,7 @@ import { StatusTag } from "@/components/ui/StatusTag";
 import { LaunchTokenButton } from "@/components/launch/LaunchTokenButton";
 import { useAllLaunches, type LaunchSummary } from "@/hooks/useLaunches";
 import { useNow } from "@/hooks/useLaunchAuction";
-import { FACTORY, FACTORY_V2, FACTORY_V3 } from "@/lib/intents";
+import { FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4 } from "@/lib/intents";
 import { fmtUsdc, type Phase } from "@/lib/launch";
 import { describeLaunch } from "@/lib/launchSummary";
 import { CruxMark } from "./Logo";
@@ -91,8 +91,8 @@ function Empty({ title, body, action = false }: { title: string; body: string; a
 /** 01 Discover: the real launch list from the deployed factories, newest and open first. */
 export function Discover() {
   const now = useNow();
-  const configured = Boolean(FACTORY || FACTORY_V2 || FACTORY_V3);
-  const { total, launches, loading, error } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3);
+  const configured = Boolean(FACTORY || FACTORY_V2 || FACTORY_V3 || FACTORY_V4);
+  const { total, launches, loading, error } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4);
   const rows = launches
     .map((launch) => ({ launch, open: describeLaunch(launch, now).phase === "open" }))
     .sort((a, b) => Number(b.open) - Number(a.open))

@@ -1,3 +1,5 @@
+import { parseAbi } from "viem";
+
 /**
  * CruxFactory: token launch + 60-second uniform-price batch auction.
  * This is Crux's own interface (not an ERC); the contracts deployed to Base
@@ -1486,3 +1488,10 @@ export const cruxBatchFactoryAbi = [
 ] as const;
 
 export const AUCTION_V2_STATUS = { live: 0, graduated: 1, cancelled: 2 } as const;
+
+/** CruxFactoryV4's additions to the V3 interface: the creator's vesting choice and how it reads back. */
+export const factoryV4Abi = parseAbi([
+  "function createAuctionWithVesting((string name, string symbol, string metadataURI, uint256 totalSupply, uint256 graduationTarget, uint64 startTime, uint32 batchWindow, uint256 maxAllocationPerWallet) params, bool instantUnlock) returns (uint256 auctionId, address token)",
+  "function creatorVestingDuration(uint256 auctionId) view returns (uint256)",
+  "event CreatorVestingSet(uint256 indexed auctionId, uint256 duration)",
+]);

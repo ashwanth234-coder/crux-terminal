@@ -36,6 +36,7 @@ export function TokenInfo({
   name,
   version,
   id,
+  vestDays,
 }: {
   open: boolean;
   onClose: () => void;
@@ -45,6 +46,8 @@ export function TokenInfo({
   name: string | null;
   version: BatchVersion;
   id: string;
+  /** From useCreatorVestingDays: 30, 0 for an instant unlock, null while loading. */
+  vestDays: number | null;
 }) {
   const socials = [
     meta.links.x && { label: "X", href: meta.links.x },
@@ -87,7 +90,9 @@ export function TokenInfo({
         )}
         <Row label="Total supply">{fmtTokens(auction.totalSupply)}</Row>
         <Row label="Split">{`${V2_SPLIT.saleBps / 100}% sale · ${V2_SPLIT.lpBps / 100}% pool · ${V2_SPLIT.creatorBps / 100}% creator`}</Row>
-        <Row label="Creator vesting">{V2_VESTING_DAYS}-day linear</Row>
+        <Row label="Creator vesting">
+          {vestDays === 0 ? <span className="text-down">Instant unlock (no vesting)</span> : `${vestDays ?? V2_VESTING_DAYS}-day linear`}
+        </Row>
         <Row label="Batch window">{windowLabel(auction.batchWindow)}</Row>
         <Row label="Graduation target">${fmtUsdc(auction.graduationTarget)}</Row>
         <Row label="Floor price">${priceUsd(auction.floorPrice)}</Row>

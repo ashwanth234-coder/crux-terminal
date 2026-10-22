@@ -65,7 +65,7 @@ function LaunchPane({ launch }: { launch: GraduatedLaunch }) {
       <p className="px-1 text-[11.5px] text-dim">
         Graduated Crux launch ·{" "}
         <Link href={launch.href} className="underline decoration-line-2 hover:text-chrome">
-          {launch.version === 3 ? "V3" : "V2"} #{launch.id}
+          V{launch.version} #{launch.id}
         </Link>{" "}
         · locked Uniswap pool
       </p>

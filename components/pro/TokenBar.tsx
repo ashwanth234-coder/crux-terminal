@@ -5,6 +5,9 @@ import { formatUnits, parseAbi, zeroAddress } from "viem";
 import { useReadContracts } from "wagmi";
 import { TokenAvatar } from "@/components/pro/TokenAvatar";
 import { TokenInfo } from "@/components/pro/TokenInfo";
+import { VestingBadge } from "@/components/ui/VestingBadge";
+import { useCreatorVestingDays } from "@/hooks/useCreatorVesting";
+import { batchFactory } from "@/lib/intents";
 import { useNow } from "@/hooks/useLaunchAuction";
 import { useLaunchMarket } from "@/hooks/useLaunchMarket";
 import { usePoolSwaps } from "@/hooks/usePoolSwaps";
@@ -184,6 +187,7 @@ export function TokenBar({
   const opensIn = now === null ? null : auction.startTime - now;
   const closesIn = now === null ? null : auction.startTime + auction.batchWindow - now;
   const starred = watch.has(key);
+  const vestDays = useCreatorVestingDays(batchFactory(version), BigInt(id), version);
 
   return (
     <div className="border-b border-line bg-void">
@@ -210,6 +214,7 @@ export function TokenBar({
               <span className={`h-[5px] w-[5px] rounded-full ${status.dot}`} aria-hidden="true" />
               {status.label}
             </span>
+            <VestingBadge days={vestDays} />
           </div>
           {name && <p className="mt-1 text-[12px] uppercase tracking-[0.12em] text-muted">{name}</p>}
 
@@ -308,7 +313,7 @@ export function TokenBar({
         </div>
       </div>
 
-      <TokenInfo open={info} onClose={() => setInfo(false)} auction={auction} meta={meta} symbol={ticker} name={name} version={version} id={id} />
+      <TokenInfo open={info} onClose={() => setInfo(false)} auction={auction} meta={meta} symbol={ticker} name={name} version={version} id={id} vestDays={vestDays} />
     </div>
   );
 }

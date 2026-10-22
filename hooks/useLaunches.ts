@@ -143,17 +143,20 @@ export function useLaunchesV2(factory: Address | null, version: BatchVersion = 2
 }
 
 /** Newest factory first: V3, then V2, then V1. */
-export function useAllLaunches(v1: Address | null, v2: Address | null, v3: Address | null = null) {
+export function useAllLaunches(v1: Address | null, v2: Address | null, v3: Address | null = null, v4: Address | null = null) {
+  const d = useLaunchesV2(v4, 4);
   const c = useLaunchesV2(v3, 3);
   const a = useLaunchesV2(v2, 2);
   const b = useLaunches(v1);
-  const launches = [...c.launches, ...a.launches, ...b.launches];
+  const launches = [...d.launches, ...c.launches, ...a.launches, ...b.launches];
   return {
-    total: c.total + a.total + b.total,
+    total: d.total + c.total + a.total + b.total,
     launches,
     // Show whatever has loaded; only wait while there is nothing to show yet.
-    loading: launches.length === 0 && ((v3 !== null && c.loading) || (v2 !== null && a.loading) || (v1 !== null && b.loading)),
+    loading:
+      launches.length === 0 &&
+      ((v4 !== null && d.loading) || (v3 !== null && c.loading) || (v2 !== null && a.loading) || (v1 !== null && b.loading)),
     // One factory being unreachable must not hide the others' launches.
-    error: launches.length > 0 ? null : (c.error ?? a.error ?? b.error),
+    error: launches.length > 0 ? null : (d.error ?? c.error ?? a.error ?? b.error),
   };
 }

@@ -8,7 +8,7 @@ import { cruxBatchFactoryAbi } from "@/contracts/abis/batchAuction";
 import { TESTNET } from "@/lib/chains";
 import { TESTNET_USDC } from "@/lib/intents";
 import { launchError, type OnStep } from "@/lib/launch";
-import { TICK_COUNT_V3, maxDepositV3, toAuctionV2, type AuctionV2, type BatchVersion } from "@/lib/launchV2";
+import { TICK_COUNT_V3, maxDepositV3, toAuctionV2, type AuctionV2, type BatchVersion, usesTicks } from "@/lib/launchV2";
 import { useExactApproval } from "@/hooks/useExactApproval";
 import { revertedOnAllowance, simulateThenWrite, type WriteRequest } from "@/lib/preflight";
 import { useConnectModal } from "@/providers/Web3Provider";
@@ -100,7 +100,7 @@ export function useLaunchV2(factory: Address, id: bigint, version: BatchVersion 
     ...fac,
     functionName: "tickPrice",
     args: [id, BigInt(TICK_COUNT_V3 - 1)],
-    query: { enabled: version === 3 && Boolean(auction), staleTime: Infinity },
+    query: { enabled: usesTicks(version) && Boolean(auction), staleTime: Infinity },
   });
 
   const meta = useReadContracts({
@@ -227,8 +227,8 @@ export function useLaunchV2(factory: Address, id: bigint, version: BatchVersion 
   return {
     version,
     auction,
-    maxDeposit: version === 3 && auction ? maxDepositV3(auction) : null,
-    topTickPrice: version === 3 ? (topTick.data ?? null) : null,
+    maxDeposit: usesTicks(version) && auction ? maxDepositV3(auction) : null,
+    topTickPrice: usesTicks(version) ? (topTick.data ?? null) : null,
     name: meta.data?.[0]?.result ?? null,
     symbol: meta.data?.[1]?.result ?? null,
     loading: core.isPending,

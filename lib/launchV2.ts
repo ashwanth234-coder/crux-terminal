@@ -16,7 +16,10 @@ export const V2_VESTING_DAYS = 30;
 export const V2_MIN_LEAD_SECONDS = 180;
 
 /** Batch factory generation: V2 (bidder list, max 200) or V3 (1% price ticks, no bidder limit). */
-export type BatchVersion = 2 | 3;
+export type BatchVersion = 2 | 3 | 4;
+
+/** V3 and V4 put bid limits on the same 1% price-tick grid (V4 is V3 plus the creator's vesting choice). */
+export const usesTicks = (version: BatchVersion) => version >= 3;
 
 /** CruxFactoryV3 prices limits on a grid 1% apart; a limit rounds down to its step. */
 export const V3_TICK_STEP_PERCENT = 1;

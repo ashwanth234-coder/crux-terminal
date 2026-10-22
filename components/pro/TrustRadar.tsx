@@ -4,6 +4,7 @@ import type { Address } from "viem";
 import { SecurityBadges } from "@/components/pro/SecurityBadges";
 import { useNow } from "@/hooks/useLaunchAuction";
 import { useTrustFacts } from "@/hooks/useTrustFacts";
+import { VestingBadge } from "@/components/ui/VestingBadge";
 import { TESTNET_EXPLORER } from "@/lib/chains";
 import type { AuctionV2, BatchVersion } from "@/lib/launchV2";
 
@@ -16,6 +17,17 @@ function VestingBar({ auction, days }: { auction: AuctionV2; days: number | null
     return <p className="text-[12px] text-dim">Creator vesting starts when the auction graduates.</p>;
   }
   if (days === null || now === null) return <p className="text-[12px] text-dim">Reading the vesting schedule…</p>;
+  if (days === 0) {
+    return (
+      <div>
+        <VestingBadge days={0} />
+        <p className="mt-3 text-[12px] leading-snug text-muted">
+          The creator chose an instant unlock: their 10% of supply and their share of the raise were released at graduation on{" "}
+          {day.format(new Date(auction.settledAt * 1000))}, with no vesting. Nothing stops them selling at once.
+        </p>
+      </div>
+    );
+  }
   const end = auction.settledAt + days * 86_400;
   const pct = Math.max(0, Math.min(100, ((now - auction.settledAt) / (days * 86_400)) * 100));
   const left = Math.max(0, end - now);
@@ -42,12 +54,12 @@ function VestingBar({ auction, days }: { auction: AuctionV2; days: number | null
 }
 
 /** The trust tab of the bottom desk: the live-verified checks beside the creator vesting schedule. */
-export function TrustRadar({ factory, auction, version }: { factory: Address; auction: AuctionV2; version: BatchVersion }) {
-  const { vestingDays } = useTrustFacts(factory, auction, version, TESTNET_EXPLORER);
+export function TrustRadar({ factory, auction, version, id }: { factory: Address; auction: AuctionV2; version: BatchVersion; id: string }) {
+  const { vestingDays } = useTrustFacts(factory, auction, version, TESTNET_EXPLORER, id);
   return (
     <div className="grid min-h-0 gap-px overflow-auto rounded-lg border border-line bg-line lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
       <div className="bg-void [&>section]:border-t-0">
-        <SecurityBadges factory={factory} auction={auction} version={version} />
+        <SecurityBadges factory={factory} auction={auction} version={version} id={id} />
       </div>
       <div className="bg-void p-4">
         <h2 className="mb-3 text-[13px] font-medium text-chrome">Creator vesting</h2>

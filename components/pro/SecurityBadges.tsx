@@ -30,8 +30,8 @@ function Mark({ state }: { state: CheckState }) {
  * The CRUX trust dashboard: every row is read live from Base Sepolia (see useTrustFacts), not asserted.
  * Rows are compact by default; tapping one reveals how it was verified.
  */
-export function SecurityBadges({ factory, auction, version }: { factory: Address; auction: AuctionV2; version: BatchVersion }) {
-  const { checks } = useTrustFacts(factory, auction, version, TESTNET_EXPLORER);
+export function SecurityBadges({ factory, auction, version, id }: { factory: Address; auction: AuctionV2; version: BatchVersion; id: string }) {
+  const { checks } = useTrustFacts(factory, auction, version, TESTNET_EXPLORER, id);
   const [open, setOpen] = useState<string | null>(null);
   const passed = checks.filter((c) => c.state === "pass").length;
 

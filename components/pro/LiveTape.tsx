@@ -145,7 +145,7 @@ export function LiveTape({
       ) : tab === "holders" ? (
         <HoldersTable factory={factory} id={id} auction={auction} />
       ) : tab === "trust" ? (
-        <TrustRadar factory={factory} auction={auction} version={version} />
+        <TrustRadar factory={factory} auction={auction} version={version} id={id} />
       ) : (
       <>
       <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-line">
