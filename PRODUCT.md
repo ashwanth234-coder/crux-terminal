@@ -25,7 +25,11 @@ Landing page and terminal live at https://cruxprotocol.xyz and run as a Farcaste
 ## Capabilities and Constraints
 
 - Live balance aggregation on Base and BSC (native + USDC, Chainlink-priced); Robinhood Chain RPC not yet public; Solana balances need an SVM wallet.
-- Testnet only: CruxSettler, CruxDestinationSettler and CruxFactory are live and source-verified on Base Sepolia (84532). Intents escrow test USDC; a testnet solver fills them with MockNOVA; launches run real 60-second batch auctions. Nothing is on mainnet.
+- Testnet only, Base Sepolia (84532), every contract source-verified (Basescan + Sourcify):
+  - Intents: CruxSettlerV3 (0xC3BE…f44C) with CruxDestinationSettlerV2 (0x62e5…cdf4). Readable EIP-712 orders, trustless same-chain settlement (escrow pays only the recorded filler of the exact order), refunds the moment an unfilled order's deadline passes. The solver fills graduated launch tokens from their locked pools in 60-second uniform batches.
+  - Launches: CruxFactoryV4 (0x91f6…0d91). Uniform-price batch auction on 1% price ticks, burned LP, and the creator's choice of 30-day vesting (green "30D vested" badge) or an instant unlock (red "Instant unlock" badge). V2/V3 launches stay readable.
+  - Indexer feeds: /tokenlist.json (Uniswap token list of graduated tokens) and /api/launches (every launch), both live from the chain.
+  - Nothing is on mainnet.
 - $NOVA, $FORM, $MIND are illustrative tokens; their prices and changes are demo data.
 
 ## Brand Commitments
