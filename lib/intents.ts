@@ -10,12 +10,13 @@ function envAddress(value: string | undefined): Address | null {
 }
 
 /**
- * CruxSettlerV3 and its destination (CruxDestinationSettlerV2) on Base Sepolia, once deployed. Both are needed:
+ * CruxSettlerV3 and its destination (CruxDestinationSettlerV2) on Base Sepolia, deployed 2026-10-22 and verified
+ * (Basescan + Sourcify exact match). Both are needed:
  * v3 settles only on its own destination's fill record. NEXT_PUBLIC_CRUX_SETTLER_V3 and
  * NEXT_PUBLIC_CRUX_DESTINATION_V2 override them (e.g. on a local fork).
  */
-const SETTLER_V3_ADDRESS: Address | null = null;
-const DESTINATION_V2_ADDRESS: Address | null = null;
+const SETTLER_V3_ADDRESS: Address | null = "0xC3BE6a2F3D82DdAba03Fb965bd08f5113354f44C";
+const DESTINATION_V2_ADDRESS: Address | null = "0x62e5ed6BC2f604fad76152045559805c11D1cdf4";
 /** CruxDestinationSettler (v1): where v1 and v2 settlers' orders are filled. */
 const LEGACY_DESTINATION = "0x300a835939D2beBed59C543470DCD9a9c8065822" as Address;
 
@@ -49,8 +50,8 @@ export const ORDER_FILLED_EVENT =
 /** Deploy blocks (crux-contracts/broadcast/Deploy*.s.sol/84532/run-latest.json); log scans start here. */
 const SETTLER_V1_DEPLOY_BLOCK = BigInt(48311115);
 const SETTLER_V2_DEPLOY_BLOCK = BigInt(48410403);
-/** Set with SETTLER_V3_ADDRESS once deployed. */
-const SETTLER_V3_DEPLOY_BLOCK: bigint | null = null;
+/** crux-contracts/broadcast/DeploySettlerV3.s.sol/84532/run-latest.json */
+const SETTLER_V3_DEPLOY_BLOCK: bigint | null = BigInt(48619867);
 
 /**
  * Block the active settler was deployed in. NEXT_PUBLIC_CRUX_SETTLER_V2_BLOCK may override v2's (for a redeploy);
