@@ -15,7 +15,7 @@ import {
   type Hex,
 } from "viem";
 import { useConfig, useConnection, useReadContract, useSignTypedData, useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
-import { readContract, simulateContract } from "wagmi/actions";
+import { getBlockNumber, readContract, simulateContract } from "wagmi/actions";
 import { Modal, KineticLoader } from "@/components/ui/Modal";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { SubmitKey } from "@/components/pro/hotkeys";
@@ -25,6 +25,7 @@ import { useExactApproval } from "@/hooks/useExactApproval";
 import { verifySettlerDomain } from "@/lib/settlerDomain";
 import { cruxSettlerAbi, originSettlerAbi } from "@/contracts/abis/erc7683";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
+import { ARBITRUM, ARBITRUM_EXPLORER, ARBITRUM_USDC, CROSS_CHAIN_DOMAIN, CROSS_CHAIN_SETTLER } from "@/lib/crosschain";
 import {
   BATCH_WINDOW_SECONDS,
   SETTLER,
@@ -48,8 +49,9 @@ type Flow =
   | { kind: "approving" }
   | { kind: "signing" }
   | { kind: "broadcasting" }
-  /** Settler live: openFor sent to Base Sepolia. */
-  | { kind: "broadcast"; hash: Hex }
+  /** Settler live: openFor sent (Base Sepolia, or Arbitrum Sepolia for a cross-chain order). `baseFrom`: a Base
+   *  block at or before the fill, where the fill-log search starts (the receipt's block is on the origin chain). */
+  | { kind: "broadcast"; hash: Hex; baseFrom?: bigint }
   /** No settler yet: signature produced and checked locally, nothing sent. */
   | { kind: "local"; signature: Hex; valid: boolean }
   | { kind: "error"; message: string };
@@ -123,6 +125,7 @@ const settlerErrorsAbi = parseAbi([
   "error UnsupportedInputAsset(bytes32 assetId)",
   "error UnsupportedInputToken(address token)",
   "error InvalidOutputAsset()",
+  "error InvalidDestinationChain()",
   "error ZeroAmount()",
 ]);
 const openForAbi = [...originSettlerAbi, ...settlerErrorsAbi] as const;
@@ -137,7 +140,8 @@ const SETTLER_ERRORS: Record<string, string> = {
   UnsupportedInputToken: "The settler doesn't escrow this token yet. Nothing was sent.",
   InvalidOutputAsset: "This order has no output asset. Nothing was sent.",
   ZeroAmount: "Enter an amount above zero.",
-  WrongChain: "Switch your wallet to Base Sepolia and try again. Nothing was sent.",
+  WrongChain: "Your wallet signed on the wrong chain. Switch networks and try again. Nothing was sent.",
+  InvalidDestinationChain: "This settler only fills on Base Sepolia. Nothing was sent.",
 };
 
 function errorMessage(err: unknown) {
@@ -160,31 +164,38 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
   const approveExact = useExactApproval();
   const [flow, setFlow] = useState<Flow>({ kind: "idle" });
 
+  // A cross-chain order is escrowed on Arbitrum Sepolia and filled on Base Sepolia.
+  const cross = order?.payFrom === "arbitrum";
+  const originChain = cross ? ARBITRUM : TESTNET;
+  const originSettler = cross ? CROSS_CHAIN_SETTLER : SETTLER;
+
   const receipt = useWaitForTransactionReceipt({
     hash: flow.kind === "broadcast" ? flow.hash : undefined,
-    chainId: TESTNET.id,
+    chainId: originChain.id,
   });
 
   // After openFor lands: the order id from its Open event, then its escrow until it settles or refunds.
   const opened = receipt.data?.status === "success" ? parseEventLogs({ abi: originSettlerAbi, eventName: "Open", logs: receipt.data.logs })[0] : undefined;
   const orderId = opened?.args.orderId;
   const escrow = useReadContract({
-    address: SETTLER,
+    address: originSettler,
     abi: cruxSettlerAbi,
     functionName: "escrows",
     args: orderId ? [orderId] : undefined,
-    chainId: TESTNET.id,
+    chainId: originChain.id,
     query: {
       enabled: Boolean(orderId),
       refetchInterval: (q) => ((q.state.data?.[4] ?? 1) <= 1 ? 4_000 : false),
     },
   });
   const escrowStatus = escrow.data?.[4];
-  const fromBlock = receipt.data?.blockNumber;
+  const fromBlock = cross ? (flow.kind === "broadcast" ? flow.baseFrom : undefined) : receipt.data?.blockNumber;
+  // Cross-chain: the fill lands on Base before the proof settles the escrow on Arbitrum, so look for it while open.
   const delivered = useQuery({
     queryKey: ["crux-order-filled", orderId],
-    enabled: escrowStatus === ESCROW_SETTLED && Boolean(orderId) && fromBlock !== undefined,
+    enabled: (escrowStatus === ESCROW_SETTLED || (cross && escrowStatus === 1)) && Boolean(orderId) && fromBlock !== undefined,
     staleTime: Infinity,
+    refetchInterval: (q) => (cross && !q.state.data ? 5_000 : false),
     queryFn: async () => {
       const [log] = await logClient.getLogs({ address: DESTINATION_SETTLER, event: ORDER_FILLED, args: { orderId }, fromBlock });
       return log ? { amount: log.args.amount ?? BigInt(0), tx: log.transactionHash } : null;
@@ -226,11 +237,12 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
     try {
       // With a live settler, intents are opened on Base Sepolia; the EIP-712
       // domain must match the chain the wallet signs on.
+      // A cross-chain order is opened on Arbitrum Sepolia instead.
       let signingChainId = chainId;
-      if (SETTLER_DEPLOYED && chainId !== TESTNET.id) {
+      if ((SETTLER_DEPLOYED || cross) && chainId !== originChain.id) {
         setFlow({ kind: "switching" });
-        await switchChain({ chainId: TESTNET.id });
-        signingChainId = TESTNET.id;
+        await switchChain({ chainId: originChain.id });
+        signingChainId = originChain.id;
       }
 
       // A graduated launch token (order.asset) is asked for, or sold, under its own CAIP-19 id; otherwise NOVA.
@@ -256,7 +268,9 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
           setFlow({ kind: "error", message: "The testnet settler escrows USDC only. Buy with Base USDC to open this intent." });
           return;
         }
-        const escrowed = { address: sellsLaunch ? traded!.address : TESTNET_USDC, abi: erc20Abi, chainId: TESTNET.id } as const;
+        const escrowed = cross
+          ? ({ address: ARBITRUM_USDC, abi: erc20Abi, chainId: ARBITRUM.id } as const)
+          : ({ address: sellsLaunch ? traded!.address : TESTNET_USDC, abi: erc20Abi, chainId: TESTNET.id } as const);
         const decimals = sellsLaunch ? tokenDecimals : 6;
         const balance = await readContract(config, { ...escrowed, functionName: "balanceOf", args: [address] });
         if (balance < input.amount) {
@@ -264,28 +278,32 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
             kind: "error",
             message: sellsLaunch
               ? `Needs ${formatUnits(input.amount, decimals)} $${order.symbol} on Base Sepolia (you have ${formatUnits(balance, decimals)}).`
-              : `Needs ${formatUnits(input.amount, 6)} test USDC on Base Sepolia (you have ${formatUnits(balance, 6)}). Get some free at faucet.circle.com.`,
+              : `Needs ${formatUnits(input.amount, 6)} test USDC on ${originChain.name} (you have ${formatUnits(balance, 6)}). Get some free at faucet.circle.com${cross ? " (pick Arbitrum Sepolia)" : ""}.`,
           });
           return;
         }
         // Exactly this order's input, never an unlimited allowance; skipped when the allowance already covers it.
-        await approveExact({ token: escrowed.address, owner: address, spender: SETTLER, amount: input.amount }, { onPrompt: () => setFlow({ kind: "approving" }) });
+        await approveExact(
+          { token: escrowed.address, owner: address, spender: originSettler, amount: input.amount, chainId: escrowed.chainId },
+          { onPrompt: () => setFlow({ kind: "approving" }) },
+        );
       }
 
       // Never ask for a signature the deployed settler wouldn't accept under its own EIP-712 domain.
-      if (SETTLER_DEPLOYED) await verifySettlerDomain(config);
+      if (SETTLER_DEPLOYED) await verifySettlerDomain(config, cross ? CROSS_CHAIN_DOMAIN : undefined);
 
       const { order: gasless, typed } = buildGaslessOrder({
         user: address,
         chainId: signingChainId,
         inputCaip19: input.caip19,
-        // The token the settler pulls: the launch token for a sell, test USDC otherwise.
-        inputToken: !buying && traded ? traded.address : TESTNET_USDC,
+        // The token the settler pulls: the launch token for a sell, test USDC (on the paying chain) otherwise.
+        inputToken: !buying && traded ? traded.address : cross ? ARBITRUM_USDC : TESTNET_USDC,
         inputAmount: input.amount,
         outputCaip19: output.caip19,
         minOutputAmount: output.amount,
         // On testnet the fill also happens on Base Sepolia, where the destination settler lives.
         destinationChainId: SETTLER_DEPLOYED ? TESTNET.id : 8453,
+        origin: cross ? "arbitrum" : undefined,
       });
 
       setFlow({ kind: "signing" });
@@ -301,16 +319,18 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
       // Pre-flight: run openFor against the chain first. If it would revert, the wallet never opens a
       // transaction it would flag as "expected to fail"; the reason is shown here instead.
       const { request } = await simulateContract(config, {
-        address: SETTLER,
+        address: originSettler,
         abi: openForAbi,
         functionName: "openFor",
         args: [gasless, signature, "0x"],
         account: address,
-        chainId: TESTNET.id,
+        chainId: originChain.id,
       });
+      // Cross-chain: the solver fills on Base after this, so Base's current block bounds where its fill can be.
+      const baseFrom = cross ? await getBlockNumber(config, { chainId: TESTNET.id }) : undefined;
       setFlow({ kind: "broadcasting" });
       const hash = await writeContract(request);
-      setFlow({ kind: "broadcast", hash });
+      setFlow({ kind: "broadcast", hash, baseFrom });
     } catch (err) {
       setFlow({ kind: "error", message: errorMessage(err) });
     }
@@ -334,14 +354,14 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
       break;
     case "switching":
       stage = 1;
-      note = "Switch your wallet to Base Sepolia.";
+      note = `Switch your wallet to ${originChain.name}.`;
       break;
     case "approving":
       stage = 1;
       note =
         !buying && order.asset
           ? `Approve exactly ${qtyFmt.format(order.qty)} $${order.symbol} for the settler to escrow.`
-          : `Approve exactly ${usd.format(order.notional)} of test USDC for the settler.`;
+          : `Approve exactly ${usd.format(order.notional)} of test USDC${cross ? " on Arbitrum Sepolia" : ""} for the settler.`;
       break;
     case "signing":
       stage = 1;
@@ -367,7 +387,7 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
       } else if (!receipt.isSuccess) {
         stage = 2;
         working = true;
-        note = "Confirming the submission on Base Sepolia…";
+        note = `Confirming the submission on ${originChain.name}…`;
       } else if (escrowStatus === ESCROW_SETTLED) {
         stage = 4;
         note = delivered.data
@@ -377,14 +397,19 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
                 : `${usd.format(Number(formatUnits(delivered.data.amount, payAsset.decimals)))} test USDC`
             } and the escrow was released.`
           : "Settlement confirmed. A solver filled your intent and the escrow was released.";
+        if (cross) note += " The solver was paid on Arbitrum only after a Hyperlane proof of its fill on Base.";
       } else if (escrowStatus === ESCROW_REFUNDED) {
         stage = 3;
         failed = true;
         note = "No solver filled this intent in time. The escrow was refunded to you.";
+      } else if (cross && delivered.data) {
+        stage = 3;
+        working = true;
+        note = `Delivered on Base Sepolia: ${qtyFmt.format(Number(formatUnits(delivered.data.amount, order.asset?.decimals ?? 18)))} $${order.symbol}. The fill proof is crossing to Arbitrum through Hyperlane (usually under a minute); then your escrow is released to the solver.`;
       } else {
         stage = 3;
         working = true;
-        note = `Submitted and escrowed. Waiting for a solver to fill it at the next ${BATCH_WINDOW_SECONDS}-second batch.`;
+        note = `Submitted and escrowed${cross ? " on Arbitrum Sepolia" : ""}. Waiting for a solver to fill it ${cross ? "on Base Sepolia " : ""}at the next ${BATCH_WINDOW_SECONDS}-second batch.`;
       }
       break;
   }
@@ -392,7 +417,7 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
   const ctaLabel: Record<Flow["kind"], string> = {
     idle: "Confirm & sign intent",
     error: "Try again",
-    switching: "Switching to Base Sepolia…",
+    switching: `Switching to ${originChain.name}…`,
     approving: "Approving test USDC…",
     signing: "Awaiting signature…",
     broadcasting: "Submitting intent…",
@@ -402,7 +427,7 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
 
   // ---------------------------------------------------------------- quote
 
-  const origin = SETTLER_DEPLOYED ? "Base Sepolia" : order.originLabel;
+  const origin = cross ? "Arbitrum Sepolia" : SETTLER_DEPLOYED ? "Base Sepolia" : order.originLabel;
   const destination = SETTLER_DEPLOYED ? { name: "Base Sepolia", id: 84532 } : { name: "Base", id: 8453 };
   // Launch-token trades on thin testnet pools are often under a cent: show USDC to its 6 decimals.
   const money = (v: number) => (order.asset && v < 1 ? `$${v.toFixed(6).replace(/0+$/, "").replace(/\.$/, "")}` : usd.format(v));
@@ -437,7 +462,15 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
       </div>
 
       <dl className="mt-3 divide-y divide-line">
-        <Row label="Route" value={`${origin} → solver → ${destination.name}`} hint="No bridge: the solver delivers from its own capital" />
+        <Row
+          label="Route"
+          value={`${origin} → solver → ${destination.name}`}
+          hint={
+            cross
+              ? "No bridge: the solver delivers on Base from its own capital and is repaid on Arbitrum after a Hyperlane proof of the fill"
+              : "No bridge: the solver delivers from its own capital"
+          }
+        />
         <Row label="Destination chain" value={`${destination.name} · ${destination.id}`} />
         <Row
           label="Fees"
@@ -462,8 +495,14 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
         />
         <Row
           label="Settler"
-          value={SETTLER_DEPLOYED ? `${SETTLER.slice(0, 6)}…${SETTLER.slice(-4)}` : "Not configured"}
-          hint={SETTLER_DEPLOYED ? "CruxSettler on Base Sepolia" : "The signature is checked locally only"}
+          value={SETTLER_DEPLOYED ? `${originSettler.slice(0, 6)}…${originSettler.slice(-4)}` : "Not configured"}
+          hint={
+            cross
+              ? "CruxCrossChainSettler on Arbitrum Sepolia · refundable 6h after the deadline if unproven"
+              : SETTLER_DEPLOYED
+                ? "CruxSettler on Base Sepolia"
+                : "The signature is checked locally only"
+          }
         />
         <Row label="Signing as" value={address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "—"} hint={chain?.name ?? (chainId ? `Chain ${chainId}` : undefined)} />
       </dl>
@@ -473,12 +512,12 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
           {flow.kind === "broadcast" && (
             <div className="space-y-1.5 text-[12px]">
               <a
-                href={`${TESTNET_EXPLORER}/tx/${flow.hash}`}
+                href={`${cross ? ARBITRUM_EXPLORER : TESTNET_EXPLORER}/tx/${flow.hash}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="group flex items-center justify-between gap-3 text-muted transition-colors hover:text-chrome"
               >
-                <span>Submission (openFor)</span>
+                <span>Submission (openFor{cross ? ", Arbitrum" : ""})</span>
                 <span className="inline-flex items-center gap-1.5 font-mono text-chrome/80">
                   {flow.hash.slice(0, 10)}…{flow.hash.slice(-6)} <ArrowUpRight className="h-3 w-3" />
                 </span>
@@ -490,7 +529,7 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
                   rel="noopener noreferrer"
                   className="group flex items-center justify-between gap-3 text-muted transition-colors hover:text-chrome"
                 >
-                  <span>Solver fill</span>
+                  <span>Solver fill{cross ? " (Base)" : ""}</span>
                   <span className="inline-flex items-center gap-1.5 font-mono text-chrome/80">
                     {delivered.data.tx.slice(0, 10)}…{delivered.data.tx.slice(-6)} <ArrowUpRight className="h-3 w-3" />
                   </span>
@@ -522,7 +561,7 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
           </button>
           <p className="mt-3 text-center text-[11.5px] text-dim">
             {SETTLER_DEPLOYED
-              ? "Approves test USDC if needed, signs, then submits on Base Sepolia. Testnet only, no real funds."
+              ? `Approves test USDC if needed, signs, then submits on ${originChain.name}. Testnet only, no real funds.`
               : "Gasless EIP-712 signature. No funds move until a solver fills the batch."}
           </p>
         </>

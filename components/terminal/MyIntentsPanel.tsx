@@ -10,6 +10,7 @@ import { cruxSettlerAbi } from "@/contracts/abis/erc7683";
 import { useMyIntents, type MyIntent } from "@/hooks/useMyIntents";
 import { useBatchClock } from "@/lib/batch";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
+import { ARBITRUM, ARBITRUM_EXPLORER, ARBITRUM_USDC, CROSS_CHAIN_SETTLER } from "@/lib/crosschain";
 import { SETTLER, SETTLER_DEPLOYED, SETTLER_VERSION, TESTNET_USDC } from "@/lib/intents";
 import { StatusTag } from "@/components/ui/StatusTag";
 import { simulateThenWrite } from "@/lib/preflight";
@@ -53,13 +54,18 @@ function errorMessage(err: unknown) {
 type Refund = { kind: "idle" } | { kind: "busy"; label: string } | { kind: "sent"; hash: Hex } | { kind: "error"; message: string };
 
 export function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: number | null; onRefunded: () => void }) {
-  // Buys escrow test USDC; a launch-token sell escrows the token itself (Crux launch tokens have 18 decimals).
-  const escrowsUsdc = intent.token === null || intent.token.toLowerCase() === TESTNET_USDC.toLowerCase();
+  // Buys escrow test USDC (on Arbitrum for a cross-chain order); a launch-token sell escrows the token itself
+  // (Crux launch tokens have 18 decimals).
+  const cross = intent.origin === "arbitrum";
+  const chain = cross ? ARBITRUM : TESTNET;
+  const settler = cross ? CROSS_CHAIN_SETTLER : SETTLER;
+  const explorer = cross ? ARBITRUM_EXPLORER : TESTNET_EXPLORER;
+  const escrowsUsdc = intent.token === null || [TESTNET_USDC, ARBITRUM_USDC].some((u) => u.toLowerCase() === intent.token!.toLowerCase());
   const { data: tokenSymbol } = useReadContract({
     address: intent.token ?? undefined,
     abi: erc20Abi,
     functionName: "symbol",
-    chainId: TESTNET.id,
+    chainId: chain.id,
     query: { enabled: !escrowsUsdc, staleTime: Infinity },
   });
   const unit = escrowsUsdc ? "USDC" : tokenSymbol ? `$${tokenSymbol}` : "tokens";
@@ -75,20 +81,20 @@ export function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: 
   const reclaim = async () => {
     if (!address) return;
     try {
-      if (chainId !== TESTNET.id) {
+      if (chainId !== chain.id) {
         setRefund({ kind: "busy", label: "Switching…" });
-        await switchChain({ chainId: TESTNET.id });
+        await switchChain({ chainId: chain.id });
       }
       setRefund({ kind: "busy", label: "Checking…" });
       // Simulated first: a refund that would revert (too early, already settled) stops here with its reason.
       const hash = await simulateThenWrite(
         config,
         address,
-        { address: SETTLER, abi: refundAbi, functionName: "refund", args: [intent.orderId], chainId: TESTNET.id },
+        { address: settler, abi: refundAbi, functionName: "refund", args: [intent.orderId], chainId: chain.id },
         () => setRefund({ kind: "busy", label: "Confirm in wallet…" }),
       );
       setRefund({ kind: "sent", hash });
-      await waitForTransactionReceipt(config, { hash, chainId: TESTNET.id });
+      await waitForTransactionReceipt(config, { hash, chainId: chain.id });
       onRefunded();
     } catch (err) {
       setRefund({ kind: "error", message: errorMessage(err) });
@@ -101,18 +107,22 @@ export function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: 
       : intent.status === "refunded"
         ? { dot: "bg-muted", label: "Refunded", tone: "text-muted" }
         : open
-          ? { dot: "bg-signal", label: refundable ? "Unfilled · refund open" : "In escrow · awaiting solver", tone: "text-chrome/85" }
+          ? {
+              dot: "bg-signal",
+              label: refundable ? "Unfilled · refund open" : cross ? "In escrow on Arbitrum · awaiting fill + proof" : "In escrow · awaiting solver",
+              tone: "text-chrome/85",
+            }
           : { dot: "bg-line-2", label: "Reading escrow…", tone: "text-dim" };
 
   return (
     <li className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 py-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(9.5rem,auto)]">
       <div className="min-w-0">
         <a
-          href={`${TESTNET_EXPLORER}/tx/${intent.txHash}`}
+          href={`${explorer}/tx/${intent.txHash}`}
           target="_blank"
           rel="noopener noreferrer"
           className="font-mono text-[12px] text-chrome/80 underline decoration-line-2 underline-offset-2 transition-colors hover:text-chrome"
-          title={`Order ${intent.orderId} on Basescan`}
+          title={`Order ${intent.orderId} on ${cross ? "Arbiscan" : "Basescan"}`}
         >
           {shortId(intent.orderId)} ↗
         </a>
@@ -155,7 +165,7 @@ export function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: 
         )}
         {refund.kind === "sent" && (
           <a
-            href={`${TESTNET_EXPLORER}/tx/${refund.hash}`}
+            href={`${explorer}/tx/${refund.hash}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 text-[11px] text-signal sm:justify-end"
@@ -195,7 +205,7 @@ export function MyIntentsPanel() {
           <h3 id="my-intents-title" className="text-[13px] text-chrome">
             My intents
           </h3>
-          <StatusTag status="testnet" label="Base Sepolia" />
+          <StatusTag status="testnet" label="Base + Arbitrum Sepolia" />
         </div>
         <div className="flex items-center gap-3 text-[11px] text-dim">
           {intents.length > 0 && (
@@ -211,7 +221,8 @@ export function MyIntentsPanel() {
       <p className="mt-1.5 max-w-[46rem] text-[11.5px] leading-relaxed text-muted">
         Orders opened from this wallet escrow their input (test USDC, or the launch token you sell) until a solver fills
         them. Testnet only: unfilled orders can be refunded{" "}
-        {SETTLER_VERSION === 3 ? "as soon as their fill deadline passes (10 minutes)" : "1 hour after their fill deadline"}.
+        {SETTLER_VERSION === 3 ? "as soon as their fill deadline passes (10 minutes)" : "1 hour after their fill deadline"}; orders paid from
+        Arbitrum, 6 hours after it if no fill proof arrived.
       </p>
 
       {error && intents.length === 0 ? (

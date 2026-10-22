@@ -1,5 +1,5 @@
 import { createConfig, http, type CreateConnectorFn } from "wagmi";
-import { base, baseSepolia, bsc } from "wagmi/chains";
+import { arbitrumSepolia, base, baseSepolia, bsc } from "wagmi/chains";
 import { coinbaseWallet } from "wagmi/connectors/coinbaseWallet";
 import { injected } from "wagmi/connectors/injected";
 import { walletConnect } from "wagmi/connectors/walletConnect";
@@ -28,8 +28,9 @@ const connectors: CreateConnectorFn[] = [
 ];
 
 export const wagmiConfig = createConfig({
-  // Mainnets for live balances and Farcaster swaps; Base Sepolia for testnet settlement.
-  chains: [base, bsc, robinhoodChain, baseSepolia],
+  // Mainnets for live balances and Farcaster swaps; Base Sepolia for testnet settlement; Arbitrum Sepolia to pay
+  // into cross-chain orders (lib/crosschain.ts).
+  chains: [base, bsc, robinhoodChain, baseSepolia, arbitrumSepolia],
   connectors,
   transports: {
     [base.id]: http(),
@@ -37,6 +38,7 @@ export const wagmiConfig = createConfig({
     [robinhoodChain.id]: http(),
     // Optional override (e.g. a local Anvil fork for testing); unset uses the chain's public RPC.
     [baseSepolia.id]: http(process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || undefined),
+    [arbitrumSepolia.id]: http(process.env.NEXT_PUBLIC_ARBITRUM_SEPOLIA_RPC || "https://arbitrum-sepolia-rpc.publicnode.com"),
   },
   ssr: true,
 });

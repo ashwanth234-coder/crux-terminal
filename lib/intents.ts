@@ -1,5 +1,6 @@
 import { encodeAbiParameters, getAddress, isAddress, keccak256, toHex, type Address, type Hex, type TypedDataDefinition } from "viem";
 import { baseSepolia } from "viem/chains";
+import { CROSS_CHAIN_DOMAIN, CROSS_CHAIN_SETTLER } from "./crosschain";
 
 // Only used as the EIP-712 verifyingContract for local signature checks while
 // nothing is deployed; never sent to a chain.
@@ -214,6 +215,8 @@ export type IntentDraft = {
   outputCaip19: string;
   minOutputAmount: bigint;
   destinationChainId: number;
+  /** Escrow on Arbitrum Sepolia (CruxCrossChainSettler) instead of the Base settler. */
+  origin?: "arbitrum";
 };
 
 /** The ERC-7683 envelope `openFor` takes, plus the EIP-712 payload the wallet signs for it. */
@@ -222,18 +225,22 @@ export function buildGaslessOrder(draft: IntentDraft): {
   /** Either version's payload; typed loosely so one signTypedData call serves both. */
   typed: TypedDataDefinition;
 } {
+  const cross = draft.origin === "arbitrum";
   // With a live settler the domain is pinned; signing it from another chain would give a signature the settler rejects.
-  if (SETTLER_DEPLOYED && draft.chainId !== SETTLER_DOMAIN.chainId) {
+  if (cross && draft.chainId !== CROSS_CHAIN_DOMAIN.chainId) {
+    throw new Error(`Switch your wallet to Arbitrum Sepolia (chain ${CROSS_CHAIN_DOMAIN.chainId}) to sign this intent.`);
+  }
+  if (!cross && SETTLER_DEPLOYED && draft.chainId !== SETTLER_DOMAIN.chainId) {
     throw new Error(`Switch your wallet to Base Sepolia (chain ${SETTLER_DOMAIN.chainId}) to sign this intent.`);
   }
-  const domain = SETTLER_DEPLOYED ? SETTLER_DOMAIN : { ...SETTLER_DOMAIN, chainId: draft.chainId };
+  const domain = cross ? CROSS_CHAIN_DOMAIN : SETTLER_DEPLOYED ? SETTLER_DOMAIN : { ...SETTLER_DOMAIN, chainId: draft.chainId };
   const now = Math.floor(Date.now() / 1000);
   const nonce = orderNonce();
   // Intent must be opened inside the current batch window and filled within 10 minutes.
   const openDeadline = now + BATCH_WINDOW_SECONDS;
   const fillDeadline = now + 600;
   const envelope = {
-    originSettler: SETTLER,
+    originSettler: cross ? CROSS_CHAIN_SETTLER : SETTLER,
     user: draft.user,
     nonce,
     originChainId: BigInt(domain.chainId),
@@ -241,7 +248,8 @@ export function buildGaslessOrder(draft: IntentDraft): {
     fillDeadline,
   };
 
-  if (SETTLER_VERSION >= 2) {
+  // The cross-chain settler takes the same readable CruxOrder as v2/v3.
+  if (cross || SETTLER_VERSION >= 2) {
     const tokenIn = getAddress(draft.inputToken);
     const orderData = encodeAbiParameters(
       [{ type: "address" }, { type: "uint256" }, { type: "string" }, { type: "uint256" }, { type: "uint256" }, { type: "uint32" }],

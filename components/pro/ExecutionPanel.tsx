@@ -12,6 +12,7 @@ import { cruxBatchFactoryAbi } from "@/contracts/abis/batchAuction";
 import { useLaunchMarket } from "@/hooks/useLaunchMarket";
 import type { LaunchV2Model } from "@/hooks/useLaunchV2";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
+import { ARBITRUM, ARBITRUM_USDC, type PayFrom } from "@/lib/crosschain";
 import { SETTLER_DEPLOYED, SLIPPAGE_BPS, TESTNET_USDC } from "@/lib/intents";
 import { USDC_DECIMALS, fmtTokens, fmtUsdc, launchError, type TxStep } from "@/lib/launch";
 import { fmtTokenPrice } from "@/lib/launchTrade";
@@ -348,13 +349,16 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   const [side, setSide] = useState<Side>("buy");
   const [amount, setAmount] = useState("");
   const [order, setOrder] = useState<OrderDraft | null>(null);
+  // Buys can pay with test USDC on Base Sepolia, or on Arbitrum Sepolia (escrowed there, filled here on Base).
+  const [payFrom, setPayFrom] = useState<PayFrom>("base");
+  const fromArbitrum = side === "buy" && payFrom === "arbitrum";
 
   const usdc = useReadContract({
-    address: TESTNET_USDC,
+    address: fromArbitrum ? ARBITRUM_USDC : TESTNET_USDC,
     abi: erc20Abi,
     functionName: "balanceOf",
     args: [address ?? zeroAddress],
-    chainId: TESTNET.id,
+    chainId: fromArbitrum ? ARBITRUM.id : TESTNET.id,
     query: { enabled: Boolean(address), refetchInterval: 15_000 },
   });
   const usdcBalance = address ? (usdc.data ?? null) : null;
@@ -377,8 +381,9 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
             price: qty > 0 ? notional / qty : 0,
             notional,
             source: TEST_USDC_SOURCE,
-            originLabel: "Base Sepolia",
+            originLabel: fromArbitrum ? "Arbitrum Sepolia" : "Base Sepolia",
             asset: { address: market.token, caip19: market.caip19, decimals: market.decimals },
+            ...(fromArbitrum ? { payFrom: "arbitrum" as const } : {}),
           };
         })()
       : null;
@@ -471,8 +476,34 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
         {side === "buy" ? "USDC to spend" : `${symbol} to sell`}
       </label>
       <AmountField id={`${uid}-amt`} value={amount} onChange={setAmount} unit={side === "buy" ? "USDC" : symbol} />
+      {side === "buy" && (
+        <div role="radiogroup" aria-label="Pay from" className="-mt-0.5 flex items-center gap-1.5 text-[11px]">
+          <span className="mr-0.5 text-dim">Pay from</span>
+          {(["base", "arbitrum"] as const).map((c) => (
+            <button
+              key={c}
+              type="button"
+              role="radio"
+              aria-checked={payFrom === c}
+              onClick={() => {
+                setPayFrom(c);
+                setAmount("");
+              }}
+              className={`h-6 rounded-[4px] border px-2 transition-colors ${payFrom === c ? "border-chrome/60 text-chrome" : "border-line-2 text-muted hover:text-chrome"}`}
+            >
+              {c === "base" ? "Base Sepolia" : "Arbitrum Sepolia"}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="-mt-1.5 flex items-baseline justify-between text-[11px] text-dim">
-        <span>{side === "buy" ? "Base Sepolia test USDC · other chains planned" : `Selling ${symbol}`}</span>
+        <span>
+          {side === "buy"
+            ? fromArbitrum
+              ? "Arbitrum Sepolia test USDC · delivered on Base · Hyperlane-proven"
+              : "Base Sepolia test USDC"
+            : `Selling ${symbol}`}
+        </span>
         <span className="font-mono text-muted">
           Bal {side === "buy" ? (usdcBalance !== null ? usd6(usdcBalance) : "…") : tokenBalance !== null ? fmtTokens(tokenBalance) : "…"}
         </span>
@@ -494,7 +525,10 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
         <a href={`${TESTNET_EXPLORER}/address/${auction.pair}`} target="_blank" rel="noopener noreferrer" className="font-mono underline decoration-line-2">
           {short(auction.pair)}
         </a>
-        {market.price !== null && <> at {fmtTokenPrice(market.price)}</>}. Filled in the next batch (about a minute), or refundable after its deadline.
+        {market.price !== null && <> at {fmtTokenPrice(market.price)}</>}.{" "}
+        {fromArbitrum
+          ? "Escrowed on Arbitrum, filled on Base in the next batch, and released to the solver only on a Hyperlane proof of that fill; refundable 6 hours after its deadline if unproven."
+          : "Filled in the next batch (about a minute), or refundable after its deadline."}
       </p>
 
       <MobileDock>

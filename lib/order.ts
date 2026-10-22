@@ -22,6 +22,8 @@ export type OrderDraft = {
    * locked Uniswap pool. Buys escrow test USDC; sells escrow this token.
    */
   asset?: TradedAsset;
+  /** Buys only: pay with test USDC on Arbitrum Sepolia, escrowed there and settled by a Hyperlane fill proof. */
+  payFrom?: "arbitrum";
 };
 
 export type TradedAsset = { address: Address; caip19: string; decimals: number };
