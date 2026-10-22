@@ -9,36 +9,69 @@ function envAddress(value: string | undefined): Address | null {
   return value && isAddress(value) ? (value as Address) : null;
 }
 
+/**
+ * CruxSettlerV3 and its destination (CruxDestinationSettlerV2) on Base Sepolia, once deployed. Both are needed:
+ * v3 settles only on its own destination's fill record. NEXT_PUBLIC_CRUX_SETTLER_V3 and
+ * NEXT_PUBLIC_CRUX_DESTINATION_V2 override them (e.g. on a local fork).
+ */
+const SETTLER_V3_ADDRESS: Address | null = null;
+const DESTINATION_V2_ADDRESS: Address | null = null;
+/** CruxDestinationSettler (v1): where v1 and v2 settlers' orders are filled. */
+const LEGACY_DESTINATION = "0x300a835939D2beBed59C543470DCD9a9c8065822" as Address;
+
 const settlerV1 = envAddress(process.env.NEXT_PUBLIC_CRUX_SETTLER);
 const settlerV2 = envAddress(process.env.NEXT_PUBLIC_CRUX_SETTLER_V2);
-const configuredSettler = settlerV2 ?? settlerV1;
+const settlerV3 = envAddress(process.env.NEXT_PUBLIC_CRUX_SETTLER_V3) ?? SETTLER_V3_ADDRESS;
+const destinationV2 = envAddress(process.env.NEXT_PUBLIC_CRUX_DESTINATION_V2) ?? DESTINATION_V2_ADDRESS;
+const v3Ready = settlerV3 !== null && destinationV2 !== null;
+const configuredSettler = v3Ready ? settlerV3 : (settlerV2 ?? settlerV1);
 
 /**
- * ERC-7683 origin settler on Base Sepolia. CruxSettlerV2 (NEXT_PUBLIC_CRUX_SETTLER_V2) takes over once set:
- * its orders are signed as plain readable fields and it accepts EIP-7702 accounts' own keys. Otherwise
- * CruxSettler v1 (NEXT_PUBLIC_CRUX_SETTLER).
+ * ERC-7683 origin settler on Base Sepolia: the newest one configured.
+ * - v3: trustless same-chain settlement (paid only on the destination's record of the exact fill), refunds
+ *   as soon as the fill deadline passes.
+ * - v2: readable signed orders, EIP-7702 accounts' own keys accepted.
+ * - v1: the original settler.
  */
 export const SETTLER = (configuredSettler ?? PLACEHOLDER_SETTLER) as Address;
 export const SETTLER_DEPLOYED = configuredSettler !== null;
-export const SETTLER_VERSION: 1 | 2 = settlerV2 ? 2 : 1;
+export const SETTLER_VERSION: 1 | 2 | 3 = v3Ready ? 3 : settlerV2 ? 2 : 1;
+
+/** Where the active settler's orders are filled (and where the terminal reads OrderFilled). */
+export const DESTINATION_SETTLER: Address = v3Ready ? destinationV2! : LEGACY_DESTINATION;
+
+/** CruxDestinationSettlerV2 keys fills by the exact order details, so its OrderFilled carries that hash. */
+export const ORDER_FILLED_EVENT =
+  SETTLER_VERSION === 3
+    ? "event OrderFilled(bytes32 indexed orderId, bytes32 indexed fillHash, address indexed filler, address recipient, address token, uint256 amount)"
+    : "event OrderFilled(bytes32 indexed orderId, address indexed filler, address indexed recipient, address token, uint256 amount)";
 
 /** Deploy blocks (crux-contracts/broadcast/Deploy*.s.sol/84532/run-latest.json); log scans start here. */
 const SETTLER_V1_DEPLOY_BLOCK = BigInt(48311115);
 const SETTLER_V2_DEPLOY_BLOCK = BigInt(48410403);
+/** Set with SETTLER_V3_ADDRESS once deployed. */
+const SETTLER_V3_DEPLOY_BLOCK: bigint | null = null;
 
 /**
  * Block the active settler was deployed in. NEXT_PUBLIC_CRUX_SETTLER_V2_BLOCK may override v2's (for a redeploy);
  * anything but a plain number is ignored, so a malformed value can never break the build.
  */
-const v2BlockOverride = process.env.NEXT_PUBLIC_CRUX_SETTLER_V2_BLOCK?.trim();
-export const SETTLER_DEPLOY_BLOCK = settlerV2
-  ? v2BlockOverride && /^\d+$/.test(v2BlockOverride)
-    ? BigInt(v2BlockOverride)
-    : SETTLER_V2_DEPLOY_BLOCK
-  : SETTLER_V1_DEPLOY_BLOCK;
+const blockOverride = (value: string | undefined) => {
+  const v = value?.trim();
+  return v && /^\d+$/.test(v) ? BigInt(v) : null;
+};
+export const SETTLER_DEPLOY_BLOCK =
+  SETTLER_VERSION === 3
+    ? (blockOverride(process.env.NEXT_PUBLIC_CRUX_SETTLER_V3_BLOCK) ?? SETTLER_V3_DEPLOY_BLOCK ?? SETTLER_V2_DEPLOY_BLOCK)
+    : settlerV2
+      ? (blockOverride(process.env.NEXT_PUBLIC_CRUX_SETTLER_V2_BLOCK) ?? SETTLER_V2_DEPLOY_BLOCK)
+      : SETTLER_V1_DEPLOY_BLOCK;
 
-/** CruxSettler.REFUND_GRACE: refunds open this long after an order's fillDeadline. */
-export const REFUND_GRACE_SECONDS = 3600;
+/**
+ * Seconds after an order's fillDeadline when refund() succeeds: v3 refunds a same-chain order the second its
+ * deadline passes unfilled; v1/v2 wait REFUND_GRACE (1 hour).
+ */
+export const REFUND_GRACE_SECONDS = SETTLER_VERSION === 3 ? 1 : 3600;
 
 /** Launch + batch-auction factory on Base Sepolia, once deployed (NEXT_PUBLIC_CRUX_FACTORY). */
 export const FACTORY = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY);
@@ -104,7 +137,7 @@ export function assetId(caip19: string): Hex {
  */
 export const SETTLER_DOMAIN = {
   name: "CruxSettler",
-  version: SETTLER_VERSION === 2 ? "2" : "1",
+  version: String(SETTLER_VERSION),
   chainId: baseSepolia.id,
   verifyingContract: SETTLER,
 } as const;
@@ -196,7 +229,7 @@ export function buildGaslessOrder(draft: IntentDraft): {
     fillDeadline,
   };
 
-  if (SETTLER_VERSION === 2) {
+  if (SETTLER_VERSION >= 2) {
     const tokenIn = getAddress(draft.inputToken);
     const orderData = encodeAbiParameters(
       [{ type: "address" }, { type: "uint256" }, { type: "string" }, { type: "uint256" }, { type: "uint256" }, { type: "uint32" }],

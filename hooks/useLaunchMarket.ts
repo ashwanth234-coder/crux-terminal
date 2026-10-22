@@ -4,12 +4,12 @@ import { erc20Abi, getAddress, keccak256, parseAbi, toHex, zeroAddress, type Add
 import { useConnection, useReadContracts } from "wagmi";
 import { TESTNET } from "@/lib/chains";
 import { useLaunchesV2 } from "@/hooks/useLaunches";
-import { FACTORY_V2, FACTORY_V3, SETTLER, SETTLER_DEPLOYED, TESTNET_USDC } from "@/lib/intents";
+import { DESTINATION_SETTLER, FACTORY_V2, FACTORY_V3, SETTLER, SETTLER_DEPLOYED, TESTNET_USDC } from "@/lib/intents";
 import { launchCaip19, midPrice, type PoolReserves } from "@/lib/launchTrade";
 import type { BatchVersion } from "@/lib/launchV2";
 
-/** CruxDestinationSettler on Base Sepolia: delivers what a buy intent asks for. */
-export const DESTINATION_SETTLER: Address = "0x300a835939D2beBed59C543470DCD9a9c8065822";
+/** The destination settler that delivers what a buy intent asks for (follows the active settler). */
+export { DESTINATION_SETTLER };
 
 const pairAbi = parseAbi([
   "function token0() view returns (address)",

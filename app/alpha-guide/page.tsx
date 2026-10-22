@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Shell } from "@/components/launch/LaunchView";
 import { CopyValue } from "@/components/guide/CopyValue";
 import { LinkButton, ArrowUpRight } from "@/components/ui/Button";
+import { SETTLER_VERSION } from "@/lib/intents";
 
 export const metadata: Metadata = {
   title: "Alpha tester guide · Crux",
@@ -280,7 +281,10 @@ export default function AlphaGuidePage() {
                   {b("Refund opens in…")}
                 </>,
                 <>
-                  About an hour after the deadline (roughly 70 minutes after you placed it), click {b("Refund test USDC")} (or the token,
+                  {SETTLER_VERSION === 3
+                    ? "As soon as the deadline passes (about 10 minutes after you placed it), "
+                    : "About an hour after the deadline (roughly 70 minutes after you placed it), "}
+                  click {b("Refund test USDC")} (or the token,
                   for a sell) and confirm. Refunds always return to your own address; nobody else can redirect them.
                 </>,
               ]}

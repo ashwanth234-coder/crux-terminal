@@ -5,10 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import {
   BaseError,
   ContractFunctionRevertedError,
-  createPublicClient,
   erc20Abi,
   formatUnits,
-  http,
   parseAbi,
   parseAbiItem,
   parseEventLogs,
@@ -16,12 +14,12 @@ import {
   verifyTypedData,
   type Hex,
 } from "viem";
-import { baseSepolia } from "viem/chains";
 import { useConfig, useConnection, useReadContract, useSignTypedData, useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { readContract, simulateContract } from "wagmi/actions";
 import { Modal, KineticLoader } from "@/components/ui/Modal";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { SubmitKey } from "@/components/pro/hotkeys";
+import { logClient } from "@/lib/logs";
 import { SmartAccountNote } from "@/components/ui/SmartAccountNote";
 import { useExactApproval } from "@/hooks/useExactApproval";
 import { verifySettlerDomain } from "@/lib/settlerDomain";
@@ -31,6 +29,8 @@ import {
   BATCH_WINDOW_SECONDS,
   SETTLER,
   SETTLER_DEPLOYED,
+  DESTINATION_SETTLER,
+  ORDER_FILLED_EVENT,
   SLIPPAGE_BPS,
   TESTNET_ESCROW_ASSETS,
   TESTNET_NOVA_CAIP19,
@@ -61,13 +61,9 @@ const priceFmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "
 /** Launch tokens can trade far below a cent; keep their significant digits. */
 const fmtPrice = (v: number) => (v < 0.01 ? fmtTokenPrice(v) : priceFmt.format(v));
 
-// Destination settler on Base Sepolia and its fill event: read-only, to show what the solver delivered.
-const DESTINATION = "0x300a835939D2beBed59C543470DCD9a9c8065822";
-const ORDER_FILLED = parseAbiItem(
-  "event OrderFilled(bytes32 indexed orderId, address indexed filler, address indexed recipient, address token, uint256 amount)",
-);
-// sepolia.base.org caps eth_getLogs at 200 blocks; publicnode allows wide ranges.
-const logClient = createPublicClient({ chain: baseSepolia, transport: http("https://base-sepolia-rpc.publicnode.com", { timeout: 15_000 }) });
+// The active destination settler's fill event: read-only, to show what the solver delivered. Read through the
+// shared log client (wide-range RPCs; NEXT_PUBLIC_BASE_SEPOLIA_LOGS_RPC overrides).
+const ORDER_FILLED = parseAbiItem(ORDER_FILLED_EVENT);
 
 // Escrow status on CruxSettler: 1 Open, 2 Settled (OrderSettled emitted), 3 Refunded.
 const ESCROW_SETTLED = 2;
@@ -190,7 +186,7 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
     enabled: escrowStatus === ESCROW_SETTLED && Boolean(orderId) && fromBlock !== undefined,
     staleTime: Infinity,
     queryFn: async () => {
-      const [log] = await logClient.getLogs({ address: DESTINATION, event: ORDER_FILLED, args: { orderId }, fromBlock });
+      const [log] = await logClient.getLogs({ address: DESTINATION_SETTLER, event: ORDER_FILLED, args: { orderId }, fromBlock });
       return log ? { amount: log.args.amount ?? BigInt(0), tx: log.transactionHash } : null;
     },
   });

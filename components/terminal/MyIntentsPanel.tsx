@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
-import { erc20Abi, formatUnits, type Hex } from "viem";
+import { erc20Abi, formatUnits, parseAbi, type Hex } from "viem";
 import { useConfig, useConnection, useReadContract, useSwitchChain } from "wagmi";
 import { waitForTransactionReceipt } from "wagmi/actions";
 import { buttonClass } from "@/components/ui/Button";
@@ -10,7 +10,7 @@ import { cruxSettlerAbi } from "@/contracts/abis/erc7683";
 import { useMyIntents, type MyIntent } from "@/hooks/useMyIntents";
 import { useBatchClock } from "@/lib/batch";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
-import { SETTLER, SETTLER_DEPLOYED, TESTNET_USDC } from "@/lib/intents";
+import { SETTLER, SETTLER_DEPLOYED, SETTLER_VERSION, TESTNET_USDC } from "@/lib/intents";
 import { StatusTag } from "@/components/ui/StatusTag";
 import { simulateThenWrite } from "@/lib/preflight";
 
@@ -34,10 +34,19 @@ function countdown(seconds: number) {
   return h > 0 ? `${h}h ${pad(m)}m` : `${pad(m)}:${pad(s)}`;
 }
 
+/** The settler's refund reverts, so the pre-flight check can name them. */
+const refundAbi = [
+  ...cruxSettlerAbi,
+  ...parseAbi(["error RefundNotYetAvailable()", "error AlreadyFilled()", "error OrderNotOpen()"]),
+] as const;
+
 function errorMessage(err: unknown) {
   const e = err as { name?: string; shortMessage?: string; message?: string };
+  const text = `${e.shortMessage} ${e.message}`;
   if (e.name === "UserRejectedRequestError" || /reject/i.test(e.shortMessage ?? "")) return "Rejected in wallet.";
-  if (/RefundNotYetAvailable/.test(`${e.shortMessage} ${e.message}`)) return "Not refundable yet. Try again in a moment.";
+  if (/RefundNotYetAvailable/.test(text)) return "Not refundable yet. Try again in a moment.";
+  if (/AlreadyFilled/.test(text)) return "A solver already filled this order, so it can't be refunded. It settles to the solver shortly.";
+  if (/OrderNotOpen/.test(text)) return "This order is already settled or refunded.";
   return e.shortMessage ?? e.message?.split("\n")[0] ?? "Refund failed";
 }
 
@@ -75,7 +84,7 @@ export function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: 
       const hash = await simulateThenWrite(
         config,
         address,
-        { address: SETTLER, abi: cruxSettlerAbi, functionName: "refund", args: [intent.orderId], chainId: TESTNET.id },
+        { address: SETTLER, abi: refundAbi, functionName: "refund", args: [intent.orderId], chainId: TESTNET.id },
         () => setRefund({ kind: "busy", label: "Confirm in wallet…" }),
       );
       setRefund({ kind: "sent", hash });
@@ -201,7 +210,8 @@ export function MyIntentsPanel() {
       </div>
       <p className="mt-1.5 max-w-[46rem] text-[11.5px] leading-relaxed text-muted">
         Orders opened from this wallet escrow their input (test USDC, or the launch token you sell) until a solver fills
-        them. Testnet only: unfilled orders can be refunded 1 hour after their fill deadline.
+        them. Testnet only: unfilled orders can be refunded{" "}
+        {SETTLER_VERSION === 3 ? "as soon as their fill deadline passes (10 minutes)" : "1 hour after their fill deadline"}.
       </p>
 
       {error && intents.length === 0 ? (

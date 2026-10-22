@@ -2,10 +2,9 @@ import type { ReactNode } from "react";
 import { ArrowUpRight } from "@/components/ui/Button";
 import { UnifiedBalanceCard } from "@/components/terminal/UnifiedBalanceCard";
 import { TESTNET_EXPLORER } from "@/lib/chains";
-import { SETTLER, SLIPPAGE_BPS } from "@/lib/intents";
+import { DESTINATION_SETTLER as DESTINATION, SETTLER, SLIPPAGE_BPS } from "@/lib/intents";
 import { Chapter } from "./Chapter";
 
-const DESTINATION = "0x300a835939D2beBed59C543470DCD9a9c8065822";
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
 function Contract({ href, children }: { href: string; children: ReactNode }) {
