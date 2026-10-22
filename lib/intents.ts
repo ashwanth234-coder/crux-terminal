@@ -87,7 +87,7 @@ export const FACTORY_V3 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V3);
 export const CRUX_SOLVER: Address = envAddress(process.env.NEXT_PUBLIC_CRUX_SOLVER) ?? "0x69E422d3Cca945a44210684b57F85f556212AD67";
 
 /** CruxFactoryV4 (V3 + the creator's choice of 30-day vesting or an instant unlock), once deployed. */
-const FACTORY_V4_ADDRESS: Address | null = null;
+const FACTORY_V4_ADDRESS: Address | null = "0x91f65efc87792798dfba69ee191fb4e3a8500d91";
 export const FACTORY_V4 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V4) ?? FACTORY_V4_ADDRESS;
 
 /** The batch factory behind a launch version (/launch/v2|v3|v4/[id]). */
