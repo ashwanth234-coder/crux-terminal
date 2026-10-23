@@ -9,8 +9,9 @@ import { arbitrumSepolia, bscTestnet, sepolia } from "viem/chains";
  * filled those exact order details. The origin settler pays only that filler, and only on a message from the
  * prover. With no proof, the user can refund 6 hours after the fill deadline.
  *
- * Origins: Arbitrum Sepolia (Phase A, live 2026-10-22), Ethereum Sepolia and BSC testnet (Phase B). The settler sits
- * at the same address on each (the deployer's first transaction there); one with `settler: null` isn't deployed yet
+ * Origins: Arbitrum Sepolia (Phase A, live 2026-10-22), Ethereum Sepolia and BSC testnet (Phase B, live 2026-10-23). The settler sits
+ * at 0x570b…9e82 on Arbitrum and BSC (the deployer's first transaction there; failed deploys on Ethereum Sepolia put it
+ * at 0x4579…bF19); one with `settler: null` isn't deployed yet
  * and isn't offered. NEXT_PUBLIC_CRUX_{CROSS_CHAIN,SEPOLIA,BSC}_SETTLER override them (e.g. a local fork).
  */
 export type OriginKey = "arbitrum" | "sepolia" | "bsc";
@@ -75,8 +76,9 @@ export const CROSS_CHAIN_ORIGINS: CrossChainOrigin[] = [
     name: "BSC testnet",
     chain: bscTestnet,
     explorer: "https://testnet.bscscan.com",
-    settler: env(process.env.NEXT_PUBLIC_CRUX_BSC_SETTLER) ?? null,
-    deployBlock: block(process.env.NEXT_PUBLIC_CRUX_BSC_SETTLER_BLOCK, 0),
+    // Deployed 2026-10-23 (crux-contracts broadcast/DeployCrossChainSettler.s.sol/97).
+    settler: env(process.env.NEXT_PUBLIC_CRUX_BSC_SETTLER) ?? "0x570b679cBeDA67322B7d6a348985B6189E8C9e82",
+    deployBlock: block(process.env.NEXT_PUBLIC_CRUX_BSC_SETTLER_BLOCK, 138484527),
     usdc: "0x64544969ed7EBf5f083679233325356EbE738930",
     decimals: 18,
     faucet: "the BNB Chain testnet faucet",
