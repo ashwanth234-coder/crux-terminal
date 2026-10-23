@@ -136,7 +136,7 @@ export function HoldersTable({ factory, id, auction }: { factory: Address; id: s
       <p className="px-1 pt-1.5 text-[11px] text-dim">
         {rows ? `Top ${Math.min(SHOWN, rows.length)} of ${rows.length} holders` : "Holders"} · balances from Transfer events · PnL at the pool price · ≈ priced at
         the solver&apos;s batch price · * part of the holding has no price.
-        {transfers.data?.truncated && " Only the last six days of transfers are read, so older holders may be missing."}
+        {transfers.data?.truncated && " Only the last three days of transfers are read, so older holders may be missing."}
       </p>
     </div>
   );

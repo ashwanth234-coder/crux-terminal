@@ -76,7 +76,7 @@ export function usePoolSwaps(pair: Address, settledAt: number, enabled: boolean,
     queryKey,
     queryFn: ({ client }) =>
       tracked(pollId, () =>
-        scanLogs(client.getQueryData<LogScan<PoolTrade>>(queryKey), settledAt, async (fromBlock, toBlock, timeOf) => {
+        scanLogs(client.getQueryData<LogScan<PoolTrade>>(queryKey), settledAt, async (fromBlock, toBlock) => {
           const [usdcIs0, logs, batch] = await Promise.all([
             readUsdcIs0(pair),
             logClient.getLogs({ address: pair, event: SWAP, fromBlock, toBlock }),
@@ -97,8 +97,7 @@ export function usePoolSwaps(pair: Address, settledAt: number, enabled: boolean,
                   txHash: l.transactionHash,
                   blockNumber: l.blockNumber,
                   logIndex: l.logIndex,
-                  time: timeOf(l.blockNumber),
-                } satisfies PoolTrade;
+                } satisfies Omit<PoolTrade, "time">;
               })
             : [];
           const swaps = logs.map((l) => {
@@ -121,8 +120,7 @@ export function usePoolSwaps(pair: Address, settledAt: number, enabled: boolean,
               txHash: l.transactionHash,
               blockNumber: l.blockNumber,
               logIndex: l.logIndex,
-              time: timeOf(l.blockNumber),
-            } satisfies PoolTrade;
+            } satisfies Omit<PoolTrade, "time">;
           });
           return [...swaps, ...batchFills].sort((a, b) => (a.blockNumber === b.blockNumber ? a.logIndex - b.logIndex : a.blockNumber < b.blockNumber ? -1 : 1));
         }),

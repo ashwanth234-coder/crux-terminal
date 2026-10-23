@@ -222,7 +222,7 @@ export function DemandCurve({
           : book.length > 0
             ? `Not clearing yet: demand at the floor covers ${pctDown(coverage)}% of the sale. Below 100% when the window closes, the launch cancels and everyone is refunded.`
             : "Each bid adds demand up to its limit price. The batch clears where demand meets the sale line."}
-        {bids.data?.truncated && " Bids older than about six days aren't shown."}
+        {bids.data?.truncated && " Bids older than about three days aren't shown."}
       </p>
     </div>
   );

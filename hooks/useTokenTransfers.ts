@@ -22,7 +22,7 @@ export type TokenTransfer = {
 /**
  * Every Transfer of a launch token since shortly before its auction opened, plus the auction's Claimed events
  * (so a claim can be told apart from a creator vesting release), oldest first, read incrementally like the bids
- * and swaps (lib/logs scanLogs). Enough to rebuild holder balances while the history fits the six-day log window;
+ * and swaps (lib/logs scanLogs). Enough to rebuild holder balances while the history fits the three-day log window;
  * `truncated` says when it doesn't.
  */
 export function useTokenTransfers(token: Address, factory: Address, auctionId: bigint, since: number, enabled: boolean) {
@@ -32,12 +32,12 @@ export function useTokenTransfers(token: Address, factory: Address, auctionId: b
     queryKey,
     queryFn: ({ client }) =>
       tracked(pollId, () =>
-        scanLogs(client.getQueryData<LogScan<TokenTransfer>>(queryKey), since, async (fromBlock, toBlock, timeOf) => {
+        scanLogs(client.getQueryData<LogScan<TokenTransfer>>(queryKey), since, async (fromBlock, toBlock) => {
           const [logs, claims] = await Promise.all([
             logClient.getLogs({ address: token, event: TRANSFER, fromBlock, toBlock }),
             logClient.getLogs({ address: factory, event: CLAIMED, args: { auctionId }, fromBlock, toBlock }),
           ]);
-          const claimItems: TokenTransfer[] = claims.map(
+          const claimItems: Omit<TokenTransfer, "time">[] = claims.map(
             (l) =>
               ({
                 kind: "claim",
@@ -47,10 +47,9 @@ export function useTokenTransfers(token: Address, factory: Address, auctionId: b
                 txHash: l.transactionHash,
                 blockNumber: l.blockNumber,
                 logIndex: l.logIndex,
-                time: timeOf(l.blockNumber),
-              }) satisfies TokenTransfer,
+              }) satisfies Omit<TokenTransfer, "time">,
           );
-          const transferItems: TokenTransfer[] = logs.map(
+          const transferItems: Omit<TokenTransfer, "time">[] = logs.map(
             (l) =>
               ({
                 kind: "transfer",
@@ -60,8 +59,7 @@ export function useTokenTransfers(token: Address, factory: Address, auctionId: b
                 txHash: l.transactionHash,
                 blockNumber: l.blockNumber,
                 logIndex: l.logIndex,
-                time: timeOf(l.blockNumber),
-              }) satisfies TokenTransfer,
+              }) satisfies Omit<TokenTransfer, "time">,
           );
           return [...transferItems, ...claimItems];
         }),

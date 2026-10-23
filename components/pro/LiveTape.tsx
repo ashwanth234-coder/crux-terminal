@@ -239,7 +239,7 @@ export function LiveTape({
           </button>
         )}
       </div>
-      {truncated && <p className="px-1 pt-1.5 text-[11px] text-dim">Only the last six days are shown.</p>}
+      {truncated && <p className="px-1 pt-1.5 text-[11px] text-dim">Only the last three days are shown.</p>}
       </>
       )}
     </div>

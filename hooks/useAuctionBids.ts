@@ -48,7 +48,7 @@ export function useAuctionBids(factory: Address, auction: AuctionV2, id: bigint,
     queryKey,
     queryFn: ({ client }) =>
       tracked(pollId, () =>
-        scanLogs(client.getQueryData<LogScan<BidEvent>>(queryKey), auction.startTime, async (fromBlock, toBlock, timeOf) => {
+        scanLogs(client.getQueryData<LogScan<BidEvent>>(queryKey), auction.startTime, async (fromBlock, toBlock) => {
           const logs = await logClient.getLogs({ address: factory, event: BID_PLACED, args: { auctionId: id }, fromBlock, toBlock });
           return logs.map((l) => ({
             account: l.args.account!,
@@ -58,7 +58,6 @@ export function useAuctionBids(factory: Address, auction: AuctionV2, id: bigint,
             blockNumber: l.blockNumber,
             logIndex: l.logIndex,
             txHash: l.transactionHash,
-            time: timeOf(l.blockNumber),
           }));
         }),
       ),
