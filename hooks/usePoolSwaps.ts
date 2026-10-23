@@ -41,7 +41,7 @@ function readUsdcIs0(pair: Address) {
 }
 
 /**
- * A V5 launch's batch pool and token, found from the pair: its token (the non-USDC side) names the pool as
+ * A V5 / V6 launch's batch pool and token, found from the pair: its token (the non-USDC side) names the pool as
  * guardian(); older tokens don't have one. Read once per pair.
  */
 const batchPools = new Map<Address, Promise<{ pool: Address; token: Address } | null>>();
@@ -67,7 +67,7 @@ const newestFirst = (scan: LogScan<PoolTrade>) => ({ trades: [...scan.items].rev
 
 /**
  * Every trade on a graduated launch since graduation, newest first: swaps on its locked Uniswap V2 pool, and for a
- * V5 launch also each order filled in its batch pool's 24-hour batches (at its batch's uniform price).
+ * V5 / V6 launch also each order filled in its batch pool's batches (at its batch's uniform price).
  */
 export function usePoolSwaps(pair: Address, settledAt: number, enabled: boolean, tokenDecimals = 18) {
   const queryKey = ["pool-swaps", pair];

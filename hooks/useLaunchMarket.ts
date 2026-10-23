@@ -33,8 +33,9 @@ export type LaunchMarket = {
   tokenBalance: bigint | null;
   loading: boolean;
   /**
-   * V5 launches: the CruxBatchPool the token trades in for 24 hours after graduation. While `protected`, the
-   * reserves above are the pool's (the Uniswap pair is empty and locked) and trades happen only in its batches.
+   * V5 / V6 launches: the batch pool the token trades in for its protection window after graduation (24 hours on V5,
+   * per launch on V6). While `protected`, the reserves above are the pool's (the Uniswap pair is empty and locked) and
+   * trades happen only in its batches.
    */
   batchPool: Address | null;
   protected: boolean;
@@ -67,10 +68,15 @@ export function useLaunchMarket(token: Address, pair: Address): LaunchMarket {
   const [t0, res, dest, origin, dec, bal, guardian] = reads.data ?? [];
   const batchPool = guardian?.status === "success" && guardian.result !== zeroAddress ? (guardian.result as Address) : null;
   const pool = useReadContracts({
-    contracts: [{ ...on, address: batchPool ?? zeroAddress, abi: batchPoolAbi, functionName: "pools", args: [token] }],
+    contracts: [
+      { ...on, address: batchPool ?? zeroAddress, abi: batchPoolAbi, functionName: "pools", args: [token] },
+      // The window is the pool's to say: 24 hours on V5, fixed per launch on V6.
+      { ...on, address: batchPool ?? zeroAddress, abi: batchPoolAbi, functionName: "protectedUntil", args: [token] },
+    ],
     query: { enabled: batchPool !== null, refetchInterval: 10_000 },
   });
   const poolState = pool.data?.[0]?.result;
+  const until = pool.data?.[1]?.result;
   const isProtected = Boolean(poolState && !poolState[4]);
   const decimals = dec?.result ?? 18;
   let reserves: PoolReserves | null = null;
@@ -96,7 +102,7 @@ export function useLaunchMarket(token: Address, pair: Address): LaunchMarket {
     batchPool,
     protected: isProtected,
     seededAt: poolState ? Number(poolState[3]) : null,
-    protectedUntil: poolState ? Number(poolState[3]) + 24 * 3600 : null,
+    protectedUntil: until !== undefined ? Number(until) : null,
   };
 }
 

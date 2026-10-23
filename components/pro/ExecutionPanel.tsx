@@ -340,16 +340,30 @@ function Status({ busy, error, done }: { busy: Busy; error: string | null; done:
   return null;
 }
 
-// ------------------------------------------------------------------ graduated: V5's 24-hour batch window
+// ------------------------------------------------------------------ graduated: the batch-only window (V5, V6)
 
 /**
- * A graduated launch's desk. V5 launches start with 24 hours of batch-only trading in their batch pool: orders go
- * there directly (Batch order), or through a Crux intent the solver fills by joining the batch (Via intent, which
- * also takes payment from Arbitrum). After that, and for V2–V4 launches, it's the intent desk on the Uniswap pool.
+ * A graduated launch's desk. V5 and V6 launches start with a batch-only window in their batch pool (24 hours on V5,
+ * 15 minutes by default on V6): orders go there directly (Batch order), or through a Crux intent the solver fills by
+ * joining the batch (Via intent, which also takes payment from other chains). When the window ends the keeper moves
+ * the liquidity to Uniswap, usually within seconds; after that, and for V2–V4 launches, it's the intent desk on the
+ * Uniswap pool.
  */
 function GraduatedDesk({ auction, symbol }: { auction: AuctionV2; symbol: string }) {
   const market = useLaunchMarket(auction.token, auction.pair);
   const [mode, setMode] = useState<"batch" | "intent">("batch");
+  const now = useNow();
+  if (market.protected && market.protectedUntil !== null && now >= market.protectedUntil) {
+    return (
+      <section aria-label="Moving to Uniswap" className="p-4">
+        <h2 className="text-[14px] font-medium text-chrome">Moving to Uniswap</h2>
+        <p role="status" className="mt-1.5 text-[11.5px] leading-snug text-muted">
+          The batch-only window has closed. The keeper is clearing the last batch and moving the liquidity into the
+          Uniswap pool with the LP burned, usually within seconds. Trading reopens here when it lands.
+        </p>
+      </section>
+    );
+  }
   if (!market.protected) {
     return (
       <section aria-label="Trade via intent" className="p-4">
@@ -386,12 +400,18 @@ function GraduatedDesk({ auction, symbol }: { auction: AuctionV2; symbol: string
   );
 }
 
-function ProtectionNote({ market }: { market: LaunchMarket }) {
+/** Unix seconds, ticking every second: the batch window is minutes long. */
+function useNow() {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
   useEffect(() => {
-    const t = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 30_000);
+    const t = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1_000);
     return () => clearInterval(t);
   }, []);
+  return now;
+}
+
+function ProtectionNote({ market }: { market: LaunchMarket }) {
+  const now = useNow();
   const left = market.protectedUntil !== null ? Math.max(0, market.protectedUntil - now) : null;
   return (
     <p className="mt-1.5 text-[11.5px] leading-snug text-muted">

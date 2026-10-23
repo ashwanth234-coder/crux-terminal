@@ -30,7 +30,7 @@ function Bar({ value, className }: { value: number; className: string }) {
 /** Identity first, then the one price everyone pays, then how far the auction has come. */
 export function LaunchCard({ launch, phase, now }: { launch: LaunchSummary; phase: Phase; now: number | null }) {
   const { auction, id } = launch;
-  const vestDays = useCreatorVestingDays(launch.version >= 2 ? batchFactory(launch.version as 2 | 3 | 4 | 5) : null, id, launch.version);
+  const vestDays = useCreatorVestingDays(launch.version >= 2 ? batchFactory(launch.version as 2 | 3 | 4 | 5 | 6) : null, id, launch.version);
   const badge = BADGE[phase];
   const ticker = launch.symbol ?? `#${id}`;
   const raised = auction.graduationTarget > BigInt(0) ? Number((auction.totalDeposits * BigInt(10000)) / auction.graduationTarget) / 10_000 : 0;

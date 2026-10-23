@@ -2,8 +2,8 @@
 
 import { useId, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { getAddress, keccak256, parseEventLogs, parseUnits, toHex, type Address, type Hex } from "viem";
-import { useConfig, useConnection, useSwitchChain } from "wagmi";
+import { getAddress, keccak256, parseAbi, parseEventLogs, parseUnits, toHex, type Address, type Hex } from "viem";
+import { useConfig, useConnection, useReadContract, useSwitchChain } from "wagmi";
 import { waitForTransactionReceipt } from "wagmi/actions";
 import { Modal, KineticLoader } from "@/components/ui/Modal";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
@@ -171,6 +171,16 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
   const { openConnect } = useConnectModal();
 
   const [form, setForm] = useState<Form>(INITIAL);
+  // V6 launches take the factory's batch-only window when created (owner-tunable); V5's is always 24 hours.
+  const protectionWindow = useReadContract({
+    chainId: TESTNET.id,
+    address: LAUNCH_FACTORY?.address,
+    abi: parseAbi(["function protectionWindow() view returns (uint256)"]),
+    functionName: "protectionWindow",
+    query: { enabled: LAUNCH_FACTORY?.version === 6 },
+  });
+  const batchOnlySeconds =
+    LAUNCH_FACTORY?.version === 5 ? 86_400 : LAUNCH_FACTORY?.version === 6 && protectionWindow.data !== undefined ? Number(protectionWindow.data) : null;
   const [touched, setTouched] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: "form" });
   const [error, setError] = useState<string | null>(null);
@@ -209,7 +219,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
   };
 
   /** CruxFactoryV2/V3: scheduled start, per-wallet cap, locked liquidity (same createAuction on both). */
-  const deployV2 = async (factory: Address, version: 2 | 3 | 4 | 5) => {
+  const deployV2 = async (factory: Address, version: 2 | 3 | 4 | 5 | 6) => {
     if (!isConnected || !address) {
       openConnect();
       return;
@@ -718,11 +728,24 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
               <li className="flex items-start gap-2">
                 <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-chrome/40" aria-hidden="true" />
                 <span>
-                  Liquidity is locked forever: {V2_SPLIT.lpBps / 100}% of supply and half the raise seed a Uniswap pool whose LP is burned. Your{" "}
+                  Liquidity is locked forever: {V2_SPLIT.lpBps / 100}% of supply and half the raise seed a Uniswap pool whose LP is burned
+                  {LAUNCH_FACTORY.version >= 5 ? " (after the batch-only window below)" : ""}. Your{" "}
                   {V2_SPLIT.creatorBps / 100}% and your share of the raise{" "}
                   {LAUNCH_FACTORY && LAUNCH_FACTORY.version >= 4 && form.instantUnlock ? "unlock at graduation (instant unlock)." : "vest over 30 days."}
                 </span>
               </li>
+              {LAUNCH_FACTORY.version >= 5 && (
+                <li className="flex items-start gap-2">
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-chrome/40" aria-hidden="true" />
+                  <span>
+                    <span className="text-chrome">
+                      Anti-sniper window{batchOnlySeconds !== null ? `: ${windowLabel(batchOnlySeconds).replace("-", " ")}s` : ""}.
+                    </span>{" "}
+                    After graduation the token trades only in 60-second batches, each cleared on-chain at one price, so nobody can
+                    buy ahead of anyone. Then the liquidity moves to Uniswap, where every trading terminal can see it.
+                  </span>
+                </li>
+              )}
               <li className="flex items-start gap-2">
                 <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-chrome/40" aria-hidden="true" />
                 <span>

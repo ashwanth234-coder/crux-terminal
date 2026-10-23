@@ -46,7 +46,10 @@ const STATUS: Record<PhaseV2, { label: string; tone: string; dot: string }> = {
   cancelled: { label: "Cancelled · refunds open", tone: "border-dashed border-line-2 text-chrome", dot: "border border-muted" },
 };
 
-/** /launch/v2|v3|v4/[id]: an auction on CruxFactoryV2, V3 or V4 (same launch, same screen; V4 adds the vesting choice). */
+/**
+ * /launch/v2…v6/[id]: an auction on CruxFactoryV2–V6 (same launch, same screen; V4 adds the vesting choice, V5 and V6
+ * the batch-only window after graduation).
+ */
 export function LaunchRouteV2({ version = 2 }: { version?: BatchVersion }) {
   const { id } = useParams<{ id: string }>();
   const factory = batchFactory(version);

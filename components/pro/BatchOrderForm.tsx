@@ -58,7 +58,7 @@ function useNow() {
 }
 
 /**
- * A V5 launch inside its 24-hour protection: orders go straight into the batch pool's current 60-second batch,
+ * A V5 / V6 launch inside its batch-only window: orders go straight into the batch pool's current 60-second batch,
  * which clears at one uniform price on-chain. The minimum signed here is the order's protection: if the batch's
  * price would give less, the whole order is refunded instead of filling worse.
  */
