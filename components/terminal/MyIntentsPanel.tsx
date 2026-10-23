@@ -10,7 +10,7 @@ import { cruxSettlerAbi } from "@/contracts/abis/erc7683";
 import { useMyIntents, type MyIntent } from "@/hooks/useMyIntents";
 import { useBatchClock } from "@/lib/batch";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
-import { ARBITRUM, ARBITRUM_EXPLORER, ARBITRUM_USDC, CROSS_CHAIN_SETTLER } from "@/lib/crosschain";
+import { LIVE_ORIGINS, originByKey } from "@/lib/crosschain";
 import { SETTLER, SETTLER_DEPLOYED, SETTLER_VERSION, TESTNET_USDC } from "@/lib/intents";
 import { StatusTag } from "@/components/ui/StatusTag";
 import { simulateThenWrite } from "@/lib/preflight";
@@ -56,11 +56,14 @@ type Refund = { kind: "idle" } | { kind: "busy"; label: string } | { kind: "sent
 export function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: number | null; onRefunded: () => void }) {
   // Buys escrow test USDC (on Arbitrum for a cross-chain order); a launch-token sell escrows the token itself
   // (Crux launch tokens have 18 decimals).
-  const cross = intent.origin === "arbitrum";
-  const chain = cross ? ARBITRUM : TESTNET;
-  const settler = cross ? CROSS_CHAIN_SETTLER : SETTLER;
-  const explorer = cross ? ARBITRUM_EXPLORER : TESTNET_EXPLORER;
-  const escrowsUsdc = intent.token === null || [TESTNET_USDC, ARBITRUM_USDC].some((u) => u.toLowerCase() === intent.token!.toLowerCase());
+  const origin = intent.origin ? originByKey(intent.origin) : null;
+  const cross = origin !== null;
+  const chain = origin ? origin.chain : TESTNET;
+  const settler = origin ? origin.settler : SETTLER;
+  const explorer = origin ? origin.explorer : TESTNET_EXPLORER;
+  const escrowsUsdc = intent.token === null || [TESTNET_USDC, ...LIVE_ORIGINS.map((o) => o.usdc)].some((u) => u.toLowerCase() === intent.token!.toLowerCase());
+  // USDC is 6 decimals except BSC testnet's (18); a sold launch token has 18.
+  const escrowDecimals = escrowsUsdc ? (origin?.decimals ?? 6) : 18;
   const { data: tokenSymbol } = useReadContract({
     address: intent.token ?? undefined,
     abi: erc20Abi,
@@ -109,7 +112,7 @@ export function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: 
         : open
           ? {
               dot: "bg-signal",
-              label: refundable ? "Unfilled · refund open" : cross ? "In escrow on Arbitrum · awaiting fill + proof" : "In escrow · awaiting solver",
+              label: refundable ? "Unfilled · refund open" : cross ? `In escrow on ${origin!.name} · awaiting fill + proof` : "In escrow · awaiting solver",
               tone: "text-chrome/85",
             }
           : { dot: "bg-line-2", label: "Reading escrow…", tone: "text-dim" };
@@ -122,7 +125,7 @@ export function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: 
           target="_blank"
           rel="noopener noreferrer"
           className="font-mono text-[12px] text-chrome/80 underline decoration-line-2 underline-offset-2 transition-colors hover:text-chrome"
-          title={`Order ${intent.orderId} on ${cross ? "Arbiscan" : "Basescan"}`}
+          title={`Order ${intent.orderId} on ${cross ? `${origin!.name}'s explorer` : "Basescan"}`}
         >
           {shortId(intent.orderId)} ↗
         </a>
@@ -133,7 +136,7 @@ export function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: 
       </div>
 
       <p className="text-right font-mono text-[12.5px] tabular-nums text-chrome">
-        {intent.amount === null ? "—" : usdcFmt.format(Number(formatUnits(intent.amount, escrowsUsdc ? 6 : 18)))}
+        {intent.amount === null ? "—" : usdcFmt.format(Number(formatUnits(intent.amount, escrowDecimals)))}
         <span className="ml-1 text-[11px] text-muted">{unit}</span>
       </p>
 
@@ -205,7 +208,7 @@ export function MyIntentsPanel() {
           <h3 id="my-intents-title" className="text-[13px] text-chrome">
             My intents
           </h3>
-          <StatusTag status="testnet" label="Base + Arbitrum Sepolia" />
+          <StatusTag status="testnet" label={["Base", ...LIVE_ORIGINS.map((o) => o.name.replace(" testnet", "").replace(" Sepolia", ""))].join(" + ") + " testnets"} />
         </div>
         <div className="flex items-center gap-3 text-[11px] text-dim">
           {intents.length > 0 && (
@@ -222,7 +225,7 @@ export function MyIntentsPanel() {
         Orders opened from this wallet escrow their input (test USDC, or the launch token you sell) until a solver fills
         them. Testnet only: unfilled orders can be refunded{" "}
         {SETTLER_VERSION === 3 ? "as soon as their fill deadline passes (10 minutes)" : "1 hour after their fill deadline"}; orders paid from
-        Arbitrum, 6 hours after it if no fill proof arrived.
+        another chain, 6 hours after it if no fill proof arrived.
       </p>
 
       {error && intents.length === 0 ? (

@@ -13,7 +13,7 @@ import { cruxBatchFactoryAbi } from "@/contracts/abis/batchAuction";
 import { useLaunchMarket, type LaunchMarket } from "@/hooks/useLaunchMarket";
 import type { LaunchV2Model } from "@/hooks/useLaunchV2";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
-import { ARBITRUM, ARBITRUM_USDC, type PayFrom } from "@/lib/crosschain";
+import { LIVE_ORIGINS, originByKey, toUsdc6, type PayFrom } from "@/lib/crosschain";
 import { SETTLER_DEPLOYED, SLIPPAGE_BPS, TESTNET_USDC } from "@/lib/intents";
 import { USDC_DECIMALS, fmtTokens, fmtUsdc, formatRemaining, launchError, type TxStep } from "@/lib/launch";
 import { fmtTokenPrice } from "@/lib/launchTrade";
@@ -413,17 +413,18 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   const [order, setOrder] = useState<OrderDraft | null>(null);
   // Buys can pay with test USDC on Base Sepolia, or on Arbitrum Sepolia (escrowed there, filled here on Base).
   const [payFrom, setPayFrom] = useState<PayFrom>("base");
-  const fromArbitrum = side === "buy" && payFrom === "arbitrum";
+  // A buy can pay from any live cross-chain origin; its USDC balance is shown and compared in 6-decimal units.
+  const fromOrigin = side === "buy" && payFrom !== "base" ? originByKey(payFrom) : null;
 
   const usdc = useReadContract({
-    address: fromArbitrum ? ARBITRUM_USDC : TESTNET_USDC,
+    address: fromOrigin ? fromOrigin.usdc : TESTNET_USDC,
     abi: erc20Abi,
     functionName: "balanceOf",
     args: [address ?? zeroAddress],
-    chainId: fromArbitrum ? ARBITRUM.id : TESTNET.id,
+    chainId: fromOrigin ? fromOrigin.chain.id : TESTNET.id,
     query: { enabled: Boolean(address), refetchInterval: 15_000 },
   });
-  const usdcBalance = address ? (usdc.data ?? null) : null;
+  const usdcBalance = address && usdc.data !== undefined ? toUsdc6(usdc.data, fromOrigin?.decimals ?? 6) : null;
   const tokenBalance = market.tokenBalance;
 
   const decimals = side === "buy" ? 6 : market.decimals;
@@ -443,9 +444,9 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
             price: qty > 0 ? notional / qty : 0,
             notional,
             source: TEST_USDC_SOURCE,
-            originLabel: fromArbitrum ? "Arbitrum Sepolia" : "Base Sepolia",
+            originLabel: fromOrigin ? fromOrigin.name : "Base Sepolia",
             asset: { address: market.token, caip19: market.caip19, decimals: market.decimals },
-            ...(fromArbitrum ? { payFrom: "arbitrum" as const } : {}),
+            ...(fromOrigin ? { payFrom: fromOrigin.key } : {}),
           };
         })()
       : null;
@@ -543,7 +544,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
       {side === "buy" && (
         <div role="radiogroup" aria-label="Pay from" className="-mt-0.5 flex items-center gap-1.5 text-[11px]">
           <span className="mr-0.5 text-dim">Pay from</span>
-          {(["base", "arbitrum"] as const).map((c) => (
+          {(["base", ...LIVE_ORIGINS.map((o) => o.key)] as PayFrom[]).map((c) => (
             <button
               key={c}
               type="button"
@@ -555,7 +556,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
               }}
               className={`h-6 rounded-[4px] border px-2 transition-colors ${payFrom === c ? "border-chrome/60 text-chrome" : "border-line-2 text-muted hover:text-chrome"}`}
             >
-              {c === "base" ? "Base Sepolia" : "Arbitrum Sepolia"}
+              {c === "base" ? "Base Sepolia" : originByKey(c)!.name}
             </button>
           ))}
         </div>
@@ -563,8 +564,8 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
       <div className="-mt-1.5 flex items-baseline justify-between text-[11px] text-dim">
         <span>
           {side === "buy"
-            ? fromArbitrum
-              ? "Arbitrum Sepolia test USDC · delivered on Base · Hyperlane-proven"
+            ? fromOrigin
+              ? `${fromOrigin.name} test USDC · delivered on Base · Hyperlane-proven`
               : "Base Sepolia test USDC"
             : `Selling ${symbol}`}
         </span>
@@ -597,8 +598,8 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
           {short(auction.pair)}
         </a>
         {market.price !== null && <> at {fmtTokenPrice(market.price)}</>}.{" "}
-        {fromArbitrum
-          ? "Escrowed on Arbitrum, filled on Base in the next batch, and released to the solver only on a Hyperlane proof of that fill; refundable 6 hours after its deadline if unproven."
+        {fromOrigin
+          ? `Escrowed on ${fromOrigin.name}, filled on Base in the next batch, and released to the solver only on a Hyperlane proof of that fill; refundable 6 hours after its deadline if unproven.`
           : "Filled in the next batch (about a minute), or refundable after its deadline."}
       </p>
       )}

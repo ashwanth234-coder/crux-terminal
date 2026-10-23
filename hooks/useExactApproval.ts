@@ -5,7 +5,7 @@ import { erc20Abi, maxUint256, type Address, type Hex } from "viem";
 import { useConfig } from "wagmi";
 import { getConnection, readContract, simulateContract, switchChain, waitForTransactionReceipt, writeContract } from "wagmi/actions";
 import { TESTNET } from "@/lib/chains";
-import { ARBITRUM } from "@/lib/crosschain";
+import { CROSS_CHAIN_ORIGINS, type OriginChainId } from "@/lib/crosschain";
 import { feeHeadroom } from "@/lib/fees";
 
 /** Anything at or above half of uint256 is treated as an "unlimited" approval and refused outright. */
@@ -17,8 +17,8 @@ export type ApprovalRequest = {
   spender: Address;
   /** Exactly what the next call will pull, in the token's base units. */
   amount: bigint;
-  /** Chain the token lives on: Base Sepolia unless given (Arbitrum Sepolia for cross-chain orders). */
-  chainId?: typeof TESTNET.id | typeof ARBITRUM.id;
+  /** Chain the token lives on: Base Sepolia unless given (a cross-chain origin for cross-chain orders). */
+  chainId?: typeof TESTNET.id | OriginChainId;
 };
 
 export type ApprovalHooks = {
@@ -59,7 +59,8 @@ export function useExactApproval() {
       const hash = await writeContract(config, { ...request, ...fees } as typeof request);
       hooks.onSent?.(hash);
       const receipt = await waitForTransactionReceipt(config, { hash, chainId });
-      if (receipt.status !== "success") throw new Error(`The approval reverted on ${chainId === ARBITRUM.id ? "Arbitrum" : "Base"} Sepolia.`);
+      const chainName = CROSS_CHAIN_ORIGINS.find((o) => o.chain.id === chainId)?.name ?? "Base Sepolia";
+      if (receipt.status !== "success") throw new Error(`The approval reverted on ${chainName}.`);
       return hash;
     },
     [config],

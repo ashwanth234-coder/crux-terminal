@@ -1,14 +1,14 @@
 "use client";
 
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { createPublicClient, fallback, getAbiItem, getAddress, http, isAddressEqual, type Address, type Hex, type PublicClient } from "viem";
 import { baseSepolia } from "viem/chains";
 import { useConnection, useReadContracts } from "wagmi";
 import { cruxSettlerAbi, originSettlerAbi } from "@/contracts/abis/erc7683";
 import { REFUND_GRACE_SECONDS, SETTLER, SETTLER_DEPLOYED, SETTLER_DEPLOY_BLOCK } from "@/lib/intents";
 import { HEAD_LAG } from "@/lib/logs";
-import { ARBITRUM, CROSS_CHAIN_DEPLOY_BLOCK, CROSS_CHAIN_REFUND_GRACE_SECONDS, CROSS_CHAIN_SETTLER, arbitrumLogClient } from "@/lib/crosschain";
+import { CROSS_CHAIN_REFUND_GRACE_SECONDS, LIVE_ORIGINS, originByKey, type OriginKey } from "@/lib/crosschain";
 
 const OPEN_EVENT = getAbiItem({ abi: originSettlerAbi, name: "Open" });
 
@@ -41,8 +41,8 @@ type OpenedOrder = {
   outAsset?: Hex;
   minOut?: string;
   inToken?: Address;
-  /** Escrowed on Arbitrum Sepolia (CruxCrossChainSettler); otherwise on the Base Sepolia settler. */
-  origin?: "arbitrum";
+  /** Escrowed on a cross-chain origin (its CruxCrossChainSettler); otherwise on the Base Sepolia settler. */
+  origin?: OriginKey;
 };
 type ScanCache = { scannedTo: string; orders: OpenedOrder[] };
 const NONE: OpenedOrder[] = [];
@@ -59,16 +59,16 @@ export type MyIntent = OpenedOrder & {
 };
 
 /** Where a wallet's orders are opened: the Base Sepolia settler, and the cross-chain settler on Arbitrum Sepolia. */
-type Source = { client: PublicClient; settler: Address; chainId: number; deployBlock: bigint; origin?: "arbitrum" };
+type Source = { client: PublicClient; settler: Address; chainId: number; deployBlock: bigint; origin?: OriginKey };
 
 const BASE_SOURCE: Source = { client: logClient as PublicClient, settler: SETTLER, chainId: baseSepolia.id, deployBlock: SETTLER_DEPLOY_BLOCK };
-const ARBITRUM_SOURCE: Source = {
-  client: arbitrumLogClient as PublicClient,
-  settler: CROSS_CHAIN_SETTLER,
-  chainId: ARBITRUM.id,
-  deployBlock: CROSS_CHAIN_DEPLOY_BLOCK,
-  origin: "arbitrum",
-};
+/** All origins' orders as one list (memoized by useQueries while the results don't change), and a refetch for all. */
+function combineOrigins(results: { data?: OpenedOrder[]; refetch: () => Promise<unknown> }[]) {
+  return { orders: results.flatMap((r) => r.data ?? NONE), refetch: () => Promise.all(results.map((r) => r.refetch())) };
+}
+
+/** Every live cross-chain origin's settler (lib/crosschain.ts). */
+const ORIGIN_SOURCES: Source[] = LIVE_ORIGINS.map((o) => ({ client: o.logClient, settler: o.settler, chainId: o.chain.id, deployBlock: o.deployBlock, origin: o.key }));
 
 function cacheKey(source: Source, user: Address) {
   // v2: orders carry their assets; older caches lack them, so they rescan once.
@@ -150,22 +150,25 @@ export function useMyIntents() {
     enabled,
     refetchInterval: 30_000,
   });
-  // Arbitrum is read separately, so a slow Arbitrum RPC never hides Base orders.
-  const openedArb = useQuery({
-    queryKey: ["crux-my-intents", CROSS_CHAIN_SETTLER, ARBITRUM.id, address],
-    queryFn: () => scanOpenedOrders(ARBITRUM_SOURCE, address as Address),
-    enabled,
-    refetchInterval: 30_000,
+  // Each cross-chain origin is read separately, so one slow RPC never hides Base orders or another chain's.
+  const fromOrigins = useQueries({
+    queries: ORIGIN_SOURCES.map((source) => ({
+      queryKey: ["crux-my-intents", source.settler, source.chainId, address],
+      queryFn: () => scanOpenedOrders(source, address as Address),
+      enabled,
+      refetchInterval: 30_000,
+    })),
+    combine: combineOrigins,
   });
 
-  const orders = useMemo(() => [...(opened.data ?? NONE), ...(openedArb.data ?? NONE)], [opened.data, openedArb.data]);
+  const orders = useMemo(() => [...(opened.data ?? NONE), ...fromOrigins.orders], [opened.data, fromOrigins.orders]);
   const escrows = useReadContracts({
     contracts: orders.map((o) => ({
-      address: o.origin === "arbitrum" ? CROSS_CHAIN_SETTLER : SETTLER,
+      address: o.origin ? originByKey(o.origin)!.settler : SETTLER,
       abi: cruxSettlerAbi,
       functionName: "escrows" as const,
       args: [o.orderId] as const,
-      chainId: o.origin === "arbitrum" ? ARBITRUM.id : baseSepolia.id,
+      chainId: o.origin ? originByKey(o.origin)!.chain.id : baseSepolia.id,
     })),
     query: { enabled: enabled && orders.length > 0, refetchInterval: 15_000 },
   });
@@ -181,7 +184,7 @@ export function useMyIntents() {
           token,
           amount,
           fillDeadline,
-          refundAt: fillDeadline + (o.origin === "arbitrum" ? CROSS_CHAIN_REFUND_GRACE_SECONDS : REFUND_GRACE_SECONDS),
+          refundAt: fillDeadline + (o.origin ? CROSS_CHAIN_REFUND_GRACE_SECONDS : REFUND_GRACE_SECONDS),
           status: ESCROW_STATUS[status] ?? null,
         };
       })
@@ -196,7 +199,7 @@ export function useMyIntents() {
     isLoading: opened.isLoading || (orders.length > 0 && escrows.isLoading),
     error: opened.error ?? escrows.error,
     refetch: async () => {
-      await Promise.all([opened.refetch(), openedArb.refetch()]);
+      await Promise.all([opened.refetch(), fromOrigins.refetch()]);
       await escrows.refetch();
     },
   };

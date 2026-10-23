@@ -1,6 +1,7 @@
 import type { Address } from "viem";
 import { CAIP19, NOVA_CAIP19 } from "./farcaster";
 import { SLIPPAGE_BPS } from "./intents";
+import type { OriginKey } from "./crosschain";
 import type { PaySource, PaySourceId } from "./tokens";
 
 export type Side = "buy" | "sell";
@@ -22,8 +23,8 @@ export type OrderDraft = {
    * locked Uniswap pool. Buys escrow test USDC; sells escrow this token.
    */
   asset?: TradedAsset;
-  /** Buys only: pay with test USDC on Arbitrum Sepolia, escrowed there and settled by a Hyperlane fill proof. */
-  payFrom?: "arbitrum";
+  /** Buys only: pay with test USDC on a cross-chain origin, escrowed there and settled by a Hyperlane fill proof. */
+  payFrom?: OriginKey;
 };
 
 export type TradedAsset = { address: Address; caip19: string; decimals: number };

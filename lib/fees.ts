@@ -1,6 +1,6 @@
 import type { Config } from "wagmi";
 import { estimateFeesPerGas } from "wagmi/actions";
-import { ARBITRUM } from "./crosschain";
+import { arbitrumSepolia } from "viem/chains";
 
 /**
  * Fee fields to send with a write on `chainId`. Arbitrum's base fee moves between blocks, and MetaMask was seen live
@@ -9,7 +9,7 @@ import { ARBITRUM } from "./crosschain";
  * wallet prices the transaction itself.
  */
 export async function feeHeadroom(config: Config, chainId: number | undefined) {
-  if (chainId !== ARBITRUM.id) return {};
-  const { maxFeePerGas, maxPriorityFeePerGas } = await estimateFeesPerGas(config, { chainId: ARBITRUM.id });
+  if (chainId !== arbitrumSepolia.id) return {};
+  const { maxFeePerGas, maxPriorityFeePerGas } = await estimateFeesPerGas(config, { chainId: arbitrumSepolia.id });
   return { maxFeePerGas: maxFeePerGas * BigInt(2), maxPriorityFeePerGas };
 }
