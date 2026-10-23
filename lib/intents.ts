@@ -95,7 +95,7 @@ export const FACTORY_V4 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V4) ??
  * CruxFactoryV5 (V4 + 24 hours of batch-only trading after graduation, in its CruxBatchPool), once deployed.
  * crux-contracts/broadcast/DeployFactoryV5.s.sol; NEXT_PUBLIC_CRUX_FACTORY_V5 overrides it (e.g. a local fork).
  */
-const FACTORY_V5_ADDRESS: Address | null = null;
+const FACTORY_V5_ADDRESS: Address | null = "0x87E39E29a8659DB2891358Ba56aA3BE899c130D9";
 export const FACTORY_V5 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V5) ?? FACTORY_V5_ADDRESS;
 
 /** The batch factory behind a launch version (/launch/v2|v3|v4|v5/[id]). */
