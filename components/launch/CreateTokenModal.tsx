@@ -209,7 +209,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
   };
 
   /** CruxFactoryV2/V3: scheduled start, per-wallet cap, locked liquidity (same createAuction on both). */
-  const deployV2 = async (factory: Address, version: 2 | 3 | 4) => {
+  const deployV2 = async (factory: Address, version: 2 | 3 | 4 | 5) => {
     if (!isConnected || !address) {
       openConnect();
       return;
@@ -235,7 +235,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     const onPrompt = () => setPhase({ kind: "deploying", label: "Confirm the launch in your wallet…" });
     // V4 records the creator's vesting choice; V2/V3 always vest over 30 days.
     const hash =
-      version === 4
+      version >= 4
         ? await simulateThenWrite(
             config,
             address,
@@ -621,7 +621,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             </fieldset>
           )}
 
-          {LAUNCH_FACTORY?.version === 4 && (
+          {LAUNCH_FACTORY && LAUNCH_FACTORY.version >= 4 && (
             <fieldset className="rounded-xl border border-line p-4">
               <legend className="px-1 text-[13px] text-chrome">Creator vesting</legend>
               <div role="radiogroup" aria-label="Creator vesting" className="mt-1 grid gap-2 sm:grid-cols-2">
@@ -720,7 +720,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                 <span>
                   Liquidity is locked forever: {V2_SPLIT.lpBps / 100}% of supply and half the raise seed a Uniswap pool whose LP is burned. Your{" "}
                   {V2_SPLIT.creatorBps / 100}% and your share of the raise{" "}
-                  {LAUNCH_FACTORY?.version === 4 && form.instantUnlock ? "unlock at graduation (instant unlock)." : "vest over 30 days."}
+                  {LAUNCH_FACTORY && LAUNCH_FACTORY.version >= 4 && form.instantUnlock ? "unlock at graduation (instant unlock)." : "vest over 30 days."}
                 </span>
               </li>
               <li className="flex items-start gap-2">

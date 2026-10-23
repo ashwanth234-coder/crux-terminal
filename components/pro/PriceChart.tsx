@@ -402,8 +402,8 @@ export function PriceChart({ auction, symbol }: { auction: AuctionV2; symbol: st
         )}
       </div>
       <p className="px-1 pt-1.5 text-[11px] text-dim">
-        Every swap on the locked Uniswap V2 pool, Uniswap&apos;s 0.3% fee included. Dashed line: the auction&apos;s clearing price, where the pool
-        opened.{indicators.length > 0 && " Indicators are computed from these same candles."}
+        Every trade on the locked liquidity since graduation (V5: each fill of its first 24 hours of batches, at the batch&apos;s price; then
+        Uniswap V2 swaps), the 0.3% pool fee included. Dashed line: the auction&apos;s clearing price, where the pool opened.{indicators.length > 0 && " Indicators are computed from these same candles."}
         {swaps.data?.truncated && " Only the last six days are shown."}
       </p>
     </div>

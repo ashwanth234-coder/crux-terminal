@@ -91,15 +91,24 @@ export const CRUX_SOLVER: Address = envAddress(process.env.NEXT_PUBLIC_CRUX_SOLV
 const FACTORY_V4_ADDRESS: Address | null = "0x91f65efc87792798dfba69ee191fb4e3a8500d91";
 export const FACTORY_V4 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V4) ?? FACTORY_V4_ADDRESS;
 
-/** The batch factory behind a launch version (/launch/v2|v3|v4/[id]). */
-export function batchFactory(version: 2 | 3 | 4): Address | null {
-  return version === 4 ? FACTORY_V4 : version === 3 ? FACTORY_V3 : FACTORY_V2;
+/**
+ * CruxFactoryV5 (V4 + 24 hours of batch-only trading after graduation, in its CruxBatchPool), once deployed.
+ * crux-contracts/broadcast/DeployFactoryV5.s.sol; NEXT_PUBLIC_CRUX_FACTORY_V5 overrides it (e.g. a local fork).
+ */
+const FACTORY_V5_ADDRESS: Address | null = null;
+export const FACTORY_V5 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V5) ?? FACTORY_V5_ADDRESS;
+
+/** The batch factory behind a launch version (/launch/v2|v3|v4|v5/[id]). */
+export function batchFactory(version: 2 | 3 | 4 | 5): Address | null {
+  return version === 5 ? FACTORY_V5 : version === 4 ? FACTORY_V4 : version === 3 ? FACTORY_V3 : FACTORY_V2;
 }
 
 /** Where new launches go: the newest batch factory configured. */
-export const LAUNCH_FACTORY: { address: Address; version: 2 | 3 | 4 } | null = FACTORY_V4
-  ? { address: FACTORY_V4, version: 4 }
-  : FACTORY_V3
+export const LAUNCH_FACTORY: { address: Address; version: 2 | 3 | 4 | 5 } | null = FACTORY_V5
+  ? { address: FACTORY_V5, version: 5 }
+  : FACTORY_V4
+    ? { address: FACTORY_V4, version: 4 }
+    : FACTORY_V3
     ? { address: FACTORY_V3, version: 3 }
     : FACTORY_V2
       ? { address: FACTORY_V2, version: 2 }

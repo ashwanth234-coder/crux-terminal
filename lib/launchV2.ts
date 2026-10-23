@@ -15,8 +15,11 @@ export const V2_VESTING_DAYS = 30;
 /** Contract minimum is 60s; the form asks for more so the transaction lands in time. */
 export const V2_MIN_LEAD_SECONDS = 180;
 
-/** Batch factory generation: V2 (bidder list, max 200) or V3 (1% price ticks, no bidder limit). */
-export type BatchVersion = 2 | 3 | 4;
+/**
+ * Batch factory generation: V2 (bidder list, max 200), V3 (1% price ticks, no bidder limit), V4 (V3 + the creator's
+ * vesting choice), V5 (V4 + 24 hours of batch-only trading in CruxBatchPool after graduation).
+ */
+export type BatchVersion = 2 | 3 | 4 | 5;
 
 /** V3 and V4 put bid limits on the same 1% price-tick grid (V4 is V3 plus the creator's vesting choice). */
 export const usesTicks = (version: BatchVersion) => version >= 3;

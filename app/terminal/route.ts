@@ -2,7 +2,7 @@ import { connection } from "next/server";
 import { createPublicClient, http } from "viem";
 import { baseSepolia } from "viem/chains";
 import { cruxBatchFactoryAbi } from "@/contracts/abis/batchAuction";
-import { FACTORY_V3, FACTORY_V4 } from "@/lib/intents";
+import { FACTORY_V3, FACTORY_V4, FACTORY_V5 } from "@/lib/intents";
 import { phaseV2, toAuctionV2, type AuctionV2 } from "@/lib/launchV2";
 
 /** How many of the newest V3 auctions to consider. */
@@ -26,9 +26,9 @@ function pickTerminal(auctions: { id: number; auction: AuctionV2 }[], now: numbe
 }
 
 async function latestTerminal(): Promise<string> {
-  // The newest factory first: V4 once deployed, else V3.
-  const version = FACTORY_V4 ? 4 : 3;
-  const address = FACTORY_V4 ?? FACTORY_V3;
+  // The newest factory first: V5 once deployed, else V4, else V3.
+  const version = FACTORY_V5 ? 5 : FACTORY_V4 ? 4 : 3;
+  const address = FACTORY_V5 ?? FACTORY_V4 ?? FACTORY_V3;
   if (!address) return FALLBACK;
   const factory = { address, abi: cruxBatchFactoryAbi } as const;
   const count = Number(await client.readContract({ ...factory, functionName: "auctionCount" }));

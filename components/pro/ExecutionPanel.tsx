@@ -1,20 +1,21 @@
 "use client";
 
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { erc20Abi, formatUnits, parseUnits, zeroAddress, type Address, type Hex } from "viem";
 import { useConnection, useReadContract } from "wagmi";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { KineticLoader } from "@/components/ui/Modal";
 import { IntentModal } from "@/components/terminal/IntentModal";
+import { BatchOrderForm } from "@/components/pro/BatchOrderForm";
 import { PresetKey, SubmitKey, useExecutionHotkeys } from "@/components/pro/hotkeys";
 import { ProtectionRow, RiskPreview, type RiskRow } from "@/components/pro/RiskPreview";
 import { cruxBatchFactoryAbi } from "@/contracts/abis/batchAuction";
-import { useLaunchMarket } from "@/hooks/useLaunchMarket";
+import { useLaunchMarket, type LaunchMarket } from "@/hooks/useLaunchMarket";
 import type { LaunchV2Model } from "@/hooks/useLaunchV2";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import { ARBITRUM, ARBITRUM_USDC, type PayFrom } from "@/lib/crosschain";
 import { SETTLER_DEPLOYED, SLIPPAGE_BPS, TESTNET_USDC } from "@/lib/intents";
-import { USDC_DECIMALS, fmtTokens, fmtUsdc, launchError, type TxStep } from "@/lib/launch";
+import { USDC_DECIMALS, fmtTokens, fmtUsdc, formatRemaining, launchError, type TxStep } from "@/lib/launch";
 import { fmtTokenPrice } from "@/lib/launchTrade";
 import { NO_LIMIT, V3_TICK_STEP_PERCENT, parsePriceUsd, priceUsd, usesTicks, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
 import { minReceived, type OrderDraft, type Side } from "@/lib/order";
@@ -339,6 +340,67 @@ function Status({ busy, error, done }: { busy: Busy; error: string | null; done:
   return null;
 }
 
+// ------------------------------------------------------------------ graduated: V5's 24-hour batch window
+
+/**
+ * A graduated launch's desk. V5 launches start with 24 hours of batch-only trading in their batch pool: orders go
+ * there directly (Batch order), or through a Crux intent the solver fills by joining the batch (Via intent, which
+ * also takes payment from Arbitrum). After that, and for V2–V4 launches, it's the intent desk on the Uniswap pool.
+ */
+function GraduatedDesk({ auction, symbol }: { auction: AuctionV2; symbol: string }) {
+  const market = useLaunchMarket(auction.token, auction.pair);
+  const [mode, setMode] = useState<"batch" | "intent">("batch");
+  if (!market.protected) {
+    return (
+      <section aria-label="Trade via intent" className="p-4">
+        <h2 className="mb-3 text-[14px] font-medium text-chrome">Trade via intent</h2>
+        <TradeForm auction={auction} symbol={symbol} />
+      </section>
+    );
+  }
+  return (
+    <section aria-label="Batch trading" className="p-4">
+      <h2 className="text-[14px] font-medium text-chrome">Batch trading</h2>
+      <ProtectionNote market={market} />
+      <div role="tablist" aria-label="How to trade" className="mb-3 mt-3 grid grid-cols-2 rounded-lg bg-void/60 p-1">
+        {(
+          [
+            ["batch", "Batch order"],
+            ["intent", "Via intent"],
+          ] as const
+        ).map(([m, text]) => (
+          <button
+            key={m}
+            role="tab"
+            type="button"
+            aria-selected={mode === m}
+            onClick={() => setMode(m)}
+            className={`h-8 rounded-md text-[12.5px] transition-colors ${mode === m ? "bg-panel-2 text-chrome ring-1 ring-inset ring-signal/60" : "text-muted hover:text-chrome"}`}
+          >
+            {text}
+          </button>
+        ))}
+      </div>
+      {mode === "batch" ? <BatchOrderForm market={market} symbol={symbol} /> : <TradeForm auction={auction} symbol={symbol} />}
+    </section>
+  );
+}
+
+function ProtectionNote({ market }: { market: LaunchMarket }) {
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
+  useEffect(() => {
+    const t = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  const left = market.protectedUntil !== null ? Math.max(0, market.protectedUntil - now) : null;
+  return (
+    <p className="mt-1.5 text-[11.5px] leading-snug text-muted">
+      Batch-only{left !== null ? ` for ${formatRemaining(left)} more` : ""}: every trade lands in a 60-second batch that clears at one price
+      on-chain, so nobody can buy ahead of you. Then the liquidity moves to Uniswap, LP burned.
+    </p>
+  );
+}
+
 // ------------------------------------------------------------------ graduated: trade via intent
 
 function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) {
@@ -394,7 +456,9 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   const tooBig = risk !== null && risk.poolImpactPct > SOLVER_MAX_IMPACT_PCT;
   const blocked = !SETTLER_DEPLOYED
     ? "Intents aren't live in this build"
-    : !market.reserves
+    : market.protected && side === "sell"
+      ? "Sell in the batch directly (Batch order)"
+      : !market.reserves
       ? market.loading
         ? "Reading the pool…"
         : "Pool unavailable"
@@ -520,6 +584,13 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
         <SubmitKey />
       </button>
 
+      {market.protected ? (
+        <p className="text-[11px] leading-snug text-dim">
+          Route: your intent → Crux solver, which joins the batch pool&apos;s next 60-second batch for you and delivers your share of it (less
+          the 0.3% spread) once it clears. Your signed minimum still holds; if the batch can&apos;t meet it, you&apos;re refunded after the
+          deadline.
+        </p>
+      ) : (
       <p className="text-[11px] leading-snug text-dim">
         Route: your intent → Crux solver → Uniswap V2 pool{" "}
         <a href={`${TESTNET_EXPLORER}/address/${auction.pair}`} target="_blank" rel="noopener noreferrer" className="font-mono underline decoration-line-2">
@@ -530,6 +601,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
           ? "Escrowed on Arbitrum, filled on Base in the next batch, and released to the solver only on a Hyperlane proof of that fill; refundable 6 hours after its deadline if unproven."
           : "Filled in the next batch (about a minute), or refundable after its deadline."}
       </p>
+      )}
 
       <MobileDock>
         <div className="flex items-center gap-2">
@@ -588,12 +660,7 @@ export function ExecutionPanel({
   }
   // Claims and creator vesting live in the notice banner above the terminal, so the desk stays the desk.
   if (phase === "graduated" && auction.pair !== zeroAddress) {
-    return (
-      <section aria-label="Trade via intent" className="p-4">
-        <h2 className="mb-3 text-[14px] font-medium text-chrome">Trade via intent</h2>
-        <TradeForm auction={auction} symbol={symbol} />
-      </section>
-    );
+    return <GraduatedDesk auction={auction} symbol={symbol} />;
   }
   if (phase === "cancelled") {
     return (

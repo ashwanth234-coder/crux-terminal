@@ -91,7 +91,7 @@ export function useTrustFacts(
   }
 
   // 2. Creator vesting: the factory's own constant, measured from the on-chain settle time.
-  const vestDays = version === 4 ? chosenDays : typeof vesting === "bigint" ? Number(vesting) / 86_400 : null;
+  const vestDays = version >= 4 ? chosenDays : typeof vesting === "bigint" ? Number(vesting) / 86_400 : null;
   let vestCheck: TrustCheck;
   if (vestDays === 0) {
     vestCheck = {

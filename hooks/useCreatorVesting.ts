@@ -11,7 +11,8 @@ import { V2_VESTING_DAYS, type BatchVersion } from "@/lib/launchV2";
  * the factory (30, or 0 for an instant unlock). Null while a V4 launch's setting is still loading.
  */
 export function useCreatorVestingDays(factory: Address | null, id: bigint | number | null, version: BatchVersion | 1): number | null {
-  const v4 = version === 4 && factory !== null && id !== null;
+  // V5 keeps V4's per-launch vesting choice.
+  const v4 = version >= 4 && factory !== null && id !== null;
   const { data } = useReadContract({
     address: factory ?? zeroAddress,
     abi: factoryV4Abi,
@@ -20,6 +21,6 @@ export function useCreatorVestingDays(factory: Address | null, id: bigint | numb
     chainId: TESTNET.id,
     query: { enabled: v4, staleTime: Infinity },
   });
-  if (version !== 4) return V2_VESTING_DAYS;
+  if (version < 4) return V2_VESTING_DAYS;
   return data === undefined ? null : Number(data) / 86_400;
 }

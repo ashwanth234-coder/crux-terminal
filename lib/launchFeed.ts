@@ -2,7 +2,7 @@ import { createPublicClient, erc20Abi, formatUnits, http, zeroAddress, type Addr
 import { baseSepolia } from "viem/chains";
 import { cruxBatchFactoryAbi, factoryV4Abi } from "@/contracts/abis/batchAuction";
 import { TESTNET_EXPLORER } from "@/lib/chains";
-import { FACTORY_V2, FACTORY_V3, FACTORY_V4 } from "@/lib/intents";
+import { FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5 } from "@/lib/intents";
 import { PRICE_DECIMALS, V2_VESTING_DAYS, phaseV2, toAuctionV2, type PhaseV2 } from "@/lib/launchV2";
 import { SITE_URL } from "@/lib/site";
 import { parseTokenMeta, tokenMetaAbi, type TokenMeta } from "@/lib/tokenMeta";
@@ -20,7 +20,7 @@ const client = createPublicClient({
 export type FeedLaunch = {
   /** "v3#0": factory version and auction id. */
   key: string;
-  version: 2 | 3 | 4;
+  version: 2 | 3 | 4 | 5;
   auctionId: number;
   token: Address;
   name: string;
@@ -46,7 +46,7 @@ export type FeedLaunch = {
   urls: { terminal: string; token: string; pool: string | null };
 };
 
-async function factoryLaunches(factory: Address, version: 2 | 3 | 4, now: number): Promise<FeedLaunch[]> {
+async function factoryLaunches(factory: Address, version: 2 | 3 | 4 | 5, now: number): Promise<FeedLaunch[]> {
   const f = { address: factory, abi: cruxBatchFactoryAbi } as const;
   const count = Number(await client.readContract({ ...f, functionName: "auctionCount" }));
   if (count === 0) return [];
@@ -58,9 +58,9 @@ async function factoryLaunches(factory: Address, version: 2 | 3 | 4, now: number
     const r = auctions[i];
     return r.status === "success" ? [{ id, a: toAuctionV2(r.result) }] : [];
   });
-  // V4 launches each carry the creator's vesting choice; V2/V3 always vest over 30 days.
+  // V4/V5 launches each carry the creator's vesting choice; V2/V3 always vest over 30 days.
   const vesting =
-    version === 4
+    version >= 4
       ? await client.multicall({
           contracts: found.map(({ id }) => ({ address: factory, abi: factoryV4Abi, functionName: "creatorVestingDuration" as const, args: [BigInt(id)] as const })),
         })
@@ -106,9 +106,10 @@ async function factoryLaunches(factory: Address, version: 2 | 3 | 4, now: number
   });
 }
 
-/** Newest first, V4 before V3 before V2. */
+/** Newest first, V5 before V4 before V3 before V2. */
 export async function readLaunches(now = Math.floor(Date.now() / 1000)): Promise<FeedLaunch[]> {
   const sets = await Promise.all([
+    FACTORY_V5 ? factoryLaunches(FACTORY_V5, 5, now) : [],
     FACTORY_V4 ? factoryLaunches(FACTORY_V4, 4, now) : [],
     FACTORY_V3 ? factoryLaunches(FACTORY_V3, 3, now) : [],
     FACTORY_V2 ? factoryLaunches(FACTORY_V2, 2, now) : [],
