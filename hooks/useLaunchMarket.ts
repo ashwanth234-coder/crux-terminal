@@ -77,7 +77,8 @@ export function useLaunchMarket(token: Address, pair: Address): LaunchMarket {
   });
   const poolState = pool.data?.[0]?.result;
   const until = pool.data?.[1]?.result;
-  const isProtected = Boolean(poolState && !poolState[4]);
+  // A V6 launch with anti-sniper off never seeds the pool (seededAt 0): it trades on Uniswap from graduation.
+  const isProtected = Boolean(poolState && poolState[3] > BigInt(0) && !poolState[4]);
   const decimals = dec?.result ?? 18;
   let reserves: PoolReserves | null = null;
   if (isProtected && poolState) {

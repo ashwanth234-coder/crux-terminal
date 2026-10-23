@@ -16,6 +16,8 @@ import { TESTNET_EXPLORER } from "@/lib/chains";
 import { batchFactory } from "@/lib/intents";
 import { useCreatorVestingDays } from "@/hooks/useCreatorVesting";
 import { VestingBadge } from "@/components/ui/VestingBadge";
+import { AntiSniperBadge } from "@/components/ui/AntiSniperBadge";
+import { useAntiSniperSeconds } from "@/hooks/useAntiSniper";
 import { USDC_DECIMALS, fmtTokens, fmtUsdc, formatRemaining, launchError, type TxStep } from "@/lib/launch";
 import {
   NO_LIMIT,
@@ -144,6 +146,7 @@ function LockIcon() {
 
 function ViewV2({ model, auction, id }: { model: LaunchV2Model; auction: AuctionV2; id: string }) {
   const vestDays = useCreatorVestingDays(batchFactory(model.version), BigInt(id), model.version);
+  const antiSniper = useAntiSniperSeconds(batchFactory(model.version), BigInt(id), model.version);
   const now = useNow();
   const phase = now === null ? "scheduled" : phaseV2(auction, now);
   const status = STATUS[phase];
@@ -174,7 +177,10 @@ function ViewV2({ model, auction, id }: { model: LaunchV2Model; auction: Auction
             <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} aria-hidden="true" />
             {status.label}
           </span>
-          <VestingBadge days={vestDays} />
+          <span className="flex flex-wrap justify-end gap-1.5">
+            <VestingBadge days={vestDays} />
+            <AntiSniperBadge seconds={antiSniper} />
+          </span>
         </div>
       </div>
 

@@ -7,13 +7,14 @@ import { useConfig, useConnection, useReadContract, useSwitchChain } from "wagmi
 import { waitForTransactionReceipt } from "wagmi/actions";
 import { Modal, KineticLoader } from "@/components/ui/Modal";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
-import { cruxBatchFactoryAbi, cruxFactoryAbi, factoryV4Abi } from "@/contracts/abis/batchAuction";
+import { cruxBatchFactoryAbi, cruxFactoryAbi, factoryV4Abi, factoryV6Abi } from "@/contracts/abis/batchAuction";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import { BATCH_WINDOW_SECONDS, FACTORY, LAUNCH_FACTORY } from "@/lib/intents";
 import { V2_FEE, V2_MIN_LEAD_SECONDS, V2_SPLIT, V2_WINDOWS, buyersNeeded, windowLabel } from "@/lib/launchV2";
 import { launchError, previewHref } from "@/lib/launch";
 import { simulateThenWrite } from "@/lib/preflight";
 import { VestingBadge } from "@/components/ui/VestingBadge";
+import { AntiSniperBadge } from "@/components/ui/AntiSniperBadge";
 
 /** With the batch auction off, CruxFactory runs one pro-rata sale over OPEN_SALE_WINDOW (1 day). */
 const OPEN_SALE_HOURS = 24;
@@ -36,6 +37,8 @@ type Form = {
   batchAuction: boolean;
   /** V4: release the creator's share at graduation instead of vesting it over 30 days. */
   instantUnlock: boolean;
+  /** V6: the first minute of trading after graduation in one uniform-price batch (else straight to Uniswap). */
+  antiSniper: boolean;
   /** V2: minutes from now until deposits open. */
   startsIn: string;
   /** V2: most of the sale one wallet can receive, as a percentage. */
@@ -56,6 +59,7 @@ const INITIAL: Form = {
   target: FACTORY || LAUNCH_FACTORY ? "10" : "50,000",
   batchAuction: true,
   instantUnlock: false,
+  antiSniper: true,
   startsIn: "10",
   walletCap: "5",
   window: "60",
@@ -179,8 +183,10 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     functionName: "protectionWindow",
     query: { enabled: LAUNCH_FACTORY?.version === 6 },
   });
-  const batchOnlySeconds =
+  const factoryWindow =
     LAUNCH_FACTORY?.version === 5 ? 86_400 : LAUNCH_FACTORY?.version === 6 && protectionWindow.data !== undefined ? Number(protectionWindow.data) : null;
+  // What this launch gets: V6 lets the creator turn it off.
+  const batchOnlySeconds = LAUNCH_FACTORY?.version === 6 && !form.antiSniper ? 0 : factoryWindow;
   const [touched, setTouched] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: "form" });
   const [error, setError] = useState<string | null>(null);
@@ -243,9 +249,16 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
       maxAllocationPerWallet: (sale * capBps) / BigInt(10_000),
     };
     const onPrompt = () => setPhase({ kind: "deploying", label: "Confirm the launch in your wallet…" });
-    // V4 records the creator's vesting choice; V2/V3 always vest over 30 days.
+    // V6 records both creator choices; V4/V5 the vesting choice; V2/V3 always vest over 30 days.
     const hash =
-      version >= 4
+      version >= 6
+        ? await simulateThenWrite(
+            config,
+            address,
+            { address: factory, abi: factoryV6Abi, functionName: "createAuctionWithOptions", chainId: TESTNET.id, args: [params, form.instantUnlock, form.antiSniper] },
+            onPrompt,
+          )
+        : version >= 4
         ? await simulateThenWrite(
             config,
             address,
@@ -662,6 +675,41 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             </fieldset>
           )}
 
+          {LAUNCH_FACTORY && LAUNCH_FACTORY.version >= 6 && (
+            <fieldset className="rounded-xl border border-line p-4">
+              <legend className="px-1 text-[13px] text-chrome">Anti-sniper launch</legend>
+              <div role="radiogroup" aria-label="Anti-sniper launch" className="mt-1 grid gap-2 sm:grid-cols-2">
+                {[
+                  {
+                    on: true,
+                    title: "On",
+                    note: `Recommended. The first ${factoryWindow !== null ? `${windowLabel(factoryWindow).replace("-", " ")}s` : "minute"} of trading clears at one price, so bots can't buy ahead of anyone. Earns a trust badge.`,
+                  },
+                  { on: false, title: "Off", note: "Trading opens on Uniswap the moment the auction graduates, so bots can buy first. Shown to buyers with a warning badge." },
+                ].map((o) => {
+                  const active = form.antiSniper === o.on;
+                  return (
+                    <button
+                      key={o.title}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => set("antiSniper", o.on)}
+                      className={`rounded-lg border p-3 text-left transition-colors ${active ? "border-signal/70 bg-panel-2" : "border-line hover:border-line-2"}`}
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span className={`text-[13px] ${active ? "text-chrome" : "text-muted"}`}>{o.title}</span>
+                        <AntiSniperBadge seconds={o.on ? (factoryWindow ?? 60) : 0} />
+                      </span>
+                      <span className="mt-1.5 block text-[11.5px] leading-snug text-dim">{o.note}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-3 text-[11.5px] leading-snug text-dim">Fixed on-chain at launch: it can&apos;t be changed later, and buyers see it before they bid.</p>
+            </fieldset>
+          )}
+
           {/* Batch auction toggle with an explanatory tooltip (also exposed as its description) */}
           {!LAUNCH_FACTORY && (
           <div className="flex items-start justify-between gap-4 rounded-xl border border-line p-4">
@@ -729,12 +777,12 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                 <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-chrome/40" aria-hidden="true" />
                 <span>
                   Liquidity is locked forever: {V2_SPLIT.lpBps / 100}% of supply and half the raise seed a Uniswap pool whose LP is burned
-                  {LAUNCH_FACTORY.version >= 5 ? " (after the batch-only window below)" : ""}. Your{" "}
+                  {LAUNCH_FACTORY.version >= 5 && batchOnlySeconds !== 0 ? " (after the batch-only window below)" : ""}. Your{" "}
                   {V2_SPLIT.creatorBps / 100}% and your share of the raise{" "}
                   {LAUNCH_FACTORY && LAUNCH_FACTORY.version >= 4 && form.instantUnlock ? "unlock at graduation (instant unlock)." : "vest over 30 days."}
                 </span>
               </li>
-              {LAUNCH_FACTORY.version >= 5 && (
+              {LAUNCH_FACTORY.version >= 5 && batchOnlySeconds !== 0 && (
                 <li className="flex items-start gap-2">
                   <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-chrome/40" aria-hidden="true" />
                   <span>

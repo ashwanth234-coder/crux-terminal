@@ -4,6 +4,8 @@ import { erc20Abi, parseAbi, zeroAddress, type Address } from "viem";
 import { useBytecode, useReadContracts } from "wagmi";
 import { cruxBatchFactoryAbi } from "@/contracts/abis/batchAuction";
 import { useCreatorVestingDays } from "@/hooks/useCreatorVesting";
+import { useAntiSniperSeconds } from "@/hooks/useAntiSniper";
+import { shortWindow } from "@/components/ui/AntiSniperBadge";
 import { useNow } from "@/hooks/useLaunchAuction";
 import { TESTNET } from "@/lib/chains";
 import { fmtUsdc, fmtTokens } from "@/lib/launch";
@@ -33,6 +35,7 @@ export function useTrustFacts(
 ): { checks: TrustCheck[]; loading: boolean; vestingDays: number | null } {
   // V4 launches each carry the creator's choice; V2/V3 use the factory's constant.
   const chosenDays = useCreatorVestingDays(factory, id === null ? null : BigInt(id), version);
+  const antiSniper = useAntiSniperSeconds(factory, id === null ? null : BigInt(id), version);
   const graduated = auction.status === 1;
   const cancelled = auction.status === 2;
   const hasPool = graduated && auction.pair !== zeroAddress;
@@ -136,13 +139,42 @@ export function useTrustFacts(
         }
       : { key: "fees", label: "Fee routing", state: "loading", value: "Checking…", detail: "Reading the fee constants." };
 
-  // 4. Admin powers: the factory's only owner-gated function is setTreasury (verified in the source); it isn't upgradeable.
+  // 2b. Anti-sniper: the creator's choice on V6 (V5 always 24 h of batches; V2–V4 open on Uniswap at graduation).
+  let sniperCheck: TrustCheck;
+  if (antiSniper === null) {
+    sniperCheck = { key: "sniper", label: "Anti-sniper", state: "loading", value: "Checking…", detail: "Reading the launch's anti-sniper setting." };
+  } else if (antiSniper > 0) {
+    sniperCheck = {
+      key: "sniper",
+      label: "Anti-sniper",
+      state: "pass",
+      value: `${shortWindow(antiSniper)} of one-price batches`,
+      detail: `For the first ${shortWindow(antiSniper)} of trading after graduation, every trade clears in a 60-second batch at one price, so a bot at second 0 pays what a person at second 59 pays. Then the liquidity moves to Uniswap. Enforced by the contract.`,
+    };
+  } else {
+    sniperCheck = {
+      key: "sniper",
+      label: "Anti-sniper",
+      state: "fail",
+      value: "Unprotected launch",
+      detail:
+        version >= 6
+          ? "The creator turned anti-sniper off: trading opens on Uniswap the moment the auction graduates, so a bot can buy in the very next transaction, ahead of everyone else."
+          : "This launch predates the anti-sniper option: trading opened on Uniswap the moment it graduated, so a bot could buy in the very next transaction.",
+    };
+  }
+
+  // 4. Admin powers (verified in the source; no factory is upgradeable): setTreasury on every version, and on V6 the
+  //    anti-sniper window for launches created later. Neither reaches an existing launch.
   const adminCheck: TrustCheck = {
     key: "admin",
     label: "Admin powers",
     state: typeof owner === "string" ? "pass" : "loading",
-    value: "Fee treasury only",
-    detail: `The factory admin${typeof owner === "string" ? ` (${short(owner)})` : ""} can only change where the protocol's fee share goes. No function can touch bids, the pool, LP or vesting, and the contract isn't upgradeable.`,
+    value: version >= 6 ? "Fee treasury · future windows" : "Fee treasury only",
+    detail:
+      version >= 6
+        ? `The factory admin${typeof owner === "string" ? ` (${short(owner)})` : ""} can change where the protocol's fee share goes and the anti-sniper window for launches created later. This launch's window was fixed when it was created. No function can touch bids, the pool, LP or vesting, and the contract isn't upgradeable.`
+        : `The factory admin${typeof owner === "string" ? ` (${short(owner)})` : ""} can only change where the protocol's fee share goes. No function can touch bids, the pool, LP or vesting, and the contract isn't upgradeable.`,
     href: `${explorer}/address/${factory}#code`,
   };
 
@@ -190,7 +222,7 @@ export function useTrustFacts(
   };
 
   return {
-    checks: [lpCheck, vestCheck, feeCheck, adminCheck, supplyCheck, capCheck, chainCheck],
+    checks: [lpCheck, vestCheck, sniperCheck, feeCheck, adminCheck, supplyCheck, capCheck, chainCheck],
     loading: facts.isPending,
     /** The factory's own creator-vesting length, read live; null until read. */
     vestingDays: vestDays,

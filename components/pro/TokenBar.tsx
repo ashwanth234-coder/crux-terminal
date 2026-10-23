@@ -6,6 +6,8 @@ import { useReadContracts } from "wagmi";
 import { TokenAvatar } from "@/components/pro/TokenAvatar";
 import { TokenInfo } from "@/components/pro/TokenInfo";
 import { VestingBadge } from "@/components/ui/VestingBadge";
+import { AntiSniperBadge } from "@/components/ui/AntiSniperBadge";
+import { useAntiSniperSeconds } from "@/hooks/useAntiSniper";
 import { useCreatorVestingDays } from "@/hooks/useCreatorVesting";
 import { batchFactory } from "@/lib/intents";
 import { useNow } from "@/hooks/useLaunchAuction";
@@ -188,6 +190,7 @@ export function TokenBar({
   const closesIn = now === null ? null : auction.startTime + auction.batchWindow - now;
   const starred = watch.has(key);
   const vestDays = useCreatorVestingDays(batchFactory(version), BigInt(id), version);
+  const antiSniper = useAntiSniperSeconds(batchFactory(version), BigInt(id), version);
 
   return (
     <div className="border-b border-line bg-void">
@@ -215,6 +218,7 @@ export function TokenBar({
               {status.label}
             </span>
             <VestingBadge days={vestDays} />
+            <AntiSniperBadge seconds={antiSniper} />
           </div>
           {name && <p className="mt-1 text-[12px] uppercase tracking-[0.12em] text-muted">{name}</p>}
 

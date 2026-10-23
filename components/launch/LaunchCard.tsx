@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { VestingBadge } from "@/components/ui/VestingBadge";
+import { AntiSniperBadge } from "@/components/ui/AntiSniperBadge";
+import { useAntiSniperSeconds } from "@/hooks/useAntiSniper";
 import { useCreatorVestingDays } from "@/hooks/useCreatorVesting";
 import { batchFactory } from "@/lib/intents";
 import { ArrowUpRight } from "@/components/ui/Button";
@@ -30,7 +32,9 @@ function Bar({ value, className }: { value: number; className: string }) {
 /** Identity first, then the one price everyone pays, then how far the auction has come. */
 export function LaunchCard({ launch, phase, now }: { launch: LaunchSummary; phase: Phase; now: number | null }) {
   const { auction, id } = launch;
-  const vestDays = useCreatorVestingDays(launch.version >= 2 ? batchFactory(launch.version as 2 | 3 | 4 | 5 | 6) : null, id, launch.version);
+  const batchFactoryAddress = launch.version >= 2 ? batchFactory(launch.version as 2 | 3 | 4 | 5 | 6) : null;
+  const vestDays = useCreatorVestingDays(batchFactoryAddress, id, launch.version);
+  const antiSniper = useAntiSniperSeconds(batchFactoryAddress, id, launch.version);
   const badge = BADGE[phase];
   const ticker = launch.symbol ?? `#${id}`;
   const raised = auction.graduationTarget > BigInt(0) ? Number((auction.totalDeposits * BigInt(10000)) / auction.graduationTarget) / 10_000 : 0;
@@ -57,7 +61,12 @@ export function LaunchCard({ launch, phase, now }: { launch: LaunchSummary; phas
             {launch.name ?? "Unnamed token"} <span className="font-mono text-dim">· #{id}</span>
             {launch.version >= 2 && <span className="text-dim"> · LP locked</span>}
           </p>
-          {launch.version >= 2 && <VestingBadge days={vestDays} className="mt-1.5" />}
+          {launch.version >= 2 && (
+            <span className="mt-1.5 flex flex-wrap gap-1.5">
+              <VestingBadge days={vestDays} />
+              <AntiSniperBadge seconds={antiSniper} />
+            </span>
+          )}
         </div>
         <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-[3px] border px-1.5 py-[3px] font-mono text-[9.5px] uppercase leading-none tracking-[0.16em] ${badge.className}`}>
           <span className={`h-[5px] w-[5px] rounded-full ${badge.dot}`} aria-hidden="true" />
