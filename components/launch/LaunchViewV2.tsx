@@ -23,6 +23,8 @@ import {
   V2_SPLIT,
   V2_VESTING_DAYS,
   V3_TICK_STEP_PERCENT,
+  fmtUsdcExact,
+  graduationNeeds,
   marketCapUsd,
   parsePriceUsd,
   phaseV2,
@@ -145,7 +147,9 @@ function ViewV2({ model, auction, id }: { model: LaunchV2Model; auction: Auction
   const symbol = model.symbol ? `$${model.symbol}` : "tokens";
   const opensIn = now === null ? 0 : auction.startTime - now;
   const closesIn = now === null ? auction.batchWindow : auction.startTime + auction.batchWindow - now;
-  const raised = auction.graduationTarget > BigInt(0) ? Number((auction.totalDeposits * BigInt(10_000)) / auction.graduationTarget) / 10_000 : 0;
+  // Measured against what graduation really needs (the floor price is rounded up on-chain), not the round target.
+  const needs = graduationNeeds(auction);
+  const raised = needs > BigInt(0) ? Number((auction.totalDeposits * BigInt(10_000)) / needs) / 10_000 : 0;
   const price = model.indicativePrice;
   const capShare = Number((auction.maxAllocationPerWallet * BigInt(10_000)) / auction.saleSupply) / 100;
 
@@ -209,7 +213,7 @@ function ViewV2({ model, auction, id }: { model: LaunchV2Model; auction: Auction
               <p className="font-mono text-[12px] text-muted">{(raised * 100).toFixed(1)}%</p>
             </div>
             <p className="mt-2 font-mono text-[22px] text-chrome">
-              ${fmtUsdc(auction.totalDeposits)} <span className="text-[14px] text-dim">/ ${fmtUsdc(auction.graduationTarget)} USDC</span>
+              ${fmtUsdcExact(auction.totalDeposits)} <span className="text-[14px] text-dim">/ ${fmtUsdcExact(needs)} USDC</span>
             </p>
             <div className="mt-3">
               <Bar value={raised} className={phase === "cancelled" ? "bg-down/70" : "bg-signal"} />

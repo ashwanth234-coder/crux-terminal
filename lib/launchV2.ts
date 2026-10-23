@@ -132,3 +132,25 @@ export function windowLabel(seconds: number) {
 export function buyersNeeded(capPercent: number) {
   return Math.ceil(100 / capPercent - 1e-9);
 }
+
+const PRICE_UNIT = BigInt(10) ** BigInt(36);
+
+/**
+ * What deposits must total for a launch to graduate: enough to buy the whole sale at the floor price. The factory
+ * rounds the floor price up (it must never sell below the target), so this can be a base unit or so above
+ * graduationTarget, and deposits of exactly the target then cancel. Seen live 2026-10-23: a 2 USDC target needed
+ * 2.000001.
+ */
+export function graduationNeeds(a: Pick<AuctionV2, "saleSupply" | "floorPrice" | "graduationTarget">): bigint {
+  const need = (a.saleSupply * a.floorPrice + PRICE_UNIT - BigInt(1)) / PRICE_UNIT;
+  return need > a.graduationTarget ? need : a.graduationTarget;
+}
+
+/** USDC with all six decimals when it isn't a whole cent, so 2.000001 never shows as $2.00. */
+export function fmtUsdcExact(units: bigint): string {
+  if (units % BigInt(10_000) === BigInt(0)) return (Number(units) / 1e6).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return (Number(units) / 1e6).toLocaleString("en-US", { minimumFractionDigits: 6, maximumFractionDigits: 6 });
+}
+
+/** A share rounded down to one decimal, so a sale that is 99.99% covered never reads "100.0%". */
+export const pctDown = (v: number) => (Math.floor(v * 10) / 10).toFixed(1);

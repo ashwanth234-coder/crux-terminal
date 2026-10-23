@@ -13,9 +13,9 @@ import { useLaunchMarket } from "@/hooks/useLaunchMarket";
 import { usePoolSwaps } from "@/hooks/usePoolSwaps";
 import { useTokenMeta } from "@/hooks/useTokenMeta";
 import { TESTNET } from "@/lib/chains";
-import { fmtUsdc, formatRemaining } from "@/lib/launch";
+import { formatRemaining } from "@/lib/launch";
 import { fmtTokenPrice } from "@/lib/launchTrade";
-import { PRICE_DECIMALS, marketCapUsd, priceUsd, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
+import { PRICE_DECIMALS, fmtUsdcExact, graduationNeeds, marketCapUsd, priceUsd, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
 import { priceChange, usdAmount } from "@/lib/orderflow";
 import { SITE_URL } from "@/lib/site";
 import { launchKey, useWatchlist } from "@/lib/watchlist";
@@ -256,7 +256,7 @@ export function TokenBar({
             ) : (
               <>
                 <Stat label="Bids">
-                  ${fmtUsdc(auction.totalDeposits)} / ${fmtUsdc(auction.graduationTarget)}
+                  ${fmtUsdcExact(auction.totalDeposits)} / ${fmtUsdcExact(graduationNeeds(auction))}
                 </Stat>
                 <Stat label="LP" hint="At graduation the factory mints the pool's LP straight to 0x…dEaD">
                   {phase === "cancelled" ? "no pool" : "burns at graduation"}

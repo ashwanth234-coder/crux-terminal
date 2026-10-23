@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Address } from "viem";
 import { useAuctionBids } from "@/hooks/useAuctionBids";
 import { curvePoints, curveRange, demandAt, type BookBid } from "@/lib/demand";
-import { priceUsd, type AuctionV2, type BatchVersion } from "@/lib/launchV2";
+import { pctDown, priceUsd, type AuctionV2, type BatchVersion } from "@/lib/launchV2";
 
 const PAD = { l: 52, r: 14, t: 18, b: 26 };
 const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
@@ -118,7 +118,7 @@ export function DemandCurve({
         </div>
         <p className="text-[11px] text-dim">
           <span className="font-mono text-muted">{book.length}</span> bidders · demand at floor{" "}
-          <span className="font-mono text-muted">{coverage.toFixed(1)}%</span> of the sale
+          <span className="font-mono text-muted">{pctDown(coverage)}%</span> of the sale
           {noLimit > 0 && (
             <>
               {" "}
@@ -134,7 +134,7 @@ export function DemandCurve({
         onPointerMove={(e) => setHoverX(e.clientX - e.currentTarget.getBoundingClientRect().left)}
         onPointerLeave={() => setHoverX(null)}
         role="img"
-        aria-label={`Demand curve: ${book.length} bidders; demand at the floor is ${coverage.toFixed(1)}% of the sale${
+        aria-label={`Demand curve: ${book.length} bidders; demand at the floor is ${pctDown(coverage)}% of the sale${
           shownClearing ? `; projected clearing price $${priceUsd(shownClearing)}` : "; not clearing yet"
         }.`}
       >
@@ -220,7 +220,7 @@ export function DemandCurve({
         {shownClearing
           ? `Demand covers the sale up to $${priceUsd(shownClearing)}: every filled bid pays that one price.`
           : book.length > 0
-            ? `Not clearing yet: demand at the floor covers ${coverage.toFixed(1)}% of the sale. Below 100% when the window closes, the launch cancels and everyone is refunded.`
+            ? `Not clearing yet: demand at the floor covers ${pctDown(coverage)}% of the sale. Below 100% when the window closes, the launch cancels and everyone is refunded.`
             : "Each bid adds demand up to its limit price. The batch clears where demand meets the sale line."}
         {bids.data?.truncated && " Bids older than about six days aren't shown."}
       </p>
