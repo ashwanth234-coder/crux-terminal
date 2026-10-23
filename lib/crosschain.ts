@@ -62,8 +62,9 @@ export const CROSS_CHAIN_ORIGINS: CrossChainOrigin[] = [
     name: "Ethereum Sepolia",
     chain: sepolia,
     explorer: "https://sepolia.etherscan.io",
-    settler: env(process.env.NEXT_PUBLIC_CRUX_SEPOLIA_SETTLER) ?? null,
-    deployBlock: block(process.env.NEXT_PUBLIC_CRUX_SEPOLIA_SETTLER_BLOCK, 0),
+    // Deployed 2026-10-23 (crux-contracts broadcast/DeployCrossChainSettler.s.sol/11155111).
+    settler: env(process.env.NEXT_PUBLIC_CRUX_SEPOLIA_SETTLER) ?? "0x45790D4E911B0bA0918880dA7eF7041F1DdFbF19",
+    deployBlock: block(process.env.NEXT_PUBLIC_CRUX_SEPOLIA_SETTLER_BLOCK, 11977294),
     usdc: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
     decimals: 6,
     faucet: "faucet.circle.com (pick Ethereum Sepolia)",
