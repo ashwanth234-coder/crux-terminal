@@ -59,7 +59,7 @@ export function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: 
   const origin = intent.origin ? originByKey(intent.origin) : null;
   const cross = origin !== null;
   const chain = origin ? origin.chain : TESTNET;
-  const settler = origin ? origin.settler : SETTLER;
+  const settler = origin ? origin.settler : (intent.settler ?? SETTLER);
   const explorer = origin ? origin.explorer : TESTNET_EXPLORER;
   const escrowsUsdc = intent.token === null || [TESTNET_USDC, ...LIVE_ORIGINS.map((o) => o.usdc)].some((u) => u.toLowerCase() === intent.token!.toLowerCase());
   // USDC is 6 decimals except BSC testnet's (18); a sold launch token has 18.
@@ -224,7 +224,7 @@ export function MyIntentsPanel() {
       <p className="mt-1.5 max-w-[46rem] text-[11.5px] leading-relaxed text-muted">
         Orders opened from this wallet escrow their input (test USDC, or the launch token you sell) until a solver fills
         them. Testnet only: unfilled orders can be refunded{" "}
-        {SETTLER_VERSION === 3 ? "as soon as their fill deadline passes (10 minutes)" : "1 hour after their fill deadline"}; orders paid from
+        {SETTLER_VERSION >= 3 ? "as soon as their fill deadline passes (10 minutes)" : "1 hour after their fill deadline"}; orders paid from
         another chain, 6 hours after it if no fill proof arrived.
       </p>
 

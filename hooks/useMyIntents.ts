@@ -6,7 +6,7 @@ import { createPublicClient, fallback, getAbiItem, getAddress, http, isAddressEq
 import { baseSepolia } from "viem/chains";
 import { useConnection, useReadContracts } from "wagmi";
 import { cruxSettlerAbi, originSettlerAbi } from "@/contracts/abis/erc7683";
-import { REFUND_GRACE_SECONDS, SETTLER, SETTLER_DEPLOYED, SETTLER_DEPLOY_BLOCK } from "@/lib/intents";
+import { PREVIOUS_SETTLERS, REFUND_GRACE_SECONDS, SETTLER, SETTLER_DEPLOYED, SETTLER_DEPLOY_BLOCK } from "@/lib/intents";
 import { HEAD_LAG } from "@/lib/logs";
 import { CROSS_CHAIN_REFUND_GRACE_SECONDS, LIVE_ORIGINS, originByKey, type OriginKey } from "@/lib/crosschain";
 
@@ -43,6 +43,8 @@ type OpenedOrder = {
   inToken?: Address;
   /** Escrowed on a cross-chain origin (its CruxCrossChainSettler); otherwise on the Base Sepolia settler. */
   origin?: OriginKey;
+  /** Opened on an earlier Base Sepolia settler (PREVIOUS_SETTLERS) rather than the active one. */
+  settler?: Address;
 };
 type ScanCache = { scannedTo: string; orders: OpenedOrder[] };
 const NONE: OpenedOrder[] = [];
@@ -59,7 +61,7 @@ export type MyIntent = OpenedOrder & {
 };
 
 /** Where a wallet's orders are opened: the Base Sepolia settler, and the cross-chain settler on Arbitrum Sepolia. */
-type Source = { client: PublicClient; settler: Address; chainId: number; deployBlock: bigint; origin?: OriginKey };
+type Source = { client: PublicClient; settler: Address; chainId: number; deployBlock: bigint; origin?: OriginKey; previous?: boolean };
 
 const BASE_SOURCE: Source = { client: logClient as PublicClient, settler: SETTLER, chainId: baseSepolia.id, deployBlock: SETTLER_DEPLOY_BLOCK };
 /** All origins' orders as one list (memoized by useQueries while the results don't change), and a refetch for all. */
@@ -68,7 +70,11 @@ function combineOrigins(results: { data?: OpenedOrder[]; refetch: () => Promise<
 }
 
 /** Every live cross-chain origin's settler (lib/crosschain.ts). */
-const ORIGIN_SOURCES: Source[] = LIVE_ORIGINS.map((o) => ({ client: o.logClient, settler: o.settler, chainId: o.chain.id, deployBlock: o.deployBlock, origin: o.key }));
+const ORIGIN_SOURCES: Source[] = [
+  ...LIVE_ORIGINS.map((o) => ({ client: o.logClient, settler: o.settler, chainId: o.chain.id, deployBlock: o.deployBlock, origin: o.key })),
+  // Earlier Base settlers still holding (or having held) this wallet's orders.
+  ...PREVIOUS_SETTLERS.map((p) => ({ client: logClient as PublicClient, settler: p.address, chainId: baseSepolia.id, deployBlock: p.deployBlock, previous: true })),
+];
 
 function cacheKey(source: Source, user: Address) {
   // v2: orders carry their assets; older caches lack them, so they rescan once.
@@ -128,6 +134,7 @@ async function scanOpenedOrders(source: Source, user: Address): Promise<OpenedOr
         minOut: out?.amount.toString(),
         inToken: input ? getAddress(`0x${input.token.slice(-40)}`) : undefined,
         ...(source.origin ? { origin: source.origin } : {}),
+        ...(source.previous ? { settler: source.settler } : {}),
       });
     }
     writeCache(source, user, { scannedTo: ranges[ranges.length - 1][1].toString(), orders: [...orders.values()] });
@@ -164,7 +171,7 @@ export function useMyIntents() {
   const orders = useMemo(() => [...(opened.data ?? NONE), ...fromOrigins.orders], [opened.data, fromOrigins.orders]);
   const escrows = useReadContracts({
     contracts: orders.map((o) => ({
-      address: o.origin ? originByKey(o.origin)!.settler : SETTLER,
+      address: o.origin ? originByKey(o.origin)!.settler : (o.settler ?? SETTLER),
       abi: cruxSettlerAbi,
       functionName: "escrows" as const,
       args: [o.orderId] as const,

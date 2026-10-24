@@ -7,6 +7,7 @@ import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { KineticLoader } from "@/components/ui/Modal";
 import { IntentModal } from "@/components/terminal/IntentModal";
 import { BatchOrderForm } from "@/components/pro/BatchOrderForm";
+import { OneClickBar, OneClickOrderStatus, useOneClick, useOrderWatch, type OneClickOrder } from "@/components/pro/OneClick";
 import { PresetKey, SubmitKey, useExecutionHotkeys } from "@/components/pro/hotkeys";
 import { ProtectionRow, RiskPreview, type RiskRow } from "@/components/pro/RiskPreview";
 import { cruxBatchFactoryAbi } from "@/contracts/abis/batchAuction";
@@ -18,7 +19,8 @@ import { SETTLER_DEPLOYED, SLIPPAGE_BPS, TESTNET_USDC } from "@/lib/intents";
 import { USDC_DECIMALS, fmtTokens, fmtUsdc, formatRemaining, launchError, type TxStep } from "@/lib/launch";
 import { fmtTokenPrice } from "@/lib/launchTrade";
 import { NO_LIMIT, V3_TICK_STEP_PERCENT, parsePriceUsd, priceUsd, usesTicks, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
-import { minReceived, type OrderDraft, type Side } from "@/lib/order";
+import { minReceived, sourceAsset, type OrderDraft, type Side } from "@/lib/order";
+import { placeOneClick } from "@/lib/session";
 import { SOLVER_MAX_IMPACT_PCT, bidRisk, tradeRisk } from "@/lib/risk";
 import { PAY_SOURCES } from "@/lib/tokens";
 import { useConnectModal } from "@/providers/Web3Provider";
@@ -435,6 +437,10 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   const [payFrom, setPayFrom] = useState<PayFrom>("base");
   // A buy can pay from any live cross-chain origin; its USDC balance is shown and compared in 6-decimal units.
   const fromOrigin = side === "buy" && payFrom !== "base" ? originByKey(payFrom) : null;
+  // One-click (CruxSettlerV4 sessions): Base buys signed by this browser's session key, no wallet popup.
+  const oneClick = useOneClick();
+  const [oneClickOrder, setOneClickOrder] = useState<OneClickOrder | null>(null);
+  useOrderWatch(oneClickOrder, setOneClickOrder);
 
   const usdc = useReadContract({
     address: fromOrigin ? fromOrigin.usdc : TESTNET_USDC,
@@ -486,8 +492,21 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
       : !listed
         ? "Not listed for intents yet"
         : null;
-  const disabled = !input || !risk || overBalance || tooBig || Boolean(blocked);
-  const label = blocked ?? (overBalance ? `Not enough ${side === "buy" ? "test USDC" : symbol}` : tooBig ? "Too large for this pool" : "Sign trade intent");
+  const oneClickReady = side === "buy" && payFrom === "base" && oneClick.session !== null;
+  const overCap = oneClickReady && input !== null && oneClick.remaining !== null && input > oneClick.remaining;
+  const sending = oneClickOrder?.kind === "sending";
+  const disabled = !input || !risk || overBalance || tooBig || overCap || sending || Boolean(blocked);
+  const label =
+    blocked ??
+    (overBalance
+      ? `Not enough ${side === "buy" ? "test USDC" : symbol}`
+      : tooBig
+        ? "Too large for this pool"
+        : overCap
+          ? "Over your one-click cap"
+          : oneClickReady
+            ? "Buy now · one-click"
+            : "Sign trade intent");
 
   const rows: RiskRow[] =
     risk && draft && signedMin !== null
@@ -517,12 +536,38 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
         ]
       : [];
 
+  /** Signs in this browser with the session key and has the relay open it: no wallet popup. */
+  const oneClickBuy = async () => {
+    if (!address || !input || !draft || !oneClick.session) return;
+    setOneClickOrder({ kind: "sending" });
+    try {
+      const orderId = await placeOneClick(oneClick.session, {
+        user: address,
+        chainId: TESTNET.id,
+        inputCaip19: sourceAsset(TEST_USDC_SOURCE.id).caip19,
+        inputToken: TESTNET_USDC,
+        inputAmount: input,
+        outputCaip19: market.caip19,
+        // The same signed floor the wallet flow uses (IntentModal): the quote less the slippage allowance.
+        minOutputAmount: parseUnits(minReceived(draft).toFixed(6), market.decimals),
+        destinationChainId: TESTNET.id,
+      });
+      setOneClickOrder({ kind: "open", orderId });
+      setAmount("");
+      void oneClick.refresh();
+    } catch (e) {
+      setOneClickOrder({ kind: "error", message: (e as Error).message.split("\n")[0] });
+    }
+  };
+
   const sign = () => {
     if (!isConnected) {
       openConnect();
       return;
     }
-    if (!disabled && draft) setOrder(draft);
+    if (disabled || !draft) return;
+    if (oneClickReady) void oneClickBuy();
+    else setOrder(draft);
   };
 
   const pick = (v: bigint) => setAmount(formatUnits(v, decimals));
@@ -600,10 +645,13 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
       {rows.length > 0 && <RiskPreview rows={rows} note={tooBig ? `The solver skips orders that move a pool more than ${SOLVER_MAX_IMPACT_PCT}% in one batch. Trade smaller.` : undefined} />}
       <ProtectionRow>Your signed minimum is enforced on-chain: the fill can&apos;t come in below it.</ProtectionRow>
 
+      {side === "buy" && payFrom === "base" && <OneClickBar oneClick={oneClick} />}
+
       <button type="button" disabled={isConnected && disabled} onClick={sign} className={buttonClass("signal", "md", "w-full rounded-xl font-semibold max-lg:hidden")}>
         {isConnected ? label : "Connect wallet to trade"} <ArrowUpRight />
         <SubmitKey />
       </button>
+      <OneClickOrderStatus order={oneClickOrder} />
 
       {market.protected ? (
         <p className="text-[11px] leading-snug text-dim">
@@ -620,7 +668,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
         {market.price !== null && <> at {fmtTokenPrice(market.price)}</>}.{" "}
         {fromOrigin
           ? `Escrowed on ${fromOrigin.name}, filled on Base in the next batch, and released to the solver only on a Hyperlane proof of that fill; refundable 6 hours after its deadline if unproven.`
-          : "Filled in the next batch (about a minute), or refundable after its deadline."}
+          : "Filled in the next 10-second batch, or refundable after its deadline."}
       </p>
       )}
 
@@ -630,7 +678,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
             <AmountField id={`${uid}-dock`} value={amount} onChange={setAmount} unit={side === "buy" ? "USDC" : symbol} compact />
           </div>
           <button type="button" disabled={isConnected && disabled} onClick={sign} className={buttonClass("signal", "md", "shrink-0 rounded-xl px-4 font-semibold capitalize")}>
-            {isConnected ? (tooBig ? "Too big" : side) : "Connect"}
+            {isConnected ? (tooBig ? "Too big" : overCap ? "Over cap" : oneClickReady ? "Buy now" : side) : "Connect"}
           </button>
         </div>
         {risk && signedMin !== null && (

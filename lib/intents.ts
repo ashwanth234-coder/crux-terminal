@@ -17,6 +17,11 @@ function envAddress(value: string | undefined): Address | null {
  * NEXT_PUBLIC_CRUX_DESTINATION_V2 override them (e.g. on a local fork).
  */
 const SETTLER_V3_ADDRESS: Address | null = "0xC3BE6a2F3D82DdAba03Fb965bd08f5113354f44C";
+/**
+ * CruxSettlerV4: V3 plus one-click sessions (a browser key signs orders; input pulled through a capped, 24-hour Permit2
+ * allowance). Same destination. Active once set; NEXT_PUBLIC_CRUX_SETTLER_V4 overrides it (e.g. a local fork).
+ */
+const SETTLER_V4_ADDRESS: Address | null = null;
 const DESTINATION_V2_ADDRESS: Address | null = "0x62e5ed6BC2f604fad76152045559805c11D1cdf4";
 /** CruxDestinationSettler (v1): where v1 and v2 settlers' orders are filled. */
 const LEGACY_DESTINATION = "0x300a835939D2beBed59C543470DCD9a9c8065822" as Address;
@@ -24,12 +29,15 @@ const LEGACY_DESTINATION = "0x300a835939D2beBed59C543470DCD9a9c8065822" as Addre
 const settlerV1 = envAddress(process.env.NEXT_PUBLIC_CRUX_SETTLER);
 const settlerV2 = envAddress(process.env.NEXT_PUBLIC_CRUX_SETTLER_V2);
 const settlerV3 = envAddress(process.env.NEXT_PUBLIC_CRUX_SETTLER_V3) ?? SETTLER_V3_ADDRESS;
+const settlerV4 = envAddress(process.env.NEXT_PUBLIC_CRUX_SETTLER_V4) ?? SETTLER_V4_ADDRESS;
 const destinationV2 = envAddress(process.env.NEXT_PUBLIC_CRUX_DESTINATION_V2) ?? DESTINATION_V2_ADDRESS;
 const v3Ready = settlerV3 !== null && destinationV2 !== null;
-const configuredSettler = v3Ready ? settlerV3 : (settlerV2 ?? settlerV1);
+const v4Ready = settlerV4 !== null && destinationV2 !== null;
+const configuredSettler = v4Ready ? settlerV4 : v3Ready ? settlerV3 : (settlerV2 ?? settlerV1);
 
 /**
  * ERC-7683 origin settler on Base Sepolia: the newest one configured.
+ * - v4: v3 plus one-click sessions (ONE_CLICK_LIVE).
  * - v3: trustless same-chain settlement (paid only on the destination's record of the exact fill), refunds
  *   as soon as the fill deadline passes.
  * - v2: readable signed orders, EIP-7702 accounts' own keys accepted.
@@ -37,14 +45,16 @@ const configuredSettler = v3Ready ? settlerV3 : (settlerV2 ?? settlerV1);
  */
 export const SETTLER = (configuredSettler ?? PLACEHOLDER_SETTLER) as Address;
 export const SETTLER_DEPLOYED = configuredSettler !== null;
-export const SETTLER_VERSION: 1 | 2 | 3 = v3Ready ? 3 : settlerV2 ? 2 : 1;
+export const SETTLER_VERSION: 1 | 2 | 3 | 4 = v4Ready ? 4 : v3Ready ? 3 : settlerV2 ? 2 : 1;
+/** One-click trading (sessions through Permit2) needs CruxSettlerV4. */
+export const ONE_CLICK_LIVE = SETTLER_VERSION === 4;
 
 /** Where the active settler's orders are filled (and where the terminal reads OrderFilled). */
-export const DESTINATION_SETTLER: Address = v3Ready ? destinationV2! : LEGACY_DESTINATION;
+export const DESTINATION_SETTLER: Address = v3Ready || v4Ready ? destinationV2! : LEGACY_DESTINATION;
 
 /** CruxDestinationSettlerV2 keys fills by the exact order details, so its OrderFilled carries that hash. */
 export const ORDER_FILLED_EVENT =
-  SETTLER_VERSION === 3
+  SETTLER_VERSION >= 3
     ? "event OrderFilled(bytes32 indexed orderId, bytes32 indexed fillHash, address indexed filler, address recipient, address token, uint256 amount)"
     : "event OrderFilled(bytes32 indexed orderId, address indexed filler, address indexed recipient, address token, uint256 amount)";
 
@@ -53,6 +63,8 @@ const SETTLER_V1_DEPLOY_BLOCK = BigInt(48311115);
 const SETTLER_V2_DEPLOY_BLOCK = BigInt(48410403);
 /** crux-contracts/broadcast/DeploySettlerV3.s.sol/84532/run-latest.json */
 const SETTLER_V3_DEPLOY_BLOCK: bigint | null = BigInt(48619867);
+/** crux-contracts/broadcast/DeploySettlerV4.s.sol/84532/run-latest.json, once deployed. */
+const SETTLER_V4_DEPLOY_BLOCK: bigint | null = null;
 
 /**
  * Block the active settler was deployed in. NEXT_PUBLIC_CRUX_SETTLER_V2_BLOCK may override v2's (for a redeploy);
@@ -63,7 +75,9 @@ const blockOverride = (value: string | undefined) => {
   return v && /^\d+$/.test(v) ? BigInt(v) : null;
 };
 export const SETTLER_DEPLOY_BLOCK =
-  SETTLER_VERSION === 3
+  SETTLER_VERSION === 4
+    ? (blockOverride(process.env.NEXT_PUBLIC_CRUX_SETTLER_V4_BLOCK) ?? SETTLER_V4_DEPLOY_BLOCK ?? SETTLER_V3_DEPLOY_BLOCK ?? SETTLER_V2_DEPLOY_BLOCK)
+    : SETTLER_VERSION === 3
     ? (blockOverride(process.env.NEXT_PUBLIC_CRUX_SETTLER_V3_BLOCK) ?? SETTLER_V3_DEPLOY_BLOCK ?? SETTLER_V2_DEPLOY_BLOCK)
     : settlerV2
       ? (blockOverride(process.env.NEXT_PUBLIC_CRUX_SETTLER_V2_BLOCK) ?? SETTLER_V2_DEPLOY_BLOCK)
@@ -73,7 +87,14 @@ export const SETTLER_DEPLOY_BLOCK =
  * Seconds after an order's fillDeadline when refund() succeeds: v3 refunds a same-chain order the second its
  * deadline passes unfilled; v1/v2 wait REFUND_GRACE (1 hour).
  */
-export const REFUND_GRACE_SECONDS = SETTLER_VERSION === 3 ? 1 : 3600;
+export const REFUND_GRACE_SECONDS = SETTLER_VERSION >= 3 ? 1 : 3600;
+
+/**
+ * Settlers the wallet may still have orders on after a newer one took over (V3 once V4 is live): My intents keeps
+ * showing them, so an order opened just before the switch can still be followed and refunded.
+ */
+export const PREVIOUS_SETTLERS: { address: Address; deployBlock: bigint }[] =
+  SETTLER_VERSION === 4 && settlerV3 && SETTLER_V3_DEPLOY_BLOCK !== null ? [{ address: settlerV3, deployBlock: SETTLER_V3_DEPLOY_BLOCK }] : [];
 
 /** Launch + batch-auction factory on Base Sepolia, once deployed (NEXT_PUBLIC_CRUX_FACTORY). */
 export const FACTORY = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY);
@@ -143,7 +164,10 @@ export const TESTNET_ESCROW_ASSETS: ReadonlySet<string> = new Set([
 const testNova = envAddress(process.env.NEXT_PUBLIC_CRUX_TEST_NOVA);
 export const TESTNET_NOVA_CAIP19 = testNova ? `eip155:84532/erc20:${getAddress(testNova)}` : null;
 
-export const BATCH_WINDOW_SECONDS = 60;
+/** The solver clears intents in batches this long (one price per batch), so a fill lands within about this long. */
+export const BATCH_WINDOW_SECONDS = 10;
+/** How long a signed intent has to be opened on-chain. */
+export const OPEN_WINDOW_SECONDS = 60;
 export const SLIPPAGE_BPS = 50;
 
 const ORDER_DATA_TYPESTRING =
@@ -256,8 +280,8 @@ export function buildGaslessOrder(draft: IntentDraft): {
   const domain = origin ? crossChainDomain(origin) : SETTLER_DEPLOYED ? SETTLER_DOMAIN : { ...SETTLER_DOMAIN, chainId: draft.chainId };
   const now = Math.floor(Date.now() / 1000);
   const nonce = orderNonce();
-  // Intent must be opened inside the current batch window and filled within 10 minutes.
-  const openDeadline = now + BATCH_WINDOW_SECONDS;
+  // Intent must be opened within a minute and filled within 10 minutes.
+  const openDeadline = now + OPEN_WINDOW_SECONDS;
   const fillDeadline = now + 600;
   const envelope = {
     originSettler: origin ? origin.settler : SETTLER,

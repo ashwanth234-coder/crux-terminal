@@ -283,7 +283,7 @@ export default function AlphaGuidePage() {
                   {b("Refund opens in…")}
                 </>,
                 <>
-                  {SETTLER_VERSION === 3
+                  {SETTLER_VERSION >= 3
                     ? "As soon as the deadline passes (about 10 minutes after you placed it), "
                     : "About an hour after the deadline (roughly 70 minutes after you placed it), "}
                   click {b("Refund test USDC")} (or the token,
