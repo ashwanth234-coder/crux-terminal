@@ -21,7 +21,7 @@ const SETTLER_V3_ADDRESS: Address | null = "0xC3BE6a2F3D82DdAba03Fb965bd08f51133
  * CruxSettlerV4: V3 plus one-click sessions (a browser key signs orders; input pulled through a capped, 24-hour Permit2
  * allowance). Same destination. Active once set; NEXT_PUBLIC_CRUX_SETTLER_V4 overrides it (e.g. a local fork).
  */
-const SETTLER_V4_ADDRESS: Address | null = null;
+const SETTLER_V4_ADDRESS: Address | null = "0x399147a5960A120A3b8b89A33a30500a561145D9";
 const DESTINATION_V2_ADDRESS: Address | null = "0x62e5ed6BC2f604fad76152045559805c11D1cdf4";
 /** CruxDestinationSettler (v1): where v1 and v2 settlers' orders are filled. */
 const LEGACY_DESTINATION = "0x300a835939D2beBed59C543470DCD9a9c8065822" as Address;
@@ -63,8 +63,8 @@ const SETTLER_V1_DEPLOY_BLOCK = BigInt(48311115);
 const SETTLER_V2_DEPLOY_BLOCK = BigInt(48410403);
 /** crux-contracts/broadcast/DeploySettlerV3.s.sol/84532/run-latest.json */
 const SETTLER_V3_DEPLOY_BLOCK: bigint | null = BigInt(48619867);
-/** crux-contracts/broadcast/DeploySettlerV4.s.sol/84532/run-latest.json, once deployed. */
-const SETTLER_V4_DEPLOY_BLOCK: bigint | null = null;
+/** crux-contracts/broadcast/DeploySettlerV4.s.sol/84532/run-latest.json (deployed 2026-10-24). */
+const SETTLER_V4_DEPLOY_BLOCK: bigint | null = BigInt(49553568);
 
 /**
  * Block the active settler was deployed in. NEXT_PUBLIC_CRUX_SETTLER_V2_BLOCK may override v2's (for a redeploy);
