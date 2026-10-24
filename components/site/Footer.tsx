@@ -9,6 +9,7 @@ const LINKS = [
   { label: "Discover", href: "/launches" },
   { label: "Protocol", href: "/#protocol" },
   { label: "Docs", href: "/alpha-guide" },
+  { label: "API", href: "/developers" },
   { label: "Settler on Basescan", href: `${TESTNET_EXPLORER}/address/${SETTLER}` },
 ];
 

@@ -5,7 +5,7 @@
  */
 
 export type Fill = { time: number; price: number; usdc: bigint };
-export type Candle = { time: number; open: number; high: number; low: number; close: number; volume: number };
+export type Candle = { time: number; open: number; high: number; low: number; close: number; volume: number; trades: number };
 
 export const INTERVALS = [
   { seconds: 60, label: "1m" },
@@ -38,9 +38,10 @@ export function toCandles(fills: Fill[], interval: number, openPrice: number | n
       last.low = Math.min(last.low, f.price);
       last.close = f.price;
       last.volume += Number(f.usdc) / 1e6;
+      last.trades += 1;
     } else {
       const open = prevClose ?? f.price;
-      out.push({ time: bucket, open, high: Math.max(open, f.price), low: Math.min(open, f.price), close: f.price, volume: Number(f.usdc) / 1e6 });
+      out.push({ time: bucket, open, high: Math.max(open, f.price), low: Math.min(open, f.price), close: f.price, volume: Number(f.usdc) / 1e6, trades: 1 });
     }
     prevClose = f.price;
   }

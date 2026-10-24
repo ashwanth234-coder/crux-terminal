@@ -1,6 +1,6 @@
 import { createPublicClient, erc20Abi, formatUnits, http, zeroAddress, type Address } from "viem";
 import { baseSepolia } from "viem/chains";
-import { cruxBatchFactoryAbi, factoryV4Abi } from "@/contracts/abis/batchAuction";
+import { cruxBatchFactoryAbi, factoryV4Abi, factoryV6Abi } from "@/contracts/abis/batchAuction";
 import { TESTNET_EXPLORER } from "@/lib/chains";
 import { FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6 } from "@/lib/intents";
 import { PRICE_DECIMALS, V2_VESTING_DAYS, phaseV2, toAuctionV2, type PhaseV2 } from "@/lib/launchV2";
@@ -42,6 +42,13 @@ export type FeedLaunch = {
   lpBurned: boolean;
   /** 30, or 0 when the creator chose an instant unlock (V4). */
   creatorVestingDays: number;
+  /** Unix seconds the auction graduated (its pool opened), or null. */
+  graduatedAt: number | null;
+  /**
+   * Seconds of one-price batch trading after graduation (anti-sniper): 0 when the creator turned it off (V6) and for
+   * V2–V4 launches, which open on Uniswap at graduation; 86400 on V5.
+   */
+  antiSniperSeconds: number;
   metadata: TokenMeta;
   urls: { terminal: string; token: string; pool: string | null };
 };
@@ -63,6 +70,13 @@ async function factoryLaunches(factory: Address, version: 2 | 3 | 4 | 5 | 6, now
     version >= 4
       ? await client.multicall({
           contracts: found.map(({ id }) => ({ address: factory, abi: factoryV4Abi, functionName: "creatorVestingDuration" as const, args: [BigInt(id)] as const })),
+        })
+      : null;
+  // V6: the creator's anti-sniper choice, as the window it fixed at creation (0 = off).
+  const protection =
+    version === 6
+      ? await client.multicall({
+          contracts: found.map(({ id }) => ({ address: factory, abi: factoryV6Abi, functionName: "batchProtection" as const, args: [BigInt(id)] as const })),
         })
       : null;
   const meta = await client.multicall({
@@ -96,6 +110,9 @@ async function factoryLaunches(factory: Address, version: 2 | 3 | 4 | 5 | 6, now
       lpBurned: graduated,
       creatorVestingDays:
         vesting && vesting[i].status === "success" ? Number(vesting[i].result as bigint) / 86_400 : V2_VESTING_DAYS,
+      graduatedAt: graduated && a.settledAt > 0 ? a.settledAt : null,
+      antiSniperSeconds:
+        version === 6 ? (protection && protection[i].status === "success" ? Number(protection[i].result as bigint) : 0) : version === 5 ? 86_400 : 0,
       metadata: parseTokenMeta(uri),
       urls: {
         terminal: `${SITE_URL}/launch/v${version}/${id}`,
@@ -118,13 +135,13 @@ export async function readLaunches(now = Math.floor(Date.now() / 1000)): Promise
   return sets.flatMap((s) => [...s].reverse());
 }
 
-/** Public, cacheable JSON for a feed route: CDN-cached for a minute, any origin may read it. */
-export function feedResponse(body: unknown, status = 200) {
+/** Public, cacheable JSON for a feed route: CDN-cached (a minute by default), any origin may read it. */
+export function feedResponse(body: unknown, status = 200, maxAgeSeconds = 60) {
   return Response.json(body, {
     status,
     headers: {
       "Access-Control-Allow-Origin": "*",
-      "Cache-Control": status === 200 ? "public, s-maxage=60, stale-while-revalidate=300" : "no-store",
+      "Cache-Control": status === 200 ? `public, s-maxage=${maxAgeSeconds}, stale-while-revalidate=${maxAgeSeconds * 5}` : "no-store",
     },
   });
 }
