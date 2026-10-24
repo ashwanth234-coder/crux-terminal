@@ -80,6 +80,16 @@ export function useTrustFacts(
     };
   } else if (lpTotal === undefined || lpDead === undefined) {
     lpCheck = { key: "lp", label: "LP status", state: "loading", value: "Checking…", detail: "Reading the pool's LP holders." };
+  } else if (lpTotal === BigInt(0)) {
+    // An anti-sniper launch (V5/V6) keeps its liquidity in the batch pool until migration: the pair has no LP yet.
+    lpCheck = {
+      key: "lp",
+      label: "LP status",
+      state: "pending",
+      value: "Burns at migration",
+      detail: "The liquidity is in the anti-sniper batch pool for now, so the Uniswap pair has no LP yet. At migration the pool's LP is minted straight to 0x…dEaD; no wallet, the creator included, can ever receive it.",
+      href: `${explorer}/address/${auction.pair}`,
+    };
   } else {
     const burned = lpDead + (lpZero ?? BigInt(0));
     const bps = lpTotal > BigInt(0) ? Number((burned * BigInt(10_000)) / lpTotal) : 0;

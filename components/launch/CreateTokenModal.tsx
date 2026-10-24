@@ -683,7 +683,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                   {
                     on: true,
                     title: "On",
-                    note: `Recommended. The first ${factoryWindow !== null ? `${windowLabel(factoryWindow).replace("-", " ")}s` : "minute"} of trading clears at one price, so bots can't buy ahead of anyone. Earns a trust badge.`,
+                    note: `Recommended. Every trade in the first ${factoryWindow !== null ? `${windowLabel(factoryWindow).replace("-", " ")}s` : "minute"} after graduation clears at one price, so bots can't buy ahead of anyone. Earns a trust badge.`,
                   },
                   { on: false, title: "Off", note: "Trading opens on Uniswap the moment the auction graduates, so bots can buy first. Shown to buyers with a warning badge." },
                 ].map((o) => {
