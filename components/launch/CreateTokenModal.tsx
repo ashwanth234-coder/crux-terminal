@@ -62,7 +62,7 @@ const INITIAL: Form = {
   antiSniper: true,
   startsIn: "10",
   walletCap: "5",
-  window: "60",
+  window: "300",
 };
 
 const SIM_STEPS = [
