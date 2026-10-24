@@ -102,7 +102,7 @@ export const FACTORY_V5 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V5) ??
  * CruxFactoryV6 (V5 with a per-launch batch-only window, 15 minutes by default, in its CruxBatchPoolV2), once
  * deployed. crux-contracts/broadcast/DeployFactoryV6.s.sol; NEXT_PUBLIC_CRUX_FACTORY_V6 overrides it.
  */
-const FACTORY_V6_ADDRESS: Address | null = null;
+const FACTORY_V6_ADDRESS: Address | null = "0xD07fBb34076D88d2391E831aABfd40AcA3F57940";
 export const FACTORY_V6 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V6) ?? FACTORY_V6_ADDRESS;
 
 /** The batch factory behind a launch version (/launch/v2|v3|v4|v5|v6/[id]). */
