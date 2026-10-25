@@ -13,7 +13,7 @@ const ROW =
   "group flex w-full items-center justify-between border-b border-line py-4 text-[13px] font-medium uppercase tracking-[0.18em] text-chrome aria-[current=page]:text-signal";
 
 /**
- * Discover | Launch | Terminal | Protocol | Docs, as one source for the landing header,
+ * Discover | Launch | Terminal | Portfolio | Protocol | Docs, as one source for the landing header,
  * its mobile menu, the launch pages and the pro terminal. Launch opens the token launch
  * modal. The link for the page you are on is marked current and set in Signal Orange.
  */

@@ -57,6 +57,7 @@ export function HoldersTable({ factory, id, auction }: { factory: Address; id: s
           solver: CRUX_SOLVER,
           destinationSettler: DESTINATION_SETTLER,
           me: address,
+          batchPool: market.batchPool,
         })
       : null;
   const price = market.price;

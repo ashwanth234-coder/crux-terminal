@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { useConnection } from "wagmi";
 import { Logo } from "@/components/site/Logo";
 import { SiteNav } from "@/components/site/SiteNav";
+import { TokenSearch } from "@/components/site/TokenSearch";
 import { WalletChip } from "@/components/terminal/WalletChip";
 import { SmartAccountHint } from "@/components/ui/SmartAccountNote";
 import { StatusTag } from "@/components/ui/StatusTag";
@@ -21,11 +22,12 @@ export function TerminalShell({ children }: { children: ReactNode }) {
             <Logo />
           </Link>
           <nav aria-label="Primary" className="hidden lg:block">
-            <SiteNav variant="inline" hide={["Docs"]} />
+            <SiteNav variant="inline" hide={["Docs", "Protocol"]} />
           </nav>
         </div>
         <div className="flex items-center gap-3">
-          <StatusTag status="testnet" label="Base Sepolia" className="hidden sm:inline-flex" />
+          <TokenSearch className="hidden w-[240px] md:block" />
+          <StatusTag status="testnet" label="Base Sepolia" className="hidden xl:inline-flex" />
           <span className="flex items-center gap-1">
             <WalletChip variant="header" />
             <SmartAccountHint address={address} />

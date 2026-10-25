@@ -23,13 +23,14 @@ export const miniAppEmbed = {
 export const TERMINAL_HREF = "/terminal";
 
 /**
- * Primary navigation: Discover | Launch | Terminal | Protocol | Docs. Launch opens the
+ * Primary navigation: Discover | Launch | Terminal | Portfolio | Protocol | Docs. Launch opens the
  * token launch modal; the rest are routes, absolute so they work on every page.
  */
 export const NAV_LINKS = [
   { label: "Discover", href: "/launches" },
   { label: "Launch", href: null },
   { label: "Terminal", href: TERMINAL_HREF },
+  { label: "Portfolio", href: "/portfolio" },
   { label: "Protocol", href: "/#protocol" },
   { label: "Docs", href: "/alpha-guide" },
 ] as const;

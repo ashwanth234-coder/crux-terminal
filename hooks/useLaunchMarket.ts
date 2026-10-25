@@ -5,7 +5,7 @@ import { useConnection, useReadContracts } from "wagmi";
 import { batchPoolAbi, guardianAbi } from "@/lib/batchPool";
 import { TESTNET } from "@/lib/chains";
 import { useLaunchesV2 } from "@/hooks/useLaunches";
-import { DESTINATION_SETTLER, FACTORY_V2, FACTORY_V3, SETTLER, SETTLER_DEPLOYED, TESTNET_USDC } from "@/lib/intents";
+import { DESTINATION_SETTLER, FACTORY_V2, FACTORY_V3, SETTLER, SETTLER_DEPLOYED, SETTLER_VERSION, TESTNET_USDC } from "@/lib/intents";
 import { launchCaip19, midPrice, type PoolReserves } from "@/lib/launchTrade";
 import type { BatchVersion } from "@/lib/launchV2";
 
@@ -16,7 +16,11 @@ const pairAbi = parseAbi([
   "function token0() view returns (address)",
   "function getReserves() view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)",
 ]);
-const registryAbi = parseAbi(["function assetToken(bytes32 assetId) view returns (address)"]);
+const registryAbi = parseAbi([
+  "function assetToken(bytes32 assetId) view returns (address)",
+  // CruxSettlerV3 / V4 replaced the asset registry with a plain allowlist of input tokens.
+  "function isInputToken(address token) view returns (bool)",
+]);
 
 export type LaunchMarket = {
   token: Address;
@@ -61,11 +65,13 @@ export function useLaunchMarket(token: Address, pair: Address): LaunchMarket {
       { ...on, address: token, abi: erc20Abi, functionName: "balanceOf", args: [address ?? zeroAddress] },
       // CruxTokenV2 (V5) names its batch pool; older tokens revert here, which just means "no pool".
       { ...on, address: token, abi: guardianAbi, functionName: "guardian" },
+      // Sells escrow the token on the origin settler: V3 / V4 accept it when it's an allowed input token.
+      { ...on, address: SETTLER, abi: registryAbi, functionName: "isInputToken", args: [token] },
     ],
     query: { enabled: pair !== zeroAddress, refetchInterval: 15_000 },
   });
 
-  const [t0, res, dest, origin, dec, bal, guardian] = reads.data ?? [];
+  const [t0, res, dest, origin, dec, bal, guardian, inputToken] = reads.data ?? [];
   const batchPool = guardian?.status === "success" && guardian.result !== zeroAddress ? (guardian.result as Address) : null;
   const pool = useReadContracts({
     contracts: [
@@ -97,7 +103,7 @@ export function useLaunchMarket(token: Address, pair: Address): LaunchMarket {
     reserves,
     price: reserves ? midPrice(reserves, decimals) : null,
     listedForBuys: listed(dest),
-    listedForSells: listed(origin),
+    listedForSells: SETTLER_VERSION >= 3 ? SETTLER_DEPLOYED && inputToken?.result === true : listed(origin),
     tokenBalance: address && bal?.result !== undefined ? bal.result : null,
     loading: reads.isLoading || (batchPool !== null && pool.isLoading),
     batchPool,

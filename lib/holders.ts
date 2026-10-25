@@ -30,6 +30,8 @@ export type HolderContext = {
   solver: Address;
   destinationSettler: Address;
   me: Address | undefined;
+  /** V5 / V6: the launch's batch pool, which pays out its anti-sniper batch fills. */
+  batchPool?: Address | null;
 };
 
 /** A holder with more than this share of supply (and not a protocol address) is tagged a whale. */
@@ -42,13 +44,15 @@ type Acc = { balance: bigint; pricedQty: number; pricedCost: number; unpriced: b
 /**
  * Holder balances rebuilt from Transfer logs, with an average entry from the acquisitions that have a price:
  * an auction claim (a factory transfer in a Claimed transaction) pays the clearing price, a creator vesting
- * release is free, a direct pool buy pays its own swap's price, and an intent fill
+ * release is free, a direct pool buy pays its own swap's price, a batch-pool fill pays its batch's price, and an intent fill
  * (tokens sent by the solver) is priced at the solver's latest pool buy, marked approximate. Anything else is
  * unpriced and flags the entry as partial. Outflows reduce the holding at average cost.
  */
 export function buildHolders(transfers: TokenTransfer[], swapsNewestFirst: PoolTrade[], ctx: HolderContext): Holder[] {
   const key = (a: Address) => a.toLowerCase();
-  const swapByTx = new Map(swapsNewestFirst.map((s) => [s.txHash, s]));
+  const swapByTx = new Map(swapsNewestFirst.filter((s) => s.venue !== "batch-pool").map((s) => [s.txHash, s]));
+  // One clear pays many batch fills in one transaction: match each payout to its owner's fill.
+  const batchFill = new Map(swapsNewestFirst.filter((s) => s.venue === "batch-pool").map((s) => [`${s.txHash}:${s.to.toLowerCase()}`, s]));
   const solverBuys = swapsNewestFirst.filter((s) => s.viaIntent && s.side === "buy");
   const solverPriceAt = (block: bigint) => solverBuys.find((s) => s.blockNumber <= block)?.price ?? null;
   const claimTxs = new Set(transfers.filter((t) => t.kind === "claim").map((t) => t.txHash));
@@ -59,6 +63,7 @@ export function buildHolders(transfers: TokenTransfer[], swapsNewestFirst: PoolT
     [key(ctx.solver)]: "solver",
     [key(ctx.destinationSettler)]: "settler",
     [key(DEAD)]: "burn",
+    ...(ctx.batchPool ? { [key(ctx.batchPool)]: "pool" as const } : {}),
   };
 
   const accs = new Map<string, Acc>();
@@ -96,6 +101,8 @@ export function buildHolders(transfers: TokenTransfer[], swapsNewestFirst: PoolT
       price = ctx.clearingPrice;
     } else if (fromKey === key(ctx.pair)) {
       price = swapByTx.get(t.txHash)?.price ?? null;
+    } else if (ctx.batchPool && fromKey === key(ctx.batchPool)) {
+      price = batchFill.get(`${t.txHash}:${key(t.to)}`)?.price ?? null;
     } else if (fromKey === key(ctx.solver) || fromKey === key(ctx.destinationSettler)) {
       price = solverPriceAt(t.blockNumber);
       if (price !== null) r.approx = true;

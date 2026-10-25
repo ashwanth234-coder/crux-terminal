@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useId, useState, type ReactNode } from "react";
 import { formatUnits, parseUnits, type Address, type Hex } from "viem";
 import { KineticLoader } from "@/components/ui/Modal";
@@ -9,6 +9,7 @@ import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { Logo } from "@/components/site/Logo";
 import { LaunchTokenButton } from "@/components/launch/LaunchTokenButton";
 import { SiteNav } from "@/components/site/SiteNav";
+import { TokenSearch } from "@/components/site/TokenSearch";
 import { WalletChip } from "@/components/terminal/WalletChip";
 import { StatusTag } from "@/components/ui/StatusTag";
 import { useLiveLaunch, useNow, useSimulatedLaunch, type PreviewParams } from "@/hooks/useLaunchAuction";
@@ -114,9 +115,7 @@ export function Shell({ mode, children }: { mode: LaunchModel["mode"] | null; ch
                 className="hidden sm:inline-flex"
               />
             )}
-            <div className="hidden xl:block">
-              <AuctionJump />
-            </div>
+            <TokenSearch className="hidden w-[260px] md:block" />
             <WalletChip variant="header" />
           </div>
         </div>
@@ -127,40 +126,6 @@ export function Shell({ mode, children }: { mode: LaunchModel["mode"] | null; ch
       </header>
       <main className="mx-auto max-w-[1180px] px-4 pb-24 pt-8 sm:px-8 sm:pt-12">{children}</main>
     </div>
-  );
-}
-
-/** Open any auction by id. */
-function AuctionJump() {
-  const router = useRouter();
-  const uid = useId();
-  const [value, setValue] = useState("");
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (/^\d+$/.test(value)) router.push(`/launch/${value}`);
-      }}
-      className="flex items-center gap-1.5"
-    >
-      <label htmlFor={uid} className="sr-only">
-        Auction id
-      </label>
-      <span className="font-mono text-[12px] text-dim" aria-hidden="true">
-        #
-      </span>
-      <input
-        id={uid}
-        inputMode="numeric"
-        placeholder="id"
-        value={value}
-        onChange={(e) => setValue(e.target.value.replace(/[^0-9]/g, ""))}
-        className="h-9 w-16 rounded-lg border border-line bg-void/60 px-2.5 font-mono text-[13px] text-chrome outline-none placeholder:text-dim focus:border-signal/60"
-      />
-      <button type="submit" className={buttonClass("outline", "sm")}>
-        Open
-      </button>
-    </form>
   );
 }
 
