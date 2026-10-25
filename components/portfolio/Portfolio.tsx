@@ -2,13 +2,16 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { erc20Abi, formatUnits, zeroAddress, type Address } from "viem";
+import { erc20Abi, formatUnits, parseUnits, zeroAddress, type Address } from "viem";
 import { useConnection, useReadContract, useReadContracts } from "wagmi";
 import { buttonClass } from "@/components/ui/Button";
 import { IntentModal } from "@/components/terminal/IntentModal";
+import { OneClickOrderStatus, useOrderWatch, type OneClickOrder } from "@/components/pro/OneClick";
 import { Shell } from "@/components/launch/LaunchView";
 import { cruxBatchFactoryAbi } from "@/contracts/abis/batchAuction";
 import { useAllLaunches, type LaunchSummary } from "@/hooks/useLaunches";
+import { useCruxAccount } from "@/hooks/useCruxAccount";
+import { tradeFromAccount } from "@/lib/account";
 import { DESTINATION_SETTLER, useLaunchMarket } from "@/hooks/useLaunchMarket";
 import { usePoolSwaps } from "@/hooks/usePoolSwaps";
 import { useTokenTransfers } from "@/hooks/useTokenTransfers";
@@ -16,9 +19,9 @@ import { TESTNET } from "@/lib/chains";
 import { buildHolders } from "@/lib/holders";
 import { CRUX_SOLVER, FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, SETTLER_DEPLOYED, TESTNET_USDC, batchFactory } from "@/lib/intents";
 import { fmtTokens, fmtUsdc } from "@/lib/launch";
-import { fmtTokenPrice } from "@/lib/launchTrade";
+import { fmtTokenPrice, launchCaip19 } from "@/lib/launchTrade";
 import { PRICE_DECIMALS, type AuctionV2, type BatchVersion } from "@/lib/launchV2";
-import type { OrderDraft } from "@/lib/order";
+import { minReceived, type OrderDraft } from "@/lib/order";
 import { SOLVER_MAX_IMPACT_PCT, tradeRisk } from "@/lib/risk";
 import { PAY_SOURCES } from "@/lib/tokens";
 import { useConnectModal } from "@/providers/Web3Provider";
@@ -44,13 +47,19 @@ type Position = { launch: LaunchSummary & { v2: AuctionV2; version: BatchVersion
 type Mark = { value: number | null; cost: number | null; pricedValue: number | null };
 
 /**
- * The connected wallet's Crux positions on Base Sepolia: every launch token it holds, valued at the pool price, with
- * its average entry and unrealized PnL rebuilt from on-chain transfers, one-click sell sizes, and anything waiting to
- * be claimed from an auction.
+ * Crux positions on Base Sepolia, for the logged-in Crux account or the connected wallet: every launch token held,
+ * valued at the pool price, with its average entry and unrealized PnL rebuilt from on-chain transfers, Sell 25% / 50% /
+ * All (silent from the account, a signed intent from the wallet), and anything waiting to be claimed from an auction.
  */
 export function Portfolio() {
-  const { address, isConnected } = useConnection();
+  const { address: wallet } = useConnection();
   const { openConnect } = useConnectModal();
+  const crux = useCruxAccount();
+  const [view, setView] = useState<"account" | "wallet">("account");
+  const viaAccount = view === "account" && crux.loggedIn && crux.account !== null;
+  // Whose positions: the Crux account when logged in (unless the wallet is picked), else the connected wallet.
+  const address = viaAccount ? crux.account! : wallet;
+  const isConnected = Boolean(address);
   const { launches, loading } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6);
   const batch = useMemo(
     () => launches.filter((l): l is Position["launch"] => l.v2 !== null && l.version !== 1 && batchFactory(l.version as BatchVersion) !== null),
@@ -101,6 +110,24 @@ export function Portfolio() {
     });
   }, []);
   const [order, setOrder] = useState<OrderDraft | null>(null);
+  // Account sells: signed silently by the login key, opened by the relay, followed until filled.
+  const [accountOrder, setAccountOrder] = useState<OneClickOrder | null>(null);
+  useOrderWatch(accountOrder, setAccountOrder);
+  const sell = (draft: OrderDraft, input: bigint) => {
+    if (!viaAccount) return setOrder(draft);
+    if (!crux.sign || !crux.owner || !crux.account || !draft.asset) return;
+    const { sign, owner, account } = crux;
+    const token = draft.asset.address;
+    setAccountOrder({ kind: "sending" });
+    tradeFromAccount(sign, owner, account, {
+      tokenIn: token,
+      amountIn: input,
+      tokenOut: launchCaip19(TESTNET_USDC),
+      minAmountOut: parseUnits(minReceived(draft).toFixed(6), 6),
+    })
+      .then((orderId) => setAccountOrder({ kind: "open", orderId }))
+      .catch((e: Error) => setAccountOrder({ kind: "error", message: e.message.split("\n")[0] }));
+  };
 
   const live = holdings.map((h) => marks[`v${h.launch.version}#${h.launch.id}`]).filter(Boolean);
   const totalValue = live.reduce((s, m) => s + (m.value ?? 0), 0);
@@ -117,17 +144,44 @@ export function Portfolio() {
           <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-dim">Portfolio · Base Sepolia testnet</p>
           <h1 className="mt-2 font-display-md text-[30px] text-chrome">Your Crux positions</h1>
           <p className="mt-2 max-w-[640px] text-[13.5px] leading-relaxed text-muted">
-            Every launch token this wallet holds, valued at its pool&apos;s price. Entry and PnL are rebuilt from the chain&apos;s own transfers and
+            Every launch token held, valued at its pool&apos;s price. Entry and PnL are rebuilt from the chain&apos;s own transfers and
             fills, so they cover the last three days. Test tokens and test USDC only.
           </p>
         </div>
 
+        {crux.loggedIn && crux.account && (
+          <div role="radiogroup" aria-label="Positions of" className="-mt-4 flex items-center gap-1.5 text-[12px]">
+            <span className="mr-1 text-dim">Showing</span>
+            {(["account", "wallet"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                role="radio"
+                aria-checked={view === v}
+                onClick={() => setView(v)}
+                className={`h-7 rounded-[4px] border px-2.5 transition-colors ${view === v ? "border-chrome/60 text-chrome" : "border-line-2 text-muted hover:text-chrome"}`}
+              >
+                {v === "account" ? "Crux account" : "Wallet"}
+              </button>
+            ))}
+          </div>
+        )}
+
         {!isConnected ? (
           <div className="rounded-xl border border-line px-6 py-12 text-center">
-            <p className="text-[14px] text-muted">Connect a wallet to see its holdings, PnL and anything waiting to be claimed.</p>
-            <button type="button" onClick={openConnect} className={buttonClass("signal", "md", "mt-5 font-semibold")}>
-              Connect wallet
-            </button>
+            <p className="text-[14px] text-muted">
+              {crux.loggedIn ? "Connect a wallet to see its holdings, PnL and anything waiting to be claimed." : "Log in for your Crux account's positions, or connect a wallet to see its holdings, PnL and claims."}
+            </p>
+            <div className="mt-5 flex flex-col justify-center gap-2 sm:flex-row">
+              {!crux.loggedIn && (
+                <button type="button" onClick={crux.login} className={buttonClass("signal", "md", "font-semibold")}>
+                  Log in
+                </button>
+              )}
+              <button type="button" onClick={openConnect} className={buttonClass(crux.loggedIn ? "signal" : "outline", "md", "font-semibold")}>
+                Connect wallet
+              </button>
+            </div>
           </div>
         ) : (
           <>
@@ -139,7 +193,7 @@ export function Portfolio() {
                 tone={totalPnl === null ? undefined : totalPnl >= 0 ? "up" : "down"}
                 hint="Across the holdings with a known entry price"
               />
-              <Stat label="Test USDC" value={usdcBalance !== null ? `$${fmtUsdc(usdcBalance)}` : "…"} />
+              <Stat label={viaAccount ? "Account test USDC" : "Test USDC"} value={usdcBalance !== null ? `$${fmtUsdc(usdcBalance)}` : "…"} />
               <Stat label="Positions" value={reading ? "…" : String(holdings.length)} />
             </dl>
 
@@ -162,19 +216,22 @@ export function Portfolio() {
                   </thead>
                   <tbody className="divide-y divide-line">
                     {holdings.map((h) => (
-                      <HoldingRow key={`v${h.launch.version}#${h.launch.id}`} position={h} me={address!} onMark={report} onSell={setOrder} />
+                      <HoldingRow key={`v${h.launch.version}#${h.launch.id}`} position={h} me={address!} onMark={report} onSell={sell} />
                     ))}
                   </tbody>
                 </table>
                 {reading && holdings.length === 0 && <p className="px-4 py-8 text-center text-[13px] text-dim">Reading your balances from Base Sepolia…</p>}
                 {!reading && holdings.length === 0 && (
                   <div className="px-4 py-10 text-center">
-                    <p className="text-[13px] text-muted">No Crux launch tokens in this wallet yet.</p>
+                    <p className="text-[13px] text-muted">No Crux launch tokens in this {viaAccount ? "account" : "wallet"} yet.</p>
                     <Link href="/launches" className={buttonClass("outline", "sm", "mt-4")}>
                       Discover launches
                     </Link>
                   </div>
                 )}
+              </div>
+              <div className="mt-2">
+                <OneClickOrderStatus order={accountOrder} to="your Crux account" />
               </div>
             </section>
 
@@ -205,7 +262,7 @@ export function Portfolio() {
             )}
 
             <p className="text-[11.5px] leading-relaxed text-dim">
-              Sells are signed trade intents: the Crux solver fills them in the next 10-second batch at no worse than your signed minimum, or
+              {viaAccount ? "Account sells sign silently with your login (no gas) and pay back into the account. " : ""}Sells are trade intents: the Crux solver fills them in the next 10-second batch at no worse than your signed minimum, or
               you&apos;re refunded after the deadline. ≈ entry priced at the solver&apos;s batch price · * part of the holding has no price (a
               plain transfer or an allocation).
             </p>
@@ -235,7 +292,7 @@ function HoldingRow({
   position: Position;
   me: Address;
   onMark: (key: string, mark: Mark) => void;
-  onSell: (order: OrderDraft) => void;
+  onSell: (order: OrderDraft, input: bigint) => void;
 }) {
   const { launch, balance } = position;
   const auction = launch.v2;
@@ -274,12 +331,16 @@ function HoldingRow({
   }, [key, value, entry, qty, onMark]);
 
   // The same order the terminal's Sell tab signs: a share of the balance, quoted from the pool.
-  const sellDraft = (share: number): { draft: OrderDraft | null; reason: string | null } => {
+  const sellDraft = (share: number): { draft: OrderDraft | null; input: bigint; reason: string | null } => {
+    const input = (balance * BigInt(share)) / BigInt(100);
+    const r = sellReason(input);
+    return { ...r, input };
+  };
+  const sellReason = (input: bigint): { draft: OrderDraft | null; reason: string | null } => {
     if (!SETTLER_DEPLOYED) return { draft: null, reason: "Intents aren't live in this build" };
     if (market.protected) return { draft: null, reason: "Batch-only window: sell in the batch on the token page" };
     if (!market.reserves) return { draft: null, reason: market.loading ? "Reading the pool…" : "Pool unavailable" };
     if (!market.listedForSells) return { draft: null, reason: "Not listed for intents yet" };
-    const input = (balance * BigInt(share)) / BigInt(100);
     const risk = input > BigInt(0) ? tradeRisk("sell", input, market.reserves) : null;
     if (!risk) return { draft: null, reason: "Too small to sell" };
     if (risk.poolImpactPct > SOLVER_MAX_IMPACT_PCT) return { draft: null, reason: `Moves the pool more than ${SOLVER_MAX_IMPACT_PCT}%: trade smaller on the token page` };
@@ -338,14 +399,14 @@ function HoldingRow({
       <td className="px-4 py-3">
         <div className="flex justify-end gap-1.5">
           {SELL_SIZES.map((share) => {
-            const { draft, reason } = sellDraft(share);
+            const { draft, input, reason } = sellDraft(share);
             return (
               <button
                 key={share}
                 type="button"
                 disabled={!draft}
                 title={reason ?? `Sell ${share}% · about ${usd(draft!.notional)} before slippage`}
-                onClick={() => draft && onSell(draft)}
+                onClick={() => draft && onSell(draft, input)}
                 className="h-7 min-w-[48px] rounded-[4px] border border-line-2 px-2 text-[11.5px] text-muted transition-colors hover:border-down/70 hover:text-down disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line-2 disabled:hover:text-muted"
               >
                 {share === 100 ? "All" : `${share}%`}
