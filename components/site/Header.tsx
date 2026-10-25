@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { WalletChip } from "@/components/terminal/WalletChip";
+import { AccountButton } from "@/components/account/AccountButton";
 import { StatusTag } from "@/components/ui/StatusTag";
 import { Logo } from "./Logo";
 import { SiteNav } from "./SiteNav";
@@ -46,6 +47,7 @@ export function Header() {
         </nav>
 
         <div className="flex items-center justify-end gap-2">
+          <AccountButton />
           <WalletChip variant="header" />
           <button
             type="button"

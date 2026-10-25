@@ -69,7 +69,8 @@ export function forgetSession(owner: Address, token: Address = TESTNET_USDC) {
 
 const json = (v: unknown) => JSON.stringify(v, (_, x) => (typeof x === "bigint" ? x.toString() : x));
 
-async function post(path: string, body: unknown): Promise<Record<string, unknown>> {
+/** POSTs to the relay; throws its plain-language error when it turns the request away. */
+export async function postRelay(path: string, body: unknown): Promise<Record<string, unknown>> {
   let res: Response;
   try {
     res = await fetch(`${RELAY_URL}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: json(body) });
@@ -144,7 +145,7 @@ export async function startSession(config: Config, owner: Address, capUnits: big
   });
 
   onStep("submitting");
-  await post("/v1/sessions", { session, ownerSignature, permit, permitSignature });
+  await postRelay("/v1/sessions", { session, ownerSignature, permit, permitSignature });
 
   const stored: StoredSession = { owner: getAddress(owner), settler: SETTLER, token, key, sessionKey, cap: capUnits.toString(), expiry };
   try {
@@ -159,7 +160,7 @@ export async function startSession(config: Config, owner: Address, capUnits: big
 export async function placeOneClick(session: StoredSession, draft: IntentDraft): Promise<Hex> {
   const { order, typed } = buildGaslessOrder(draft);
   const signature = await privateKeyToAccount(session.key).signTypedData(typed as Parameters<ReturnType<typeof privateKeyToAccount>["signTypedData"]>[0]);
-  const data = await post("/v1/orders", { order, signature });
+  const data = await postRelay("/v1/orders", { order, signature });
   return data.orderId as Hex;
 }
 

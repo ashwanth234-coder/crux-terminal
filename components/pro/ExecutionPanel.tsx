@@ -12,12 +12,14 @@ import { PresetKey, SubmitKey, useExecutionHotkeys } from "@/components/pro/hotk
 import { ProtectionRow, RiskPreview, type RiskRow } from "@/components/pro/RiskPreview";
 import { cruxBatchFactoryAbi } from "@/contracts/abis/batchAuction";
 import { useLaunchMarket, type LaunchMarket } from "@/hooks/useLaunchMarket";
+import { useCruxAccount } from "@/hooks/useCruxAccount";
+import { tradeFromAccount } from "@/lib/account";
 import type { LaunchV2Model } from "@/hooks/useLaunchV2";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import { LIVE_ORIGINS, originByKey, toUsdc6, type PayFrom } from "@/lib/crosschain";
 import { SETTLER_DEPLOYED, SLIPPAGE_BPS, TESTNET_USDC } from "@/lib/intents";
 import { USDC_DECIMALS, fmtTokens, fmtUsdc, formatRemaining, launchError, type TxStep } from "@/lib/launch";
-import { fmtTokenPrice } from "@/lib/launchTrade";
+import { fmtTokenPrice, launchCaip19 } from "@/lib/launchTrade";
 import { NO_LIMIT, V3_TICK_STEP_PERCENT, parsePriceUsd, priceUsd, usesTicks, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
 import { minReceived, sourceAsset, type OrderDraft, type Side } from "@/lib/order";
 import { placeOneClick } from "@/lib/session";
@@ -435,8 +437,21 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   const [order, setOrder] = useState<OrderDraft | null>(null);
   // Buys can pay with test USDC on Base Sepolia, or on Arbitrum Sepolia (escrowed there, filled here on Base).
   const [payFrom, setPayFrom] = useState<PayFrom>("base");
+  // Crux account (email / Google login): its trades sign silently with the login key, go through the relay, and fill
+  // back into the account. Logged in, it's the default; the connected wallet stays one tap away.
+  const crux = useCruxAccount();
+  const [from, setFrom] = useState<"account" | "wallet">("account");
+  const viaAccount = crux.loggedIn && crux.account !== null && from === "account";
+  const accountTokens = useReadContract({
+    address: market.token,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    args: [crux.account ?? zeroAddress],
+    chainId: TESTNET.id,
+    query: { enabled: crux.account !== null, refetchInterval: 10_000 },
+  });
   // A buy can pay from any live cross-chain origin; its USDC balance is shown and compared in 6-decimal units.
-  const fromOrigin = side === "buy" && payFrom !== "base" ? originByKey(payFrom) : null;
+  const fromOrigin = side === "buy" && payFrom !== "base" && !viaAccount ? originByKey(payFrom) : null;
   // One-click (CruxSettlerV4 sessions): Base buys signed by this browser's session key, no wallet popup.
   const oneClick = useOneClick();
   const [oneClickOrder, setOneClickOrder] = useState<OneClickOrder | null>(null);
@@ -450,8 +465,8 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
     chainId: fromOrigin ? fromOrigin.chain.id : TESTNET.id,
     query: { enabled: Boolean(address), refetchInterval: 15_000 },
   });
-  const usdcBalance = address && usdc.data !== undefined ? toUsdc6(usdc.data, fromOrigin?.decimals ?? 6) : null;
-  const tokenBalance = market.tokenBalance;
+  const usdcBalance = viaAccount ? crux.usdc : address && usdc.data !== undefined ? toUsdc6(usdc.data, fromOrigin?.decimals ?? 6) : null;
+  const tokenBalance = viaAccount ? (accountTokens.data ?? null) : market.tokenBalance;
 
   const decimals = side === "buy" ? 6 : market.decimals;
   const input = parse(amount, decimals);
@@ -492,21 +507,23 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
       : !listed
         ? "Not listed for intents yet"
         : null;
-  const oneClickReady = side === "buy" && payFrom === "base" && oneClick.session !== null;
+  const oneClickReady = !viaAccount && side === "buy" && payFrom === "base" && oneClick.session !== null;
   const overCap = oneClickReady && input !== null && oneClick.remaining !== null && input > oneClick.remaining;
   const sending = oneClickOrder?.kind === "sending";
   const disabled = !input || !risk || overBalance || tooBig || overCap || sending || Boolean(blocked);
   const label =
     blocked ??
     (overBalance
-      ? `Not enough ${side === "buy" ? "test USDC" : symbol}`
+      ? `Not enough ${side === "buy" ? "test USDC" : symbol}${viaAccount ? " in your account" : ""}`
       : tooBig
         ? "Too large for this pool"
         : overCap
           ? "Over your one-click cap"
-          : oneClickReady
-            ? "Buy now · one-click"
-            : "Sign trade intent");
+          : viaAccount
+            ? `${side === "buy" ? "Buy" : "Sell"} now · Crux account`
+            : oneClickReady
+              ? "Buy now · one-click"
+              : "Sign trade intent");
 
   const rows: RiskRow[] =
     risk && draft && signedMin !== null
@@ -560,7 +577,31 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
     }
   };
 
+  /** Signs with the Crux account's login key (no pop-up) and has the relay open it from the account. */
+  const accountTrade = async () => {
+    if (!input || !draft || !crux.sign || !crux.owner || !crux.account) return;
+    setOneClickOrder({ kind: "sending" });
+    try {
+      const orderId = await tradeFromAccount(crux.sign, crux.owner, crux.account, {
+        tokenIn: side === "buy" ? TESTNET_USDC : market.token,
+        amountIn: input,
+        tokenOut: side === "buy" ? market.caip19 : launchCaip19(TESTNET_USDC),
+        // The same signed floor as the wallet flow: the quote less the slippage allowance.
+        minAmountOut: parseUnits(minReceived(draft).toFixed(6), side === "buy" ? market.decimals : 6),
+      });
+      setOneClickOrder({ kind: "open", orderId });
+      setAmount("");
+      crux.refresh();
+    } catch (e) {
+      setOneClickOrder({ kind: "error", message: (e as Error).message.split("\n")[0] });
+    }
+  };
+
   const sign = () => {
+    if (viaAccount) {
+      if (!disabled && draft) void accountTrade();
+      return;
+    }
     if (!isConnected) {
       openConnect();
       return;
@@ -606,7 +647,32 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
         {side === "buy" ? "USDC to spend" : `${symbol} to sell`}
       </label>
       <AmountField id={`${uid}-amt`} value={amount} onChange={setAmount} unit={side === "buy" ? "USDC" : symbol} />
-      {side === "buy" && (
+      {crux.loggedIn && crux.account && (
+        <div role="radiogroup" aria-label="Trade from" className="-mt-0.5 flex items-center gap-1.5 text-[11px]">
+          <span className="mr-0.5 text-dim">Trade from</span>
+          {(["account", "wallet"] as const).map((f) => (
+            <button
+              key={f}
+              type="button"
+              role="radio"
+              aria-checked={from === f}
+              onClick={() => {
+                setFrom(f);
+                setAmount("");
+              }}
+              className={`h-6 rounded-[4px] border px-2 transition-colors ${from === f ? "border-chrome/60 text-chrome" : "border-line-2 text-muted hover:text-chrome"}`}
+            >
+              {f === "account" ? "Crux account" : "Wallet"}
+            </button>
+          ))}
+          {viaAccount && (
+            <a href="/account" className={`ml-auto ${crux.withdrawalAddress ? "text-dim" : "text-down"} hover:text-chrome`}>
+              {crux.withdrawalAddress ? "Deposit / withdraw" : "Not protected yet"}
+            </a>
+          )}
+        </div>
+      )}
+      {side === "buy" && !viaAccount && (
         <div role="radiogroup" aria-label="Pay from" className="-mt-0.5 flex items-center gap-1.5 text-[11px]">
           <span className="mr-0.5 text-dim">Pay from</span>
           {(["base", ...LIVE_ORIGINS.map((o) => o.key)] as PayFrom[]).map((c) => (
@@ -645,13 +711,13 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
       {rows.length > 0 && <RiskPreview rows={rows} note={tooBig ? `The solver skips orders that move a pool more than ${SOLVER_MAX_IMPACT_PCT}% in one batch. Trade smaller.` : undefined} />}
       <ProtectionRow>Your signed minimum is enforced on-chain: the fill can&apos;t come in below it.</ProtectionRow>
 
-      {side === "buy" && payFrom === "base" && <OneClickBar oneClick={oneClick} />}
+      {side === "buy" && payFrom === "base" && !viaAccount && <OneClickBar oneClick={oneClick} />}
 
-      <button type="button" disabled={isConnected && disabled} onClick={sign} className={buttonClass("signal", "md", "w-full rounded-xl font-semibold max-lg:hidden")}>
-        {isConnected ? label : "Connect wallet to trade"} <ArrowUpRight />
+      <button type="button" disabled={(isConnected || viaAccount) && disabled} onClick={sign} className={buttonClass("signal", "md", "w-full rounded-xl font-semibold max-lg:hidden")}>
+        {isConnected || viaAccount ? label : "Connect wallet to trade"} <ArrowUpRight />
         <SubmitKey />
       </button>
-      <OneClickOrderStatus order={oneClickOrder} />
+      <OneClickOrderStatus order={oneClickOrder} to={viaAccount ? "your Crux account" : undefined} />
 
       {market.protected ? (
         <p className="text-[11px] leading-snug text-dim">
@@ -677,8 +743,8 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
           <div className="min-w-0 flex-1">
             <AmountField id={`${uid}-dock`} value={amount} onChange={setAmount} unit={side === "buy" ? "USDC" : symbol} compact />
           </div>
-          <button type="button" disabled={isConnected && disabled} onClick={sign} className={buttonClass("signal", "md", "shrink-0 rounded-xl px-4 font-semibold capitalize")}>
-            {isConnected ? (tooBig ? "Too big" : overCap ? "Over cap" : oneClickReady ? "Buy now" : side) : "Connect"}
+          <button type="button" disabled={(isConnected || viaAccount) && disabled} onClick={sign} className={buttonClass("signal", "md", "shrink-0 rounded-xl px-4 font-semibold capitalize")}>
+            {isConnected || viaAccount ? (tooBig ? "Too big" : overCap ? "Over cap" : oneClickReady || viaAccount ? `${side} now` : side) : "Connect"}
           </button>
         </div>
         {risk && signedMin !== null && (

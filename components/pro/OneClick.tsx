@@ -220,7 +220,7 @@ export function useOrderWatch(order: OneClickOrder | null, setOrder: (o: OneClic
 }
 
 /** The last one-click order's state, under the Buy button. */
-export function OneClickOrderStatus({ order }: { order: OneClickOrder | null }) {
+export function OneClickOrderStatus({ order, to = "your wallet" }: { order: OneClickOrder | null; to?: string }) {
   if (!order) return null;
   const link = (id: Hex) => (
     <a href={`${TESTNET_EXPLORER}/address/${SETTLER}#events`} target="_blank" rel="noopener noreferrer" className="font-mono underline decoration-line-2">
@@ -229,10 +229,10 @@ export function OneClickOrderStatus({ order }: { order: OneClickOrder | null }) 
   );
   return (
     <p role="status" className={`text-[11.5px] leading-snug ${order.kind === "error" ? "text-down" : order.kind === "filled" ? "text-up" : "text-muted"}`}>
-      {order.kind === "sending" && "Signed in this browser · opening it on Base…"}
+      {order.kind === "sending" && (to === "your wallet" ? "Signed in this browser · opening it on Base…" : "Signed · opening it on Base…")}
       {order.kind === "open" && <>Order {link(order.orderId)} open · the solver fills it in the next 10-second batch…</>}
-      {order.kind === "filled" && <>Filled · order {link(order.orderId)} delivered to your wallet.</>}
-      {order.kind === "refunded" && <>Order {link(order.orderId)} wasn&apos;t filled and was refunded to your wallet.</>}
+      {order.kind === "filled" && <>Filled · order {link(order.orderId)} delivered to {to}.</>}
+      {order.kind === "refunded" && <>Order {link(order.orderId)} wasn&apos;t filled and was refunded to {to}.</>}
       {order.kind === "error" && order.message}
     </p>
   );

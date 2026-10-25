@@ -11,6 +11,7 @@ import { LaunchTokenButton } from "@/components/launch/LaunchTokenButton";
 import { SiteNav } from "@/components/site/SiteNav";
 import { TokenSearch } from "@/components/site/TokenSearch";
 import { WalletChip } from "@/components/terminal/WalletChip";
+import { AccountButton } from "@/components/account/AccountButton";
 import { StatusTag } from "@/components/ui/StatusTag";
 import { useLiveLaunch, useNow, useSimulatedLaunch, type PreviewParams } from "@/hooks/useLaunchAuction";
 import { TESTNET_EXPLORER } from "@/lib/chains";
@@ -116,6 +117,7 @@ export function Shell({ mode, children }: { mode: LaunchModel["mode"] | null; ch
               />
             )}
             <TokenSearch className="hidden w-[260px] md:block" />
+            <AccountButton />
             <WalletChip variant="header" />
           </div>
         </div>
