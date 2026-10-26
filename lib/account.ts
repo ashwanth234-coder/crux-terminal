@@ -15,6 +15,12 @@ import { postRelay } from "@/lib/session";
 
 /** CruxAccountFactory: the same address on every chain (deterministic CREATE2 deploy). */
 export const ACCOUNT_FACTORY = "0xDdB0DF1CfcdEd073A72A489351f22cfF646f8C6E" as Address;
+/**
+ * CruxAccountFactoryV2: accounts with standing orders (take profit, stop loss, buy the dip). Once it's deployed it
+ * becomes the trader's account; their V1 account stays readable so its funds can be moved, and it remains the creator
+ * of gasless launches (CruxFactoryV7 checks the V1 factory).
+ */
+export const ACCOUNT_FACTORY_V2 = "0xf8962965f04e20B95dAdD931fDe00121906a97DC" as Address;
 /** How long a change of withdrawal address waits (CruxAccount.WITHDRAWAL_CHANGE_DELAY). */
 export const WITHDRAWAL_CHANGE_DELAY = 48 * 3600;
 /** A trade's fill deadline is at most this far out (CruxAccount.MAX_FILL_WINDOW); the terminal uses 10 minutes less. */
@@ -111,7 +117,7 @@ export async function tradeFromAccount(sign: AccountSigner, owner: Address, acco
     deadline: deadline(),
   };
   const signature = await sign(typed(account, "Trade", message));
-  const data = await postRelay("/v1/account/trade", { owner, trade: message, signature });
+  const data = await postRelay("/v1/account/trade", { owner, account, trade: message, signature });
   if (typeof data.orderId !== "string") throw new Error("The relay opened the trade but didn't return its order id.");
   return data.orderId as Hex;
 }
@@ -120,20 +126,20 @@ export async function tradeFromAccount(sign: AccountSigner, owner: Address, acco
 export async function setWithdrawalAddress(sign: AccountSigner, owner: Address, account: Address, to: Address) {
   const message = { withdrawalAddress: to, nonce: accountNonce(), deadline: deadline() };
   const signature = await sign(typed(account, "SetWithdrawalAddress", message));
-  return postRelay("/v1/account/withdrawal-address", { owner, ...message, signature });
+  return postRelay("/v1/account/withdrawal-address", { owner, account, ...message, signature });
 }
 
 /** Withdraws `amount` of `token` to the bound withdrawal address, the only place it can go. */
 export async function withdrawFromAccount(sign: AccountSigner, owner: Address, account: Address, token: Address, amount: bigint) {
   const message = { token, amount, nonce: accountNonce(), deadline: deadline() };
   const signature = await sign(typed(account, "Withdraw", message));
-  return postRelay("/v1/account/withdraw", { owner, ...message, signature });
+  return postRelay("/v1/account/withdraw", { owner, account, ...message, signature });
 }
 
 export async function cancelWithdrawalChange(sign: AccountSigner, owner: Address, account: Address) {
   const message = { nonce: accountNonce(), deadline: deadline() };
   const signature = await sign(typed(account, "CancelWithdrawalChange", message));
-  return postRelay("/v1/account/cancel-change", { owner, ...message, signature });
+  return postRelay("/v1/account/cancel-change", { owner, account, ...message, signature });
 }
 
 /** CruxFactoryV7's gasless launch (LAUNCH_TYPEHASH), mirrored in crux-solver launchrelay.ts. */
@@ -197,6 +203,6 @@ export async function launchFromAccount(
 }
 
 /** Applies a change whose 48 hours have passed. Needs no signature. */
-export async function finalizeWithdrawalChange(owner: Address) {
-  return postRelay("/v1/account/finalize-change", { owner });
+export async function finalizeWithdrawalChange(owner: Address, account: Address) {
+  return postRelay("/v1/account/finalize-change", { owner, account });
 }

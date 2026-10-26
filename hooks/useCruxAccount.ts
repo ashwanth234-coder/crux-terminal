@@ -4,7 +4,7 @@ import { useCallback, useMemo } from "react";
 import { usePrivy, useSignTypedData, useWallets } from "@privy-io/react-auth";
 import { erc20Abi, getAddress, zeroAddress, type Address, type Hex } from "viem";
 import { useBytecode, useReadContract, useReadContracts } from "wagmi";
-import { ACCOUNT_FACTORY, accountFactoryAbi, cruxAccountAbi, type AccountSigner } from "@/lib/account";
+import { ACCOUNT_FACTORY, ACCOUNT_FACTORY_V2, accountFactoryAbi, cruxAccountAbi, type AccountSigner } from "@/lib/account";
 import { TESTNET } from "@/lib/chains";
 import { TESTNET_USDC } from "@/lib/intents";
 
@@ -35,8 +35,14 @@ export type CruxAccountState = {
   logout: () => Promise<void>;
   /** The login key (Privy embedded wallet): the account's owner. Null until it exists. */
   owner: Address | null;
-  /** The CruxAccount address: the deposit address, valid before the account is deployed. */
+  /** The CruxAccount address: the deposit address, valid before the account is deployed. V2 once its factory is live. */
   account: Address | null;
+  /** The account has standing orders (CruxAccountV2). */
+  v2: boolean;
+  /** The V1 account, once V2 is live: funds left there can be withdrawn and moved over. */
+  legacy: { account: Address; usdc: bigint | null; withdrawalAddress: Address | null } | null;
+  /** The account named as creator of gasless launches (CruxFactoryV7 knows the V1 factory only). */
+  launchAccount: Address | null;
   deployed: boolean;
   /** Bound withdrawal address, or null while none is (the account isn't protected yet). */
   withdrawalAddress: Address | null;
@@ -67,7 +73,27 @@ export function useCruxAccount(): CruxAccountState {
     args: [owner ?? zeroAddress],
     query: { enabled: owner !== null, staleTime: Infinity },
   });
-  const account = owner && accountOf.data ? getAddress(accountOf.data) : null;
+  const v1 = owner && accountOf.data ? getAddress(accountOf.data) : null;
+  // V2 takes over as soon as its factory exists on Base Sepolia.
+  const v2Code = useBytecode({ ...on, address: ACCOUNT_FACTORY_V2, query: { refetchInterval: (q) => (q.state.data ? false : 60_000) } });
+  const v2Live = Boolean(v2Code.data && v2Code.data !== "0x");
+  const accountOfV2 = useReadContract({
+    ...on,
+    address: ACCOUNT_FACTORY_V2,
+    abi: accountFactoryAbi,
+    functionName: "accountOf",
+    args: [owner ?? zeroAddress],
+    query: { enabled: owner !== null && v2Live, staleTime: Infinity },
+  });
+  const v2 = owner && v2Live && accountOfV2.data ? getAddress(accountOfV2.data) : null;
+  const account = v2Live ? v2 : v1;
+  const legacyReads = useReadContracts({
+    contracts: [
+      { ...on, address: TESTNET_USDC, abi: erc20Abi, functionName: "balanceOf", args: [v1 ?? zeroAddress] },
+      { ...on, address: v1 ?? zeroAddress, abi: cruxAccountAbi, functionName: "withdrawalAddress" },
+    ],
+    query: { enabled: v2Live && v1 !== null, refetchInterval: 15_000 },
+  });
   const code = useBytecode({ ...on, address: account ?? zeroAddress, query: { enabled: account !== null, refetchInterval: (q) => (q.state.data ? false : 10_000) } });
   const deployed = Boolean(code.data && code.data !== "0x");
 
@@ -125,6 +151,16 @@ export function useCruxAccount(): CruxAccountState {
     pendingWithdrawalAddress: deployed ? nonZero(state.data?.[1]?.result) : null,
     withdrawalChangeEta: deployed && eta ? Number(eta) || null : null,
     usdc: usdc.data ?? null,
+    v2: v2Live && v2 !== null,
+    legacy:
+      v2Live && v1
+        ? {
+            account: v1,
+            usdc: (legacyReads.data?.[0]?.result as bigint | undefined) ?? null,
+            withdrawalAddress: nonZero(legacyReads.data?.[1]?.result),
+          }
+        : null,
+    launchAccount: v1,
     sign,
     refresh,
   };

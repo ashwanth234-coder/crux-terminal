@@ -181,7 +181,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
   // with the account as creator (no gas, nothing needed on Base). The wallet stays one tap away.
   const crux = useCruxAccount();
   const [launchAs, setLaunchAs] = useState<"account" | "wallet">("account");
-  const canLaunchFromAccount = LAUNCH_FACTORY?.version === 7 && crux.loggedIn && crux.account !== null;
+  const canLaunchFromAccount = LAUNCH_FACTORY?.version === 7 && crux.loggedIn && crux.launchAccount !== null;
   const accountLaunch = canLaunchFromAccount && launchAs === "account";
   // V6 launches take the factory's batch-only window when created (owner-tunable); V5's is always 24 hours.
   const protectionWindow = useReadContract({
@@ -251,11 +251,11 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
 
   /** CruxFactoryV7, from the Crux account: signed silently by the login key, submitted (and paid for) by the relay. */
   const deployFromAccount = async (factory: Address) => {
-    if (!crux.sign || !crux.account) throw new Error("Your login key is still being set up. Try again in a moment.");
+    if (!crux.sign || !crux.launchAccount) throw new Error("Your login key is still being set up. Try again in a moment.");
     setPhase({ kind: "deploying", label: "Signing the launch with your login…" });
     const params = launchParams();
     setPhase({ kind: "deploying", label: "Launching on Base: no gas needed…" });
-    const auctionId = await launchFromAccount(crux.sign, crux.account, factory, params, { instantUnlock: form.instantUnlock, antiSniper: form.antiSniper });
+    const auctionId = await launchFromAccount(crux.sign, crux.launchAccount, factory, params, { instantUnlock: form.instantUnlock, antiSniper: form.antiSniper });
     reset();
     onClose();
     router.push(`/launch/v7/${auctionId.toString()}`);

@@ -19,6 +19,7 @@ import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import { LIVE_ORIGINS, originByKey, toUsdc6, type PayFrom } from "@/lib/crosschain";
 import { SETTLER_DEPLOYED, TESTNET_USDC } from "@/lib/intents";
 import { TradeSettingsButton } from "@/components/pro/TradeSettingsButton";
+import { StandingOrderForm, type OrderType } from "@/components/pro/StandingOrderForm";
 import { useTradeSettings } from "@/hooks/useTradeSettings";
 import { USDC_DECIMALS, fmtTokens, fmtUsdc, formatRemaining, launchError, type TxStep } from "@/lib/launch";
 import { fmtTokenPrice, launchCaip19 } from "@/lib/launchTrade";
@@ -414,6 +415,9 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   const market = useLaunchMarket(auction.token, auction.pair);
   const trade = useTradeSettings();
   const [side, setSide] = useState<Side>("buy");
+  // Market, or a standing order the keeper sends at its price (Crux account only): FOMO's Buy Dip / Stop Loss /
+  // Take Profit, plus a trailing stop and take profit + stop loss together.
+  const [orderType, setOrderType] = useState<OrderType>("market");
   const [amount, setAmount] = useState("");
   const [order, setOrder] = useState<OrderDraft | null>(null);
   // Buys can pay with test USDC on Base Sepolia, or on Arbitrum Sepolia (escrowed there, filled here on Base).
@@ -608,23 +612,65 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
 
   return (
     <div className="flex flex-col gap-3">
-      <div role="tablist" aria-label="Order side" className="grid grid-cols-2 rounded-lg bg-void/60 p-1">
-        {(["buy", "sell"] as const).map((s) => (
-          <button
-            key={s}
-            role="tab"
-            type="button"
-            aria-selected={side === s}
-            onClick={() => {
-              setSide(s);
-              setAmount("");
-            }}
-            className={`h-8 rounded-md text-[12.5px] capitalize transition-colors ${side === s ? "bg-panel-2 text-chrome ring-1 ring-inset ring-signal/60" : "text-muted hover:text-chrome"}`}
+      <div className="flex gap-1.5">
+        <div role="tablist" aria-label="Order side" className="grid flex-1 grid-cols-2 rounded-lg bg-void/60 p-1">
+          {(["buy", "sell"] as const).map((s) => (
+            <button
+              key={s}
+              role="tab"
+              type="button"
+              aria-selected={side === s}
+              onClick={() => {
+                setSide(s);
+                setAmount("");
+                setOrderType("market");
+              }}
+              className={`h-8 rounded-md text-[12.5px] capitalize transition-colors ${
+                side === s ? (s === "buy" ? "bg-up/15 text-up ring-1 ring-inset ring-up/60" : "bg-down/15 text-down ring-1 ring-inset ring-down/60") : "text-muted hover:text-chrome"
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+        <label className="relative">
+          <span className="sr-only">Order type</span>
+          <select
+            value={orderType}
+            onChange={(e) => setOrderType(e.target.value as OrderType)}
+            className="h-10 appearance-none rounded-lg border border-line bg-void/60 pl-3 pr-7 text-[12.5px] text-chrome outline-none focus:border-line-2"
           >
-            {s}
-          </button>
-        ))}
+            <option value="market">Market</option>
+            {side === "buy" ? (
+              <option value="dip">Buy dip</option>
+            ) : (
+              <>
+                <option value="stopLoss">Stop loss</option>
+                <option value="takeProfit">Take profit</option>
+                <option value="trailing">Trailing stop</option>
+                <option value="bracket">TP + SL</option>
+              </>
+            )}
+          </select>
+          <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-dim" aria-hidden="true">
+            ▾
+          </span>
+        </label>
       </div>
+
+      {orderType !== "market" ? (
+        <StandingOrderForm
+          type={orderType}
+          crux={crux}
+          token={market.token}
+          decimals={market.decimals}
+          symbol={symbol}
+          price={market.price}
+          supply={Number(auction.totalSupply) / 1e18}
+          tokenBalance={accountTokens.data ?? null}
+        />
+      ) : (
+      <>
 
       <label htmlFor={`${uid}-amt`} className="sr-only">
         {side === "buy" ? "USDC to spend" : `${symbol} to sell`}
@@ -739,6 +785,9 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
           </p>
         )}
       </MobileDock>
+
+      </>
+      )}
 
       <IntentModal order={order} open={order !== null} onClose={() => setOrder(null)} />
     </div>

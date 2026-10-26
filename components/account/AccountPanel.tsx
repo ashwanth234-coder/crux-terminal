@@ -195,6 +195,50 @@ export function AccountPanel() {
         )}
       </div>
 
+      {a.legacy && a.legacy.usdc !== null && a.legacy.usdc > BigInt(0) && (
+        <section className="rounded-xl border border-signal/50 bg-signal/[0.04] p-4 text-[13px]">
+          <h2 className="font-medium text-chrome">Your account was upgraded: move ${fmtUsdc(a.legacy.usdc)} over</h2>
+          <p className="mt-1 text-muted">
+            Crux accounts now take standing orders (take profit, stop loss, buy the dip), so you have a new account address. Your previous
+            account {short(a.legacy.account)} still holds test USDC. Step 1 sends it to your bound wallet (no gas); step 2 is the deposit box
+            below.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {a.legacy.withdrawalAddress ? (
+              <button
+                type="button"
+                disabled={busy !== null || !a.sign || !a.owner}
+                onClick={() =>
+                  run(
+                    "withdraw",
+                    () => withdrawFromAccount(a.sign!, a.owner!, a.legacy!.account, TESTNET_USDC, a.legacy!.usdc!),
+                    `Sent to ${short(a.legacy!.withdrawalAddress!)}. Now deposit it into this account below.`,
+                  )
+                }
+                className={buttonClass("signal", "sm")}
+              >
+                1. Withdraw ${fmtUsdc(a.legacy.usdc)} to {short(a.legacy.withdrawalAddress)}
+              </button>
+            ) : wallet ? (
+              <button
+                type="button"
+                disabled={busy !== null || !a.sign || !a.owner}
+                onClick={() =>
+                  run("bind", () => setWithdrawalAddress(a.sign!, a.owner!, a.legacy!.account, wallet), `The old account now withdraws only to ${short(wallet)}. Withdraw next.`)
+                }
+                className={buttonClass("signal", "sm")}
+              >
+                Bind the old account to {short(wallet)} first
+              </button>
+            ) : (
+              <button type="button" onClick={openConnect} className={buttonClass("signal", "sm")}>
+                Connect your wallet to move it
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+
       {(error || notice) && (
         <p role="status" className={`rounded-lg border px-4 py-3 text-[13px] ${error ? "border-down/50 text-down" : "border-up/40 text-up"}`}>
           {error ?? notice}
@@ -307,7 +351,7 @@ export function AccountPanel() {
                       {busy === "cancel" ? "Cancelling…" : "Cancel change"}
                     </button>
                     {eta !== null && now !== null && eta <= now && (
-                      <button type="button" disabled={busy !== null} onClick={() => run("finalize", () => finalizeWithdrawalChange(owner), `Withdrawals now go only to ${short(pending)}.`)} className={buttonClass("signal", "sm")}>
+                      <button type="button" disabled={busy !== null} onClick={() => run("finalize", () => finalizeWithdrawalChange(owner, account), `Withdrawals now go only to ${short(pending)}.`)} className={buttonClass("signal", "sm")}>
                         {busy === "finalize" ? "Applying…" : "Finalize change"}
                       </button>
                     )}
