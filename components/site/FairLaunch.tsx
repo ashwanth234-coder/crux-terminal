@@ -7,7 +7,7 @@ import { ArrowUpRight } from "@/components/ui/Button";
 import { StatusTag } from "@/components/ui/StatusTag";
 import { useAllLaunches, type LaunchSummary } from "@/hooks/useLaunches";
 import { useNow } from "@/hooks/useLaunchAuction";
-import { FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5 } from "@/lib/intents";
+import { FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7 } from "@/lib/intents";
 import { fmtUsdc, type Phase } from "@/lib/launch";
 import { describeLaunch } from "@/lib/launchSummary";
 import { V2_SPLIT, V3_TICK_STEP_PERCENT, priceUsd } from "@/lib/launchV2";
@@ -101,7 +101,7 @@ function Latest({ launch, now }: { launch: LaunchSummary; now: number | null }) 
 export function FairLaunch() {
   const now = useNow();
   const configured = Boolean(FACTORY || FACTORY_V2 || FACTORY_V3 || FACTORY_V4 || FACTORY_V5);
-  const { launches, loading, error } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5);
+  const { launches, loading, error } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7);
   const latest = launches[0];
 
   return (

@@ -126,13 +126,22 @@ export const FACTORY_V5 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V5) ??
 const FACTORY_V6_ADDRESS: Address | null = "0xD07fBb34076D88d2391E831aABfd40AcA3F57940";
 export const FACTORY_V6 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V6) ?? FACTORY_V6_ADDRESS;
 
-/** The batch factory behind a launch version (/launch/v2|v3|v4|v5|v6/[id]). */
-export function batchFactory(version: 2 | 3 | 4 | 5 | 6): Address | null {
-  return version === 6 ? FACTORY_V6 : version === 5 ? FACTORY_V5 : version === 4 ? FACTORY_V4 : version === 3 ? FACTORY_V3 : FACTORY_V2;
+/**
+ * CruxFactoryV7: V6 plus gasless launches the creator signs (createAuctionFor), whose creator may be the signer's Crux
+ * account. crux-contracts/broadcast/DeployFactoryV7.s.sol; NEXT_PUBLIC_CRUX_FACTORY_V7 overrides it.
+ */
+const FACTORY_V7_ADDRESS: Address | null = "0xeacB98371D5597c20A9ECDf6f09726817489722e";
+export const FACTORY_V7 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V7) ?? FACTORY_V7_ADDRESS;
+
+/** The batch factory behind a launch version (/launch/v2…v7/[id]). */
+export function batchFactory(version: 2 | 3 | 4 | 5 | 6 | 7): Address | null {
+  return version === 7 ? FACTORY_V7 : version === 6 ? FACTORY_V6 : version === 5 ? FACTORY_V5 : version === 4 ? FACTORY_V4 : version === 3 ? FACTORY_V3 : FACTORY_V2;
 }
 
 /** Where new launches go: the newest batch factory configured. */
-export const LAUNCH_FACTORY: { address: Address; version: 2 | 3 | 4 | 5 | 6 } | null = FACTORY_V6
+export const LAUNCH_FACTORY: { address: Address; version: 2 | 3 | 4 | 5 | 6 | 7 } | null = FACTORY_V7
+  ? { address: FACTORY_V7, version: 7 }
+  : FACTORY_V6
   ? { address: FACTORY_V6, version: 6 }
   : FACTORY_V5
   ? { address: FACTORY_V5, version: 5 }

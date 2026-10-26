@@ -142,7 +142,7 @@ export function useLaunchesV2(factory: Address | null, version: BatchVersion = 2
   return { total, launches, loading: count.isPending || (ids.length > 0 && auctions.isPending), error: count.error ?? auctions.error };
 }
 
-/** Newest factory first: V6, V5, V4, V3, V2, then V1. */
+/** Newest factory first: V7, V6, V5, V4, V3, V2, then V1. */
 export function useAllLaunches(
   v1: Address | null,
   v2: Address | null,
@@ -150,24 +150,27 @@ export function useAllLaunches(
   v4: Address | null = null,
   v5: Address | null = null,
   v6: Address | null = null,
+  v7: Address | null = null,
 ) {
+  const g = useLaunchesV2(v7, 7);
   const f = useLaunchesV2(v6, 6);
   const e = useLaunchesV2(v5, 5);
   const d = useLaunchesV2(v4, 4);
   const c = useLaunchesV2(v3, 3);
   const a = useLaunchesV2(v2, 2);
   const b = useLaunches(v1);
-  const launches = [...f.launches, ...e.launches, ...d.launches, ...c.launches, ...a.launches, ...b.launches];
+  const launches = [...g.launches, ...f.launches, ...e.launches, ...d.launches, ...c.launches, ...a.launches, ...b.launches];
   return {
-    total: f.total + e.total + d.total + c.total + a.total + b.total,
+    total: g.total + f.total + e.total + d.total + c.total + a.total + b.total,
     launches,
     // Show whatever has loaded; only wait while there is nothing to show yet.
     loading:
       launches.length === 0 &&
-      ((v6 !== null && f.loading) ||
+      ((v7 !== null && g.loading) ||
+        (v6 !== null && f.loading) ||
         (v5 !== null && e.loading) ||
         (v4 !== null && d.loading) || (v3 !== null && c.loading) || (v2 !== null && a.loading) || (v1 !== null && b.loading)),
     // One factory being unreachable must not hide the others' launches.
-    error: launches.length > 0 ? null : (f.error ?? e.error ?? d.error ?? c.error ?? a.error ?? b.error),
+    error: launches.length > 0 ? null : (g.error ?? f.error ?? e.error ?? d.error ?? c.error ?? a.error ?? b.error),
   };
 }

@@ -17,7 +17,7 @@ import {
   withdrawFromAccount,
 } from "@/lib/account";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
-import { FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, TESTNET_USDC } from "@/lib/intents";
+import { FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7, TESTNET_USDC } from "@/lib/intents";
 import { fmtTokens, fmtUsdc, formatRemaining } from "@/lib/launch";
 import { simulateThenWrite } from "@/lib/preflight";
 import { useConnectModal } from "@/providers/Web3Provider";
@@ -54,7 +54,7 @@ export function AccountPanel() {
   const [copied, setCopied] = useState(false);
 
   // Launch tokens the account holds: shown, and swept along with USDC.
-  const { launches } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6);
+  const { launches } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7);
   const tokens = useMemo(() => launches.filter((l) => l.v2 && l.v2.status === 1), [launches]);
   const balances = useReadContracts({
     contracts: tokens.map((l) => ({ chainId: TESTNET.id, address: l.v2!.token, abi: erc20Abi, functionName: "balanceOf" as const, args: [a.account ?? zeroAddress] as const })),

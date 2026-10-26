@@ -8,6 +8,16 @@ import { ACCOUNT_FACTORY, accountFactoryAbi, cruxAccountAbi, type AccountSigner 
 import { TESTNET } from "@/lib/chains";
 import { TESTNET_USDC } from "@/lib/intents";
 
+/** eth_signTypedData_v4 JSON: bigints as decimal strings, nested structs included. */
+const plain = (v: unknown): unknown =>
+  typeof v === "bigint"
+    ? v.toString()
+    : Array.isArray(v)
+      ? v.map(plain)
+      : v !== null && typeof v === "object"
+        ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, plain(x)]))
+        : v;
+
 const EIP712_DOMAIN = [
   { name: "name", type: "string" },
   { name: "version", type: "string" },
@@ -85,7 +95,7 @@ export function useCruxAccount(): CruxAccountState {
     if (!owner) return null;
     return async (t) => {
       // Privy takes eth_signTypedData_v4 JSON: numbers as decimal strings, the domain type spelled out.
-      const message = Object.fromEntries(Object.entries(t.message).map(([k, v]) => [k, typeof v === "bigint" ? v.toString() : v]));
+      const message = plain(t.message);
       const { signature } = await signTypedData(
         { domain: t.domain, types: { EIP712Domain: EIP712_DOMAIN, ...t.types }, primaryType: t.primaryType, message } as never,
         { uiOptions: { showWalletUIs: false }, address: owner },

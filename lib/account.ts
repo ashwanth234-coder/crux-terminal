@@ -68,8 +68,16 @@ export type AccountTypedData = {
   message: Record<string, unknown>;
 };
 
-/** Signs one account message with the owner's login key (the Privy embedded wallet, silently). */
-export type AccountSigner = (typed: AccountTypedData) => Promise<Hex>;
+/** Any EIP-712 message the login key signs: an account action (AccountTypedData) or a launch (CruxFactoryV7). */
+export type TypedDataToSign = {
+  domain: { name: string; version: string; chainId: number; verifyingContract: Address };
+  types: Record<string, readonly { name: string; type: string }[]>;
+  primaryType: string;
+  message: Record<string, unknown>;
+};
+
+/** Signs one message with the owner's login key (the Privy embedded wallet, silently). */
+export type AccountSigner = (typed: TypedDataToSign) => Promise<Hex>;
 
 const typed = (account: Address, primaryType: PrimaryType, message: Record<string, unknown>): AccountTypedData => ({
   domain: { name: "CruxAccount", version: "1", chainId: TESTNET.id, verifyingContract: account },
@@ -126,6 +134,66 @@ export async function cancelWithdrawalChange(sign: AccountSigner, owner: Address
   const message = { nonce: accountNonce(), deadline: deadline() };
   const signature = await sign(typed(account, "CancelWithdrawalChange", message));
   return postRelay("/v1/account/cancel-change", { owner, ...message, signature });
+}
+
+/** CruxFactoryV7's gasless launch (LAUNCH_TYPEHASH), mirrored in crux-solver launchrelay.ts. */
+export const LAUNCH_TYPES = {
+  Launch: [
+    { name: "params", type: "LaunchParams" },
+    { name: "options", type: "LaunchOptions" },
+  ],
+  LaunchParams: [
+    { name: "name", type: "string" },
+    { name: "symbol", type: "string" },
+    { name: "metadataURI", type: "string" },
+    { name: "totalSupply", type: "uint256" },
+    { name: "graduationTarget", type: "uint256" },
+    { name: "startTime", type: "uint64" },
+    { name: "batchWindow", type: "uint32" },
+    { name: "maxAllocationPerWallet", type: "uint256" },
+  ],
+  LaunchOptions: [
+    { name: "instantUnlock", type: "bool" },
+    { name: "antiSniper", type: "bool" },
+    { name: "creator", type: "address" },
+    { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+  ],
+} as const;
+
+export type LaunchParamsInput = {
+  name: string;
+  symbol: string;
+  metadataURI: string;
+  totalSupply: bigint;
+  graduationTarget: bigint;
+  startTime: bigint;
+  batchWindow: number;
+  maxAllocationPerWallet: bigint;
+};
+
+/**
+ * A launch on CruxFactoryV7 with the Crux account as creator: the login key signs it silently and the relay submits
+ * it (POST /v1/launches), so the creator needs nothing on Base. The creator fee, creator share and vesting go to the
+ * account. Returns the new auction's id.
+ */
+export async function launchFromAccount(
+  sign: AccountSigner,
+  account: Address,
+  factory: Address,
+  params: LaunchParamsInput,
+  choices: { instantUnlock: boolean; antiSniper: boolean },
+): Promise<bigint> {
+  const options = { ...choices, creator: account, nonce: accountNonce(), deadline: deadline() };
+  const signature = await sign({
+    domain: { name: "CruxFactory", version: "7", chainId: TESTNET.id, verifyingContract: factory },
+    types: LAUNCH_TYPES,
+    primaryType: "Launch",
+    message: { params, options },
+  });
+  const data = await postRelay("/v1/launches", { params, options, signature });
+  if (typeof data.auctionId !== "string") throw new Error("The relay launched it but didn't return the auction id. Find it under Discover.");
+  return BigInt(data.auctionId);
 }
 
 /** Applies a change whose 48 hours have passed. Needs no signature. */

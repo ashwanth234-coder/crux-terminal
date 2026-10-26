@@ -22,6 +22,8 @@ const OPEN_SALE_HOURS = 24;
 /** CruxFactory only needs a target above zero; testnet faucets hand out ~10 USDC, so the floor drops there. */
 const MIN_TARGET = FACTORY || LAUNCH_FACTORY ? 1 : 1_000;
 import { useConnectModal } from "@/providers/Web3Provider";
+import { useCruxAccount } from "@/hooks/useCruxAccount";
+import { launchFromAccount } from "@/lib/account";
 
 type Form = {
   name: string;
@@ -175,18 +177,24 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
   const { openConnect } = useConnectModal();
 
   const [form, setForm] = useState<Form>(INITIAL);
+  // Logged in with a Crux account and launching on V7: the launch is signed by the login key and submitted by the relay,
+  // with the account as creator (no gas, nothing needed on Base). The wallet stays one tap away.
+  const crux = useCruxAccount();
+  const [launchAs, setLaunchAs] = useState<"account" | "wallet">("account");
+  const canLaunchFromAccount = LAUNCH_FACTORY?.version === 7 && crux.loggedIn && crux.account !== null;
+  const accountLaunch = canLaunchFromAccount && launchAs === "account";
   // V6 launches take the factory's batch-only window when created (owner-tunable); V5's is always 24 hours.
   const protectionWindow = useReadContract({
     chainId: TESTNET.id,
     address: LAUNCH_FACTORY?.address,
     abi: parseAbi(["function protectionWindow() view returns (uint256)"]),
     functionName: "protectionWindow",
-    query: { enabled: LAUNCH_FACTORY?.version === 6 },
+    query: { enabled: (LAUNCH_FACTORY?.version ?? 0) >= 6 },
   });
   const factoryWindow =
-    LAUNCH_FACTORY?.version === 5 ? 86_400 : LAUNCH_FACTORY?.version === 6 && protectionWindow.data !== undefined ? Number(protectionWindow.data) : null;
+    LAUNCH_FACTORY?.version === 5 ? 86_400 : (LAUNCH_FACTORY?.version ?? 0) >= 6 && protectionWindow.data !== undefined ? Number(protectionWindow.data) : null;
   // What this launch gets: V6 lets the creator turn it off.
-  const batchOnlySeconds = LAUNCH_FACTORY?.version === 6 && !form.antiSniper ? 0 : factoryWindow;
+  const batchOnlySeconds = (LAUNCH_FACTORY?.version ?? 0) >= 6 && !form.antiSniper ? 0 : factoryWindow;
   const [touched, setTouched] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: "form" });
   const [error, setError] = useState<string | null>(null);
@@ -224,21 +232,12 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     setPhase({ kind: "done", token: preview, simulated: true, start: Math.floor(Date.now() / 1000) });
   };
 
-  /** CruxFactoryV2/V3: scheduled start, per-wallet cap, locked liquidity (same createAuction on both). */
-  const deployV2 = async (factory: Address, version: 2 | 3 | 4 | 5 | 6) => {
-    if (!isConnected || !address) {
-      openConnect();
-      return;
-    }
-    if (chainId !== TESTNET.id) {
-      setPhase({ kind: "deploying", label: "Switching to Base Sepolia…" });
-      await switchChain({ chainId: TESTNET.id });
-    }
+  /** The launch parameters from the form (V2 and later). */
+  const launchParams = () => {
     const totalSupply = parseUnits(digits(form.supply), 18);
     const sale = (totalSupply * BigInt(V2_SPLIT.saleBps)) / BigInt(10_000);
     const capBps = BigInt(Math.round(Number(form.walletCap) * 100));
-    setPhase({ kind: "deploying", label: "Checking the launch settings…" });
-    const params = {
+    return {
       name: form.name.trim(),
       symbol: form.symbol,
       metadataURI: metadataURI(form),
@@ -248,6 +247,33 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
       batchWindow: Number(form.window),
       maxAllocationPerWallet: (sale * capBps) / BigInt(10_000),
     };
+  };
+
+  /** CruxFactoryV7, from the Crux account: signed silently by the login key, submitted (and paid for) by the relay. */
+  const deployFromAccount = async (factory: Address) => {
+    if (!crux.sign || !crux.account) throw new Error("Your login key is still being set up. Try again in a moment.");
+    setPhase({ kind: "deploying", label: "Signing the launch with your login…" });
+    const params = launchParams();
+    setPhase({ kind: "deploying", label: "Launching on Base: no gas needed…" });
+    const auctionId = await launchFromAccount(crux.sign, crux.account, factory, params, { instantUnlock: form.instantUnlock, antiSniper: form.antiSniper });
+    reset();
+    onClose();
+    router.push(`/launch/v7/${auctionId.toString()}`);
+  };
+
+  /** CruxFactoryV2/V3: scheduled start, per-wallet cap, locked liquidity (same createAuction on both). */
+  const deployV2 = async (factory: Address, version: 2 | 3 | 4 | 5 | 6 | 7) => {
+    if (version === 7 && accountLaunch) return deployFromAccount(factory);
+    if (!isConnected || !address) {
+      openConnect();
+      return;
+    }
+    if (chainId !== TESTNET.id) {
+      setPhase({ kind: "deploying", label: "Switching to Base Sepolia…" });
+      await switchChain({ chainId: TESTNET.id });
+    }
+    setPhase({ kind: "deploying", label: "Checking the launch settings…" });
+    const params = launchParams();
     const onPrompt = () => setPhase({ kind: "deploying", label: "Confirm the launch in your wallet…" });
     // V6 records both creator choices; V4/V5 the vesting choice; V2/V3 always vest over 30 days.
     const hash =
@@ -804,10 +830,36 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             </ul>
           )}
 
+          {canLaunchFromAccount && (
+            <div className="flex flex-col gap-2">
+              <div role="radiogroup" aria-label="Launch as" className="flex items-center gap-1.5 text-[12px]">
+                <span className="mr-1 text-dim">Launch as</span>
+                {(["account", "wallet"] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    role="radio"
+                    aria-checked={launchAs === v}
+                    onClick={() => setLaunchAs(v)}
+                    className={`h-7 rounded-[4px] border px-2.5 transition-colors ${launchAs === v ? "border-chrome/60 text-chrome" : "border-line-2 text-muted hover:text-chrome"}`}
+                  >
+                    {v === "account" ? "Crux account · no gas" : "Wallet"}
+                  </button>
+                ))}
+              </div>
+              {accountLaunch && (
+                <p className="text-[11.5px] leading-relaxed text-dim">
+                  Signed with your login and launched on Base by Crux: no gas and nothing needed on Base, whatever chain your coins are on.
+                  Your Crux account is the creator, so the creator fee and your share land there, withdrawable only to your bound address.
+                </p>
+              )}
+            </div>
+          )}
+
           <button type="submit" className={buttonClass("signal", "md", "w-full rounded-xl font-semibold")}>
-            Deploy Token &amp; Initialize Auction <ArrowUpRight />
+            {accountLaunch ? "Launch from Crux account" : <>Deploy Token &amp; Initialize Auction</>} <ArrowUpRight />
           </button>
-          {live && !isConnected && <p className="text-center text-[11.5px] text-dim">You&apos;ll be asked to connect a wallet first.</p>}
+          {live && !isConnected && !accountLaunch && <p className="text-center text-[11.5px] text-dim">You&apos;ll be asked to connect a wallet first.</p>}
         </form>
       )}
     </Modal>

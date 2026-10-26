@@ -49,7 +49,7 @@ const STATUS: Record<PhaseV2, { label: string; tone: string; dot: string }> = {
 };
 
 /**
- * /launch/v2…v6/[id]: an auction on CruxFactoryV2–V6 (same launch, same screen; V4 adds the vesting choice, V5 and V6
+ * /launch/v2…v7/[id]: an auction on CruxFactoryV2–V7 (same launch, same screen; V4 adds the vesting choice, V5 and V6
  * the batch-only window after graduation).
  */
 export function LaunchRouteV2({ version = 2 }: { version?: BatchVersion }) {
