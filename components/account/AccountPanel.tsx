@@ -6,6 +6,7 @@ import { useConfig, useConnection, useReadContract, useReadContracts, useSwitchC
 import { waitForTransactionReceipt } from "wagmi/actions";
 import { buttonClass } from "@/components/ui/Button";
 import { Shell } from "@/components/launch/LaunchView";
+import { CrossChainDeposit } from "@/components/account/CrossChainDeposit";
 import { useNow } from "@/hooks/useLaunchAuction";
 import { useAllLaunches } from "@/hooks/useLaunches";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
@@ -221,9 +222,10 @@ export function AccountPanel() {
           <div className="mt-4 rounded-lg border border-signal/50 bg-signal/[0.05] px-4 py-3">
             <p className="text-[12.5px] font-semibold uppercase tracking-[0.12em] text-signal">Base network only</p>
             <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
-              Send test USDC on <span className="text-chrome">Base Sepolia</span> only. The address is the same on every chain, but only Base
-              Sepolia trades: anything sent on another chain can only be withdrawn back to your bound address, once the account is set up
-              there. Deposits from Arbitrum, BSC and Ethereum are coming, routed through Crux intents.
+              Send test USDC to this address on <span className="text-chrome">Base Sepolia</span> only. The address is the same on every chain,
+              but only Base Sepolia trades: anything sent straight to it on another chain can only be withdrawn back to your bound address, once
+              the account is set up there. To move USDC from Arbitrum, Ethereum or BSC, use <span className="text-chrome">Deposit from another
+              chain</span> below instead.
             </p>
           </div>
           <div className="mt-4 border-t border-line pt-4">
@@ -252,6 +254,7 @@ export function AccountPanel() {
                   {overWallet ? "More than your wallet holds. " : ""}From {short(wallet)} on Base Sepolia
                   {walletUsdc.data !== undefined ? ` · wallet has $${fmtUsdc(walletUsdc.data)}` : ""}. Your wallet asks you to confirm one transfer.
                 </p>
+                <CrossChainDeposit account={account} onOpened={a.refresh} />
               </>
             ) : (
               <button type="button" onClick={openConnect} className={buttonClass("outline", "sm", "mt-2")}>

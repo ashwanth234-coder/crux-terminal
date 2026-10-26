@@ -24,6 +24,8 @@ export type CrossChainOrigin = {
   explorer: string;
   /** CruxCrossChainSettler there, or null while it isn't deployed. */
   settler: Address | null;
+  /** CruxCrossChainSettlerV2 there (orders name a recipient: deposits into Crux accounts), or null. */
+  depositSettler: Address | null;
   /** Its deploy block: My intents scans from here. */
   deployBlock: bigint;
   /** The test USDC it escrows, and its decimals (BSC testnet's has 18). */
@@ -51,6 +53,8 @@ export const CROSS_CHAIN_ORIGINS: CrossChainOrigin[] = [
     chain: arbitrumSepolia,
     explorer: "https://sepolia.arbiscan.io",
     settler: env(process.env.NEXT_PUBLIC_CRUX_CROSS_CHAIN_SETTLER) ?? "0x570b679cBeDA67322B7d6a348985B6189E8C9e82",
+    // CruxCrossChainSettlerV2, deployed 2026-10-26 (crux-contracts broadcast/DeployCrossChainSettlerV2.s.sol/421614).
+    depositSettler: env(process.env.NEXT_PUBLIC_CRUX_ARB_DEPOSIT_SETTLER) ?? "0xd31ff678109E99d4b56b3ef2a2602b5A3E06c1A0",
     deployBlock: BigInt(321708017),
     usdc: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
     decimals: 6,
@@ -65,6 +69,7 @@ export const CROSS_CHAIN_ORIGINS: CrossChainOrigin[] = [
     explorer: "https://sepolia.etherscan.io",
     // Deployed 2026-10-23 (crux-contracts broadcast/DeployCrossChainSettler.s.sol/11155111).
     settler: env(process.env.NEXT_PUBLIC_CRUX_SEPOLIA_SETTLER) ?? "0x45790D4E911B0bA0918880dA7eF7041F1DdFbF19",
+    depositSettler: env(process.env.NEXT_PUBLIC_CRUX_SEPOLIA_DEPOSIT_SETTLER) ?? "0xA36EFf1a24e369AC8D1F6b8a1FA71d6e8d2C89fB",
     deployBlock: block(process.env.NEXT_PUBLIC_CRUX_SEPOLIA_SETTLER_BLOCK, 11977294),
     usdc: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
     decimals: 6,
@@ -78,6 +83,7 @@ export const CROSS_CHAIN_ORIGINS: CrossChainOrigin[] = [
     explorer: "https://testnet.bscscan.com",
     // Deployed 2026-10-23 (crux-contracts broadcast/DeployCrossChainSettler.s.sol/97).
     settler: env(process.env.NEXT_PUBLIC_CRUX_BSC_SETTLER) ?? "0x570b679cBeDA67322B7d6a348985B6189E8C9e82",
+    depositSettler: env(process.env.NEXT_PUBLIC_CRUX_BSC_DEPOSIT_SETTLER) ?? "0xd31ff678109E99d4b56b3ef2a2602b5A3E06c1A0",
     deployBlock: block(process.env.NEXT_PUBLIC_CRUX_BSC_SETTLER_BLOCK, 138484527),
     usdc: "0x64544969ed7EBf5f083679233325356EbE738930",
     decimals: 18,
