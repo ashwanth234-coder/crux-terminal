@@ -25,6 +25,8 @@ export type OrderDraft = {
   asset?: TradedAsset;
   /** Buys only: pay with test USDC on a cross-chain origin, escrowed there and settled by a Hyperlane fill proof. */
   payFrom?: OriginKey;
+  /** The trader's slippage allowance, in basis points (the ticket's gear); SLIPPAGE_BPS when unset. */
+  slippageBps?: number;
 };
 
 export type TradedAsset = { address: Address; caip19: string; decimals: number };
@@ -44,14 +46,16 @@ export function sourceAsset(id: PaySourceId): { caip19: string; decimals: number
   }
 }
 
+export const slippageOf = (order: OrderDraft) => order.slippageBps ?? SLIPPAGE_BPS;
+
 /** Worst acceptable fill after slippage, in the output unit. */
 export function minReceived(order: OrderDraft) {
   const out = order.side === "buy" ? order.qty : order.notional;
-  return out * (1 - SLIPPAGE_BPS / 10_000);
+  return out * (1 - slippageOf(order) / 10_000);
 }
 
 /** Price cap (buy) or floor (sell) the batch auction must clear within. */
 export function clearingLimit(order: OrderDraft) {
-  const k = SLIPPAGE_BPS / 10_000;
+  const k = slippageOf(order) / 10_000;
   return order.side === "buy" ? order.price * (1 + k) : order.price * (1 - k);
 }

@@ -238,6 +238,11 @@ export function TokenBar({
             )}
             {phase === "scheduled" && opensIn !== null && <Stat label="Opens in">{formatRemaining(opensIn)}</Stat>}
             {phase === "open" && closesIn !== null && <Stat label="Closes in">{formatRemaining(closesIn)}</Stat>}
+            {graduated && now !== null && auction.settledAt > 0 && (
+              <Stat label="Age" hint={`Trading since ${new Date(auction.settledAt * 1000).toLocaleString()}`}>
+                {formatRemaining(Math.max(0, now - auction.settledAt))}
+              </Stat>
+            )}
           </div>
 
           {/* Stats strip */}

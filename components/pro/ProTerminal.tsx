@@ -1,12 +1,12 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { zeroAddress, type Address } from "viem";
 import { DemandCurve } from "@/components/pro/DemandCurve";
 import { LiveTape } from "@/components/pro/LiveTape";
 import { ProChart } from "@/components/chart/ProChart";
 import { NoticeBanner } from "@/components/pro/NoticeBanner";
-import { Orderflow } from "@/components/pro/Orderflow";
+import { Momentum } from "@/components/pro/Momentum";
 import { TerminalShell } from "@/components/pro/TerminalShell";
 import { TokenBar, type PhaseStatus } from "@/components/pro/TokenBar";
 import type { LaunchV2Model } from "@/hooks/useLaunchV2";
@@ -23,7 +23,8 @@ import type { AuctionV2, BatchVersion, PhaseV2 } from "@/lib/launchV2";
  *         ├───────────────┤ order flow │
  *         │ desk (tabs)   │            │
  *         └───────────────┴────────────┘
- *   The desk's tabs: trades tape, auction bids, holders & PnL, trust radar.
+ *   The desk's tabs: swaps, holders & PnL, top traders, my orders, auction bids, trust radar. Clicking a trader in the desk
+ *   filters the desk and the chart's marks to that wallet.
  */
 export function ProTerminal({
   factory,
@@ -47,6 +48,7 @@ export function ProTerminal({
 }) {
   const mode = phase === "graduated" ? "trade" : "auction";
   const symbol = model.symbol ? `$${model.symbol}` : "tokens";
+  const [focus, setFocus] = useState<Address | null>(null);
 
   return (
     <TerminalShell>
@@ -77,13 +79,13 @@ export function ProTerminal({
               symbol={model.symbol ? `$${model.symbol}` : "tokens"}
             />
           ) : (
-            <ProChart auction={auction} symbol={model.symbol ? `$${model.symbol}` : "Token"} name={model.name} factory={factory} id={id} />
+            <ProChart auction={auction} symbol={model.symbol ? `$${model.symbol}` : "Token"} name={model.name} factory={factory} id={id} focus={focus} onFocus={setFocus} />
           )}
         </section>
 
         <aside aria-label="Execution" className="bg-panel lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:overflow-y-auto">
           {execution}
-          {mode === "trade" && auction.pair !== zeroAddress && <Orderflow auction={auction} />}
+          {mode === "trade" && auction.pair !== zeroAddress && <Momentum auction={auction} symbol={model.symbol} />}
           <p className="border-t border-line px-4 py-3 text-[11.5px] text-dim">
             Prefer a simpler layout?{" "}
             <a href={`/launch/v${version}/${id}?view=classic`} className="text-muted underline decoration-line-2 hover:text-chrome">
@@ -101,6 +103,8 @@ export function ProTerminal({
             live={phase === "open" || phase === "scheduled"}
             symbol={symbol}
             version={version}
+            focus={focus}
+            onFocus={setFocus}
           />
         </section>
       </div>

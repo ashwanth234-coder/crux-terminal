@@ -20,11 +20,17 @@ export type Flow = {
   sellUsdc: bigint;
   /** USDC volume filled by the Crux solver (intent fills), the rest being direct pool swaps. */
   intentUsdc: bigint;
+  /** Distinct wallets that bought / sold directly (pool swaps and batch fills). Intent fills settle through the solver, so they're counted in `intentTrades` instead. */
+  buyers: number;
+  sellers: number;
+  intentTrades: number;
 };
 
 /** Buys against sells, by count and by USDC, for trades at or after `since` (unix seconds). */
 export function orderflow(trades: PoolTrade[], since: number): Flow {
-  const flow: Flow = { buys: 0, sells: 0, buyUsdc: BigInt(0), sellUsdc: BigInt(0), intentUsdc: BigInt(0) };
+  const flow: Flow = { buys: 0, sells: 0, buyUsdc: BigInt(0), sellUsdc: BigInt(0), intentUsdc: BigInt(0), buyers: 0, sellers: 0, intentTrades: 0 };
+  const buyers = new Set<string>();
+  const sellers = new Set<string>();
   for (const t of trades) {
     if (t.time < since) continue;
     if (t.side === "buy") {
@@ -34,8 +40,15 @@ export function orderflow(trades: PoolTrade[], since: number): Flow {
       flow.sells += 1;
       flow.sellUsdc += t.usdc;
     }
-    if (t.viaIntent) flow.intentUsdc += t.usdc;
+    if (t.viaIntent) {
+      flow.intentUsdc += t.usdc;
+      flow.intentTrades += 1;
+    } else {
+      (t.side === "buy" ? buyers : sellers).add(t.to.toLowerCase());
+    }
   }
+  flow.buyers = buyers.size;
+  flow.sellers = sellers.size;
   return flow;
 }
 

@@ -32,6 +32,7 @@ import { Toolbar } from "./Toolbar";
 
 /** How each kind of marked trader shows on the bars. */
 const MARK_STYLE: Record<MarkWho, { color: string; buy: string; sell: string }> = {
+  focus: { color: "#ff9d6e", buy: "B", sell: "S" },
   me: { color: "#5cc08c", buy: "B", sell: "S" },
   dev: { color: "#c792ea", buy: "Dev", sell: "Dev" },
   whale: { color: "#4cc9f0", buy: "W", sell: "W" },
@@ -57,7 +58,24 @@ function parseAmount(s: string): number | null {
  * overlay and pane indicators, price or market cap, %, log and auto scales, range presets, a live OHLCV legend, a
  * right-click menu, a table view, price alerts, undo / redo, a branded snapshot and fullscreen.
  */
-export function ProChart({ auction, symbol, name, factory, id }: { auction: AuctionV2; symbol: string; name: string | null; factory: Address; id: string }) {
+export function ProChart({
+  auction,
+  symbol,
+  name,
+  factory,
+  id,
+  focus = null,
+  onFocus,
+}: {
+  auction: AuctionV2;
+  symbol: string;
+  name: string | null;
+  factory: Address;
+  id: string;
+  /** A wallet picked in the desk: only its trades are marked while set. */
+  focus?: Address | null;
+  onFocus?: (a: Address | null) => void;
+}) {
   const swaps = usePoolSwaps(auction.pair, auction.settledAt, true);
   // The same reads as the Holders tab (shared queries): who holds what, and every transfer to rebuild their trades.
   const transfers = useTokenTransfers(auction.token, factory, BigInt(id), auction.startTime - 86_400, true);
@@ -153,19 +171,23 @@ export function ProChart({ auction, symbol, name, factory, id }: { auction: Auct
         dev: auction.creator,
         whales: people.filter((h) => h.tags.includes("whale")).map((h) => h.address),
         top: people.filter((h) => getAddress(h.address) !== getAddress(auction.creator)).slice(0, 10).map((h) => h.address),
+        focus,
       },
       (time) => {
         const bt = barTime(times, time);
         return bt === null ? null : (candles.find((c) => c.time === bt)?.close ?? null);
       },
     );
-  }, [transfers.data, candles, holders, me, auction.pair, auction.creator, market.batchPool]);
+  }, [transfers.data, candles, holders, me, auction.pair, auction.creator, market.batchPool, focus]);
+  // A wallet picked in the desk shows alone, every trade of it, whatever the overlay switches say.
   const shownMarks = useMemo(
     () =>
-      marks.filter(
-        (m) => m.usd >= settings.minUsd && (m.who === "me" ? settings.marks.mine : m.who === "top" ? settings.marks.top : settings.marks.dev),
-      ),
-    [marks, settings.minUsd, settings.marks],
+      focus
+        ? marks.filter((m) => m.who === "focus")
+        : marks.filter(
+            (m) => m.usd >= settings.minUsd && (m.who === "me" ? settings.marks.mine : m.who === "top" ? settings.marks.top : settings.marks.dev),
+          ),
+    [marks, settings.minUsd, settings.marks, focus],
   );
   const markCounts = useMemo(
     () => ({ mine: marks.filter((m) => m.who === "me").length, dev: marks.filter((m) => m.who === "dev" || m.who === "whale").length, top: marks.filter((m) => m.who === "top").length }),
@@ -241,6 +263,7 @@ export function ProChart({ auction, symbol, name, factory, id }: { auction: Auct
                 position: m.side === "buy" ? ("belowBar" as const) : ("aboveBar" as const),
                 shape: m.side === "buy" ? ("arrowUp" as const) : ("arrowDown" as const),
                 color: m.who === "me" ? (m.side === "buy" ? "#5cc08c" : "#e5484d") : style.color,
+                ...(m.who === "focus" ? { size: 1.4 } : {}),
                 text: m.side === "buy" ? style.buy : style.sell,
               },
             ];
@@ -441,6 +464,16 @@ export function ProChart({ auction, symbol, name, factory, id }: { auction: Auct
             count={config.drawings.length}
             onClear={() => set((c) => ({ ...c, drawings: [] }))}
           />
+        )}
+        {focus && view === "chart" && (
+          <button
+            type="button"
+            onClick={() => onFocus?.(null)}
+            title="Show every marked trade again"
+            className="absolute right-16 top-2 z-20 inline-flex items-center gap-1.5 rounded-[4px] border border-[#ff9d6e]/50 bg-panel-2/95 px-2 py-0.5 font-mono text-[11px] text-[#ff9d6e] hover:bg-[#ff9d6e]/15"
+          >
+            Trades of {focus.slice(0, 6)}…{focus.slice(-4)} · {shownMarks.length} <span aria-hidden="true">×</span>
+          </button>
         )}
         {tool && (
           <p className="pointer-events-none absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded-[4px] border border-line-2 bg-panel-2/95 px-2.5 py-1 text-[11.5px] text-muted">

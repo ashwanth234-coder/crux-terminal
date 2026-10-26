@@ -11,7 +11,9 @@ import { useExactApproval } from "@/hooks/useExactApproval";
 import type { LaunchMarket } from "@/hooks/useLaunchMarket";
 import { BATCH_SECONDS, POOL_ERRORS, batchAt, batchPoolAbi, soloOut } from "@/lib/batchPool";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
-import { SLIPPAGE_BPS, TESTNET_USDC } from "@/lib/intents";
+import { TESTNET_USDC } from "@/lib/intents";
+import { useTradeSettings } from "@/hooks/useTradeSettings";
+import { TradeSettingsButton } from "@/components/pro/TradeSettingsButton";
 import { formatRemaining, launchError } from "@/lib/launch";
 import { logClient } from "@/lib/logs";
 import { simulateThenWrite } from "@/lib/preflight";
@@ -69,6 +71,7 @@ export function BatchOrderForm({ market, symbol }: { market: LaunchMarket; symbo
   const { openConnect } = useConnectModal();
   const { mutateAsync: switchChain } = useSwitchChain();
   const approveExact = useExactApproval();
+  const { slippageBps, buyPresets } = useTradeSettings();
   const now = useNow();
   const [side, setSide] = useState<Side>("buy");
   const [amount, setAmount] = useState("");
@@ -104,7 +107,7 @@ export function BatchOrderForm({ market, symbol }: { market: LaunchMarket; symbo
   const balance = side === "buy" ? (address ? (usdc.data ?? null) : null) : market.tokenBalance;
   const reserves = market.reserves;
   const quote = input && reserves ? (side === "buy" ? soloOut(input, reserves.usdc, reserves.token) : soloOut(input, reserves.token, reserves.usdc)) : null;
-  const minOut = quote !== null ? (quote * BigInt(10_000 - SLIPPAGE_BPS)) / BigInt(10_000) : null;
+  const minOut = quote !== null ? (quote * BigInt(10_000 - slippageBps)) / BigInt(10_000) : null;
   const tokens = (v: bigint) => `${Number(formatUnits(v, market.decimals)).toLocaleString("en-US", { maximumFractionDigits: 2 })} ${symbol}`;
   const outFmt = (v: bigint, s: Side = side) => (s === "buy" ? tokens(v) : usd6(v));
 
@@ -236,6 +239,23 @@ export function BatchOrderForm({ market, symbol }: { market: LaunchMarket; symbo
           Bal {balance === null ? "…" : side === "buy" ? usd6(balance) : tokens(balance)}
         </button>
       </div>
+      <div className="flex items-center gap-1.5">
+        {(side === "buy"
+          ? buyPresets.map((usd) => ({ label: `$${usd.toLocaleString("en-US", { maximumFractionDigits: 2 })}`, value: BigInt(Math.round(usd * 1e6)) }))
+          : [25, 50, 100].map((n) => ({ label: `${n}%`, value: balance ? (balance * BigInt(n)) / BigInt(100) : BigInt(0) }))
+        ).map((p) => (
+          <button
+            key={p.label}
+            type="button"
+            disabled={p.value === BigInt(0) || (balance !== null && p.value > balance)}
+            onClick={() => setAmount(formatUnits(p.value, decimals))}
+            className="h-6 flex-1 rounded-[4px] border border-line font-mono text-[11px] text-dim transition-colors hover:border-chrome/60 hover:text-chrome disabled:opacity-40"
+          >
+            {p.label}
+          </button>
+        ))}
+        <TradeSettingsButton />
+      </div>
 
       {quote !== null && minOut !== null && (
         <dl className="divide-y divide-line rounded-lg border border-line text-[12px]">
@@ -249,7 +269,7 @@ export function BatchOrderForm({ market, symbol }: { market: LaunchMarket; symbo
           </div>
           <p className="px-3 py-2 text-[11px] leading-snug text-dim">
             Buys and sells in the batch are matched first; only the net trades against the pool. If the batch&apos;s one price gives you less
-            than {(SLIPPAGE_BPS / 100).toFixed(1)}% under this quote, your whole order is refunded.
+            than {(slippageBps / 100).toFixed(slippageBps % 100 === 0 ? 0 : 1)}% under this quote, your whole order is refunded.
           </p>
         </dl>
       )}

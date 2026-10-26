@@ -1,8 +1,11 @@
 import type { Address } from "viem";
 import type { TokenTransfer } from "../hooks/useTokenTransfers";
 
-/** Whose trade a chart mark shows, strongest first: the viewer, the launch's creator, a whale, a top-10 holder. */
-export type MarkWho = "me" | "dev" | "whale" | "top";
+/**
+ * Whose trade a chart mark shows, strongest first: the wallet picked in the desk, the viewer, the launch's creator, a
+ * whale, a top-10 holder.
+ */
+export type MarkWho = "focus" | "me" | "dev" | "whale" | "top";
 
 export type MarkTrade = { time: number; side: "buy" | "sell"; who: MarkWho; address: Address; tokens: number; usd: number };
 
@@ -15,6 +18,8 @@ export type MarkContext = {
   dev: Address;
   whales: Address[];
   top: Address[];
+  /** A wallet picked in the desk: its trades are marked whoever it is. */
+  focus?: Address | null;
 };
 
 const ONE = 1e18;
@@ -32,7 +37,9 @@ export function markTrades(transfers: TokenTransfer[], ctx: MarkContext, priceAt
   const whales = low(ctx.whales);
   const top = low(ctx.top);
   const dev = ctx.dev.toLowerCase();
-  const whoOf = (a: string): MarkWho | null => (me.has(a) ? "me" : a === dev ? "dev" : whales.has(a) ? "whale" : top.has(a) ? "top" : null);
+  const focus = ctx.focus?.toLowerCase() ?? null;
+  const whoOf = (a: string): MarkWho | null =>
+    a === focus ? "focus" : me.has(a) ? "me" : a === dev ? "dev" : whales.has(a) ? "whale" : top.has(a) ? "top" : null;
 
   const out: MarkTrade[] = [];
   for (const t of transfers) {

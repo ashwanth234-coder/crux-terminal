@@ -33,14 +33,13 @@ import {
   SETTLER_DEPLOYED,
   DESTINATION_SETTLER,
   ORDER_FILLED_EVENT,
-  SLIPPAGE_BPS,
   TESTNET_ESCROW_ASSETS,
   TESTNET_NOVA_CAIP19,
   TESTNET_USDC,
   buildGaslessOrder,
 } from "@/lib/intents";
 import { fmtTokenPrice } from "@/lib/launchTrade";
-import { NOVA_ASSET, clearingLimit, minReceived, sourceAsset, type OrderDraft } from "@/lib/order";
+import { NOVA_ASSET, clearingLimit, minReceived, slippageOf, sourceAsset, type OrderDraft } from "@/lib/order";
 import { usd } from "@/lib/tokens";
 
 type Flow =
@@ -492,7 +491,7 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
         <Row
           label="Clearing"
           value={`${BATCH_WINDOW_SECONDS}s uniform batch`}
-          hint={`${buying ? "Price cap" : "Price floor"} ${fmtPrice(limit)} · ${(SLIPPAGE_BPS / 100).toFixed(2)}% max slippage`}
+          hint={`${buying ? "Price cap" : "Price floor"} ${fmtPrice(limit)} · ${(slippageOf(order) / 100).toFixed(2)}% max slippage`}
         />
         <Row
           label="Quote"

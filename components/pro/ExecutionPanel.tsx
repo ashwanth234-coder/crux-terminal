@@ -17,7 +17,9 @@ import { tradeFromAccount } from "@/lib/account";
 import type { LaunchV2Model } from "@/hooks/useLaunchV2";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import { LIVE_ORIGINS, originByKey, toUsdc6, type PayFrom } from "@/lib/crosschain";
-import { SETTLER_DEPLOYED, SLIPPAGE_BPS, TESTNET_USDC } from "@/lib/intents";
+import { SETTLER_DEPLOYED, TESTNET_USDC } from "@/lib/intents";
+import { TradeSettingsButton } from "@/components/pro/TradeSettingsButton";
+import { useTradeSettings } from "@/hooks/useTradeSettings";
 import { USDC_DECIMALS, fmtTokens, fmtUsdc, formatRemaining, launchError, type TxStep } from "@/lib/launch";
 import { fmtTokenPrice, launchCaip19 } from "@/lib/launchTrade";
 import { NO_LIMIT, V3_TICK_STEP_PERCENT, parsePriceUsd, priceUsd, usesTicks, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
@@ -74,28 +76,6 @@ function AmountField({ id, value, onChange, unit, compact }: { id: string; value
         className={`w-full min-w-0 bg-transparent font-mono text-chrome outline-none placeholder:text-dim ${compact ? "text-[16px]" : "text-[20px]"}`}
       />
       <span className="shrink-0 text-[12px] text-muted">{unit}</span>
-    </div>
-  );
-}
-
-/** Quick dollar sizes for buys: plain amounts of test USDC, unavailable beyond the wallet's balance. */
-function DollarChips({ amounts, balance, onPick }: { amounts: number[]; balance: bigint | null; onPick: (v: bigint) => void }) {
-  return (
-    <div className="flex gap-1.5" role="group" aria-label="Quick amounts">
-      {amounts.map((usd) => {
-        const value = BigInt(usd) * BigInt(1_000_000);
-        return (
-          <button
-            key={usd}
-            type="button"
-            disabled={balance !== null && value > balance}
-            onClick={() => onPick(value)}
-            className="h-6 flex-1 rounded-[4px] border border-line font-mono text-[11px] text-dim transition-colors hover:border-chrome/60 hover:text-chrome disabled:opacity-40"
-          >
-            ${usd}
-          </button>
-        );
-      })}
     </div>
   );
 }
@@ -432,6 +412,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   const { address, isConnected } = useConnection();
   const { openConnect } = useConnectModal();
   const market = useLaunchMarket(auction.token, auction.pair);
+  const trade = useTradeSettings();
   const [side, setSide] = useState<Side>("buy");
   const [amount, setAmount] = useState("");
   const [order, setOrder] = useState<OrderDraft | null>(null);
@@ -487,6 +468,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
             source: TEST_USDC_SOURCE,
             originLabel: fromOrigin ? fromOrigin.name : "Base Sepolia",
             asset: { address: market.token, caip19: market.caip19, decimals: market.decimals },
+            slippageBps: trade.slippageBps,
             ...(fromOrigin ? { payFrom: fromOrigin.key } : {}),
           };
         })()
@@ -542,7 +524,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
           {
             label: "Min. received",
             value: side === "buy" ? `${signedMin.toLocaleString("en-US", { maximumFractionDigits: 2 })} ${symbol}` : `$${signedMin.toFixed(6)}`,
-            hint: `Guaranteed on-chain: signed into your intent, ${(SLIPPAGE_BPS / 100).toFixed(1)}% under the quote. It can't fill below this.`,
+            hint: `Guaranteed on-chain: signed into your intent, ${(trade.slippageBps / 100).toFixed(trade.slippageBps % 100 === 0 ? 0 : 1)}% under the quote (your slippage setting). It can't fill below this.`,
           },
           {
             label: "Liquidity impact",
@@ -613,14 +595,15 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
 
   const pick = (v: bigint) => setAmount(formatUnits(v, decimals));
   const fraction = (v: bigint | null, n: number) => (v ? (v * BigInt(n)) / BigInt(100) : null);
-  // The same three sizes on both sides: a share of what this wallet can spend (test USDC) or sell.
-  const spendable = side === "buy" ? usdcBalance : tokenBalance;
-  const presets = [
-    { label: "25%", value: fraction(spendable, 25) },
-    { label: "50%", value: fraction(spendable, 50) },
-    { label: "75%", value: fraction(spendable, 75) },
-    { label: "MAX", value: spendable },
-  ];
+  // Buys: the trader's four dollar sizes (the gear sets them), unavailable beyond the balance. Sells: a share of the bag.
+  const usdcUnits = (usd: number) => BigInt(Math.round(usd * 1e6));
+  const presets =
+    side === "buy"
+      ? trade.buyPresets.map((usd) => ({
+          label: `$${usd.toLocaleString("en-US", { maximumFractionDigits: 2 })}`,
+          value: usdcBalance !== null && usdcUnits(usd) > usdcBalance ? null : usdcUnits(usd),
+        }))
+      : [25, 50, 75, 100].map((n) => ({ label: `${n}%`, value: fraction(tokenBalance, n) }));
   useExecutionHotkeys({ presets: presets.map((p) => () => p.value && pick(p.value)), onSubmit: sign });
 
   return (
@@ -706,7 +689,10 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
       </div>
 
       <Presets items={presets} onPick={pick} />
-      {side === "buy" && <DollarChips amounts={[5, 10, 25]} balance={usdcBalance} onPick={pick} />}
+      <div className="-mt-1 flex items-center justify-between gap-2">
+        <span className="text-[11px] text-dim">{side === "buy" ? "Quick buy · keys 1–4" : "Share of your bag · keys 1–4"}</span>
+        <TradeSettingsButton />
+      </div>
 
       {rows.length > 0 && <RiskPreview rows={rows} note={tooBig ? `The solver skips orders that move a pool more than ${SOLVER_MAX_IMPACT_PCT}% in one batch. Trade smaller.` : undefined} />}
       <ProtectionRow>Your signed minimum is enforced on-chain: the fill can&apos;t come in below it.</ProtectionRow>
