@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { parseAbiItem, zeroAddress, type Address, type Hex } from "viem";
 import { logClient, pollInterval, scanLogs, tracked, type LogScan } from "@/lib/logs";
 import { watchLogsOf } from "@/lib/stream";
+import { loadHistory } from "@/lib/history";
 
 const TRANSFER = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)");
 const CLAIMED = parseAbiItem("event Claimed(uint256 indexed auctionId, address indexed account, uint256 tokens, uint256 refund)");
@@ -70,6 +71,10 @@ export function useTokenTransfers(token: Address, factory: Address, auctionId: b
               }) satisfies Omit<TokenTransfer, "time">,
           );
           return [...transferItems, ...claimItems];
+        }, async () => {
+          // The whole history from the relay's indexer, when it has it: holders reach back to the launch.
+          const h = await loadHistory(token);
+          return h ? { items: h.transfers, scannedTo: h.scannedTo } : null;
         }),
       ),
     enabled: enabled && token !== zeroAddress,

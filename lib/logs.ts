@@ -116,12 +116,25 @@ async function findWindow(since: number) {
   return { head: head.number, floor: wanted > edge ? wanted : edge, truncated: wanted < edge, windowBlocks };
 }
 
+/** The window, in Base's 0.2 s blocks, given to a data set seeded from the relay's history. */
+const SEEDED_WINDOW_BLOCKS = BigInt(Math.ceil(WINDOW_SECONDS / 0.2));
+
 /**
- * A data set's logs since `since` (unix seconds). With no `prev`, reads the whole window. After that, each poll costs
- * one eth_blockNumber plus one eth_getLogs over the new blocks and the reorg margin (and one block read per new
- * block with a log, to date it), and returns `prev` itself when no block has landed.
+ * A data set's logs since `since` (unix seconds). With no `prev`, starts from `seed` (the relay's full history, when
+ * it has it: everything up to a recent block, so only the blocks after it are read here) or else reads the window.
+ * After that, each poll costs one eth_blockNumber plus one eth_getLogs over the new blocks and the reorg margin (and
+ * one block read per new block with a log, to date it), and returns `prev` itself when no block has landed.
  */
-export async function scanLogs<T extends Positioned>(prev: LogScan<T> | undefined, since: number, read: ReadLogs<T>): Promise<LogScan<T>> {
+export async function scanLogs<T extends Positioned>(
+  prev: LogScan<T> | undefined,
+  since: number,
+  read: ReadLogs<T>,
+  seed?: () => Promise<{ items: T[]; scannedTo: bigint } | null>,
+): Promise<LogScan<T>> {
+  if (!prev && seed) {
+    const s = await seed().catch(() => null);
+    if (s) prev = { items: [...s.items].sort(byPosition), floor: BigInt(0), scannedTo: s.scannedTo, truncated: false, windowBlocks: SEEDED_WINDOW_BLOCKS };
+  }
   if (prev) {
     // Reuse a head up to a second old, so the bid and swap polls on one page can share it.
     const head = (await logClient.getBlockNumber({ cacheTime: 1_000 })) - BASE_HEAD_LAG;

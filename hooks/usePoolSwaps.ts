@@ -6,6 +6,7 @@ import { zeroAddress, type Address } from "viem";
 import { pollInterval, scanLogs, tracked, type LogScan } from "@/lib/logs";
 import { poolTradeReader, readBatchPool, type PoolTrade } from "@/lib/poolTrades";
 import { watchLogsOf } from "@/lib/stream";
+import { loadHistory } from "@/lib/history";
 
 export type { PoolTrade };
 
@@ -39,7 +40,13 @@ export function usePoolSwaps(pair: Address, settledAt: number, enabled: boolean,
   return useQuery({
     queryKey,
     queryFn: ({ client }) =>
-      tracked(pollId, () => scanLogs(client.getQueryData<LogScan<PoolTrade>>(queryKey), settledAt, poolTradeReader(pair, tokenDecimals))),
+      tracked(pollId, () =>
+        scanLogs(client.getQueryData<LogScan<PoolTrade>>(queryKey), settledAt, poolTradeReader(pair, tokenDecimals), async () => {
+          // The whole history from the relay's indexer, when it has it: the chart reaches back to the launch.
+          const h = await loadHistory(pair);
+          return h ? { items: h.trades, scannedTo: h.scannedTo } : null;
+        }),
+      ),
     select: newestFirst,
     enabled: enabled && pair !== zeroAddress,
     // Every 3 s while the page is in view (Base makes a block every 0.2 s); each poll reads only the new blocks.

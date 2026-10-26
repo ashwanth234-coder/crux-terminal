@@ -1,4 +1,5 @@
 import { formatUnits, getAddress, parseAbi, type Address } from "viem";
+import { loadHistory } from "./history";
 import { batchPoolAbi } from "@/lib/batchPool";
 import { TESTNET_EXPLORER } from "@/lib/chains";
 import { TESTNET_USDC } from "@/lib/intents";
@@ -122,7 +123,11 @@ export async function readTrades(l: FeedLaunch): Promise<{ trades: PoolTrade[]; 
   const pair = getAddress(l.pool!);
   // Read from shortly before the auction closed, so nothing at graduation is missed.
   const since = (l.graduatedAt ?? l.closesAt) - 120;
-  const scan = await scanLogs(scans.get(pair), since, poolTradeReader(pair, 18));
+  const scan = await scanLogs(scans.get(pair), since, poolTradeReader(pair, 18), async () => {
+    // The relay's full history, when it has it, so the API reaches back to the launch too.
+    const h = await loadHistory(pair);
+    return h ? { items: h.trades, scannedTo: h.scannedTo } : null;
+  });
   scans.set(pair, scan);
   return { trades: scan.items, truncated: scan.truncated };
 }
