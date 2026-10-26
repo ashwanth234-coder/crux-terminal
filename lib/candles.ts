@@ -8,6 +8,8 @@ export type Fill = { time: number; price: number; usdc: bigint };
 export type Candle = { time: number; open: number; high: number; low: number; close: number; volume: number; trades: number };
 
 export const INTERVALS = [
+  { seconds: 1, label: "1s" },
+  { seconds: 15, label: "15s" },
   { seconds: 60, label: "1m" },
   { seconds: 300, label: "5m" },
   { seconds: 900, label: "15m" },

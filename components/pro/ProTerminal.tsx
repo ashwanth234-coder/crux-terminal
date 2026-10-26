@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { zeroAddress, type Address } from "viem";
 import { DemandCurve } from "@/components/pro/DemandCurve";
 import { LiveTape } from "@/components/pro/LiveTape";
-import { PriceChart } from "@/components/pro/PriceChart";
+import { ProChart } from "@/components/chart/ProChart";
 import { NoticeBanner } from "@/components/pro/NoticeBanner";
 import { Orderflow } from "@/components/pro/Orderflow";
 import { TerminalShell } from "@/components/pro/TerminalShell";
@@ -77,7 +77,7 @@ export function ProTerminal({
               symbol={model.symbol ? `$${model.symbol}` : "tokens"}
             />
           ) : (
-            <PriceChart auction={auction} symbol={model.symbol ? `$${model.symbol}` : "Token"} />
+            <ProChart auction={auction} symbol={model.symbol ? `$${model.symbol}` : "Token"} name={model.name} />
           )}
         </section>
 
