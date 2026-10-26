@@ -11,6 +11,7 @@ import { DESTINATION_SETTLER, useLaunchMarket } from "@/hooks/useLaunchMarket";
 import { useTokenTransfers } from "@/hooks/useTokenTransfers";
 import { useStandingOrders } from "@/hooks/useStandingOrders";
 import { loadRemoteLayout, saveRemoteLayout } from "@/lib/layoutSync";
+import { getServerAlerts, pushOn, setServerAlerts } from "@/lib/alertSync";
 import { barTime, markTrades, type MarkWho } from "@/lib/chartMarks";
 import { buildHolders } from "@/lib/holders";
 import { CRUX_SOLVER, PREVIOUS_SETTLERS, SETTLER } from "@/lib/intents";
@@ -31,6 +32,7 @@ import { OverlaysBar } from "./OverlaysBar";
 import { DEFAULT_CONFIG, DEFAULT_SETTINGS, layoutSavedAt, loadLayout, loadSettings, palette, parseLayout, saveLayout, saveSettings, type ChartSettings, type ScaleMode } from "./settings";
 import { SettingsModal } from "./SettingsModal";
 import { CompareButton, CompareFeed } from "./Compare";
+import type { SyncBus, SyncOptions } from "./sync";
 import { StudySettings } from "./StudySettings";
 import { chartSnapshot, shareImage } from "./snapshot";
 import { TableView } from "./TableView";
@@ -77,6 +79,7 @@ export function ProChart({
   onFocus,
   slot = 0,
   layoutSlot,
+  sync,
 }: {
   auction: AuctionV2;
   symbol: string;
@@ -90,7 +93,18 @@ export function ProChart({
   slot?: number;
   /** The layout picker, shown in the toolbar. */
   layoutSlot?: ReactNode;
+  /** In a multi-chart layout: what the charts share (crosshair, time range, timeframe). */
+  sync?: { bus: SyncBus; opts: SyncOptions };
 }) {
+  // The sync settings as of the last render, for the chart's own (mount-time) event callbacks.
+  const syncRef = useRef(sync);
+  // A chart's slot never changes; the mount-time callbacks read it from here.
+  const slotRef = useRef(slot);
+  useEffect(() => {
+    syncRef.current = sync;
+  }, [sync]);
+  /** When another chart last moved this one, so applying its move isn't published back. */
+  const remoteAt = useRef(0);
   const swaps = usePoolSwaps(auction.pair, auction.settledAt, true);
   // The same reads as the Holders tab (shared queries): who holds what, and every transfer to rebuild their trades.
   const transfers = useTokenTransfers(auction.token, factory, BigInt(id), auction.startTime - 86_400, true);
@@ -299,8 +313,21 @@ export function ProChart({
         { bg: css("--color-void", "#0a0b0d"), line: css("--color-line", "#292b2f"), text: css("--color-muted", "#8f939b"), chrome: css("--color-chrome", "#f3f3f0"), dim: css("--color-dim", "#5d6168") },
         loadSettings(),
       );
-      created.onCrosshair((p) => setHoverTime(typeof p.time === "number" ? p.time : null));
-      created.onRange(() => setRangeTick((n) => n + 1));
+      created.onCrosshair((p) => {
+        const time = typeof p.time === "number" ? p.time : null;
+        setHoverTime(time);
+        // Only the trader's own pointer is shared; crosshairs placed from other charts carry no source event.
+        const s = syncRef.current;
+        if (s?.opts.crosshair && p.sourceEvent !== undefined) s.bus.publish({ kind: "crosshair", from: slotRef.current, time });
+        else if (s?.opts.crosshair && time === null && p.point === undefined) s.bus.publish({ kind: "crosshair", from: slotRef.current, time: null });
+      });
+      created.onRange(() => {
+        setRangeTick((n) => n + 1);
+        const s = syncRef.current;
+        if (!s?.opts.time || Date.now() - remoteAt.current < 250) return;
+        const r = created?.visibleTimes();
+        if (r) s.bus.publish({ kind: "range", from: slotRef.current, start: r.start, end: r.end });
+      });
       setEngine(created);
     })();
     return () => {
@@ -374,6 +401,82 @@ export function ProChart({
           .sort((a, b) => (a.time as number) - (b.time as number));
     engine.setMarkers(bars);
   }, [engine, candles, k, fmt, minMove, config.type, drawnStudies, config.alerts, settings, marksHidden, gradPrice, shownMarks, mine, last, standingOrders, auction.token]);
+
+  // Logged in, the first chart's alerts live at the relay too, which fires them with Crux closed (web push). On
+  // arrival the relay's pending set wins (alerts that fired while you were away are gone); after that every change is
+  // sent there a moment later. Logged out, alerts stay in this tab.
+  const alertsReady = useRef(false);
+  useEffect(() => {
+    if (slot !== 0 || alertsReady.current || !crux.sign || !crux.owner) return;
+    const [sign, owner] = [crux.sign, crux.owner];
+    void getServerAlerts(sign, owner, auction.token)
+      .then((srv) => {
+        if (srv.updatedAt !== null) set((c) => ({ ...c, alerts: srv.prices, rules: srv.rules as typeof c.rules }));
+      })
+      .catch(() => {
+        // No alert service (or offline): the chart's own alerts stand.
+      })
+      .finally(() => {
+        alertsReady.current = true;
+      });
+  }, [slot, crux.sign, crux.owner, auction.token, set]);
+  useEffect(() => {
+    if (slot !== 0 || !alertsReady.current || !crux.sign || !crux.owner) return;
+    const [sign, owner] = [crux.sign, crux.owner];
+    const t = setTimeout(() => {
+      const used = new Set(config.rules.map((r) => r.study));
+      void setServerAlerts(sign, owner, auction.token, {
+        pair: auction.pair,
+        symbol,
+        interval,
+        openPrice: gradPrice,
+        prices: config.alerts,
+        rules: config.rules,
+        studies: config.studies.filter((s) => used.has(s.id)),
+      }).catch(() => {});
+    }, 2_000);
+    return () => clearTimeout(t);
+  }, [slot, crux.sign, crux.owner, auction.token, auction.pair, symbol, interval, gradPrice, config.alerts, config.rules, config.studies]);
+
+  // A synced layout: apply the other charts' crosshair, time range and timeframe.
+  const candlesRef = useRef(candles);
+  useEffect(() => {
+    candlesRef.current = candles;
+  }, [candles]);
+  const kRef = useRef(k);
+  useEffect(() => {
+    kRef.current = k;
+  }, [k]);
+  const fromRemoteInterval = useRef(false);
+  useEffect(() => {
+    if (!sync || !engine) return;
+    return sync.bus.subscribe((e) => {
+      if (e.from === slot) return;
+      if (e.kind === "crosshair" && sync.opts.crosshair) {
+        if (e.time === null) return engine.showCrosshair(null, null);
+        const cs = candlesRef.current;
+        const bt = barTime(
+          cs.map((c) => c.time),
+          e.time,
+        );
+        const c = cs.find((x) => x.time === bt);
+        engine.showCrosshair(bt, c ? c.close * kRef.current : null);
+      } else if (e.kind === "range" && sync.opts.time) {
+        remoteAt.current = Date.now();
+        engine.showRange(e.start, e.end);
+      } else if (e.kind === "interval" && sync.opts.interval) {
+        fromRemoteInterval.current = true;
+        set((c) => (c.interval === e.interval ? c : { ...c, interval: e.interval }));
+      }
+    });
+  }, [sync, engine, slot, set]);
+  useEffect(() => {
+    if (fromRemoteInterval.current) {
+      fromRemoteInterval.current = false;
+      return;
+    }
+    if (syncRef.current?.opts.interval) syncRef.current.bus.publish({ kind: "interval", from: slot, interval: config.interval });
+  }, [config.interval, slot]);
 
   // The symbol behind the candles, when wanted.
   useEffect(() => {
@@ -497,7 +600,7 @@ export function ProChart({
     if (hit.length === 0) return;
     const msg = `${symbol} crossed ${hit.map((a) => fmt(a * k)).join(", ")}`;
     try {
-      if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification("CRUX alert", { body: msg });
+      if (typeof Notification !== "undefined" && Notification.permission === "granted" && !pushOn()) new Notification("CRUX alert", { body: msg });
     } catch {
       // Notifications unavailable: the in-page message below still shows.
     }
@@ -538,7 +641,7 @@ export function ProChart({
     if (fired.length === 0) return;
     const msg = messages.join(" · ");
     try {
-      if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification("CRUX alert", { body: msg });
+      if (typeof Notification !== "undefined" && Notification.permission === "granted" && !pushOn()) new Notification("CRUX alert", { body: msg });
     } catch {
       // Notifications unavailable: the in-page message still shows.
     }
@@ -997,6 +1100,16 @@ export function ProChart({
                   ? points.length === 0
                     ? "click what it points at"
                     : "click where the note goes"
+                  : tool === "fibext" && points.length > 0
+                    ? points.length === 1
+                      ? "click the end of the move (B)"
+                      : "click where the extension starts (C)"
+                    : tool === "curve" && points.length > 0
+                      ? points.length === 1
+                        ? "click where it ends"
+                        : "click where it bends toward"
+                      : tool === "circle" && points.length === 0
+                        ? "click the centre"
                   : tool === "pitchfork" && points.length > 0
                     ? points.length === 1
                       ? "click the first swing"

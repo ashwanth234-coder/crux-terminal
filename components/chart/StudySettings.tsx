@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { EMPTY_CONTEXT, computeInstance, paramsOf, studyById, type StudyInstance } from "@/lib/indicators";
 import type { AlertOp, AlertRule } from "./settings";
+import { PushSwitch } from "./PushSwitch";
 
 const OPS: { id: AlertOp; label: string }[] = [
   { id: "up", label: "crosses above" },
@@ -191,8 +192,11 @@ export function StudySettings({
               </ul>
             )}
             <p className="mt-1.5 text-[11px] text-dim">
-              Alerts check every new trade while a Crux tab is open, and notify you in the browser. {study.priced ? `Values are in ${unitHint}.` : ""}
+              {study.priced ? `Values are in ${unitHint}. ` : ""}Each alert fires once, on the candle where the line crosses.
             </p>
+            <div className="mt-1">
+              <PushSwitch />
+            </div>
           </section>
         )}
 

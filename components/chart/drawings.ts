@@ -23,7 +23,11 @@ export type DrawTool =
   | "abcd"
   | "headshoulders"
   | "elliott"
-  | "triangle";
+  | "triangle"
+  | "fibext"
+  | "fibtime"
+  | "circle"
+  | "curve";
 
 /** Chart patterns: one point per click, all kept in `path`, labelled in order. */
 export const PATTERN_LABELS: Partial<Record<DrawTool, string[]>> = {
@@ -72,6 +76,10 @@ export const TOOL_POINTS: Record<DrawTool, number> = {
   headshoulders: 7,
   elliott: 6,
   triangle: 3,
+  fibext: 3,
+  fibtime: 2,
+  circle: 2,
+  curve: 3,
 };
 
 export const TOOL_COLOR: Record<DrawTool, string> = {
@@ -97,7 +105,16 @@ export const TOOL_COLOR: Record<DrawTool, string> = {
   headshoulders: "#ffd166",
   elliott: "#7bdff2",
   triangle: "#f4a261",
+  fibext: "#8f939b",
+  fibtime: "#7bdff2",
+  circle: "#c792ea",
+  curve: "#ffd166",
 };
+
+/** Trend-based Fib extension levels, measured from C by the A→B move. */
+const FIB_EXT_LEVELS = [0, 0.382, 0.618, 1, 1.272, 1.618, 2, 2.618];
+/** Fib time zones: bars from A, in units of the A→B distance. */
+const FIB_TIME = [0, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89];
 
 /** A long / short position's default stop: half the distance to the target on the other side (2 : 1 reward to risk). */
 export function defaultStop(entry: DrawPoint, target: DrawPoint): DrawPoint {
@@ -314,6 +331,29 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
       }
       case "pitchfork":
         return this.pitchforkLines(a, b, c).some(([u, v]) => distToSegment(p, u, v) <= NEAR);
+      case "fibext":
+        return (
+          c !== null &&
+          d.c !== undefined &&
+          d.b !== undefined &&
+          FIB_EXT_LEVELS.some((level) => {
+            const y = this.y(d.c!.price + (d.b!.price - d.a.price) * level);
+            return y !== null && Math.abs(p.y - y) <= NEAR && p.x >= Math.min(a.x, c.x) && p.x <= this.width;
+          })
+        );
+      case "fibtime":
+        return b !== null && this.fibTimeXs(d).some((x) => Math.abs(p.x - x) <= NEAR);
+      case "circle": {
+        if (!b) return false;
+        const r = Math.hypot(b.x - a.x, b.y - a.y);
+        return Math.hypot(p.x - a.x, p.y - a.y) <= r + NEAR;
+      }
+      case "curve": {
+        if (!b) return false;
+        const pts = this.curvePoints(a, b, c);
+        for (let i = 1; i < pts.length; i++) if (distToSegment(p, pts[i - 1], pts[i]) <= NEAR) return true;
+        return false;
+      }
       case "gannfan":
         return b !== null && this.gannLines(a, b).some(([, v]) => distToSegment(p, a, v) <= NEAR);
       case "brush": {
@@ -514,6 +554,79 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
       return;
     }
 
+    if (d.tool === "fibext") {
+      // Trend-based extension: each level is C plus that multiple of the A→B move, from C to the right edge.
+      ctx.setLineDash([2, 3]);
+      ctx.strokeStyle = "#8f939b";
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      if (c) ctx.lineTo(c.x, c.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      if (!c || !d.c) return;
+      const left = Math.min(a.x, c.x);
+      FIB_EXT_LEVELS.forEach((level, i) => {
+        const price = d.c!.price + (d.b!.price - d.a.price) * level;
+        const y = this.y(price);
+        if (y === null) return;
+        const col = FIB_COLORS[i % FIB_COLORS.length];
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(left, y);
+        ctx.lineTo(this.width, y);
+        ctx.stroke();
+        ctx.fillStyle = col;
+        ctx.fillText(`${level} (${this.fmt(price * this.k)})`, left + 4, y - 7);
+      });
+      return;
+    }
+
+    if (d.tool === "fibtime") {
+      ctx.lineWidth = 1;
+      this.fibTimeXs(d).forEach((x, i) => {
+        ctx.strokeStyle = i === 0 ? color : `${color}aa`;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, this.height);
+        ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.fillText(String(FIB_TIME[i]), x + 3, 12);
+      });
+      return;
+    }
+
+    if (d.tool === "circle") {
+      const r = Math.hypot(b.x - a.x, b.y - a.y);
+      ctx.fillStyle = `${color}1a`;
+      ctx.beginPath();
+      ctx.arc(a.x, a.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      return;
+    }
+
+    if (d.tool === "curve") {
+      const pts = this.curvePoints(a, b, c);
+      ctx.lineWidth = 1.75;
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y);
+      ctx.stroke();
+      if (c && (this.selected === d.id || draft)) {
+        ctx.setLineDash([2, 3]);
+        ctx.strokeStyle = `${color}66`;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(c.x, c.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      return;
+    }
+
     if (d.tool === "pitchfork") {
       const lines = this.pitchforkLines(a, b, c);
       ctx.lineWidth = 1.25;
@@ -694,6 +807,29 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
     this.label(ctx, `Target ${this.fmt(d.b.price * this.k)}  ${this.pct(d.a.price, d.b.price)}`, a.x + w / 2, b.y < a.y ? b.y - 10 : b.y + 10, this.up, "center");
     this.label(ctx, `Stop ${this.fmt(stop.price * this.k)}  ${this.pct(d.a.price, stop.price)}`, a.x + w / 2, sy < a.y ? sy - 10 : sy + 10, this.down, "center");
     this.label(ctx, `${d.tool === "long" ? "Long" : "Short"} ${this.fmt(d.a.price * this.k)} · R:R ${rr.toFixed(2)}`, a.x + w / 2, a.y, "#f3f3f0", "center");
+  }
+
+  /** Fib time zones' x positions: A, then A + n × (B − A) bars for each Fibonacci n. */
+  private fibTimeXs(d: Drawing): number[] {
+    if (!d.b || !this.chart) return [];
+    const la = this.logicalOf(d.a.time);
+    const unit = this.logicalOf(d.b.time) - la;
+    if (Math.abs(unit) < 0.01) return [];
+    const ts = this.chart.timeScale();
+    return FIB_TIME.flatMap((n) => {
+      const x = ts.logicalToCoordinate((la + unit * n) as Logical);
+      return x === null || x < -50 || x > this.width + 50 ? [] : [x];
+    });
+  }
+
+  /** A curve from A to B bending toward C (a quadratic Bézier), as short segments; straight until C is placed. */
+  private curvePoints(a: XY, b: XY, c: XY | null): XY[] {
+    if (!c) return [a, b];
+    return Array.from({ length: 33 }, (_, i) => {
+      const t = i / 32;
+      const u = 1 - t;
+      return { x: u * u * a.x + 2 * u * t * c.x + t * t * b.x, y: u * u * a.y + 2 * u * t * c.y + t * t * b.y };
+    });
   }
 
   /** A pitchfork's median (from the pivot through the midpoint of b and c) and its two parallels, to the right edge. */

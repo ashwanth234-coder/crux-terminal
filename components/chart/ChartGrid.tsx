@@ -1,11 +1,14 @@
 "use client";
 
-import { useRef, useState, type ComponentProps } from "react";
+import { useMemo, useRef, useState, type ComponentProps } from "react";
+import { SyncBus, type SyncOptions } from "./sync";
 import { ProChart } from "./ProChart";
 import { Popover, Tool } from "./ui";
 
 export type GridLayout = "1" | "2h" | "2v" | "4";
 const KEY = "crux:chart:grid:v1";
+const SYNC_KEY = "crux:chart:grid-sync:v1";
+const DEFAULT_SYNC: SyncOptions = { crosshair: true, time: false, interval: false };
 const COUNT: Record<GridLayout, number> = { "1": 1, "2h": 2, "2v": 2, "4": 4 };
 const GRID: Record<GridLayout, string> = {
   "1": "grid-cols-1 grid-rows-1",
@@ -32,7 +35,25 @@ const icon = (l: GridLayout) => (
  * indicators and drawings (saved per slot). The layout button sits in every chart's toolbar; "Fullscreen" takes the
  * whole grid full screen.
  */
-export function ChartGrid(props: Omit<ComponentProps<typeof ProChart>, "slot" | "layoutSlot">) {
+export function ChartGrid(props: Omit<ComponentProps<typeof ProChart>, "slot" | "layoutSlot" | "sync">) {
+  const [bus] = useState(() => new SyncBus());
+  const [opts, setOpts] = useState<SyncOptions>(() => {
+    try {
+      return { ...DEFAULT_SYNC, ...JSON.parse(localStorage.getItem(SYNC_KEY) ?? "{}") };
+    } catch {
+      return DEFAULT_SYNC;
+    }
+  });
+  const toggleSync = (k: keyof SyncOptions) => {
+    const next = { ...opts, [k]: !opts[k] };
+    setOpts(next);
+    try {
+      localStorage.setItem(SYNC_KEY, JSON.stringify(next));
+    } catch {
+      // Storage blocked: the choice lasts for this visit.
+    }
+  };
+  const sync = useMemo(() => ({ bus, opts }), [bus, opts]);
   const [layout, setLayoutState] = useState<GridLayout>(() => {
     try {
       const v = localStorage.getItem(KEY);
@@ -78,6 +99,30 @@ export function ChartGrid(props: Omit<ComponentProps<typeof ProChart>, "slot" | 
             </button>
           ))}
           {layout !== "1" && (
+            <div className="mt-1 border-t border-line pt-1">
+              <p className="px-2 pb-0.5 text-[10px] uppercase tracking-[0.14em] text-dim">Sync across charts</p>
+              {(
+                [
+                  ["crosshair", "Crosshair"],
+                  ["time", "Scroll and zoom"],
+                  ["interval", "Timeframe"],
+                ] as const
+              ).map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={opts[k]}
+                  onClick={() => toggleSync(k)}
+                  className="flex w-full items-center justify-between rounded-[3px] px-2 py-1.5 text-left text-[12px] text-chrome/85 hover:bg-white/[0.05]"
+                >
+                  {label}
+                  <span className={`font-mono text-[10.5px] ${opts[k] ? "text-signal" : "text-dim"}`}>{opts[k] ? "on" : "off"}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {layout !== "1" && (
             <button
               type="button"
               onClick={() => {
@@ -98,7 +143,7 @@ export function ChartGrid(props: Omit<ComponentProps<typeof ProChart>, "slot" | 
     <div ref={box} className={`grid h-full min-h-[inherit] gap-2 bg-void ${GRID[layout]}`}>
       {Array.from({ length: COUNT[layout] }, (_, i) => (
         <div key={i} className="min-h-0 min-w-0">
-          <ProChart {...props} slot={i} layoutSlot={picker} />
+          <ProChart {...props} slot={i} layoutSlot={picker} sync={COUNT[layout] > 1 ? sync : undefined} />
         </div>
       ))}
     </div>

@@ -388,6 +388,18 @@ export class ChartEngine {
     }
   }
 
+  /** Puts the crosshair at a time and price (another chart's, in a synced layout), or clears it. */
+  showCrosshair(time: number | null, price: number | null) {
+    if (time === null || price === null) this.chart.clearCrosshairPosition();
+    else this.chart.setCrosshairPosition(price, time as UTCTimestamp, this.main);
+  }
+
+  /** The visible time range (unix seconds), or null before there's data. */
+  visibleTimes(): { start: number; end: number } | null {
+    const r = this.chart.timeScale().getVisibleRange();
+    return r ? { start: r.from as number, end: r.to as number } : null;
+  }
+
   onCrosshair(cb: (p: MouseEventParams) => void) {
     this.chart.subscribeCrosshairMove(cb);
   }

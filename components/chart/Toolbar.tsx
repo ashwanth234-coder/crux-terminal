@@ -5,6 +5,7 @@ import { INTERVALS } from "@/lib/candles";
 import { STUDIES, STUDY_GROUPS, isStudyId, type StudyId } from "@/lib/indicators";
 import type { ChartConfig, ChartType, Units } from "./settings";
 import { Icon, MenuItem, Popover, Sep, Tool } from "./ui";
+import { PushSwitch } from "./PushSwitch";
 
 const PIN_KEY = "crux:chart:pinned-intervals:v1";
 const FAV_KEY = "crux:chart:fav-studies:v1";
@@ -411,7 +412,9 @@ function AlertButton({ onAdd, prefill, count, onClear }: { onAdd: (v: string) =>
             className="mt-1 w-full rounded-[4px] border border-line bg-void px-2 py-1.5 font-mono text-[12.5px] text-chrome outline-none focus:border-line-2"
           />
           {error && <p className="mt-1 text-[11px] text-down">{error}</p>}
-          <p className="mt-1.5 text-[10.5px] leading-snug text-dim">A browser notification while this page is open, and a line on the chart.</p>
+          <div className="mt-1.5">
+            <PushSwitch />
+          </div>
           <div className="mt-2 flex gap-1.5">
             <button type="submit" className="flex-1 rounded-[4px] bg-signal px-2 py-1.5 text-[12px] font-semibold text-void">
               Add alert

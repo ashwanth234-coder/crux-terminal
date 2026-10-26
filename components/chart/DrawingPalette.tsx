@@ -62,6 +62,10 @@ export const TOOL_INFO: Record<DrawTool, { label: string; key?: string; icon: Re
     ),
   },
   callout: { label: "Callout", icon: svg(<path d="M2.5 3.5h11v6.5H7l-3 3v-3H2.5Z" {...S} strokeLinejoin="round" />) },
+  fibext: { label: "Trend-based Fib extension", icon: svg(<path d="m2 13 4-8 3 5M2.5 3.5h11M2.5 6h11M2.5 8.5h11" {...S} strokeWidth={1} />) },
+  fibtime: { label: "Fib time zones", icon: svg(<path d="M2.5 2v12M4.5 2v12M6.5 2v12M9.5 2v12M14 2v12" {...S} strokeWidth={1} />) },
+  circle: { label: "Circle", icon: svg(<circle cx="8" cy="8" r="5.5" {...S} />) },
+  curve: { label: "Curve", icon: svg(<path d="M2 12C4 3 12 3 14 12" {...S} />) },
   pitchfork: { label: "Pitchfork", icon: svg(<path d="M2 13 8 8M8 8l6-5M8 8l6 1M8 8l6-1M8 8 14 3M5 6.5l5 4" {...S} />) },
   gannfan: { label: "Gann fan", icon: svg(<path d="M2.5 13.5 14 2.5M2.5 13.5 14 6.5M2.5 13.5 14 10.5M2.5 13.5 10 2.5M2.5 13.5 6 2.5" {...S} strokeWidth={1} />) },
   xabcd: { label: "XABCD pattern", icon: svg(<path d="m1.5 12 3-8 3 5 3-6 4 9" {...S} />) },
@@ -103,9 +107,9 @@ export const STICKERS = ["🚀", "🔥", "💎", "🐋", "📈", "📉", "⚠️
 
 const GROUPS: { id: string; label: string; tools: DrawTool[] }[] = [
   { id: "lines", label: "Lines", tools: ["trend", "ray", "hline", "vline", "arrow", "channel"] },
-  { id: "fib", label: "Fib, Gann and positions", tools: ["fib", "pitchfork", "gannfan", "long", "short"] },
+  { id: "fib", label: "Fib, Gann and positions", tools: ["fib", "fibext", "fibtime", "pitchfork", "gannfan", "long", "short"] },
   { id: "patterns", label: "Patterns", tools: ["xabcd", "abcd", "headshoulders", "elliott", "triangle"] },
-  { id: "shapes", label: "Shapes and notes", tools: ["rect", "text", "callout"] },
+  { id: "shapes", label: "Shapes and notes", tools: ["rect", "circle", "curve", "text", "callout"] },
 ];
 
 const CURSORS: { id: ChartSettings["cursor"]; label: string; icon: ReactNode }[] = [
