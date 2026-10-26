@@ -145,7 +145,7 @@ function Btn({
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className={`relative grid h-8 w-8 shrink-0 place-items-center rounded-[3px] transition-colors disabled:opacity-30 ${
+      className={`relative grid h-7 w-7 shrink-0 place-items-center rounded-[3px] transition-colors disabled:opacity-30 ${
         pressed
           ? "bg-signal/15 text-signal ring-1 ring-inset ring-signal/60"
           : danger
@@ -162,8 +162,9 @@ const Corner = () => <span className="absolute bottom-0.5 right-0.5 h-0 w-0 bord
 const Rule = () => <span className="my-0.5 h-px shrink-0 bg-line" aria-hidden="true" />;
 
 /**
- * The drawing toolbar on the chart's left edge, in TradingView's order: cursor (cross / dot / arrow), line tools, Fib
- * and positions, shapes and notes, brush, stickers, then measure and zoom, then magnet, lock, show / hide and remove.
+ * The drawing toolbar on the chart's left edge: cursor (cross / dot / arrow), measure and zoom, then line tools, Fib and
+ * positions, patterns, shapes and notes, brush, stickers, then magnet, lock, show / hide and remove. On a short chart
+ * arrows show there are more tools and scroll to them.
  * Grouped tools open beside it and remember the last one used. It folds away to a small tab.
  */
 export function DrawingPalette({
@@ -199,6 +200,27 @@ export function DrawingPalette({
 }) {
   // The open group menu and how far down the toolbar its button sits (menus live outside the scrolling column).
   const [flyout, setFlyoutState] = useState<string | null>(null);
+  // When the chart is too short for every tool, arrows show there's more and scroll to it.
+  const col = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState({ up: false, down: false });
+  const measureMore = () => {
+    const el = col.current;
+    if (!el) return;
+    const next = { up: el.scrollTop > 2, down: el.scrollTop + el.clientHeight < el.scrollHeight - 2 };
+    setMore((m) => (m.up === next.up && m.down === next.down ? m : next));
+  };
+  useEffect(() => {
+    const el = col.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => measureMore());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [open]);
+  // Also after every render (a resize observer only reports while the page is painting).
+  useEffect(() => {
+    const t = setTimeout(measureMore, 0);
+    return () => clearTimeout(t);
+  });
   const [flyTop, setFlyTop] = useState(0);
   const setFlyout = (id: string | null) => setFlyoutState(id);
   const toggleFly = (id: string) => (e: ReactMouseEvent<HTMLButtonElement>) => {
@@ -269,6 +291,21 @@ export function DrawingPalette({
     </button>
   );
   const cursor = CURSORS.find((c) => c.id === settings.cursor) ?? CURSORS[0];
+  const moreBelow = more.down && (
+    <button
+      type="button"
+      aria-label="More tools below"
+      onClick={() => {
+            col.current?.scrollBy({ top: 90 });
+            measureMore();
+          }}
+      className="pointer-events-auto mt-0.5 grid h-4 w-full shrink-0 place-items-center rounded-b-[5px] border border-t-0 border-line-2 bg-panel-2/95 text-signal hover:text-chrome"
+    >
+      <svg viewBox="0 0 12 8" className="h-2 w-3" aria-hidden="true">
+        <path d="m2 2 4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      </svg>
+    </button>
+  );
 
   return (
     <div
@@ -277,10 +314,27 @@ export function DrawingPalette({
       onClick={(e) => e.stopPropagation()}
       onMouseDownCapture={(e) => e.stopPropagation()}
       data-palette
-      className="pointer-events-none absolute bottom-2 left-1.5 top-2 z-20 flex w-10 flex-col"
+      className="pointer-events-none absolute bottom-2 left-1.5 top-2 z-20 flex w-9 flex-col"
     >
+      {more.up && (
+        <button
+          type="button"
+          aria-label="More tools above"
+          onClick={() => {
+            col.current?.scrollBy({ top: -90 });
+            measureMore();
+          }}
+          className="pointer-events-auto mb-0.5 grid h-4 w-full shrink-0 place-items-center rounded-t-[5px] border border-b-0 border-line-2 bg-panel-2/95 text-dim hover:text-chrome"
+        >
+          <svg viewBox="0 0 12 8" className="h-2 w-3" aria-hidden="true">
+            <path d="m2 6 4-4 4 4" fill="none" stroke="currentColor" strokeWidth="1.4" />
+          </svg>
+        </button>
+      )}
       <div
-        className="pointer-events-auto flex max-h-full flex-col gap-0.5 overflow-y-auto overflow-x-visible rounded-[5px] border border-line-2 bg-panel-2/95 p-1 shadow-[0_16px_40px_-16px_rgba(0,0,0,0.9)] [scrollbar-width:none]"
+        ref={col}
+        onScroll={measureMore}
+        className="pointer-events-auto flex max-h-full min-h-0 flex-col gap-0.5 overflow-y-auto overflow-x-visible rounded-[5px] border border-line-2 bg-panel-2/95 p-1 shadow-[0_16px_40px_-16px_rgba(0,0,0,0.9)] [scrollbar-width:none]"
         role="toolbar"
         aria-label="Drawing tools"
         aria-orientation="vertical"
@@ -296,6 +350,18 @@ export function DrawingPalette({
             CURSORS.map((c) => item(c.id, settings.cursor === c.id, c.icon, c.label, () => onSettings({ ...settings, cursor: c.id }))),
           )}
         </div>
+        <Btn label="Measure (Alt+M)" pressed={tool === "ruler"} onClick={() => setTool(tool === "ruler" ? null : "ruler")}>
+          {TOOL_INFO.ruler.icon}
+        </Btn>
+        <Btn label="Zoom in: drag a box" pressed={zoom} onClick={onZoom}>
+          {svg(
+            <>
+              <circle cx="7" cy="7" r="4.5" {...S} />
+              <path d="m10.5 10.5 3.5 3.5M5 7h4M7 5v4" {...S} />
+            </>,
+          )}
+        </Btn>
+        <Rule />
         {GROUPS.map((g) => {
           const active = tool !== null && g.tools.includes(tool);
           const shown = active ? tool! : last[g.id];
@@ -356,18 +422,6 @@ export function DrawingPalette({
           )}
         </div>
         <Rule />
-        <Btn label="Measure (Alt+M)" pressed={tool === "ruler"} onClick={() => setTool(tool === "ruler" ? null : "ruler")}>
-          {TOOL_INFO.ruler.icon}
-        </Btn>
-        <Btn label="Zoom in: drag a box" pressed={zoom} onClick={onZoom}>
-          {svg(
-            <>
-              <circle cx="7" cy="7" r="4.5" {...S} />
-              <path d="m10.5 10.5 3.5 3.5M5 7h4M7 5v4" {...S} />
-            </>,
-          )}
-        </Btn>
-        <Rule />
         <Btn
           label={settings.snap ? "Magnet on: points snap to the bar's open, high, low or close" : "Magnet off"}
           pressed={settings.snap}
@@ -422,6 +476,7 @@ export function DrawingPalette({
           </svg>
         </button>
       </div>
+      {moreBelow}
       {menus}
     </div>
   );
