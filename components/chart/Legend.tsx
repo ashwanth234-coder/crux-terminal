@@ -5,6 +5,8 @@ import type { Candle } from "@/lib/candles";
 import type { StudyLine } from "@/lib/indicators";
 import { Icon } from "./ui";
 
+const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
+
 /**
  * Top-left of the chart: the hovered candle (or the latest) as O H L C with its change, the volume, and every active
  * indicator's value at that candle (collapsible).
@@ -74,7 +76,7 @@ export function Legend({
             const v = line.values[index];
             return (
               <span key={line.key} style={{ color: line.color }}>
-                {line.label} <span className={v == null ? "text-dim" : ""}>{v == null ? "…" : priced ? fmt(v * k) : v.toFixed(1)}</span>
+                {line.label} <span className={v == null ? "text-dim" : ""}>{v == null ? "…" : priced ? fmt(v * k) : Math.abs(v) >= 1_000 ? compact.format(v) : Number.isInteger(v) ? v : v.toFixed(Math.abs(v) >= 100 ? 0 : 1)}</span>
               </span>
             );
           })}

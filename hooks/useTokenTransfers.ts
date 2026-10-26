@@ -65,7 +65,7 @@ export function useTokenTransfers(token: Address, factory: Address, auctionId: b
         }),
       ),
     enabled: enabled && token !== zeroAddress,
-    refetchInterval: () => pollInterval(pollId, 15_000),
+    refetchInterval: () => pollInterval(pollId, 6_000),
     retry: false,
   });
 }

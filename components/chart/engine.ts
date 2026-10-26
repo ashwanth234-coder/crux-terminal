@@ -11,7 +11,7 @@ import type {
   UTCTimestamp,
 } from "lightweight-charts";
 import type { Candle } from "@/lib/candles";
-import { studyById, type StudyId } from "@/lib/indicators";
+import type { Study, StudyLine } from "@/lib/indicators";
 import { DrawingsPrimitive, type DrawPoint } from "./drawings";
 import { palette, type ChartSettings, type ChartType, type ScaleMode } from "./settings";
 
@@ -23,6 +23,9 @@ export type Theme = { bg: string; line: string; text: string; chrome: string; di
 export type Formatter = (v: number) => string;
 
 const t = (c: Candle) => c.time as UTCTimestamp;
+
+/** Axis labels for unitless studies: RSI's 0–100 to one place, flows and counts compact. */
+const unitless = (v: number) => (Math.abs(v) >= 1_000 ? new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(v) : v.toFixed(Math.abs(v) >= 100 ? 0 : 1));
 
 /**
  * The CRUX chart on lightweight-charts: one price pane (candles in the chosen style, volume underneath, overlay
@@ -160,22 +163,27 @@ export class ChartEngine {
     this.volume.setData(candles.map((c) => ({ time: t(c), value: c.volume, color: `${c.close >= c.open ? up : down}55` })));
   }
 
-  /** Rebuilds the studies: overlays on the price pane, one pane per oscillator (RSI, MACD) below it. */
-  setStudies(ids: StudyId[], candles: Candle[], k: number, format: Formatter, minMove: number) {
+  /**
+   * Rebuilds the studies from their computed lines: overlays on the price pane, one pane per oscillator below it.
+   * A gap in a line (null) stays a gap: the series gets a blank point there instead of a line drawn across it.
+   */
+  setStudies(computed: { study: Study; lines: StudyLine[] }[], candles: Candle[], k: number, format: Formatter, minMove: number) {
     for (const s of this.studySeries) this.chart.removeSeries(s);
     this.studySeries = [];
     this.paneLines = [];
     while (this.chart.panes().length > 1) this.chart.removePane(this.chart.panes().length - 1);
 
     let paneIndex = 0;
-    for (const id of ids) {
-      const study = studyById(id);
+    for (const { study, lines } of computed) {
       const pane = study.pane === "price" ? 0 : ++paneIndex;
       const scale = study.priced ? k : 1;
-      const fmt = study.priced ? { type: "custom" as const, formatter: format, minMove } : { type: "price" as const, precision: 1, minMove: 0.1 };
+      const fmt = study.priced ? { type: "custom" as const, formatter: format, minMove } : { type: "custom" as const, formatter: unitless, minMove: 0.01 };
       let first: ISeriesApi<SeriesType> | null = null;
-      for (const line of study.compute(candles)) {
-        const data = candles.flatMap((c, i) => (line.values[i] === null ? [] : [{ time: t(c) as Time, value: (line.values[i] as number) * scale }]));
+      for (const line of lines) {
+        const firstValue = line.values.findIndex((v) => v !== null);
+        const data: ({ time: Time } | { time: Time; value: number })[] = candles.flatMap((c, i) =>
+          i < firstValue || firstValue < 0 ? [] : line.values[i] === null ? [{ time: t(c) as Time }] : [{ time: t(c) as Time, value: (line.values[i] as number) * scale }],
+        );
         const opts = { color: line.color, priceLineVisible: false, lastValueVisible: pane > 0, priceFormat: fmt, crosshairMarkerVisible: false };
         const series =
           line.kind === "histogram"
@@ -183,7 +191,7 @@ export class ChartEngine {
             : this.chart.addSeries(this.lc.LineSeries, { ...opts, lineWidth: 1 }, pane);
         if (line.kind === "histogram") {
           (series as ISeriesApi<"Histogram">).setData(
-            data.map((d) => ({ ...d, color: d.value >= 0 ? `${palette(this.settings).up}88` : `${palette(this.settings).down}88` })),
+            data.map((d) => ("value" in d ? { ...d, color: d.value >= 0 ? `${palette(this.settings).up}88` : `${palette(this.settings).down}88` } : d)),
           );
         } else {
           series.setData(data);
@@ -259,12 +267,10 @@ export class ChartEngine {
     return l === null ? null : Math.round(l);
   }
 
-  /** A drawing point under (x, y) in the price pane, in USDC per token (`k` is the units' multiplier). */
-  pointAt(x: number, y: number, k: number): DrawPoint | null {
-    const l = this.chart.timeScale().coordinateToLogical(x);
-    const p = this.main.coordinateToPrice(y);
-    if (l === null || p === null || p <= 0) return null;
-    return { time: this.drawings.timeOf(l), price: p / k };
+  /** A drawing point under (x, y) in the price pane, in USDC per token; `snap` pulls it to the bar's nearest O / H / L / C. */
+  pointAt(x: number, y: number, snap: boolean): DrawPoint | null {
+    const p = this.drawings.pointAtXY(x, y);
+    return p && snap ? this.drawings.snap(p) : p;
   }
 
   xOf(time: number): number | null {

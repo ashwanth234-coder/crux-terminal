@@ -24,5 +24,8 @@ export function useHistory<T>(initial: T) {
     setH((cur) => (cur.future.length === 0 ? cur : { past: [...cur.past, cur.present], present: cur.future[0], future: cur.future.slice(1) }));
   }, []);
 
-  return { state: h.present, set, undo, redo, canUndo: h.past.length > 0, canRedo: h.future.length > 0 };
+  /** Starts over from `value` with no history (a saved layout loaded on arrival). */
+  const replace = useCallback((value: T) => setH({ past: [], present: value, future: [] }), []);
+
+  return { state: h.present, set, undo, redo, replace, canUndo: h.past.length > 0, canRedo: h.future.length > 0 };
 }

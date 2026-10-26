@@ -23,7 +23,8 @@ export function usePoolSwaps(pair: Address, settledAt: number, enabled: boolean,
       tracked(pollId, () => scanLogs(client.getQueryData<LogScan<PoolTrade>>(queryKey), settledAt, poolTradeReader(pair, tokenDecimals))),
     select: newestFirst,
     enabled: enabled && pair !== zeroAddress,
-    refetchInterval: () => pollInterval(pollId, 10_000),
+    // Every 3 s while the page is in view (Base makes a block every 0.2 s); each poll reads only the new blocks.
+    refetchInterval: () => pollInterval(pollId, 3_000),
     retry: false,
   });
 }

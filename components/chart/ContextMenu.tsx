@@ -22,6 +22,7 @@ export function ContextMenu({
   onSettings,
   drawings,
   onRemoveDrawings,
+  onResetLayout,
 }: {
   at: ContextAt;
   fmt: (v: number) => string;
@@ -38,6 +39,7 @@ export function ContextMenu({
   onSettings: () => void;
   drawings: number;
   onRemoveDrawings: () => void;
+  onResetLayout: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -83,6 +85,7 @@ export function ContextMenu({
       {drawings > 0 && <MenuItem onClick={act(onRemoveDrawings)}>Remove {drawings} drawing{drawings === 1 ? "" : "s"}</MenuItem>}
       <MenuItem onClick={act(onToggleMarks)}>{marksHidden ? "Show marks on bars" : "Hide marks on bars"}</MenuItem>
       <div className="my-1 border-t border-line" />
+      <MenuItem onClick={act(onResetLayout)}>Reset this token&apos;s layout</MenuItem>
       <MenuItem onClick={act(onSettings)}>⚙ Settings…</MenuItem>
     </div>
   );

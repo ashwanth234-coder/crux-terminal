@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { INTERVALS } from "@/lib/candles";
-import { STUDIES, type StudyId } from "@/lib/indicators";
+import { STUDIES, STUDY_GROUPS, type StudyId } from "@/lib/indicators";
 import type { ChartConfig, ChartType, Units } from "./settings";
 import { Icon, MenuItem, Popover, Sep, Tool } from "./ui";
 
@@ -52,6 +52,7 @@ export function Toolbar({
   live: boolean;
 }) {
   const type = TYPES.find((t) => t.id === config.type) ?? TYPES[0];
+  const [query, setQuery] = useState("");
   const toggleStudy = (id: StudyId) =>
     set((c) => ({ ...c, studies: c.studies.includes(id) ? c.studies.filter((s) => s !== id) : [...c.studies, id] }));
 
@@ -99,7 +100,7 @@ export function Toolbar({
         }
       </Popover>
       <Popover
-        width="w-60"
+        width="w-72"
         button={(open, toggle) => (
           <Tool label="Indicators" active={open || config.studies.length > 0} onClick={toggle}>
             <span className="flex items-center gap-1">
@@ -111,12 +112,37 @@ export function Toolbar({
       >
         {() => (
           <div role="menu">
-            {STUDIES.map((s) => (
-              <MenuItem key={s.id} checked={config.studies.includes(s.id)} onClick={() => toggleStudy(s.id)}>
-                {s.label}
-                {s.pane === "pane" && <span className="text-[10px] text-dim">pane</span>}
-              </MenuItem>
-            ))}
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search indicators"
+              aria-label="Search indicators"
+              className="mb-1 w-full rounded-[3px] border border-line-2 bg-void/60 px-2 py-1 text-[12px] text-chrome outline-none placeholder:text-dim focus:border-chrome/50"
+            />
+            <div className="max-h-[min(60vh,420px)] overflow-y-auto">
+              {STUDY_GROUPS.map((g) => {
+                const items = STUDIES.filter((s) => s.group === g && `${s.label} ${s.hint ?? ""} ${g}`.toLowerCase().includes(query.trim().toLowerCase()));
+                if (items.length === 0) return null;
+                return (
+                  <div key={g}>
+                    <p className={`px-2 pb-0.5 pt-1.5 text-[10px] uppercase tracking-[0.14em] ${g === "On-chain" ? "text-signal" : "text-dim"}`}>
+                      {g}
+                      {g === "On-chain" && <span className="ml-1.5 normal-case tracking-normal text-dim">from this token&apos;s own chain data</span>}
+                    </p>
+                    {items.map((s) => (
+                      <MenuItem key={s.id} checked={config.studies.includes(s.id)} onClick={() => toggleStudy(s.id)}>
+                        <span className="flex flex-col">
+                          <span>{s.label}</span>
+                          {s.hint && <span className="text-[10.5px] text-dim">{s.hint}</span>}
+                        </span>
+                        {s.pane === "pane" && <span className="text-[10px] text-dim">pane</span>}
+                      </MenuItem>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
             {config.studies.length > 0 && (
               <div className="mt-1 border-t border-line pt-1">
                 <MenuItem danger onClick={() => set((c) => ({ ...c, studies: [] }))}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 import { formatUnits, getAddress, type Address } from "viem";
 import type { SeriesMarker, Time } from "lightweight-charts";
 import { useConnection } from "wagmi";
@@ -12,6 +12,7 @@ import { useTokenTransfers } from "@/hooks/useTokenTransfers";
 import { barTime, markTrades, type MarkWho } from "@/lib/chartMarks";
 import { buildHolders } from "@/lib/holders";
 import { CRUX_SOLVER, PREVIOUS_SETTLERS, SETTLER } from "@/lib/intents";
+import { EMPTY_CONTEXT, flowByCandle, holdersByCandle, type StudyContext } from "@/lib/indicators";
 import { INTERVALS, autoInterval, toCandles } from "@/lib/candles";
 import { studyById } from "@/lib/indicators";
 import { fmtTokenPrice } from "@/lib/launchTrade";
@@ -21,10 +22,11 @@ import { ContextMenu, type ContextAt } from "./ContextMenu";
 import { ChartEngine } from "./engine";
 import { useHistory } from "./history";
 import { Legend } from "./Legend";
-import { DrawingPalette } from "./DrawingPalette";
-import { TOOL_POINTS, type DrawPoint, type DrawTool } from "./drawings";
+import { DrawingBar } from "./DrawingBar";
+import { DrawingPalette, TOOL_INFO, TOOL_KEYS } from "./DrawingPalette";
+import { TOOL_POINTS, defaultStop, type DrawPart, type DrawPoint, type DrawTool, type Drawing } from "./drawings";
 import { OverlaysBar } from "./OverlaysBar";
-import { DEFAULT_CONFIG, DEFAULT_SETTINGS, loadSettings, palette, saveSettings, type ChartSettings, type ScaleMode } from "./settings";
+import { DEFAULT_CONFIG, DEFAULT_SETTINGS, loadLayout, loadSettings, palette, saveLayout, saveSettings, type ChartSettings, type ScaleMode } from "./settings";
 import { SettingsModal } from "./SettingsModal";
 import { chartSnapshot, shareImage } from "./snapshot";
 import { TableView } from "./TableView";
@@ -86,7 +88,9 @@ export function ProChart({
   const frame = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const [engine, setEngine] = useState<ChartEngine | null>(null);
-  const { state: config, set, undo, redo, canUndo, canRedo } = useHistory(DEFAULT_CONFIG);
+  // This token's chart as it was left in this browser (drawings, indicators, timeframe…), or the defaults.
+  const [initialConfig] = useState(() => (typeof window === "undefined" ? null : loadLayout(auction.token)) ?? DEFAULT_CONFIG);
+  const { state: config, set, undo, redo, replace, canUndo, canRedo } = useHistory(initialConfig);
   const [settings, setSettingsState] = useState<ChartSettings>(() => (typeof window === "undefined" ? DEFAULT_SETTINGS : loadSettings()));
   const [scale, setScale] = useState<ScaleMode>("normal");
   const [view, setView] = useState<"chart" | "table">("chart");
@@ -99,8 +103,17 @@ export function ProChart({
   // Drawing: the palette, the active tool, its first point and where the cursor is (for the live preview).
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [tool, setTool] = useState<DrawTool | null>(null);
-  const [anchor, setAnchor] = useState<DrawPoint | null>(null);
+  const [points, setPoints] = useState<DrawPoint[]>([]);
   const [cursor, setCursor] = useState<DrawPoint | null>(null);
+  // Editing drawings: the selected one, the one being dragged (shown live, committed as one undo step on release),
+  // whether they're hidden, the text note being typed and what the pointer is over.
+  const [selected, setSelected] = useState<string | null>(null);
+  const [dragged, setDragged] = useState<Drawing | null>(null);
+  const [drawHidden, setDrawHidden] = useState(false);
+  const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
+  const [hover, setHover] = useState<DrawPart | null>(null);
+  const drag = useRef<{ orig: Drawing; part: DrawPart; x: number; y: number; moved: boolean; last: Drawing | null } | null>(null);
+  const area = useRef<HTMLDivElement>(null);
   // Bumped when the visible range moves, so the locked time line follows the candles.
   const [, setRangeTick] = useState(0);
 
@@ -124,10 +137,29 @@ export function ProChart({
   const candles = useMemo(() => toCandles(fills, interval, gradPrice > 0 ? gradPrice : null), [fills, interval, gradPrice]);
   const fmt = useCallback((v: number) => (config.units === "mcap" ? compactUsd.format(v) : fmtTokenPrice(v)), [config.units]);
   const minMove = config.units === "mcap" ? 0.01 : 1e-15;
-  const studyLines = useMemo(
-    () => config.studies.flatMap((id) => studyById(id).compute(candles).map((line) => ({ line, priced: studyById(id).priced }))),
-    [config.studies, candles],
+  // What the on-chain studies read: USDC bought / sold per candle, and holders at each close (only when shown).
+  const studyCtx = useMemo<StudyContext>(() => {
+    if (config.studies.length === 0) return EMPTY_CONTEXT;
+    const times = candles.map((c) => c.time);
+    const flow = flowByCandle(
+      times,
+      interval,
+      (swaps.data?.trades ?? []).map((t) => ({ time: t.time, side: t.side, usd: Number(t.usdc) / 1e6 })),
+    );
+    if (!config.studies.includes("holders") || !transfers.data) return { ...flow, holders: [] };
+    const exclude = new Set(
+      [auction.pair, factory, CRUX_SOLVER, DESTINATION_SETTLER, SETTLER, ...PREVIOUS_SETTLERS.map((p) => p.address), market.batchPool ?? "", "0x000000000000000000000000000000000000dEaD", "0x0000000000000000000000000000000000000000"]
+        .filter(Boolean)
+        .map((a) => a.toLowerCase()),
+    );
+    const moves = transfers.data.items.filter((t) => t.kind === "transfer");
+    return { ...flow, holders: holdersByCandle(times, interval, moves, exclude) };
+  }, [config.studies, candles, interval, swaps.data, transfers.data, auction.pair, factory, market.batchPool]);
+  const computedStudies = useMemo(
+    () => config.studies.map((id) => ({ study: studyById(id), lines: studyById(id).compute(candles, studyCtx) })),
+    [config.studies, candles, studyCtx],
   );
+  const studyLines = useMemo(() => computedStudies.flatMap(({ study, lines }) => lines.map((line) => ({ line, priced: study.priced }))), [computedStudies]);
   const intervalLabel = INTERVALS.find((i) => i.seconds === interval)?.label ?? `${interval}s`;
 
   // ------------------------------------------------------- overlays
@@ -238,7 +270,7 @@ export function ProChart({
   useEffect(() => {
     if (!engine) return;
     engine.setData(candles, k, fmt, minMove);
-    engine.setStudies(config.studies, candles, k, fmt, minMove);
+    engine.setStudies(computedStudies, candles, k, fmt, minMove);
     const lines: { price: number; color: string; title: string; style?: number }[] = [];
     if (settings.clearingLine && !marksHidden && gradPrice > 0) lines.push({ price: gradPrice * k, color: "#f3f3f080", title: "Auction clear" });
     for (const a of config.alerts) lines.push({ price: a * k, color: "#ffd166", title: "Alert", style: 1 });
@@ -270,24 +302,30 @@ export function ProChart({
           })
           .sort((a, b) => (a.time as number) - (b.time as number));
     engine.setMarkers(bars);
-  }, [engine, candles, k, fmt, minMove, config.type, config.studies, config.alerts, settings, marksHidden, gradPrice, shownMarks, mine, last]);
+  }, [engine, candles, k, fmt, minMove, config.type, computedStudies, config.alerts, settings, marksHidden, gradPrice, shownMarks, mine, last]);
 
   // Drawings: the frame they map through (times, interval, units), the saved ones and the one being placed.
-  const draft = useMemo(
-    () => (tool && anchor ? { id: "draft", tool, a: anchor, b: cursor ?? anchor } : tool === "ray" && cursor ? { id: "draft", tool, a: cursor } : null),
-    [tool, anchor, cursor],
-  );
+  const draft = useMemo<Drawing | null>(() => {
+    if (!tool) return null;
+    const [p0, p1] = points;
+    if (!p0) return cursor && TOOL_POINTS[tool] === 1 && tool !== "text" ? { id: "draft", tool, a: cursor } : null;
+    if (!p1) {
+      const b = cursor ?? p0;
+      return { id: "draft", tool, a: p0, b, ...(tool === "long" || tool === "short" ? { c: defaultStop(p0, b) } : {}) };
+    }
+    return { id: "draft", tool, a: p0, b: p1, c: cursor ?? p1 };
+  }, [tool, points, cursor]);
+  const shownDrawings = useMemo(() => (dragged ? config.drawings.map((d) => (d.id === dragged.id ? dragged : d)) : config.drawings), [config.drawings, dragged]);
   useEffect(() => {
     if (!engine) return;
-    engine.drawings.setFrame(
-      candles.map((c) => c.time),
-      interval,
-      k,
-      fmt,
-      palette(settings),
-    );
-    engine.drawings.setDrawings(config.drawings, draft);
-  }, [engine, candles, interval, k, fmt, settings, config.drawings, draft]);
+    engine.drawings.setFrame(candles, interval, k, fmt, palette(settings));
+    engine.drawings.setDrawings(shownDrawings, draft, selected, drawHidden);
+  }, [engine, candles, interval, k, fmt, settings, shownDrawings, draft, selected, drawHidden]);
+
+  // Every change is saved for this token, so the chart comes back as it was left.
+  useEffect(() => {
+    saveLayout(auction.token, config);
+  }, [auction.token, config]);
   // While a tool is active, clicks place points instead of panning the chart.
   useEffect(() => {
     engine?.chart.applyOptions({ handleScroll: tool === null, handleScale: tool === null });
@@ -349,16 +387,19 @@ export function ProChart({
     const how = await shareImage(blob, `${symbol.replace(/^\$/, "")}-${intervalLabel}.png`);
     flash(how === "copied" ? "Chart copied: paste it into X" : "Chart image downloaded");
   };
-  const addAlert = (value: string) => {
-    const v = parseAmount(value);
-    if (v === null) return "Enter a number, e.g. 140K or 0.00014.";
-    const price = v / k;
-    set((c) => ({ ...c, alerts: [...c.alerts, price] }));
+  /** Alerts at these prices (USDC per token); asks for notification permission the first time. */
+  const alertAt = (prices: number[]) => {
+    set((c) => ({ ...c, alerts: [...c.alerts, ...prices.filter((p) => p > 0 && !c.alerts.includes(p))] }));
     try {
       if (typeof Notification !== "undefined" && Notification.permission === "default") void Notification.requestPermission();
     } catch {
       // ignore
     }
+  };
+  const addAlert = (value: string) => {
+    const v = parseAmount(value);
+    if (v === null) return "Enter a number, e.g. 140K or 0.00014.";
+    alertAt([v / k]);
     return null;
   };
   const onRange = (seconds: number) => {
@@ -378,34 +419,120 @@ export function ProChart({
   };
   const pickTool = (t: DrawTool | null) => {
     setTool(t);
-    setAnchor(null);
+    setPoints([]);
     setCursor(null);
+    if (t) setSelected(null);
   };
-  const pointer = (e: MouseEvent<HTMLDivElement>) => {
-    if (!engine) return null;
-    const r = e.currentTarget.getBoundingClientRect();
-    return engine.pointAt(e.clientX - r.left, e.clientY - r.top, k);
+  const local = (e: { clientX: number; clientY: number }) => {
+    const r = area.current?.getBoundingClientRect();
+    return r ? { x: e.clientX - r.left, y: e.clientY - r.top } : null;
+  };
+  const pointer = (e: { clientX: number; clientY: number }) => {
+    const at = local(e);
+    return engine && at ? engine.pointAt(at.x, at.y, settings.snap) : null;
+  };
+  const newId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const addDrawing = (d: Drawing) => {
+    set((c) => ({ ...c, drawings: [...c.drawings, d] }));
+    setSelected(d.id);
+    if (d.tool === "text") setEditing({ id: d.id, value: d.text ?? "" });
+  };
+  const updateDrawing = (id: string, fn: (d: Drawing) => Drawing) => set((c) => ({ ...c, drawings: c.drawings.map((d) => (d.id === id ? fn(d) : d)) }));
+  const removeDrawing = (id: string) => {
+    set((c) => ({ ...c, drawings: c.drawings.filter((d) => d.id !== id) }));
+    setSelected(null);
   };
   const onChartClick = (e: MouseEvent<HTMLDivElement>) => {
     if (!tool || view !== "chart") return;
     const p = pointer(e);
     if (!p) return;
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    if (TOOL_POINTS[tool] === 1) {
-      set((c) => ({ ...c, drawings: [...c.drawings, { id, tool, a: p }] }));
-      pickTool(null);
-    } else if (!anchor) {
-      setAnchor(p);
-    } else {
-      const a = anchor;
-      set((c) => ({ ...c, drawings: [...c.drawings, { id, tool, a, b: p }] }));
-      pickTool(null);
+    const all = [...points, p];
+    if (all.length < TOOL_POINTS[tool]) {
+      setPoints(all);
+      return;
     }
+    const [a, b, c] = all;
+    addDrawing({ id: newId(), tool, a, ...(b ? { b } : {}), ...(c ? { c } : tool === "long" || tool === "short" ? { c: defaultStop(a, b!) } : {}) });
+    pickTool(null);
+  };
+  // Pressing on a drawing grabs it (a handle moves that point, the body moves it all) instead of panning the chart.
+  const onPointerDownCapture = (e: PointerEvent<HTMLDivElement>) => {
+    if (!engine || tool || view !== "chart" || e.button !== 0) return;
+    // The palette, the drawing bar, menus and the note editor handle their own clicks.
+    if ((e.target as HTMLElement).closest("[role=toolbar],[role=menu],[role=dialog],input,button")) return;
+    const at = local(e);
+    const hit = at ? engine.drawings.drawingAt(at.x, at.y) : null;
+    if (!hit || !at) {
+      setSelected(null);
+      return;
+    }
+    e.stopPropagation();
+    e.preventDefault();
+    frame.current?.focus();
+    setSelected(hit.id);
+    const orig = config.drawings.find((d) => d.id === hit.id);
+    if (!orig) return;
+    drag.current = { orig, part: hit.part, x: at.x, y: at.y, moved: false, last: null };
+    const move = (ev: globalThis.PointerEvent) => {
+      const cur = local(ev);
+      const d = drag.current;
+      if (!cur || !d) return;
+      const dx = cur.x - d.x;
+      const dy = cur.y - d.y;
+      if (!d.moved && Math.abs(dx) + Math.abs(dy) < 3) return;
+      d.moved = true;
+      d.last = engine.drawings.moved(d.orig, d.part, dx, dy);
+      setDragged(d.last);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      const d = drag.current;
+      drag.current = null;
+      const last = d?.moved ? d.last : null;
+      if (last) updateDrawing(last.id, () => last);
+      setDragged(null);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+  const onAreaMove = (e: MouseEvent<HTMLDivElement>) => {
+    if (tool) {
+      setCursor(pointer(e));
+      return;
+    }
+    if (!engine || drag.current) return;
+    const at = local(e);
+    const part = at ? (engine.drawings.drawingAt(at.x, at.y)?.part ?? null) : null;
+    if (part !== hover) setHover(part);
+  };
+  const onDoubleClick = (e: MouseEvent<HTMLDivElement>) => {
+    const at = local(e);
+    const hit = engine && at ? engine.drawings.drawingAt(at.x, at.y) : null;
+    const d = hit && config.drawings.find((x) => x.id === hit.id);
+    if (d?.tool === "text") setEditing({ id: d.id, value: d.text ?? "" });
+  };
+  const commitText = () => {
+    if (!editing) return;
+    const value = editing.value.trim();
+    if (value) updateDrawing(editing.id, (d) => ({ ...d, text: value.slice(0, 120) }));
+    else removeDrawing(editing.id);
+    setEditing(null);
   };
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const mod = e.ctrlKey || e.metaKey;
-    if (e.key === "Escape" && tool) {
+    if ((e.target as HTMLElement).tagName === "INPUT") return;
+    if (e.key === "Escape" && (tool || selected)) {
       pickTool(null);
+      setSelected(null);
+    } else if ((e.key === "Delete" || e.key === "Backspace") && selected) {
+      e.preventDefault();
+      removeDrawing(selected);
+    } else if (e.altKey && !mod && TOOL_KEYS[e.key.toLowerCase()]) {
+      e.preventDefault();
+      const t = TOOL_KEYS[e.key.toLowerCase()];
+      setPaletteOpen(true);
+      pickTool(tool === t ? null : t);
     } else if (e.altKey && e.key.toLowerCase() === "r") {
       e.preventDefault();
       reset();
@@ -419,6 +546,64 @@ export function ProChart({
   };
 
   const lockedX = config.lockedTime !== null && engine ? engine.xOf(config.lockedTime) : null;
+
+  // The selected drawing's bar, just above its first point (kept inside the chart).
+  const sel = selected ? config.drawings.find((d) => d.id === selected) : undefined;
+  const selAt = sel && engine ? engine.drawings.screenOf(sel.a) : null;
+  const selectedBar =
+    sel && selAt ? (
+      <DrawingBar
+        drawing={sel}
+        x={Math.max(4, selAt.x - 40)}
+        y={Math.max(4, selAt.y - 44)}
+        onColor={(color) => updateDrawing(sel.id, (d) => ({ ...d, color }))}
+        onAlert={
+          sel.tool === "hline" || sel.tool === "ray"
+            ? () => {
+                alertAt([sel.a.price]);
+                flash(`Alert set at ${fmt(sel.a.price * k)}`);
+              }
+            : (sel.tool === "long" || sel.tool === "short") && sel.b
+              ? () => {
+                  const stop = sel.c ?? defaultStop(sel.a, sel.b!);
+                  alertAt([sel.b!.price, stop.price]);
+                  flash(`Alerts at target ${fmt(sel.b!.price * k)} and stop ${fmt(stop.price * k)}`);
+                }
+              : null
+        }
+        onEditText={sel.tool === "text" ? () => setEditing({ id: sel.id, value: sel.text ?? "" }) : null}
+        onDuplicate={() => {
+          const shift = engine?.drawings.moved(sel, "body", 24, 24) ?? sel;
+          addDrawing({ ...shift, id: newId() });
+        }}
+        onDelete={() => removeDrawing(sel.id)}
+      />
+    ) : null;
+  const editAt = editing && engine ? (() => {
+    const d = config.drawings.find((x) => x.id === editing.id);
+    return d ? engine.drawings.screenOf(d.a) : null;
+  })() : null;
+  const textEditor = editing && editAt ? (
+    <input
+      autoFocus
+      aria-label="Note text"
+      value={editing.value}
+      maxLength={120}
+      placeholder="Type a note, Enter to save"
+      onChange={(e) => setEditing({ ...editing, value: e.target.value })}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commitText();
+        if (e.key === "Escape") {
+          if (!config.drawings.find((d) => d.id === editing.id)?.text) removeDrawing(editing.id);
+          setEditing(null);
+        }
+      }}
+      onBlur={commitText}
+      onPointerDownCapture={(e) => e.stopPropagation()}
+      style={{ left: editAt.x - 4, top: editAt.y - 12 }}
+      className="absolute z-30 w-56 rounded-[3px] border border-signal/60 bg-panel-2 px-2 py-1 text-[12px] text-chrome outline-none placeholder:text-dim"
+    />
+  ) : null;
   const live = swaps.data !== undefined && !swaps.isError;
 
   return (
@@ -442,11 +627,22 @@ export function ProChart({
       />
 
       <div
-        className={`relative min-h-[300px] flex-1 overflow-hidden rounded-t-[4px] border border-line ${tool ? "cursor-crosshair" : ""}`}
+        ref={area}
+        // On phones the chart grows by a pane's height for each indicator pane, so panes never squeeze the candles.
+        style={{ "--chart-min": `${300 + 110 * computedStudies.filter((c) => c.study.pane === "pane").length}px` } as CSSProperties}
+        className={`relative min-h-[300px] flex-1 touch-none overflow-hidden rounded-t-[4px] border border-line max-lg:min-h-[var(--chart-min)] ${
+          tool ? "cursor-crosshair" : dragged ? "cursor-grabbing" : hover === "body" ? "cursor-move" : hover ? "cursor-grab" : ""
+        }`}
         onContextMenu={onContext}
         onMouseDown={() => frame.current?.focus()}
+        onPointerDownCapture={onPointerDownCapture}
+        // A drawing being dragged keeps the chart from panning under it (mouse and touch).
+        onMouseDownCapture={(e) => drag.current && e.stopPropagation()}
+        onTouchStartCapture={(e) => drag.current && e.stopPropagation()}
         onClick={onChartClick}
-        onMouseMove={tool ? (e) => setCursor(pointer(e)) : undefined}
+        onDoubleClick={onDoubleClick}
+        onMouseMove={onAreaMove}
+        onMouseLeave={() => setHover(null)}
       >
         <div ref={host} className={`absolute inset-0 ${view === "table" ? "invisible" : ""}`} aria-label={`${symbol} chart`} role="img" />
         {view === "chart" && (
@@ -463,8 +659,14 @@ export function ProChart({
             setTool={pickTool}
             count={config.drawings.length}
             onClear={() => set((c) => ({ ...c, drawings: [] }))}
+            snap={settings.snap}
+            onSnap={() => setSettings({ ...settings, snap: !settings.snap })}
+            hidden={drawHidden}
+            onHidden={() => setDrawHidden((h) => !h)}
           />
         )}
+        {view === "chart" && !drawHidden && !tool && !dragged && selectedBar}
+        {view === "chart" && editing && textEditor}
         {focus && view === "chart" && (
           <button
             type="button"
@@ -477,7 +679,21 @@ export function ProChart({
         )}
         {tool && (
           <p className="pointer-events-none absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded-[4px] border border-line-2 bg-panel-2/95 px-2.5 py-1 text-[11.5px] text-muted">
-            {TOOL_POINTS[tool] === 1 ? "Click to place the ray" : anchor ? "Click the second point" : "Click the first point"} · Esc to cancel
+            {TOOL_INFO[tool].label}:{" "}
+            {TOOL_POINTS[tool] === 1
+              ? "click to place it"
+              : points.length === 0
+                ? tool === "long" || tool === "short"
+                  ? "click the entry"
+                  : "click the first point"
+                : points.length === 1
+                  ? tool === "long" || tool === "short"
+                    ? "click the target (the stop starts at 2 : 1, drag it after)"
+                    : tool === "channel"
+                      ? "click the end of the base line"
+                      : "click the second point"
+                  : "click where the parallel line runs"}{" "}
+            · {settings.snap ? "magnet on · " : ""}Esc to cancel
           </p>
         )}
         {view === "table" && <TableView candles={candles} k={k} fmt={fmt} />}
@@ -500,6 +716,10 @@ export function ProChart({
             onSettings={() => setSettingsOpen(true)}
             drawings={config.drawings.length}
             onRemoveDrawings={() => set((c) => ({ ...c, drawings: [] }))}
+            onResetLayout={() => {
+              replace(DEFAULT_CONFIG);
+              flash("Chart layout reset for this token");
+            }}
           />
         )}
         {toast && (

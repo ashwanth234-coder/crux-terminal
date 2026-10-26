@@ -1,5 +1,5 @@
-import type { StudyId } from "@/lib/indicators";
-import type { Drawing } from "./drawings";
+import { isStudyId, type StudyId } from "@/lib/indicators";
+import { TOOL_POINTS, type Drawing } from "./drawings";
 
 export type ChartType = "candles" | "hollow" | "bars" | "line" | "area" | "baseline";
 export type ScaleMode = "normal" | "log" | "percent";
@@ -21,6 +21,8 @@ export type ChartSettings = {
   marks: { mine: boolean; dev: boolean; top: boolean };
   /** Trades under this many USD aren't marked. */
   minUsd: number;
+  /** Drawing magnet: new points snap to the bar's open / high / low / close. */
+  snap: boolean;
 };
 
 export const DEFAULT_SETTINGS: ChartSettings = {
@@ -32,6 +34,7 @@ export const DEFAULT_SETTINGS: ChartSettings = {
   clearingLine: true,
   marks: { mine: true, dev: true, top: false },
   minUsd: 0,
+  snap: true,
 };
 
 /**
@@ -47,7 +50,7 @@ export type ChartConfig = {
   lockedTime: number | null;
   /** Price alerts, in USDC per token (shown in the current units). */
   alerts: number[];
-  /** Rays, trendlines, rulers and Fibs. */
+  /** Lines, shapes, notes, rulers, Fibs and positions. */
   drawings: Drawing[];
 };
 
@@ -71,6 +74,45 @@ export function saveSettings(s: ChartSettings) {
     localStorage.setItem(KEY, JSON.stringify(s));
   } catch {
     // Private mode or blocked storage: settings last for this visit only.
+  }
+}
+
+const layoutKey = (token: string) => `crux:chart:layout:v1:${token.toLowerCase()}`;
+
+const isPoint = (p: unknown): p is { time: number; price: number } =>
+  typeof p === "object" && p !== null && Number.isFinite((p as { time: number }).time) && Number.isFinite((p as { price: number }).price);
+
+/**
+ * This token's saved chart (timeframe, style, units, indicators, drawings, alerts, locked line), as it was left in
+ * this browser; null when there's none. Anything unreadable is dropped rather than trusted.
+ */
+export function loadLayout(token: string): ChartConfig | null {
+  try {
+    const raw = localStorage.getItem(layoutKey(token));
+    if (!raw) return null;
+    const v = JSON.parse(raw) as Partial<ChartConfig>;
+    const types: ChartType[] = ["candles", "hollow", "bars", "line", "area", "baseline"];
+    return {
+      interval: v.interval === "auto" || (typeof v.interval === "number" && v.interval > 0) ? v.interval : DEFAULT_CONFIG.interval,
+      type: types.includes(v.type as ChartType) ? (v.type as ChartType) : DEFAULT_CONFIG.type,
+      units: v.units === "price" ? "price" : "mcap",
+      studies: Array.isArray(v.studies) ? v.studies.filter(isStudyId) : [],
+      lockedTime: typeof v.lockedTime === "number" ? v.lockedTime : null,
+      alerts: Array.isArray(v.alerts) ? v.alerts.filter((a) => Number.isFinite(a) && a > 0) : [],
+      drawings: Array.isArray(v.drawings)
+        ? v.drawings.filter((d) => d && typeof d.id === "string" && d.tool in TOOL_POINTS && isPoint(d.a) && (d.b === undefined || isPoint(d.b)) && (d.c === undefined || isPoint(d.c)))
+        : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function saveLayout(token: string, config: ChartConfig) {
+  try {
+    localStorage.setItem(layoutKey(token), JSON.stringify(config));
+  } catch {
+    // Storage blocked: the layout lasts for this visit only.
   }
 }
 
