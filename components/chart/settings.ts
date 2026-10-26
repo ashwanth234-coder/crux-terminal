@@ -1,4 +1,5 @@
 import type { StudyId } from "@/lib/indicators";
+import type { Drawing } from "./drawings";
 
 export type ChartType = "candles" | "hollow" | "bars" | "line" | "area" | "baseline";
 export type ScaleMode = "normal" | "log" | "percent";
@@ -46,9 +47,11 @@ export type ChartConfig = {
   lockedTime: number | null;
   /** Price alerts, in USDC per token (shown in the current units). */
   alerts: number[];
+  /** Rays, trendlines, rulers and Fibs. */
+  drawings: Drawing[];
 };
 
-export const DEFAULT_CONFIG: ChartConfig = { interval: "auto", type: "candles", units: "mcap", studies: [], lockedTime: null, alerts: [] };
+export const DEFAULT_CONFIG: ChartConfig = { interval: "auto", type: "candles", units: "mcap", studies: [], lockedTime: null, alerts: [], drawings: [] };
 
 const KEY = "crux:chart:settings:v1";
 

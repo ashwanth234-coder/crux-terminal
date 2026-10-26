@@ -20,6 +20,8 @@ export function ContextMenu({
   marksHidden,
   onToggleMarks,
   onSettings,
+  drawings,
+  onRemoveDrawings,
 }: {
   at: ContextAt;
   fmt: (v: number) => string;
@@ -34,6 +36,8 @@ export function ContextMenu({
   marksHidden: boolean;
   onToggleMarks: () => void;
   onSettings: () => void;
+  drawings: number;
+  onRemoveDrawings: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -76,6 +80,7 @@ export function ContextMenu({
       <div className="my-1 border-t border-line" />
       <MenuItem onClick={act(onTable)}>Table view</MenuItem>
       {studies > 0 && <MenuItem onClick={act(onRemoveStudies)}>Remove {studies} indicator{studies === 1 ? "" : "s"}</MenuItem>}
+      {drawings > 0 && <MenuItem onClick={act(onRemoveDrawings)}>Remove {drawings} drawing{drawings === 1 ? "" : "s"}</MenuItem>}
       <MenuItem onClick={act(onToggleMarks)}>{marksHidden ? "Show marks on bars" : "Hide marks on bars"}</MenuItem>
       <div className="my-1 border-t border-line" />
       <MenuItem onClick={act(onSettings)}>⚙ Settings…</MenuItem>

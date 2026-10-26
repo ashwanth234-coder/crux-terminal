@@ -12,6 +12,7 @@ import type {
 } from "lightweight-charts";
 import type { Candle } from "@/lib/candles";
 import { studyById, type StudyId } from "@/lib/indicators";
+import { DrawingsPrimitive, type DrawPoint } from "./drawings";
 import { palette, type ChartSettings, type ChartType, type ScaleMode } from "./settings";
 
 type Lc = typeof import("lightweight-charts");
@@ -40,6 +41,8 @@ export class ChartEngine {
   private mainLines: IPriceLine[] = [];
   private markers: ISeriesMarkersPluginApi<Time> | null = null;
   private markerData: SeriesMarker<Time>[] = [];
+  /** Every drawing, painted on the price pane; it moves to the new main series when the style changes. */
+  readonly drawings = new DrawingsPrimitive();
   private settings: ChartSettings;
 
   constructor(lc: Lc, host: HTMLElement, theme: Theme, settings: ChartSettings) {
@@ -65,6 +68,7 @@ export class ChartEngine {
     this.volume.priceScale().applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
     this.main = this.addMain("candles");
     this.markers = lc.createSeriesMarkers(this.main, []);
+    this.main.attachPrimitive(this.drawings);
     this.applySettings(settings);
   }
 
@@ -126,10 +130,12 @@ export class ChartEngine {
     if (type === this.type && !force) return;
     this.mainLines = [];
     this.markers?.detach();
+    this.main.detachPrimitive(this.drawings);
     this.chart.removeSeries(this.main);
     this.type = type;
     this.main = this.addMain(type);
     this.markers = this.lc.createSeriesMarkers(this.main, this.markerData);
+    this.main.attachPrimitive(this.drawings);
   }
 
   /** Marks on the bars (B / S, D, W, T), kept across chart-style changes. */
@@ -251,6 +257,14 @@ export class ChartEngine {
   barAt(x: number): number | null {
     const l = this.chart.timeScale().coordinateToLogical(x);
     return l === null ? null : Math.round(l);
+  }
+
+  /** A drawing point under (x, y) in the price pane, in USDC per token (`k` is the units' multiplier). */
+  pointAt(x: number, y: number, k: number): DrawPoint | null {
+    const l = this.chart.timeScale().coordinateToLogical(x);
+    const p = this.main.coordinateToPrice(y);
+    if (l === null || p === null || p <= 0) return null;
+    return { time: this.drawings.timeOf(l), price: p / k };
   }
 
   xOf(time: number): number | null {

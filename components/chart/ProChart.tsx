@@ -21,8 +21,10 @@ import { ContextMenu, type ContextAt } from "./ContextMenu";
 import { ChartEngine } from "./engine";
 import { useHistory } from "./history";
 import { Legend } from "./Legend";
+import { DrawingPalette } from "./DrawingPalette";
+import { TOOL_POINTS, type DrawPoint, type DrawTool } from "./drawings";
 import { OverlaysBar } from "./OverlaysBar";
-import { DEFAULT_CONFIG, DEFAULT_SETTINGS, loadSettings, saveSettings, type ChartSettings, type ScaleMode } from "./settings";
+import { DEFAULT_CONFIG, DEFAULT_SETTINGS, loadSettings, palette, saveSettings, type ChartSettings, type ScaleMode } from "./settings";
 import { SettingsModal } from "./SettingsModal";
 import { chartSnapshot, shareImage } from "./snapshot";
 import { TableView } from "./TableView";
@@ -76,6 +78,11 @@ export function ProChart({ auction, symbol, name, factory, id }: { auction: Auct
   const [ctx, setCtx] = useState<ContextAt | null>(null);
   const [hoverTime, setHoverTime] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  // Drawing: the palette, the active tool, its first point and where the cursor is (for the live preview).
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [tool, setTool] = useState<DrawTool | null>(null);
+  const [anchor, setAnchor] = useState<DrawPoint | null>(null);
+  const [cursor, setCursor] = useState<DrawPoint | null>(null);
   // Bumped when the visible range moves, so the locked time line follows the candles.
   const [, setRangeTick] = useState(0);
 
@@ -242,6 +249,27 @@ export function ProChart({ auction, symbol, name, factory, id }: { auction: Auct
     engine.setMarkers(bars);
   }, [engine, candles, k, fmt, minMove, config.type, config.studies, config.alerts, settings, marksHidden, gradPrice, shownMarks, mine, last]);
 
+  // Drawings: the frame they map through (times, interval, units), the saved ones and the one being placed.
+  const draft = useMemo(
+    () => (tool && anchor ? { id: "draft", tool, a: anchor, b: cursor ?? anchor } : tool === "ray" && cursor ? { id: "draft", tool, a: cursor } : null),
+    [tool, anchor, cursor],
+  );
+  useEffect(() => {
+    if (!engine) return;
+    engine.drawings.setFrame(
+      candles.map((c) => c.time),
+      interval,
+      k,
+      fmt,
+      palette(settings),
+    );
+    engine.drawings.setDrawings(config.drawings, draft);
+  }, [engine, candles, interval, k, fmt, settings, config.drawings, draft]);
+  // While a tool is active, clicks place points instead of panning the chart.
+  useEffect(() => {
+    engine?.chart.applyOptions({ handleScroll: tool === null, handleScale: tool === null });
+  }, [engine, tool]);
+
   // Fit the view when the timeframe changes or the first candles arrive.
   const fitKey = `${interval}:${candles.length > 0}`;
   useEffect(() => {
@@ -325,9 +353,37 @@ export function ProChart({ auction, symbol, name, factory, id }: { auction: Auct
     const time = bar === null || candles.length === 0 ? null : candles[Math.max(0, Math.min(candles.length - 1, bar))].time;
     setCtx({ x: Math.min(x, r.width - 248), y: Math.min(y, r.height - 280), price: engine.priceAt(y), time });
   };
+  const pickTool = (t: DrawTool | null) => {
+    setTool(t);
+    setAnchor(null);
+    setCursor(null);
+  };
+  const pointer = (e: MouseEvent<HTMLDivElement>) => {
+    if (!engine) return null;
+    const r = e.currentTarget.getBoundingClientRect();
+    return engine.pointAt(e.clientX - r.left, e.clientY - r.top, k);
+  };
+  const onChartClick = (e: MouseEvent<HTMLDivElement>) => {
+    if (!tool || view !== "chart") return;
+    const p = pointer(e);
+    if (!p) return;
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    if (TOOL_POINTS[tool] === 1) {
+      set((c) => ({ ...c, drawings: [...c.drawings, { id, tool, a: p }] }));
+      pickTool(null);
+    } else if (!anchor) {
+      setAnchor(p);
+    } else {
+      const a = anchor;
+      set((c) => ({ ...c, drawings: [...c.drawings, { id, tool, a, b: p }] }));
+      pickTool(null);
+    }
+  };
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const mod = e.ctrlKey || e.metaKey;
-    if (e.altKey && e.key.toLowerCase() === "r") {
+    if (e.key === "Escape" && tool) {
+      pickTool(null);
+    } else if (e.altKey && e.key.toLowerCase() === "r") {
       e.preventDefault();
       reset();
     } else if (mod && e.key.toLowerCase() === "z" && !e.shiftKey) {
@@ -362,13 +418,34 @@ export function ProChart({ auction, symbol, name, factory, id }: { auction: Auct
         live={live}
       />
 
-      <div className="relative min-h-[300px] flex-1 overflow-hidden rounded-t-[4px] border border-line" onContextMenu={onContext} onMouseDown={() => frame.current?.focus()}>
+      <div
+        className={`relative min-h-[300px] flex-1 overflow-hidden rounded-t-[4px] border border-line ${tool ? "cursor-crosshair" : ""}`}
+        onContextMenu={onContext}
+        onMouseDown={() => frame.current?.focus()}
+        onClick={onChartClick}
+        onMouseMove={tool ? (e) => setCursor(pointer(e)) : undefined}
+      >
         <div ref={host} className={`absolute inset-0 ${view === "table" ? "invisible" : ""}`} aria-label={`${symbol} chart`} role="img" />
         {view === "chart" && (
           <Legend title={`${name ?? symbol} · ${intervalLabel} · CRUX`} candle={shown} k={k} fmt={fmt} lines={studyLines} index={shownIndex} />
         )}
         {view === "chart" && lockedX !== null && (
           <div className="pointer-events-none absolute bottom-7 top-0 z-[5] w-px border-l border-dashed border-[#4cc9f0]/70" style={{ left: lockedX }} aria-hidden="true" />
+        )}
+        {view === "chart" && (
+          <DrawingPalette
+            open={paletteOpen}
+            setOpen={setPaletteOpen}
+            tool={tool}
+            setTool={pickTool}
+            count={config.drawings.length}
+            onClear={() => set((c) => ({ ...c, drawings: [] }))}
+          />
+        )}
+        {tool && (
+          <p className="pointer-events-none absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded-[4px] border border-line-2 bg-panel-2/95 px-2.5 py-1 text-[11.5px] text-muted">
+            {TOOL_POINTS[tool] === 1 ? "Click to place the ray" : anchor ? "Click the second point" : "Click the first point"} · Esc to cancel
+          </p>
         )}
         {view === "table" && <TableView candles={candles} k={k} fmt={fmt} />}
         {ctx && (
@@ -388,6 +465,8 @@ export function ProChart({ auction, symbol, name, factory, id }: { auction: Auct
             marksHidden={marksHidden}
             onToggleMarks={() => setMarksHidden((m) => !m)}
             onSettings={() => setSettingsOpen(true)}
+            drawings={config.drawings.length}
+            onRemoveDrawings={() => set((c) => ({ ...c, drawings: [] }))}
           />
         )}
         {toast && (
