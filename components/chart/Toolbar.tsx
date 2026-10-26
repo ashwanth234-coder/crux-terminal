@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { INTERVALS } from "@/lib/candles";
 import { STUDIES, STUDY_GROUPS, isStudyId, type StudyId } from "@/lib/indicators";
 import type { ChartConfig, ChartType, Units } from "./settings";
@@ -52,6 +52,10 @@ export function Toolbar({
   onAddAlert,
   formatInput,
   live,
+  replaying,
+  onReplay,
+  compareSlot,
+  layoutSlot,
 }: {
   config: ChartConfig;
   set: (fn: (c: ChartConfig) => ChartConfig) => void;
@@ -70,6 +74,12 @@ export function Toolbar({
   /** The current price in the current units, prefilled in the alert box. */
   formatInput: string;
   live: boolean;
+  replaying: boolean;
+  onReplay: () => void;
+  /** The compare button (it reads the launch list, so the chart provides it). */
+  compareSlot?: ReactNode;
+  /** The multi-chart layout picker. */
+  layoutSlot?: ReactNode;
 }) {
   const type = TYPES.find((t) => t.id === config.type) ?? TYPES[0];
   const [query, setQuery] = useState("");
@@ -110,7 +120,7 @@ export function Toolbar({
     }
   };
   const toggleStudy = (id: StudyId) =>
-    set((c) => ({ ...c, studies: c.studies.includes(id) ? c.studies.filter((s) => s !== id) : [...c.studies, id] }));
+    set((c) => ({ ...c, studies: c.studies.some((s) => s.id === id) ? c.studies.filter((s) => s.id !== id) : [...c.studies, { id }] }));
 
   return (
     <div className="flex flex-wrap items-center gap-x-0.5 gap-y-1.5 pb-2">
@@ -247,7 +257,7 @@ export function Toolbar({
                           {favs.includes(s.id) ? "★" : "☆"}
                         </button>
                         <div className="min-w-0 flex-1">
-                          <MenuItem checked={config.studies.includes(s.id)} onClick={() => toggleStudy(s.id)}>
+                          <MenuItem checked={config.studies.some((x) => x.id === s.id)} onClick={() => toggleStudy(s.id)}>
                             <span className="flex flex-col">
                               <span>{s.label}</span>
                               {s.hint && <span className="text-[10.5px] text-dim">{s.hint}</span>}
@@ -271,6 +281,7 @@ export function Toolbar({
           </div>
         )}
       </Popover>
+      {compareSlot}
       <Sep />
       <div role="radiogroup" aria-label="Show price or market cap" className="flex items-center gap-0.5 text-[11.5px]">
         {(["mcap", "price"] as Units[]).map((u) => (
@@ -293,6 +304,15 @@ export function Toolbar({
       </Tool>
       <Tool label="Redo (Ctrl+Y)" disabled={!canRedo} onClick={redo}>
         {Icon.redo}
+      </Tool>
+      <Sep />
+      <Tool label={replaying ? "Leave bar replay" : "Bar replay: pick a bar, then play the market forward from it"} active={replaying} onClick={onReplay}>
+        <span className="flex items-center gap-1">
+          <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" aria-hidden="true">
+            <path d="M3 3v10M6 3.5v9l7-4.5-7-4.5Z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+          </svg>
+          <span className="hidden sm:inline">Replay</span>
+        </span>
       </Tool>
 
       <div className="ml-auto flex items-center gap-0.5">
@@ -335,6 +355,7 @@ export function Toolbar({
         <Tool label="Copy a snapshot of the chart" onClick={onSnapshot}>
           {Icon.camera}
         </Tool>
+        {layoutSlot}
         <Tool label={full ? "Exit fullscreen" : "Fullscreen"} active={full} onClick={onFull}>
           {full ? Icon.shrink : Icon.expand}
         </Tool>

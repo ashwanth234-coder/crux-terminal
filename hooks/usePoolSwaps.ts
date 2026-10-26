@@ -1,9 +1,11 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { zeroAddress, type Address } from "viem";
 import { pollInterval, scanLogs, tracked, type LogScan } from "@/lib/logs";
-import { poolTradeReader, type PoolTrade } from "@/lib/poolTrades";
+import { poolTradeReader, readBatchPool, type PoolTrade } from "@/lib/poolTrades";
+import { watchLogsOf } from "@/lib/stream";
 
 export type { PoolTrade };
 
@@ -17,6 +19,23 @@ const newestFirst = (scan: LogScan<PoolTrade>) => ({ trades: [...scan.items].rev
 export function usePoolSwaps(pair: Address, settledAt: number, enabled: boolean, tokenDecimals = 18) {
   const queryKey = ["pool-swaps", pair];
   const pollId = queryKey.join(":");
+  const qc = useQueryClient();
+  // Streamed: a swap on the pair (or a batch-pool fill) refetches at once; the poll below is the fallback.
+  useEffect(() => {
+    if (!enabled || pair === zeroAddress) return;
+    let stop = () => {};
+    let live = true;
+    void readBatchPool(pair)
+      .catch(() => null)
+      .then((batch) => {
+        if (!live) return;
+        stop = watchLogsOf(batch ? [pair, batch.pool] : [pair], () => void qc.refetchQueries({ queryKey: ["pool-swaps", pair] }));
+      });
+    return () => {
+      live = false;
+      stop();
+    };
+  }, [enabled, pair, qc]);
   return useQuery({
     queryKey,
     queryFn: ({ client }) =>

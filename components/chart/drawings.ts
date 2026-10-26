@@ -1,7 +1,39 @@
 import type { IChartApi, IPrimitivePaneRenderer, IPrimitivePaneView, ISeriesApi, ISeriesPrimitive, Logical, SeriesAttachedParameter, SeriesType, Time } from "lightweight-charts";
 import type { Candle } from "@/lib/candles";
 
-export type DrawTool = "ray" | "hline" | "vline" | "trend" | "arrow" | "channel" | "rect" | "text" | "emoji" | "brush" | "ruler" | "fib" | "long" | "short";
+export type DrawTool =
+  | "ray"
+  | "hline"
+  | "vline"
+  | "trend"
+  | "arrow"
+  | "channel"
+  | "rect"
+  | "text"
+  | "callout"
+  | "emoji"
+  | "brush"
+  | "ruler"
+  | "fib"
+  | "pitchfork"
+  | "gannfan"
+  | "long"
+  | "short"
+  | "xabcd"
+  | "abcd"
+  | "headshoulders"
+  | "elliott"
+  | "triangle";
+
+/** Chart patterns: one point per click, all kept in `path`, labelled in order. */
+export const PATTERN_LABELS: Partial<Record<DrawTool, string[]>> = {
+  xabcd: ["X", "A", "B", "C", "D"],
+  abcd: ["A", "B", "C", "D"],
+  headshoulders: ["", "LS", "", "H", "", "RS", ""],
+  elliott: ["0", "1", "2", "3", "4", "5"],
+  triangle: ["A", "B", "C"],
+};
+export const isPattern = (t: DrawTool) => t in PATTERN_LABELS;
 
 /** A chart point: a time (unix seconds, may be between or beyond candles) and a price in USDC per token. */
 export type DrawPoint = { time: number; price: number };
@@ -12,11 +44,11 @@ export type DrawPoint = { time: number; price: number };
  */
 export type Drawing = { id: string; tool: DrawTool; a: DrawPoint; b?: DrawPoint; c?: DrawPoint; color?: string; text?: string; path?: DrawPoint[] };
 
-/** Which part of a drawing is under the pointer: one of its points, or the whole of it. */
-export type DrawPart = "a" | "b" | "c" | "body";
+/** Which part of a drawing is under the pointer: one of its points (a pattern's are p0, p1…), or the whole of it. */
+export type DrawPart = "a" | "b" | "c" | "body" | `p${number}`;
 
 /** How many clicks each tool takes. */
-export const TOOL_POINTS: Record<DrawTool, 1 | 2 | 3> = {
+export const TOOL_POINTS: Record<DrawTool, number> = {
   ray: 1,
   hline: 1,
   vline: 1,
@@ -32,6 +64,14 @@ export const TOOL_POINTS: Record<DrawTool, 1 | 2 | 3> = {
   long: 2,
   short: 2,
   channel: 3,
+  callout: 2,
+  pitchfork: 3,
+  gannfan: 2,
+  xabcd: 5,
+  abcd: 4,
+  headshoulders: 7,
+  elliott: 6,
+  triangle: 3,
 };
 
 export const TOOL_COLOR: Record<DrawTool, string> = {
@@ -49,6 +89,14 @@ export const TOOL_COLOR: Record<DrawTool, string> = {
   fib: "#8f939b",
   long: "#5cc08c",
   short: "#e5484d",
+  callout: "#f3f3f0",
+  pitchfork: "#ff9d6e",
+  gannfan: "#90be6d",
+  xabcd: "#4cc9f0",
+  abcd: "#c792ea",
+  headshoulders: "#ffd166",
+  elliott: "#7bdff2",
+  triangle: "#f4a261",
 };
 
 /** A long / short position's default stop: half the distance to the target on the other side (2 : 1 reward to risk). */
@@ -219,6 +267,18 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
       const d = this.drawings[i];
       const a = this.xy(d.a);
       if (!a) continue;
+      if (isPattern(d.tool)) {
+        const pts = (d.path ?? []).map((q) => this.xy(q));
+        for (let j = 0; j < pts.length; j++) {
+          const q = pts[j];
+          if (q && Math.hypot(q.x - x, q.y - y) <= HANDLE) return { id: d.id, part: `p${j}` };
+        }
+        for (let j = 1; j < pts.length; j++) {
+          const [u, v] = [pts[j - 1], pts[j]];
+          if (u && v && distToSegment(p, u, v) <= NEAR) return { id: d.id, part: "body" };
+        }
+        continue;
+      }
       const b = d.b ? this.xy(d.b) : null;
       const stop = d.tool === "long" || d.tool === "short" ? (d.c ?? (d.b ? defaultStop(d.a, d.b) : undefined)) : d.c;
       const c = stop ? this.xy(stop) : null;
@@ -247,6 +307,15 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
       }
       case "emoji":
         return Math.abs(p.x - a.x) <= 14 && Math.abs(p.y - a.y) <= 14;
+      case "callout": {
+        if (!b) return false;
+        const tw = Math.max(60, (d.text ?? "").length * 7 + 16);
+        return (p.x >= b.x - 4 && p.x <= b.x + tw && p.y >= b.y - 13 && p.y <= b.y + 13) || distToSegment(p, a, b) <= NEAR;
+      }
+      case "pitchfork":
+        return this.pitchforkLines(a, b, c).some(([u, v]) => distToSegment(p, u, v) <= NEAR);
+      case "gannfan":
+        return b !== null && this.gannLines(a, b).some(([, v]) => distToSegment(p, a, v) <= NEAR);
       case "brush": {
         const pts = (d.path ?? []).map((q) => this.xy(q)).filter((q): q is XY => q !== null);
         for (let i = 1; i < pts.length; i++) if (distToSegment(p, pts[i - 1], pts[i]) <= NEAR) return true;
@@ -281,6 +350,8 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
         const right = Math.max(b.x, a.x + 40);
         return p.x >= a.x && p.x <= right && p.y >= Math.min(b.y, c.y) && p.y <= Math.max(b.y, c.y);
       }
+      default:
+        return false;
     }
   }
 
@@ -303,7 +374,12 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
       if (d.tool === "vline") return { ...d, a: { ...d.a, time: shift(d.a)!.time } };
       return { ...base, a: shift(base.a)!, b: shift(base.b), c: shift(base.c), ...(base.path ? { path: base.path.map((q) => shift(q)!) } : {}) };
     }
-    const next: Drawing = { ...base, [part]: shift(base[part]) };
+    if (part.startsWith("p") && base.path) {
+      const j = Number(part.slice(1));
+      const path = base.path.map((q, i) => (i === j ? shift(q)! : q));
+      return { ...base, path, a: path[0] };
+    }
+    const next: Drawing = { ...base, [part]: shift(base[part as "a" | "b" | "c"]) };
     // A position's target and stop share the box's right edge: dragging either sets its price, b sets the width.
     if (position && part === "c" && next.c && next.b) next.c = { time: next.b.time, price: next.c.price };
     if (position && part === "b" && next.b && next.c) next.c = { time: next.b.time, price: next.c.price };
@@ -397,6 +473,10 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
       ctx.stroke();
       return;
     }
+    if (isPattern(d.tool)) {
+      this.drawPattern(ctx, d, color);
+      return;
+    }
     if (d.tool === "text") {
       ctx.font = "12px Inter, ui-sans-serif, system-ui, sans-serif";
       const text = d.text || "Text";
@@ -413,6 +493,72 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
     const b = d.b ? this.xy(d.b) : null;
     if (!b || !d.b) return;
     const c = d.c ? this.xy(d.c) : null;
+
+    if (d.tool === "callout") {
+      ctx.lineWidth = 1.25;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      this.dot(ctx, a.x, a.y, color);
+      ctx.font = "12px Inter, ui-sans-serif, system-ui, sans-serif";
+      const text = d.text || "Note";
+      const w = Math.max(60, ctx.measureText(text).width + 16);
+      ctx.fillStyle = "#1b1d22f2";
+      ctx.fillRect(b.x - 4, b.y - 13, w, 26);
+      ctx.strokeStyle = color;
+      ctx.strokeRect(b.x - 3.5, b.y - 12.5, w - 1, 25);
+      ctx.fillStyle = color;
+      ctx.fillText(text, b.x + 4, b.y + 0.5);
+      ctx.font = "10.5px JetBrains Mono, ui-monospace, monospace";
+      return;
+    }
+
+    if (d.tool === "pitchfork") {
+      const lines = this.pitchforkLines(a, b, c);
+      ctx.lineWidth = 1.25;
+      lines.forEach(([u, v], i) => {
+        ctx.setLineDash(i === 0 ? [] : [5, 3]);
+        ctx.beginPath();
+        ctx.moveTo(u.x, u.y);
+        ctx.lineTo(v.x, v.y);
+        ctx.stroke();
+      });
+      ctx.setLineDash([]);
+      if (c) {
+        ctx.beginPath();
+        ctx.moveTo(b.x, b.y);
+        ctx.lineTo(c.x, c.y);
+        ctx.stroke();
+        if (lines.length === 3) {
+          ctx.fillStyle = `${color}14`;
+          ctx.beginPath();
+          ctx.moveTo(lines[1][0].x, lines[1][0].y);
+          ctx.lineTo(lines[1][1].x, lines[1][1].y);
+          ctx.lineTo(lines[2][1].x, lines[2][1].y);
+          ctx.lineTo(lines[2][0].x, lines[2][0].y);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+      return;
+    }
+
+    if (d.tool === "gannfan") {
+      ctx.lineWidth = 1;
+      for (const [label, end] of this.gannLines(a, b)) {
+        ctx.strokeStyle = label === "1/1" ? color : `${color}aa`;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.stroke();
+        ctx.fillStyle = `${color}cc`;
+        const lx = a.x + (end.x - a.x) * 0.85;
+        const ly = a.y + (end.y - a.y) * 0.85;
+        ctx.fillText(label, lx + 3, ly);
+      }
+      return;
+    }
 
     if (d.tool === "trend" || d.tool === "arrow") {
       ctx.lineWidth = 1.5;
@@ -550,11 +696,151 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
     this.label(ctx, `${d.tool === "long" ? "Long" : "Short"} ${this.fmt(d.a.price * this.k)} · R:R ${rr.toFixed(2)}`, a.x + w / 2, a.y, "#f3f3f0", "center");
   }
 
+  /** A pitchfork's median (from the pivot through the midpoint of b and c) and its two parallels, to the right edge. */
+  private pitchforkLines(a: XY, b: XY | null, c: XY | null): [XY, XY][] {
+    if (!b) return [];
+    if (!c) return [[a, b]];
+    const m = { x: (b.x + c.x) / 2, y: (b.y + c.y) / 2 };
+    const dx = m.x - a.x;
+    if (Math.abs(dx) < 1) return [[a, m]];
+    const slope = (m.y - a.y) / dx;
+    const to = (from: XY) => {
+      const x = Math.max(this.width, from.x + 1);
+      return { x, y: from.y + slope * (x - from.x) };
+    };
+    return [
+      [a, to(m)],
+      [b, to(b)],
+      [c, to(c)],
+    ];
+  }
+
+  /** A Gann fan from a, its 1/1 line through b, and the 1/2…1/8 and 2/1…8/1 lines either side, out to the edge. */
+  private gannLines(a: XY, b: XY): [string, XY][] {
+    const dx = b.x - a.x || 1;
+    const dy = b.y - a.y;
+    const ratios: [string, number, number][] = [
+      ["1/8", 1, 1 / 8],
+      ["1/4", 1, 1 / 4],
+      ["1/3", 1, 1 / 3],
+      ["1/2", 1, 1 / 2],
+      ["1/1", 1, 1],
+      ["2/1", 1 / 2, 1],
+      ["3/1", 1 / 3, 1],
+      ["4/1", 1 / 4, 1],
+      ["8/1", 1 / 8, 1],
+    ];
+    const reach = Math.max(1, (Math.max(this.width, b.x) - a.x) / Math.abs(dx));
+    return ratios.map(([label, fx, fy]) => [label, { x: a.x + dx * fx * reach, y: a.y + dy * fy * reach }]);
+  }
+
+  /** A chart pattern: its legs through every point, the point labels, and the pattern's own guides and ratios. */
+  private drawPattern(ctx: CanvasRenderingContext2D, d: Drawing, color: string) {
+    const pts = (d.path ?? []).map((q) => this.xy(q));
+    if (pts.some((q) => q === null) || pts.length < 2) return;
+    const P = pts as XY[];
+    const prices = (d.path ?? []).map((q) => q.price);
+    const labels = PATTERN_LABELS[d.tool] ?? [];
+    const ratio = (i: number, j: number, k: number) => {
+      const leg = Math.abs(prices[j] - prices[i]);
+      return leg > 0 ? (Math.abs(prices[k] - prices[j]) / leg).toFixed(3) : "–";
+    };
+    const dashed = (i: number, k: number, text: string) => {
+      if (!P[i] || !P[k]) return;
+      ctx.save();
+      ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = `${color}aa`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(P[i].x, P[i].y);
+      ctx.lineTo(P[k].x, P[k].y);
+      ctx.stroke();
+      ctx.restore();
+      this.label(ctx, text, (P[i].x + P[k].x) / 2, (P[i].y + P[k].y) / 2, color, "center");
+    };
+
+    // Shaded legs: XABCD's two triangles, a triangle pattern's body.
+    const fillTri = (i: number, j: number, k: number) => {
+      if (!P[i] || !P[j] || !P[k]) return;
+      ctx.fillStyle = `${color}1a`;
+      ctx.beginPath();
+      ctx.moveTo(P[i].x, P[i].y);
+      ctx.lineTo(P[j].x, P[j].y);
+      ctx.lineTo(P[k].x, P[k].y);
+      ctx.closePath();
+      ctx.fill();
+    };
+    if (d.tool === "xabcd") {
+      fillTri(0, 1, 2);
+      fillTri(2, 3, 4);
+    }
+    if (d.tool === "triangle") fillTri(0, 1, 2);
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(P[0].x, P[0].y);
+    for (const q of P.slice(1)) ctx.lineTo(q.x, q.y);
+    if (d.tool === "triangle" && P.length === 3) ctx.closePath();
+    ctx.stroke();
+
+    if (d.tool === "xabcd" && P.length >= 3) {
+      dashed(0, 2, `AB ${ratio(0, 1, 2)}`);
+      if (P.length >= 4) dashed(1, 3, `BC ${ratio(1, 2, 3)}`);
+      if (P.length >= 5) {
+        dashed(2, 4, `CD ${ratio(2, 3, 4)}`);
+        const xa = Math.abs(prices[1] - prices[0]);
+        dashed(0, 4, `AD ${xa > 0 ? (Math.abs(prices[4] - prices[1]) / xa).toFixed(3) : "–"}`);
+      }
+    }
+    if (d.tool === "abcd" && P.length >= 3) {
+      dashed(0, 2, `BC ${ratio(0, 1, 2)}`);
+      if (P.length >= 4) dashed(1, 3, `CD ${ratio(1, 2, 3)}`);
+    }
+    if (d.tool === "headshoulders" && P.length >= 5) {
+      // The neckline through the two troughs, out to the right edge.
+      const [t1, t2] = [P[2], P[4]];
+      const slope = (t2.y - t1.y) / ((t2.x - t1.x) || 1);
+      ctx.save();
+      ctx.setLineDash([6, 3]);
+      ctx.beginPath();
+      ctx.moveTo(t1.x, t1.y);
+      ctx.lineTo(this.width, t1.y + slope * (this.width - t1.x));
+      ctx.stroke();
+      ctx.restore();
+      this.label(ctx, "Neckline", Math.min(this.width - 40, t2.x + 40), t2.y + slope * 40 + 12, color, "center");
+    }
+
+    ctx.font = "bold 11px Inter, ui-sans-serif, system-ui, sans-serif";
+    P.forEach((q, i) => {
+      const text = labels[i];
+      if (!text) return;
+      const prevY = P[i - 1]?.y ?? P[i + 1]?.y ?? q.y;
+      const nextY = P[i + 1]?.y ?? prevY;
+      const peak = q.y <= Math.min(prevY, nextY);
+      const ly = peak ? q.y - 12 : q.y + 13;
+      if (d.tool === "elliott") {
+        ctx.fillStyle = "#141518ee";
+        ctx.beginPath();
+        ctx.arc(q.x, ly, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+      ctx.fillStyle = color;
+      ctx.textAlign = "center";
+      ctx.fillText(text, q.x, ly + 0.5);
+      ctx.textAlign = "left";
+    });
+    ctx.font = "10.5px JetBrains Mono, ui-monospace, monospace";
+  }
+
   private drawHandles(ctx: CanvasRenderingContext2D, d: Drawing) {
     ctx.globalAlpha = 1;
     ctx.setLineDash([]);
     const stop = d.tool === "long" || d.tool === "short" ? (d.c ?? (d.b ? defaultStop(d.a, d.b) : undefined)) : d.c;
-    for (const p of [d.a, d.b, stop]) {
+    for (const p of isPattern(d.tool) ? (d.path ?? []) : [d.a, d.b, stop]) {
       if (!p) continue;
       const s = this.xy(p);
       if (!s) continue;

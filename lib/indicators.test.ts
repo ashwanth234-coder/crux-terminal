@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Candle } from "./candles.ts";
-import { STUDIES, adx, aroon, atr, bollinger, cci, donchian, ema, emaOf, flowByCandle, holdersByCandle, macd, obv, psar, rsi, sma, smaOf, stochRsi, supertrend, williamsR, wmaOf } from "./indicators.ts";
+import { STUDIES, paramsOf, adx, aroon, atr, bollinger, cci, donchian, ema, emaOf, flowByCandle, holdersByCandle, macd, obv, psar, rsi, sma, smaOf, stochRsi, supertrend, williamsR, wmaOf } from "./indicators.ts";
 
 const candles = (closes: number[]): Candle[] => closes.map((c, i) => ({ time: i, open: c, high: c, low: c, close: c, volume: 1, trades: 1 }));
 const near = (a: number | null, b: number, eps = 1e-9) => assert.ok(a !== null && Math.abs(a - b) < eps, `${a} ≈ ${b}`);
@@ -142,8 +142,8 @@ test("every study computes on a long random walk without throwing or NaN", () =>
     return { time: i * 60, open: o, high: Math.max(o, p) + 1, low: Math.min(o, p) - 1, close: p, volume: 1 + (i % 5), trades: 1 };
   });
   const ctx = { buyUsd: cs.map(() => 1), sellUsd: cs.map(() => 0.5), holders: cs.map((_, i) => i) };
-  for (const s of STUDIES) {
-    const lines = s.compute(cs, ctx);
+  for (const s of STUDIES.filter((x) => !x.special)) {
+    const lines = s.compute(cs, ctx, paramsOf({ id: s.id }));
     for (const line of lines) {
       assert.equal(line.values.length, cs.length, s.id);
       assert.ok(line.values.every((v) => v === null || Number.isFinite(v)), `${s.id} ${line.key}`);
@@ -151,4 +151,16 @@ test("every study computes on a long random walk without throwing or NaN", () =>
     // Some lines are one-sided by design (Supertrend's down line in an uptrend), but every study shows something.
     assert.ok(lines.some((l) => l.values.some((v) => v !== null)), `${s.id} has values`);
   }
+});
+
+test("volume profile: the busiest level is the point of control, the value area holds its share", async () => {
+  const { volumeProfile } = await import("./volumeProfile.ts");
+  const cs = bars([[2, 1, 1.5], [2, 1, 1.5], [10, 9, 9.5]]);
+  const p = volumeProfile(cs, [1, 1, 0], [0, 0, 1], 9, 70)!;
+  assert.ok(p.rows[p.poc].lo < 2, "POC in the 1–2 band where two candles traded");
+  const buy = p.rows.reduce((t, r) => t + r.buy, 0);
+  near(buy, 2);
+  near(p.total, 3);
+  const inVa = p.rows.slice(p.vaLo, p.vaHi + 1).reduce((t, r) => t + r.buy + r.sell, 0);
+  assert.ok(inVa >= 0.7 * p.total);
 });

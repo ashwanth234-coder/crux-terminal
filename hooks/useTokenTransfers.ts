@@ -1,8 +1,10 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { parseAbiItem, zeroAddress, type Address, type Hex } from "viem";
 import { logClient, pollInterval, scanLogs, tracked, type LogScan } from "@/lib/logs";
+import { watchLogsOf } from "@/lib/stream";
 
 const TRANSFER = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)");
 const CLAIMED = parseAbiItem("event Claimed(uint256 indexed auctionId, address indexed account, uint256 tokens, uint256 refund)");
@@ -28,6 +30,12 @@ export type TokenTransfer = {
 export function useTokenTransfers(token: Address, factory: Address, auctionId: bigint, since: number, enabled: boolean) {
   const queryKey = ["token-transfers", token];
   const pollId = queryKey.join(":");
+  const qc = useQueryClient();
+  // Streamed: any Transfer of the token refetches at once; the poll is the fallback.
+  useEffect(() => {
+    if (!enabled || token === zeroAddress) return;
+    return watchLogsOf([token], () => void qc.refetchQueries({ queryKey: ["token-transfers", token] }));
+  }, [enabled, token, qc]);
   return useQuery({
     queryKey,
     queryFn: ({ client }) =>

@@ -617,27 +617,25 @@ export type StudyId =
   | "sma20"
   | "sma50"
   | "sma200"
+  | "wma"
+  | "hma"
+  | "dema"
+  | "tema"
+  | "alma"
   | "vwap"
+  | "supertrend"
+  | "psar"
+  | "ichimoku"
+  | "highlow"
   | "bb"
   | "donchian"
-  | "supertrend"
+  | "keltner"
   | "rsi"
   | "stochrsi"
   | "macd"
   | "atr"
-  | "obv"
-  | "hma"
-  | "wma"
-  | "dema"
-  | "tema"
-  | "alma"
-  | "psar"
-  | "ichimoku"
-  | "highlow"
-  | "keltner"
   | "cci"
   | "willr"
-  | "mfi"
   | "adx"
   | "aroon"
   | "ao"
@@ -645,18 +643,27 @@ export type StudyId =
   | "roc"
   | "mom"
   | "trix"
+  | "mfi"
   | "ad"
   | "cmf"
   | "volma"
+  | "obv"
+  | "vprofile"
   | "netflow"
   | "buypressure"
   | "holders";
 
 export type StudyGroup = "Trend" | "Bands" | "Oscillators" | "Volume" | "On-chain";
 
+/** A setting a trader can change (length, multiplier, guide level…), with its default and limits. */
+export type ParamDef = { key: string; label: string; def: number; min: number; max: number; step?: number };
+export type Params = Record<string, number>;
+
 export type Study = {
   id: StudyId;
+  /** The menu name; `title(p)` is what the legend shows with the current settings. */
   label: string;
+  title: (p: Params) => string;
   group: StudyGroup;
   /** One line on what it shows, for the menu. */
   hint?: string;
@@ -664,189 +671,387 @@ export type Study = {
   pane: "price" | "pane";
   /** Whether its values are prices (scaled with the Price / MCap switch) or unitless (RSI). */
   priced: boolean;
-  /** Candles needed before it shows anything. */
-  needs: number;
-  /** Horizontal guide levels in its pane (RSI's 30 / 70). */
-  levels?: number[];
-  compute: (candles: Candle[], ctx: StudyContext) => StudyLine[];
+  params: ParamDef[];
+  /** Horizontal guide levels in its pane, from the settings (RSI's 30 / 70). */
+  levels?: (p: Params) => number[];
+  /** Drawn by the chart itself rather than as lines (the volume profile). */
+  special?: boolean;
+  compute: (candles: Candle[], ctx: StudyContext, p: Params) => StudyLine[];
 };
 
 const line = (key: string, label: string, color: string, values: Series): StudyLine => ({ key, label, color, kind: "line", values });
 const bar = (key: string, label: string, color: string, values: Series): StudyLine => ({ key, label, color, kind: "histogram", values });
 const aligned = (candles: Candle[], v: number[] | Series) => candles.map((_, i) => v[i] ?? null);
+const len = (def: number, label = "Length", max = 500): ParamDef => ({ key: "length", label, def, min: 1, max });
+const lvl = (key: string, label: string, def: number, min: number, max: number): ParamDef => ({ key, label, def, min, max });
+
+/** A single moving-average line with an editable length. */
+const ma = (id: StudyId, name: string, def: number, color: string, fn: (c: Candle[], n: number) => Series, hint?: string): Study => ({
+  id,
+  label: `${name} ${def}`,
+  title: (p) => `${name} ${p.length}`,
+  group: "Trend",
+  hint,
+  pane: "price",
+  priced: true,
+  params: [len(def)],
+  compute: (c, _x, p) => [line(id, `${name} ${p.length}`, color, fn(c, p.length))],
+});
 
 /** The chart's studies, in menu order. */
 export const STUDIES: Study[] = [
-  { id: "ema9", label: "EMA 9", group: "Trend", pane: "price", priced: true, needs: 9, compute: (c) => [line("ema9", "EMA 9", "#ffd166", ema(c, 9))] },
-  { id: "ema21", label: "EMA 21", group: "Trend", pane: "price", priced: true, needs: 21, compute: (c) => [line("ema21", "EMA 21", "#4cc9f0", ema(c, 21))] },
-  { id: "ema50", label: "EMA 50", group: "Trend", pane: "price", priced: true, needs: 50, compute: (c) => [line("ema50", "EMA 50", "#7bdff2", ema(c, 50))] },
-  { id: "sma20", label: "SMA 20", group: "Trend", pane: "price", priced: true, needs: 20, compute: (c) => [line("sma20", "SMA 20", "#f4a261", sma(c, 20))] },
-  { id: "sma50", label: "SMA 50", group: "Trend", pane: "price", priced: true, needs: 50, compute: (c) => [line("sma50", "SMA 50", "#c792ea", sma(c, 50))] },
-  { id: "sma200", label: "SMA 200", group: "Trend", pane: "price", priced: true, needs: 200, compute: (c) => [line("sma200", "SMA 200", "#e9c46a", sma(c, 200))] },
+  ma("ema9", "EMA", 9, "#ffd166", (c, n) => ema(c, n)),
+  ma("ema21", "EMA", 21, "#4cc9f0", (c, n) => ema(c, n)),
+  ma("ema50", "EMA", 50, "#7bdff2", (c, n) => ema(c, n)),
+  ma("sma20", "SMA", 20, "#f4a261", (c, n) => sma(c, n)),
+  ma("sma50", "SMA", 50, "#c792ea", (c, n) => sma(c, n)),
+  ma("sma200", "SMA", 200, "#e9c46a", (c, n) => sma(c, n)),
+  ma("wma", "WMA", 20, "#90be6d", (c, n) => wmaOf(closes(c), n)),
+  ma("hma", "Hull MA", 9, "#43aa8b", (c, n) => hma(c, n), "Fast moving average with little lag"),
+  ma("dema", "Double EMA", 21, "#577590", (c, n) => dema(c, n)),
+  ma("tema", "Triple EMA", 21, "#4d908e", (c, n) => tema(c, n)),
+  {
+    id: "alma",
+    label: "Arnaud Legoux MA 9",
+    title: (p) => `ALMA ${p.length} ${p.offset} ${p.sigma}`,
+    group: "Trend",
+    pane: "price",
+    priced: true,
+    params: [len(9), { key: "offset", label: "Offset", def: 0.85, min: 0, max: 1, step: 0.05 }, { key: "sigma", label: "Sigma", def: 6, min: 1, max: 20 }],
+    compute: (c, _x, p) => [line("alma", "ALMA", "#f9844a", alma(c, p.length, p.offset, p.sigma))],
+  },
   {
     id: "vwap",
     label: "VWAP",
+    title: () => "VWAP",
     group: "Trend",
     hint: "Average price paid, weighted by USDC volume",
     pane: "price",
     priced: true,
-    needs: 1,
+    params: [],
     compute: (c) => [line("vwap", "VWAP", "#ff9d6e", vwap(c))],
   },
-  { id: "wma", label: "WMA 20", group: "Trend", pane: "price", priced: true, needs: 20, compute: (c) => [line("wma", "WMA 20", "#90be6d", wmaOf(closes(c), 20))] },
-  { id: "hma", label: "Hull MA 9", group: "Trend", hint: "Fast moving average with little lag", pane: "price", priced: true, needs: 12, compute: (c) => [line("hma", "HMA 9", "#43aa8b", hma(c, 9))] },
-  { id: "dema", label: "Double EMA 21", group: "Trend", pane: "price", priced: true, needs: 42, compute: (c) => [line("dema", "DEMA 21", "#577590", dema(c, 21))] },
-  { id: "tema", label: "Triple EMA 21", group: "Trend", pane: "price", priced: true, needs: 63, compute: (c) => [line("tema", "TEMA 21", "#4d908e", tema(c, 21))] },
-  { id: "alma", label: "Arnaud Legoux MA 9", group: "Trend", pane: "price", priced: true, needs: 9, compute: (c) => [line("alma", "ALMA 9", "#f9844a", alma(c, 9))] },
-  { id: "psar", label: "Parabolic SAR", group: "Trend", hint: "Trailing stop that speeds up with the trend", pane: "price", priced: true, needs: 2, compute: (c) => [line("psar", "SAR", "#f9c74f", psar(c))] },
+  {
+    id: "supertrend",
+    label: "Supertrend (10, 3)",
+    title: (p) => `Supertrend ${p.length} ${p.mult}`,
+    group: "Trend",
+    hint: "ATR trailing stop that flips with the trend",
+    pane: "price",
+    priced: true,
+    params: [len(10, "ATR length"), { key: "mult", label: "Multiplier", def: 3, min: 0.5, max: 10, step: 0.5 }],
+    compute: (c, _x, p) => {
+      const s = supertrend(c, p.length, p.mult);
+      return [line("stUp", "ST up", "#5cc08c", s.up), line("stDown", "ST down", "#e5484d", s.down)];
+    },
+  },
+  {
+    id: "psar",
+    label: "Parabolic SAR",
+    title: (p) => `SAR ${p.step} ${p.max}`,
+    group: "Trend",
+    hint: "Trailing stop that speeds up with the trend",
+    pane: "price",
+    priced: true,
+    params: [
+      { key: "step", label: "Step", def: 0.02, min: 0.005, max: 0.2, step: 0.005 },
+      { key: "max", label: "Maximum", def: 0.2, min: 0.05, max: 1, step: 0.05 },
+    ],
+    compute: (c, _x, p) => [line("psar", "SAR", "#f9c74f", psar(c, p.step, p.max))],
+  },
   {
     id: "ichimoku",
     label: "Ichimoku (conversion, base)",
+    title: (p) => `Ichimoku ${p.conv} ${p.base}`,
     group: "Trend",
     pane: "price",
     priced: true,
-    needs: 26,
-    compute: (c) => {
-      const x = ichimokuLines(c);
+    params: [lvl("conv", "Conversion", 9, 1, 100), lvl("base", "Base", 26, 1, 200)],
+    compute: (c, _x, p) => {
+      const x = ichimokuLines(c, p.conv, p.base);
       return [line("ichiConv", "Conversion", "#4cc9f0", x.conversion), line("ichiBase", "Base", "#e5484d", x.base)];
     },
   },
   {
     id: "highlow",
     label: "All-time high / low",
+    title: () => "ATH / ATL",
     group: "Trend",
     hint: "The token's highest and lowest price so far (its own 52-week range)",
     pane: "price",
     priced: true,
-    needs: 1,
+    params: [],
     compute: (c) => {
       const x = periodHighLow(c);
       return [line("athHigh", "High", "#5cc08c", x.high), line("athLow", "Low", "#e5484d", x.low)];
     },
   },
   {
-    id: "supertrend",
-    label: "Supertrend (10, 3)",
-    group: "Trend",
-    hint: "ATR trailing stop that flips with the trend",
-    pane: "price",
-    priced: true,
-    needs: 10,
-    compute: (c) => {
-      const s = supertrend(c, 10, 3);
-      return [line("stUp", "ST up", "#5cc08c", s.up), line("stDown", "ST down", "#e5484d", s.down)];
-    },
-  },
-  {
     id: "bb",
     label: "Bollinger Bands (20, 2)",
+    title: (p) => `BB ${p.length} ${p.mult}`,
     group: "Bands",
     pane: "price",
     priced: true,
-    needs: 20,
-    compute: (c) => {
-      const b = bollinger(c, 20, 2);
-      return [line("bbUpper", "BB upper", "#7f8ea3", b.upper), line("bbMid", "BB basis", "#b0b8c4", b.mid), line("bbLower", "BB lower", "#7f8ea3", b.lower)];
+    params: [len(20), { key: "mult", label: "Std. dev.", def: 2, min: 0.5, max: 5, step: 0.5 }],
+    compute: (c, _x, p) => {
+      const b = bollinger(c, p.length, p.mult);
+      return [line("bbUpper", "Upper", "#7f8ea3", b.upper), line("bbMid", "Basis", "#b0b8c4", b.mid), line("bbLower", "Lower", "#7f8ea3", b.lower)];
     },
   },
   {
     id: "donchian",
     label: "Donchian Channel (20)",
+    title: (p) => `DC ${p.length}`,
     group: "Bands",
-    hint: "Highest high and lowest low of 20 candles",
+    hint: "Highest high and lowest low of the period",
     pane: "price",
     priced: true,
-    needs: 20,
-    compute: (c) => {
-      const d = donchian(c, 20);
-      return [line("dcUpper", "DC upper", "#5fa8d3", d.upper), line("dcMid", "DC mid", "#8f939b", d.mid), line("dcLower", "DC lower", "#5fa8d3", d.lower)];
+    params: [len(20)],
+    compute: (c, _x, p) => {
+      const d = donchian(c, p.length);
+      return [line("dcUpper", "Upper", "#5fa8d3", d.upper), line("dcMid", "Mid", "#8f939b", d.mid), line("dcLower", "Lower", "#5fa8d3", d.lower)];
     },
   },
   {
     id: "keltner",
     label: "Keltner Channels (20, 2)",
+    title: (p) => `KC ${p.length} ${p.mult}`,
     group: "Bands",
     pane: "price",
     priced: true,
-    needs: 20,
-    compute: (c) => {
-      const x = keltner(c);
-      return [line("kcUpper", "KC upper", "#9d8df1", x.upper), line("kcMid", "KC basis", "#b8b8ff", x.mid), line("kcLower", "KC lower", "#9d8df1", x.lower)];
+    params: [len(20), { key: "mult", label: "ATR multiplier", def: 2, min: 0.5, max: 5, step: 0.5 }],
+    compute: (c, _x, p) => {
+      const x = keltner(c, p.length, p.mult);
+      return [line("kcUpper", "Upper", "#9d8df1", x.upper), line("kcMid", "Basis", "#b8b8ff", x.mid), line("kcLower", "Lower", "#9d8df1", x.lower)];
     },
   },
-  { id: "rsi", label: "RSI (14)", group: "Oscillators", pane: "pane", priced: false, needs: 15, levels: [30, 70], compute: (c) => [line("rsi", "RSI", "#b388ff", rsi(c, 14))] },
   {
-    id: "stochrsi",
-    label: "Stoch RSI (14, 14, 3, 3)",
+    id: "rsi",
+    label: "RSI (14)",
+    title: (p) => `RSI ${p.length}`,
     group: "Oscillators",
     pane: "pane",
     priced: false,
-    needs: 30,
-    levels: [20, 80],
-    compute: (c) => {
-      const s = stochRsi(c);
+    params: [len(14, "Length", 200), lvl("upper", "Overbought", 70, 50, 100), lvl("lower", "Oversold", 30, 0, 50)],
+    levels: (p) => [p.lower, p.upper],
+    compute: (c, _x, p) => [line("rsi", "RSI", "#b388ff", rsi(c, p.length))],
+  },
+  {
+    id: "stochrsi",
+    label: "Stoch RSI (14, 14, 3, 3)",
+    title: (p) => `Stoch RSI ${p.rsi} ${p.length} ${p.k} ${p.d}`,
+    group: "Oscillators",
+    pane: "pane",
+    priced: false,
+    params: [lvl("rsi", "RSI length", 14, 1, 100), len(14, "Stoch length", 100), lvl("k", "%K smoothing", 3, 1, 20), lvl("d", "%D smoothing", 3, 1, 20), lvl("upper", "Upper", 80, 50, 100), lvl("lower", "Lower", 20, 0, 50)],
+    levels: (p) => [p.lower, p.upper],
+    compute: (c, _x, p) => {
+      const s = stochRsi(c, p.rsi, p.length, p.k, p.d);
       return [line("srsiK", "%K", "#4cc9f0", s.k), line("srsiD", "%D", "#ff9d6e", s.d)];
     },
   },
   {
     id: "macd",
     label: "MACD (12, 26, 9)",
+    title: (p) => `MACD ${p.fast} ${p.slow} ${p.signal}`,
     group: "Oscillators",
     pane: "pane",
     priced: true,
-    needs: 34,
-    compute: (c) => {
-      const m = macd(c);
+    params: [lvl("fast", "Fast", 12, 1, 100), lvl("slow", "Slow", 26, 2, 200), lvl("signal", "Signal", 9, 1, 50)],
+    compute: (c, _x, p) => {
+      const m = macd(c, p.fast, p.slow, p.signal);
       return [bar("macdHist", "Hist", "#8f939b", m.hist), line("macd", "MACD", "#4cc9f0", m.macd), line("macdSignal", "Signal", "#ff9d6e", m.signal)];
     },
   },
-  { id: "atr", label: "ATR (14)", group: "Oscillators", hint: "Average candle range: volatility", pane: "pane", priced: true, needs: 14, compute: (c) => [line("atr", "ATR", "#e9c46a", atr(c, 14))] },
-  { id: "cci", label: "CCI (20)", group: "Oscillators", pane: "pane", priced: false, needs: 20, levels: [-100, 100], compute: (c) => [line("cci", "CCI", "#4cc9f0", cci(c))] },
-  { id: "willr", label: "Williams %R (14)", group: "Oscillators", pane: "pane", priced: false, needs: 14, levels: [-80, -20], compute: (c) => [line("willr", "%R", "#c792ea", williamsR(c))] },
+  {
+    id: "atr",
+    label: "ATR (14)",
+    title: (p) => `ATR ${p.length}`,
+    group: "Oscillators",
+    hint: "Average candle range: volatility",
+    pane: "pane",
+    priced: true,
+    params: [len(14)],
+    compute: (c, _x, p) => [line("atr", "ATR", "#e9c46a", atr(c, p.length))],
+  },
+  {
+    id: "cci",
+    label: "CCI (20)",
+    title: (p) => `CCI ${p.length}`,
+    group: "Oscillators",
+    pane: "pane",
+    priced: false,
+    params: [len(20)],
+    levels: () => [-100, 100],
+    compute: (c, _x, p) => [line("cci", "CCI", "#4cc9f0", cci(c, p.length))],
+  },
+  {
+    id: "willr",
+    label: "Williams %R (14)",
+    title: (p) => `%R ${p.length}`,
+    group: "Oscillators",
+    pane: "pane",
+    priced: false,
+    params: [len(14)],
+    levels: () => [-80, -20],
+    compute: (c, _x, p) => [line("willr", "%R", "#c792ea", williamsR(c, p.length))],
+  },
   {
     id: "adx",
     label: "ADX / DMI (14)",
+    title: (p) => `ADX ${p.length}`,
     group: "Oscillators",
     hint: "Trend strength, with buyers' (+DI) and sellers' (−DI) push",
     pane: "pane",
     priced: false,
-    needs: 28,
-    levels: [25],
-    compute: (c) => {
-      const x = adx(c);
+    params: [len(14, "Length", 100), lvl("level", "Trend level", 25, 1, 100)],
+    levels: (p) => [p.level],
+    compute: (c, _x, p) => {
+      const x = adx(c, p.length);
       return [line("adx", "ADX", "#ffd166", x.adx), line("pdi", "+DI", "#5cc08c", x.plus), line("mdi", "−DI", "#e5484d", x.minus)];
     },
   },
   {
     id: "aroon",
     label: "Aroon (14)",
+    title: (p) => `Aroon ${p.length}`,
     group: "Oscillators",
     pane: "pane",
     priced: false,
-    needs: 15,
-    compute: (c) => {
-      const x = aroon(c);
+    params: [len(14)],
+    compute: (c, _x, p) => {
+      const x = aroon(c, p.length);
       return [line("aroonUp", "Up", "#5cc08c", x.up), line("aroonDown", "Down", "#e5484d", x.down)];
     },
   },
-  { id: "ao", label: "Awesome Oscillator", group: "Oscillators", pane: "pane", priced: true, needs: 34, compute: (c) => [bar("ao", "AO", "#8f939b", awesome(c))] },
-  { id: "ac", label: "Accelerator Oscillator", group: "Oscillators", pane: "pane", priced: true, needs: 38, compute: (c) => [bar("ac", "AC", "#8f939b", accelerator(c))] },
-  { id: "roc", label: "Rate of Change (9)", group: "Oscillators", pane: "pane", priced: false, needs: 10, levels: [0], compute: (c) => [line("roc", "ROC %", "#f4a261", roc(c))] },
-  { id: "mom", label: "Momentum (10)", group: "Oscillators", pane: "pane", priced: true, needs: 11, levels: [0], compute: (c) => [line("mom", "MOM", "#e9c46a", momentum(c))] },
-  { id: "trix", label: "TRIX (15)", group: "Oscillators", pane: "pane", priced: false, needs: 46, levels: [0], compute: (c) => [line("trix", "TRIX", "#90be6d", trix(c))] },
-  { id: "mfi", label: "Money Flow Index (14)", group: "Volume", hint: "RSI weighted by volume", pane: "pane", priced: false, needs: 15, levels: [20, 80], compute: (c) => [line("mfi", "MFI", "#43aa8b", mfi(c))] },
-  { id: "ad", label: "Accumulation / Distribution", group: "Volume", pane: "pane", priced: false, needs: 1, compute: (c) => [line("ad", "A/D", "#7bdff2", accDist(c))] },
-  { id: "cmf", label: "Chaikin Money Flow (20)", group: "Volume", pane: "pane", priced: false, needs: 20, levels: [0], compute: (c) => [line("cmf", "CMF", "#c792ea", cmf(c))] },
-  { id: "volma", label: "Volume MA (20)", group: "Volume", pane: "pane", priced: false, needs: 20, compute: (c) => [bar("vol", "Vol", "#8f939b", c.map((x) => x.volume)), line("volma", "MA 20", "#ffd166", volumeMa(c))] },
-  { id: "obv", label: "On-balance volume", group: "Volume", pane: "pane", priced: false, needs: 2, compute: (c) => [line("obv", "OBV", "#7bdff2", obv(c))] },
+  {
+    id: "ao",
+    label: "Awesome Oscillator",
+    title: () => "AO",
+    group: "Oscillators",
+    pane: "pane",
+    priced: true,
+    params: [],
+    compute: (c) => [bar("ao", "AO", "#8f939b", awesome(c))],
+  },
+  {
+    id: "ac",
+    label: "Accelerator Oscillator",
+    title: () => "AC",
+    group: "Oscillators",
+    pane: "pane",
+    priced: true,
+    params: [],
+    compute: (c) => [bar("ac", "AC", "#8f939b", accelerator(c))],
+  },
+  {
+    id: "roc",
+    label: "Rate of Change (9)",
+    title: (p) => `ROC ${p.length}`,
+    group: "Oscillators",
+    pane: "pane",
+    priced: false,
+    params: [len(9)],
+    levels: () => [0],
+    compute: (c, _x, p) => [line("roc", "ROC %", "#f4a261", roc(c, p.length))],
+  },
+  {
+    id: "mom",
+    label: "Momentum (10)",
+    title: (p) => `MOM ${p.length}`,
+    group: "Oscillators",
+    pane: "pane",
+    priced: true,
+    params: [len(10)],
+    levels: () => [0],
+    compute: (c, _x, p) => [line("mom", "MOM", "#e9c46a", momentum(c, p.length))],
+  },
+  {
+    id: "trix",
+    label: "TRIX (15)",
+    title: (p) => `TRIX ${p.length}`,
+    group: "Oscillators",
+    pane: "pane",
+    priced: false,
+    params: [len(15, "Length", 100)],
+    levels: () => [0],
+    compute: (c, _x, p) => [line("trix", "TRIX", "#90be6d", trix(c, p.length))],
+  },
+  {
+    id: "mfi",
+    label: "Money Flow Index (14)",
+    title: (p) => `MFI ${p.length}`,
+    group: "Volume",
+    hint: "RSI weighted by volume",
+    pane: "pane",
+    priced: false,
+    params: [len(14), lvl("upper", "Overbought", 80, 50, 100), lvl("lower", "Oversold", 20, 0, 50)],
+    levels: (p) => [p.lower, p.upper],
+    compute: (c, _x, p) => [line("mfi", "MFI", "#43aa8b", mfi(c, p.length))],
+  },
+  {
+    id: "ad",
+    label: "Accumulation / Distribution",
+    title: () => "A/D",
+    group: "Volume",
+    pane: "pane",
+    priced: false,
+    params: [],
+    compute: (c) => [line("ad", "A/D", "#7bdff2", accDist(c))],
+  },
+  {
+    id: "cmf",
+    label: "Chaikin Money Flow (20)",
+    title: (p) => `CMF ${p.length}`,
+    group: "Volume",
+    pane: "pane",
+    priced: false,
+    params: [len(20)],
+    levels: () => [0],
+    compute: (c, _x, p) => [line("cmf", "CMF", "#c792ea", cmf(c, p.length))],
+  },
+  {
+    id: "volma",
+    label: "Volume MA (20)",
+    title: (p) => `Volume MA ${p.length}`,
+    group: "Volume",
+    pane: "pane",
+    priced: false,
+    params: [len(20)],
+    compute: (c, _x, p) => [bar("vol", "Vol", "#8f939b", c.map((x) => x.volume)), line("volma", `MA ${p.length}`, "#ffd166", volumeMa(c, p.length))],
+  },
+  {
+    id: "obv",
+    label: "On-balance volume",
+    title: () => "OBV",
+    group: "Volume",
+    pane: "pane",
+    priced: false,
+    params: [],
+    compute: (c) => [line("obv", "OBV", "#7bdff2", obv(c))],
+  },
+  {
+    id: "vprofile",
+    label: "Volume profile (visible range)",
+    title: (p) => `VP ${p.rows}`,
+    group: "Volume",
+    hint: "USDC traded at each price level in view, split buy / sell, with the point of control and value area",
+    pane: "price",
+    priced: true,
+    special: true,
+    params: [lvl("rows", "Rows", 24, 6, 120), lvl("width", "Width %", 28, 10, 60), lvl("va", "Value area %", 70, 50, 95)],
+    compute: () => [],
+  },
   {
     id: "netflow",
     label: "Net buy flow",
+    title: () => "Net buy flow",
     group: "On-chain",
     hint: "USDC bought minus sold per candle, and its running total",
     pane: "pane",
     priced: false,
-    needs: 1,
+    params: [],
     compute: (c, ctx) => {
       const net = c.map((_, i) => (ctx.buyUsd[i] ?? 0) - (ctx.sellUsd[i] ?? 0));
       let run = 0;
@@ -856,12 +1061,13 @@ export const STUDIES: Study[] = [
   {
     id: "buypressure",
     label: "Buy pressure %",
+    title: () => "Buy pressure",
     group: "On-chain",
     hint: "Share of each candle's USDC volume that was buying",
     pane: "pane",
     priced: false,
-    needs: 1,
-    levels: [50],
+    params: [],
+    levels: () => [50],
     compute: (c, ctx) => [
       line(
         "buyPressure",
@@ -878,11 +1084,12 @@ export const STUDIES: Study[] = [
   {
     id: "holders",
     label: "Holders",
+    title: () => "Holders",
     group: "On-chain",
     hint: "Wallets holding the token at each candle's close",
     pane: "pane",
     priced: false,
-    needs: 1,
+    params: [],
     compute: (c, ctx) => [line("holders", "Holders", "#c792ea", aligned(c, ctx.holders))],
   },
 ];
@@ -891,3 +1098,40 @@ export const STUDY_GROUPS: StudyGroup[] = ["Trend", "Bands", "Oscillators", "Vol
 
 export const studyById = (id: StudyId) => STUDIES.find((s) => s.id === id)!;
 export const isStudyId = (id: unknown): id is StudyId => STUDIES.some((s) => s.id === id);
+
+// ------------------------------------------------------- instances on a chart
+
+/**
+ * A study on a chart, as the trader set it up: its settings (anything left out takes the default), each line's colour
+ * and width, and whether it's hidden. Saved with the chart's layout.
+ */
+export type StudyInstance = { id: StudyId; params?: Params; colors?: Record<string, string>; widths?: Record<string, number>; hidden?: boolean };
+
+/** The instance's settings, defaults filled in and clamped to each setting's limits. */
+export function paramsOf(inst: StudyInstance): Params {
+  const out: Params = {};
+  for (const d of studyById(inst.id).params) {
+    const v = inst.params?.[d.key];
+    out[d.key] = typeof v === "number" && Number.isFinite(v) ? Math.min(d.max, Math.max(d.min, v)) : d.def;
+  }
+  return out;
+}
+
+/** Computes an instance: its lines with the trader's colours applied (widths are the engine's). */
+export function computeInstance(inst: StudyInstance, candles: Candle[], ctx: StudyContext): StudyLine[] {
+  const study = studyById(inst.id);
+  return study.compute(candles, ctx, paramsOf(inst)).map((l) => ({ ...l, color: inst.colors?.[l.key] ?? l.color }));
+}
+
+/** Reads a saved list of studies: the old form (ids) and the new (instances). Unknown ids are dropped. */
+export function readInstances(v: unknown): StudyInstance[] {
+  if (!Array.isArray(v)) return [];
+  return v.flatMap((x): StudyInstance[] => {
+    if (isStudyId(x)) return [{ id: x }];
+    if (x && typeof x === "object" && isStudyId((x as StudyInstance).id)) {
+      const s = x as StudyInstance;
+      return [{ id: s.id, params: s.params, colors: s.colors, widths: s.widths, hidden: s.hidden === true }];
+    }
+    return [];
+  });
+}

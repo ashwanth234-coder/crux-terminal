@@ -1,17 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 import { formatUnits, parseUnits, type Address, type Hex } from "viem";
 import { buttonClass } from "@/components/ui/Button";
 import { TradeSettingsButton } from "@/components/pro/TradeSettingsButton";
 import type { CruxAccountState } from "@/hooks/useCruxAccount";
 import { useTradeSettings } from "@/hooks/useTradeSettings";
+import { useStandingOrders } from "@/hooks/useStandingOrders";
 import { TESTNET_USDC } from "@/lib/intents";
 import { fmtTokens } from "@/lib/launch";
 import { fmtTokenPrice, launchCaip19 } from "@/lib/launchTrade";
 import { SOLVER_MAX_IMPACT_PCT, tradeRisk } from "@/lib/risk";
 import type { PoolReserves } from "@/lib/launchTrade";
-import { KIND_LABEL, cancelStanding, listStanding, newGroup, placeStanding, standingFloor, type StandingKind, type StandingView } from "@/lib/standing";
+import { KIND_LABEL, cancelStanding, newGroup, placeStanding, standingFloor, type StandingKind, type StandingView } from "@/lib/standing";
 
 export type OrderType = "market" | StandingKind | "bracket";
 
@@ -171,26 +172,8 @@ export function StandingOrderForm({
   const [lifetime, setLifetime] = useState(LIFETIMES[1].seconds);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
-  const [orders, setOrders] = useState<StandingView[] | null>(null);
-
-  const ready = crux.loggedIn && crux.v2 && crux.sign !== null && crux.owner !== null && crux.account !== null;
-  const refresh = useCallback(async () => {
-    if (!crux.sign || !crux.owner || !crux.account || !crux.v2) return;
-    try {
-      setOrders(await listStanding(crux.sign, crux.owner, crux.account));
-    } catch {
-      // The list is a convenience; the next poll tries again.
-    }
-  }, [crux.sign, crux.owner, crux.account, crux.v2]);
-  useEffect(() => {
-    if (!ready) return;
-    const first = setTimeout(() => void refresh(), 0);
-    const t = setInterval(() => void refresh(), 20_000);
-    return () => {
-      clearTimeout(first);
-      clearInterval(t);
-    };
-  }, [ready, refresh]);
+  // The account's orders, shared with the chart's order lines.
+  const { orders, refresh } = useStandingOrders();
 
   if (!crux.loggedIn) {
     return (
@@ -251,7 +234,7 @@ export function StandingOrderForm({
       }
       setMsg({ tone: "ok", text: kinds.length > 1 ? "Take profit and stop loss placed. When one fills, the other cancels." : `${KIND_LABEL[kinds[0]]} placed. It waits for its price, even with this page closed.` });
       setUsdc("");
-      void refresh();
+      refresh();
     } catch (e) {
       setMsg({ tone: "err", text: (e as Error).message.split("\n")[0] });
     } finally {
@@ -263,7 +246,7 @@ export function StandingOrderForm({
     if (!crux.sign || !crux.owner || !crux.account) return;
     try {
       await cancelStanding(crux.sign, crux.owner, crux.account, o.group ? [] : [BigInt(o.nonce)], o.group ? [o.group as Hex] : []);
-      void refresh();
+      refresh();
     } catch (e) {
       setMsg({ tone: "err", text: (e as Error).message.split("\n")[0] });
     }

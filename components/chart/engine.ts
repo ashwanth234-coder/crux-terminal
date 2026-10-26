@@ -13,6 +13,7 @@ import type {
 import { heikinAshi, type Candle } from "@/lib/candles";
 import type { Study, StudyLine } from "@/lib/indicators";
 import { DrawingsPrimitive, type DrawPoint } from "./drawings";
+import { VolumeProfilePrimitive } from "./volumeProfile";
 import { palette, type ChartSettings, type ChartType, type ScaleMode } from "./settings";
 
 type Lc = typeof import("lightweight-charts");
@@ -42,13 +43,20 @@ export class ChartEngine {
   /** Helper series some styles draw with (HLC area's high and low lines), replaced with the style. */
   private extras: ISeriesApi<SeriesType>[] = [];
   private studySeries: ISeriesApi<SeriesType>[] = [];
+  /** Other tokens' closes, on the main price scale (which the chart switches to % while comparing). */
+  private compareSeries: ISeriesApi<SeriesType>[] = [];
   private paneLines: IPriceLine[] = [];
   private mainLines: IPriceLine[] = [];
   private markers: ISeriesMarkersPluginApi<Time> | null = null;
   private markerData: SeriesMarker<Time>[] = [];
   /** Every drawing, painted on the price pane; it moves to the new main series when the style changes. */
   readonly drawings = new DrawingsPrimitive();
+  /** The visible-range volume profile (off until set), behind the candles. */
+  readonly profile = new VolumeProfilePrimitive();
   private settings: ChartSettings;
+  /** The price axis the candles, overlays and compared lines share. */
+  private side: "left" | "right" = "right";
+  private watermark: { applyOptions(o: object): void; detach(): void } | null = null;
 
   constructor(lc: Lc, host: HTMLElement, theme: Theme, settings: ChartSettings) {
     this.lc = lc;
@@ -74,6 +82,7 @@ export class ChartEngine {
     this.main = this.addMain("candles");
     this.markers = lc.createSeriesMarkers(this.main, []);
     this.main.attachPrimitive(this.drawings);
+    this.main.attachPrimitive(this.profile);
     this.applySettings(settings);
   }
 
@@ -81,24 +90,57 @@ export class ChartEngine {
     this.chart.remove();
   }
 
-  /** Grid, crosshair magnet, seconds on the time axis, volume, up / down colours. */
+  /** Grid, background, crosshair, scales, time zone, volume, up / down colours. */
   applySettings(s: ChartSettings) {
     this.settings = s;
-    const grid = s.grid ? this.theme.line : "transparent";
+    const grid = (on: boolean) => (s.grid && on ? this.theme.line : "transparent");
+    const bg = s.background === "black" ? "#000000" : s.background === "slate" ? "#131722" : this.theme.bg;
+    const local = s.timezone === "local";
+    const two = (n: number) => String(n).padStart(2, "0");
+    const fmtTime = (ts: number) => {
+      const d = new Date(ts * 1000);
+      return local
+        ? `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}`
+        : d.toISOString().slice(0, 16).replace("T", " ");
+    };
     this.chart.applyOptions({
-      grid: { vertLines: { color: grid }, horzLines: { color: grid } },
+      layout: { background: { type: this.lc.ColorType.Solid, color: bg } },
+      grid: { vertLines: { color: grid(s.gridStyle !== "horz") }, horzLines: { color: grid(s.gridStyle !== "vert") } },
+      leftPriceScale: { visible: s.scaleSide === "left", borderColor: this.theme.line, scaleMargins: { top: 0.12, bottom: 0.24 } },
+      rightPriceScale: { visible: s.scaleSide === "right" },
+      localization: { timeFormatter: (ts: number) => `${fmtTime(ts)}${local ? "" : " UTC"}` },
+      timeScale: {
+        secondsVisible: s.seconds,
+        // Midnight shows the date, any other mark the time, in the chosen zone.
+        tickMarkFormatter: (ts: number) => {
+          const d = new Date(ts * 1000);
+          const [h, m, day, mon] = local ? [d.getHours(), d.getMinutes(), d.getDate(), d.getMonth()] : [d.getUTCHours(), d.getUTCMinutes(), d.getUTCDate(), d.getUTCMonth()];
+          return h === 0 && m === 0 ? `${day}/${mon + 1}` : `${two(h)}:${two(m)}`;
+        },
+      },
       crosshair: {
         mode: s.cursor === "arrow" ? this.lc.CrosshairMode.Hidden : s.magnet ? this.lc.CrosshairMode.MagnetOHLC : this.lc.CrosshairMode.Normal,
         vertLine: { visible: s.cursor === "cross", labelVisible: s.cursor !== "arrow" },
         horzLine: { visible: s.cursor === "cross", labelVisible: s.cursor !== "arrow" },
       },
-      timeScale: { secondsVisible: s.seconds },
     });
     this.volume.applyOptions({ visible: s.volume });
+    this.side = s.scaleSide;
     this.setType(this.type, true);
   }
 
   private addMain(type: ChartType): ISeriesApi<SeriesType> {
+    const series = this.addMainSeries(type);
+    const s = this.settings;
+    series.applyOptions({ priceScaleId: this.side, priceLineVisible: s.lastPriceLine });
+    if (type === "candles" || type === "heikin" || type === "hollow") {
+      const { up, down } = palette(s);
+      series.applyOptions({ wickVisible: s.wicks, ...(type !== "hollow" ? { borderVisible: s.borders, borderUpColor: up, borderDownColor: down } : {}) } as never);
+    }
+    return series;
+  }
+
+  private addMainSeries(type: ChartType): ISeriesApi<SeriesType> {
     const { up, down } = palette(this.settings);
     const chrome = this.theme.chrome;
     const lc = this.lc;
@@ -158,6 +200,7 @@ export class ChartEngine {
     this.mainLines = [];
     this.markers?.detach();
     this.main.detachPrimitive(this.drawings);
+    this.main.detachPrimitive(this.profile);
     this.chart.removeSeries(this.main);
     for (const s of this.extras) this.chart.removeSeries(s);
     this.extras = [];
@@ -165,6 +208,7 @@ export class ChartEngine {
     this.main = this.addMain(type);
     this.markers = this.lc.createSeriesMarkers(this.main, this.markerData);
     this.main.attachPrimitive(this.drawings);
+    this.main.attachPrimitive(this.profile);
   }
 
   /** Marks on the bars (B / S, D, W, T), kept across chart-style changes. */
@@ -208,14 +252,21 @@ export class ChartEngine {
    * Rebuilds the studies from their computed lines: overlays on the price pane, one pane per oscillator below it.
    * A gap in a line (null) stays a gap: the series gets a blank point there instead of a line drawn across it.
    */
-  setStudies(computed: { study: Study; lines: StudyLine[] }[], candles: Candle[], k: number, format: Formatter, minMove: number) {
+  setStudies(
+    computed: { study: Study; lines: StudyLine[]; levels: number[]; widths?: Record<string, number> }[],
+    candles: Candle[],
+    k: number,
+    format: Formatter,
+    minMove: number,
+  ) {
     for (const s of this.studySeries) this.chart.removeSeries(s);
     this.studySeries = [];
     this.paneLines = [];
     while (this.chart.panes().length > 1) this.chart.removePane(this.chart.panes().length - 1);
 
     let paneIndex = 0;
-    for (const { study, lines } of computed) {
+    for (const { study, lines, levels, widths } of computed) {
+      if (study.special) continue;
       const pane = study.pane === "price" ? 0 : ++paneIndex;
       const scale = study.priced ? k : 1;
       const fmt = study.priced ? { type: "custom" as const, formatter: format, minMove } : { type: "custom" as const, formatter: unitless, minMove: 0.01 };
@@ -225,11 +276,18 @@ export class ChartEngine {
         const data: ({ time: Time } | { time: Time; value: number })[] = candles.flatMap((c, i) =>
           i < firstValue || firstValue < 0 ? [] : line.values[i] === null ? [{ time: t(c) as Time }] : [{ time: t(c) as Time, value: (line.values[i] as number) * scale }],
         );
-        const opts = { color: line.color, priceLineVisible: false, lastValueVisible: pane > 0, priceFormat: fmt, crosshairMarkerVisible: false };
+        const opts = {
+          color: line.color,
+          priceLineVisible: false,
+          lastValueVisible: pane > 0,
+          priceFormat: fmt,
+          crosshairMarkerVisible: false,
+          ...(pane === 0 ? { priceScaleId: this.side } : {}),
+        };
         const series =
           line.kind === "histogram"
             ? this.chart.addSeries(this.lc.HistogramSeries, opts, pane)
-            : this.chart.addSeries(this.lc.LineSeries, { ...opts, lineWidth: 1 }, pane);
+            : this.chart.addSeries(this.lc.LineSeries, { ...opts, lineWidth: (widths?.[line.key] ?? 1) as 1 | 2 | 3 | 4 }, pane);
         if (line.kind === "histogram") {
           (series as ISeriesApi<"Histogram">).setData(
             data.map((d) => ("value" in d ? { ...d, color: d.value >= 0 ? `${palette(this.settings).up}88` : `${palette(this.settings).down}88` } : d)),
@@ -240,12 +298,30 @@ export class ChartEngine {
         this.studySeries.push(series);
         first ??= series;
       }
-      for (const level of study.levels ?? []) {
+      for (const level of levels) {
         if (first) this.paneLines.push(first.createPriceLine({ price: level, color: `${this.theme.dim}99`, lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: "" }));
       }
     }
     const panes = this.chart.panes();
     panes.forEach((p, i) => p.setStretchFactor(i === 0 ? 3 : 1));
+  }
+
+  /** Compared tokens as lines of their closes (`k` scales them like the candles), replaced as a set. */
+  setCompare(lines: { key: string; color: string; candles: Candle[] }[], k: number, format: Formatter, minMove: number) {
+    for (const s of this.compareSeries) this.chart.removeSeries(s);
+    this.compareSeries = lines.map((l) => {
+      const s = this.chart.addSeries(this.lc.LineSeries, {
+        color: l.color,
+        lineWidth: 2,
+        priceLineVisible: false,
+        lastValueVisible: true,
+        crosshairMarkerVisible: false,
+        priceFormat: { type: "custom", formatter: format, minMove },
+        priceScaleId: this.side,
+      });
+      s.setData(l.candles.map((c) => ({ time: t(c), value: c.close * k })));
+      return s;
+    });
   }
 
   /** Horizontal lines on the price pane (the clearing price, alerts), replaced as a set. */
@@ -259,21 +335,44 @@ export class ChartEngine {
   setScale(mode: ScaleMode) {
     const m = mode === "log" ? this.lc.PriceScaleMode.Logarithmic : mode === "percent" ? this.lc.PriceScaleMode.Percentage : this.lc.PriceScaleMode.Normal;
     this.chart.priceScale("right").applyOptions({ mode: m });
+    this.chart.priceScale("left").applyOptions({ mode: m });
+  }
+
+  /** The token's symbol faintly behind the candles, or nothing. */
+  setWatermark(text: string | null) {
+    this.watermark?.detach();
+    this.watermark = null;
+    if (!text) return;
+    this.watermark = this.lc.createTextWatermark(this.chart.panes()[0], {
+      horzAlign: "center",
+      vertAlign: "center",
+      lines: [{ text, color: `${this.theme.chrome}12`, fontSize: 64, fontStyle: "bold" }],
+    }) as never;
+  }
+
+  /** The price axis's width, for labels that sit on it. */
+  axisWidth(): number {
+    return this.chart.priceScale(this.side).width();
+  }
+
+  /** Where a price (in the chart's units) sits on the price axis. */
+  yOf(price: number): number | null {
+    return this.main.priceToCoordinate(price);
   }
 
   /** Back to "everything visible, scale fitted": the reset the context menu and Alt+R do. */
   reset() {
-    this.chart.priceScale("right").applyOptions({ autoScale: true });
+    this.chart.priceScale(this.side).applyOptions({ autoScale: true });
     for (const p of this.chart.panes()) for (const s of p.getSeries()) s.priceScale().applyOptions({ autoScale: true });
     this.chart.timeScale().fitContent();
   }
 
   autoScale() {
-    this.chart.priceScale("right").applyOptions({ autoScale: true });
+    this.chart.priceScale(this.side).applyOptions({ autoScale: true });
   }
 
   isAutoScale() {
-    return this.chart.priceScale("right").options().autoScale;
+    return this.chart.priceScale(this.side).options().autoScale;
   }
 
   fit() {
@@ -322,7 +421,7 @@ export class ChartEngine {
     const p2 = this.main.coordinateToPrice(Math.min(y1, y2));
     if (l1 !== null && l2 !== null && l2 - l1 >= 1) this.chart.timeScale().setVisibleLogicalRange({ from: l1, to: l2 });
     if (p1 !== null && p2 !== null && p2 > p1) {
-      this.chart.priceScale("right").applyOptions({ autoScale: false });
+      this.chart.priceScale(this.side).applyOptions({ autoScale: false });
       this.main.priceScale().setVisibleRange({ from: p1, to: p2 });
     }
   }

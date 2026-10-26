@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import { formatUnits, getAddress, type Address } from "viem";
 import type { SeriesMarker, Time } from "lightweight-charts";
 import { useConnection } from "wagmi";
@@ -9,11 +9,13 @@ import { usePoolSwaps } from "@/hooks/usePoolSwaps";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { DESTINATION_SETTLER, useLaunchMarket } from "@/hooks/useLaunchMarket";
 import { useTokenTransfers } from "@/hooks/useTokenTransfers";
+import { useStandingOrders } from "@/hooks/useStandingOrders";
+import { loadRemoteLayout, saveRemoteLayout } from "@/lib/layoutSync";
 import { barTime, markTrades, type MarkWho } from "@/lib/chartMarks";
 import { buildHolders } from "@/lib/holders";
 import { CRUX_SOLVER, PREVIOUS_SETTLERS, SETTLER } from "@/lib/intents";
-import { EMPTY_CONTEXT, flowByCandle, holdersByCandle, type StudyContext } from "@/lib/indicators";
-import { INTERVALS, autoInterval, toCandles } from "@/lib/candles";
+import { EMPTY_CONTEXT, computeInstance, flowByCandle, holdersByCandle, paramsOf, type StudyContext, type StudyId } from "@/lib/indicators";
+import { INTERVALS, autoInterval, toCandles, type Candle } from "@/lib/candles";
 import { studyById } from "@/lib/indicators";
 import { fmtTokenPrice } from "@/lib/launchTrade";
 import { PRICE_DECIMALS, type AuctionV2 } from "@/lib/launchV2";
@@ -24,13 +26,18 @@ import { useHistory } from "./history";
 import { Legend } from "./Legend";
 import { DrawingBar } from "./DrawingBar";
 import { DrawingPalette, TOOL_INFO, TOOL_KEYS } from "./DrawingPalette";
-import { TOOL_POINTS, defaultStop, type DrawPart, type DrawPoint, type DrawTool, type Drawing } from "./drawings";
+import { PATTERN_LABELS, TOOL_POINTS, defaultStop, isPattern, type DrawPart, type DrawPoint, type DrawTool, type Drawing } from "./drawings";
 import { OverlaysBar } from "./OverlaysBar";
-import { DEFAULT_CONFIG, DEFAULT_SETTINGS, loadLayout, loadSettings, palette, saveLayout, saveSettings, type ChartSettings, type ScaleMode } from "./settings";
+import { DEFAULT_CONFIG, DEFAULT_SETTINGS, layoutSavedAt, loadLayout, loadSettings, palette, parseLayout, saveLayout, saveSettings, type ChartSettings, type ScaleMode } from "./settings";
 import { SettingsModal } from "./SettingsModal";
+import { CompareButton, CompareFeed } from "./Compare";
+import { StudySettings } from "./StudySettings";
 import { chartSnapshot, shareImage } from "./snapshot";
 import { TableView } from "./TableView";
 import { Toolbar } from "./Toolbar";
+
+/** A new chart in a multi-chart layout starts on a different timeframe: auto, 1 minute, 15 minutes, 1 hour. */
+const SLOT_INTERVALS: (number | "auto")[] = ["auto", 60, 900, 3_600];
 
 /** How each kind of marked trader shows on the bars. */
 const MARK_STYLE: Record<MarkWho, { color: string; buy: string; sell: string }> = {
@@ -68,6 +75,8 @@ export function ProChart({
   id,
   focus = null,
   onFocus,
+  slot = 0,
+  layoutSlot,
 }: {
   auction: AuctionV2;
   symbol: string;
@@ -77,6 +86,10 @@ export function ProChart({
   /** A wallet picked in the desk: only its trades are marked while set. */
   focus?: Address | null;
   onFocus?: (a: Address | null) => void;
+  /** Which chart of a multi-chart layout this is: each slot keeps its own saved layout. */
+  slot?: number;
+  /** The layout picker, shown in the toolbar. */
+  layoutSlot?: ReactNode;
 }) {
   const swaps = usePoolSwaps(auction.pair, auction.settledAt, true);
   // The same reads as the Holders tab (shared queries): who holds what, and every transfer to rebuild their trades.
@@ -84,12 +97,16 @@ export function ProChart({
   const market = useLaunchMarket(auction.token, auction.pair);
   const { address: wallet } = useConnection();
   const crux = useCruxAccount();
+  const { orders: standingOrders } = useStandingOrders();
   const now = useNow();
   const frame = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const [engine, setEngine] = useState<ChartEngine | null>(null);
   // This token's chart as it was left in this browser (drawings, indicators, timeframe…), or the defaults.
-  const [initialConfig] = useState(() => (typeof window === "undefined" ? null : loadLayout(auction.token)) ?? DEFAULT_CONFIG);
+  const layoutKey = slot === 0 ? auction.token : `${auction.token}#${slot}`;
+  const [initialConfig] = useState(
+    () => (typeof window === "undefined" ? null : loadLayout(layoutKey)) ?? { ...DEFAULT_CONFIG, interval: SLOT_INTERVALS[slot] ?? DEFAULT_CONFIG.interval },
+  );
   const { state: config, set, undo, redo, replace, canUndo, canRedo } = useHistory(initialConfig);
   const [settings, setSettingsState] = useState<ChartSettings>(() => (typeof window === "undefined" ? DEFAULT_SETTINGS : loadSettings()));
   const [scale, setScale] = useState<ScaleMode>("normal");
@@ -140,7 +157,26 @@ export function ProChart({
   const fills = useMemo(() => (swaps.data?.trades ?? []).map((t) => ({ time: t.time, price: t.price, usdc: t.usdc })), [swaps.data]);
   const first = fills.length ? Math.min(...fills.map((f) => f.time)) : auction.settledAt;
   const interval = config.interval === "auto" ? autoInterval(Math.min(first, auction.settledAt), now ?? auction.settledAt) : config.interval;
-  const candles = useMemo(() => toCandles(fills, interval, gradPrice > 0 ? gradPrice : null), [fills, interval, gradPrice]);
+  const allCandles = useMemo(() => toCandles(fills, interval, gradPrice > 0 ? gradPrice : null), [fills, interval, gradPrice]);
+  // Bar replay: the chart as it stood at `index`, played forward a candle at a time. Off: every candle, live.
+  const [replay, setReplay] = useState<{ index: number | null; playing: boolean; speed: number } | null>(null);
+  const replayIndex = replay?.index ?? null;
+  const replaying = replay !== null;
+  const candles = useMemo(
+    () => (replayIndex !== null ? allCandles.slice(0, Math.min(allCandles.length, replayIndex + 1)) : allCandles),
+    [allCandles, replayIndex],
+  );
+  useEffect(() => {
+    if (!replay?.playing || replay.index === null) return;
+    const t = setInterval(() => {
+      setReplay((r) => {
+        if (!r || r.index === null) return r;
+        if (r.index >= allCandles.length - 1) return { ...r, playing: false };
+        return { ...r, index: r.index + 1 };
+      });
+    }, 1_000 / replay.speed);
+    return () => clearInterval(t);
+  }, [replay?.playing, replay?.speed, replay?.index, allCandles.length]);
   const fmt = useCallback((v: number) => (config.units === "mcap" ? compactUsd.format(v) : fmtTokenPrice(v)), [config.units]);
   const minMove = config.units === "mcap" ? 0.01 : 1e-15;
   // What the on-chain studies read: USDC bought / sold per candle, and holders at each close (only when shown).
@@ -152,7 +188,7 @@ export function ProChart({
       interval,
       (swaps.data?.trades ?? []).map((t) => ({ time: t.time, side: t.side, usd: Number(t.usdc) / 1e6 })),
     );
-    if (!config.studies.includes("holders") || !transfers.data) return { ...flow, holders: [] };
+    if (!config.studies.some((s) => s.id === "holders" && !s.hidden) || !transfers.data) return { ...flow, holders: [] };
     const exclude = new Set(
       [auction.pair, factory, CRUX_SOLVER, DESTINATION_SETTLER, SETTLER, ...PREVIOUS_SETTLERS.map((p) => p.address), market.batchPool ?? "", "0x000000000000000000000000000000000000dEaD", "0x0000000000000000000000000000000000000000"]
         .filter(Boolean)
@@ -161,11 +197,20 @@ export function ProChart({
     const moves = transfers.data.items.filter((t) => t.kind === "transfer");
     return { ...flow, holders: holdersByCandle(times, interval, moves, exclude) };
   }, [config.studies, candles, interval, swaps.data, transfers.data, auction.pair, factory, market.batchPool]);
+  // Every study the trader added, with their settings; hidden ones keep their place in the legend but aren't drawn.
   const computedStudies = useMemo(
-    () => config.studies.map((id) => ({ study: studyById(id), lines: studyById(id).compute(candles, studyCtx) })),
+    () =>
+      config.studies.map((inst) => {
+        const study = studyById(inst.id);
+        const p = paramsOf(inst);
+        return { inst, study, title: study.title(p), lines: inst.hidden ? [] : computeInstance(inst, candles, studyCtx), levels: study.levels?.(p) ?? [], widths: inst.widths };
+      }),
     [config.studies, candles, studyCtx],
   );
-  const studyLines = useMemo(() => computedStudies.flatMap(({ study, lines }) => lines.map((line) => ({ line, priced: study.priced }))), [computedStudies]);
+  const drawnStudies = useMemo(() => computedStudies.filter((c) => !c.inst.hidden), [computedStudies]);
+  const [editing_study, setEditingStudy] = useState<StudyId | null>(null);
+  const updateStudy = (id: StudyId, fn: (s: (typeof config.studies)[number]) => (typeof config.studies)[number] | null) =>
+    set((c) => ({ ...c, studies: c.studies.flatMap((s) => (s.id === id ? (fn(s) ? [fn(s)!] : []) : [s])) }));
   const intervalLabel = INTERVALS.find((i) => i.seconds === interval)?.label ?? `${interval}s`;
 
   // ------------------------------------------------------- overlays
@@ -218,14 +263,18 @@ export function ProChart({
     );
   }, [transfers.data, candles, holders, me, auction.pair, auction.creator, market.batchPool, focus]);
   // A wallet picked in the desk shows alone, every trade of it, whatever the overlay switches say.
+  const replayEnd = replayIndex !== null && candles.length ? candles[candles.length - 1].time + interval : null;
   const shownMarks = useMemo(
     () =>
       focus
-        ? marks.filter((m) => m.who === "focus")
+        ? marks.filter((m) => m.who === "focus" && (replayEnd === null || m.time < replayEnd))
         : marks.filter(
-            (m) => m.usd >= settings.minUsd && (m.who === "me" ? settings.marks.mine : m.who === "top" ? settings.marks.top : settings.marks.dev),
+            (m) =>
+              (replayEnd === null || m.time < replayEnd) &&
+              m.usd >= settings.minUsd &&
+              (m.who === "me" ? settings.marks.mine : m.who === "top" ? settings.marks.top : settings.marks.dev),
           ),
-    [marks, settings.minUsd, settings.marks, focus],
+    [marks, settings.minUsd, settings.marks, focus, replayEnd],
   );
   const markCounts = useMemo(
     () => ({ mine: marks.filter((m) => m.who === "me").length, dev: marks.filter((m) => m.who === "dev" || m.who === "whale").length, top: marks.filter((m) => m.who === "top").length }),
@@ -276,13 +325,29 @@ export function ProChart({
   useEffect(() => {
     if (!engine) return;
     engine.setData(candles, k, fmt, minMove);
-    engine.setStudies(computedStudies, candles, k, fmt, minMove);
+    engine.setStudies(drawnStudies, candles, k, fmt, minMove);
     const lines: { price: number; color: string; title: string; style?: number }[] = [];
     if (settings.clearingLine && !marksHidden && gradPrice > 0) lines.push({ price: gradPrice * k, color: "#f3f3f080", title: "Auction clear" });
     for (const a of config.alerts) lines.push({ price: a * k, color: "#ffd166", title: "Alert", style: 1 });
     if (settings.marks.mine && !marksHidden && mine.balance > 0 && mine.entry !== null && last) {
       const pct = (last.close / mine.entry - 1) * 100;
       lines.push({ price: mine.entry * k, color: "#4cc9f0", title: `AVG ENTRY ${fmt(mine.entry * k)} · ${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%` });
+    }
+    // Your standing orders on this token, where they'd fire (a trailing stop where it stands now).
+    if (settings.showOrders && !marksHidden) {
+      for (const o of standingOrders ?? []) {
+        if (o.status !== "open" || o.token.toLowerCase() !== auction.token.toLowerCase()) continue;
+        const at = o.kind === "trailing stop" ? Math.max(o.triggerUsd, (o.peak ?? 0) * (1 - (o.trailBps ?? 0) / 10_000)) : o.triggerUsd;
+        const look =
+          o.kind === "take profit"
+            ? { color: "#5cc08c", title: "TP" }
+            : o.kind === "stop loss"
+              ? { color: "#e5484d", title: "SL" }
+              : o.kind === "trailing stop"
+                ? { color: "#ff9d6e", title: "Trail" }
+                : { color: "#4cc9f0", title: "Dip buy" };
+        lines.push({ price: at * k, color: look.color, title: look.title, style: 0 });
+      }
     }
     engine.setPriceLines(lines);
 
@@ -308,13 +373,51 @@ export function ProChart({
           })
           .sort((a, b) => (a.time as number) - (b.time as number));
     engine.setMarkers(bars);
-  }, [engine, candles, k, fmt, minMove, config.type, computedStudies, config.alerts, settings, marksHidden, gradPrice, shownMarks, mine, last]);
+  }, [engine, candles, k, fmt, minMove, config.type, drawnStudies, config.alerts, settings, marksHidden, gradPrice, shownMarks, mine, last, standingOrders, auction.token]);
+
+  // The symbol behind the candles, when wanted.
+  useEffect(() => {
+    engine?.setWatermark(settings.watermark ? symbol.replace(/^\$/, "") : null);
+  }, [engine, settings.watermark, symbol]);
+
+  // Compared tokens: each one's candles at this timeframe, fed by an invisible CompareFeed.
+  const [compareData, setCompareData] = useState<Record<string, Candle[]>>({});
+  const onCompareCandles = useCallback((pair: Address, c: Candle[]) => setCompareData((d) => (d[pair] === c ? d : { ...d, [pair]: c })), []);
+  useEffect(() => {
+    if (!engine) return;
+    engine.setCompare(
+      config.compare.map((c) => ({ key: c.pair, color: c.color, candles: compareData[c.pair] ?? [] })),
+      k,
+      fmt,
+      minMove,
+    );
+  }, [engine, config.compare, compareData, k, fmt, minMove]);
+  const setCompare = (next: typeof config.compare) => {
+    // Comparing only reads right on a % scale: everything starts at 0% at the first visible bar.
+    if (config.compare.length === 0 && next.length > 0) setScale("percent");
+    if (next.length === 0 && scale === "percent") setScale("normal");
+    set((c) => ({ ...c, compare: next }));
+  };
+
+  // The volume profile, when it's on: the visible range's volume by price, from the same flow as the on-chain studies.
+  const profileInst = config.studies.find((s) => s.id === "vprofile" && !s.hidden);
+  useEffect(() => {
+    if (!engine) return;
+    if (!profileInst) return engine.profile.set(null);
+    const p = paramsOf(profileInst);
+    const { up, down } = palette(settings);
+    engine.profile.set({ candles, buyUsd: studyCtx.buyUsd, sellUsd: studyCtx.sellUsd, k, rows: p.rows, width: p.width, va: p.va, up, down });
+  }, [engine, profileInst, candles, studyCtx, k, settings]);
 
   // Drawings: the frame they map through (times, interval, units), the saved ones and the one being placed.
   const draft = useMemo<Drawing | null>(() => {
     if (!tool) return null;
     if (tool === "brush") return stroke && stroke.length > 1 ? { id: "draft", tool, a: stroke[0], path: stroke } : null;
     if (tool === "emoji") return cursor ? { id: "draft", tool, a: cursor, text: sticker } : null;
+    if (isPattern(tool)) {
+      const path = cursor ? [...points, cursor] : points;
+      return path.length > 0 ? { id: "draft", tool, a: path[0], path } : null;
+    }
     const [p0, p1] = points;
     if (!p0) return cursor && TOOL_POINTS[tool] === 1 && tool !== "text" ? { id: "draft", tool, a: cursor } : null;
     if (!p1) {
@@ -330,10 +433,47 @@ export function ProChart({
     engine.drawings.setDrawings(shownDrawings, draft, selected, drawHidden);
   }, [engine, candles, interval, k, fmt, settings, shownDrawings, draft, selected, drawHidden]);
 
+  // Layout sync state (below): a layout just loaded from another device isn't synced straight back.
+  const skipSync = useRef(false);
+  const synced = useRef(false);
   // Every change is saved for this token, so the chart comes back as it was left.
   useEffect(() => {
-    saveLayout(auction.token, config);
-  }, [auction.token, config]);
+    saveLayout(layoutKey, config, skipSync.current ? layoutSavedAt(layoutKey) : Date.now());
+  }, [layoutKey, config]);
+
+  // Logged in: the first chart's layout follows you between devices. On arrival the newer of this browser's and the
+  // synced copy wins; changes are synced a few seconds after you stop making them (signed silently by the login key).
+  useEffect(() => {
+    if (slot !== 0 || synced.current || !crux.sign || !crux.owner) return;
+    synced.current = true;
+    const [sign, owner] = [crux.sign, crux.owner];
+    void loadRemoteLayout(sign, owner, auction.token)
+      .then((remote) => {
+        if (!remote || remote.savedAt <= layoutSavedAt(layoutKey)) return;
+        const next = parseLayout(remote.layout);
+        if (!next) return;
+        skipSync.current = true;
+        replace(next);
+        saveLayout(layoutKey, next, remote.savedAt);
+      })
+      .catch(() => {
+        // No sync (relay without it, or offline): this browser's layout stands.
+      });
+  }, [slot, crux.sign, crux.owner, auction.token, layoutKey, replace]);
+  useEffect(() => {
+    if (slot !== 0 || !crux.sign || !crux.owner || !synced.current) return;
+    if (skipSync.current) {
+      skipSync.current = false;
+      return;
+    }
+    const [sign, owner] = [crux.sign, crux.owner];
+    const t = setTimeout(() => {
+      const raw = JSON.stringify(config);
+      if (raw.length > 46_000) return;
+      void saveRemoteLayout(sign, owner, auction.token, raw, layoutSavedAt(layoutKey) || Date.now()).catch(() => {});
+    }, 4_000);
+    return () => clearTimeout(t);
+  }, [slot, config, crux.sign, crux.owner, auction.token, layoutKey]);
   // While a tool is active, clicks place points instead of panning the chart.
   useEffect(() => {
     const free = tool === null && !zoomMode;
@@ -352,7 +492,7 @@ export function ProChart({
   useEffect(() => {
     const prev = prevClose.current;
     prevClose.current = lastClose;
-    if (prev === null || lastClose === null || prev === lastClose) return;
+    if (prev === null || lastClose === null || prev === lastClose || replaying) return;
     const hit = config.alerts.filter((a) => (prev < a && lastClose >= a) || (prev > a && lastClose <= a));
     if (hit.length === 0) return;
     const msg = `${symbol} crossed ${hit.map((a) => fmt(a * k)).join(", ")}`;
@@ -365,7 +505,48 @@ export function ProChart({
       flash(msg);
       set((c) => ({ ...c, alerts: c.alerts.filter((a) => !hit.includes(a)) }));
     }, 0);
-  }, [lastClose, config.alerts, symbol, fmt, k, flash, set]);
+  }, [lastClose, config.alerts, symbol, fmt, k, flash, set, replaying]);
+
+  // Indicator alerts: a line crossing its target between the last two candles fires once for that candle.
+  const firedAt = useRef(new Map<string, number>());
+  useEffect(() => {
+    const n = candles.length - 1;
+    if (n < 1 || config.rules.length === 0 || replaying) return;
+    const seriesOf = (id: StudyId, key: string) => {
+      const inst = config.studies.find((s) => s.id === id);
+      return inst ? (computeInstance(inst, candles, studyCtx).find((l) => l.key === key)?.values ?? null) : null;
+    };
+    const fired: string[] = [];
+    const messages: string[] = [];
+    for (const r of config.rules) {
+      const a = seriesOf(r.study, r.line);
+      if (!a) continue;
+      const b = r.target === "price" ? candles.map((c) => c.close) : "line" in r.target ? seriesOf(r.study, r.target.line) : null;
+      const at = (i: number) => (b ? b[i] : (r.target as { value: number }).value);
+      const [pa, ca, pb, cb] = [a[n - 1], a[n], at(n - 1), at(n)];
+      if (pa == null || ca == null || pb == null || cb == null) continue;
+      const up = pa <= pb && ca > cb;
+      const down = pa >= pb && ca < cb;
+      if (!(r.op === "up" ? up : r.op === "down" ? down : up || down)) continue;
+      if (firedAt.current.get(r.id) === candles[n].time) continue;
+      firedAt.current.set(r.id, candles[n].time);
+      fired.push(r.id);
+      const study = studyById(r.study);
+      const target = r.target === "price" ? "the price" : "line" in r.target ? r.target.line : study.priced ? fmt(r.target.value * k) : String(r.target.value);
+      messages.push(`${symbol}: ${study.title(paramsOf(config.studies.find((s) => s.id === r.study) ?? { id: r.study }))} ${r.line} crossed ${up ? "above" : "below"} ${target}`);
+    }
+    if (fired.length === 0) return;
+    const msg = messages.join(" · ");
+    try {
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification("CRUX alert", { body: msg });
+    } catch {
+      // Notifications unavailable: the in-page message still shows.
+    }
+    setTimeout(() => {
+      flash(msg);
+      set((c) => ({ ...c, rules: c.rules.filter((r) => r.repeat || !fired.includes(r.id)) }));
+    }, 0);
+  }, [candles, config.rules, config.studies, studyCtx, symbol, fmt, k, flash, set, replaying]);
 
   useEffect(() => {
     const onChange = () => setFull(document.fullscreenElement === frame.current);
@@ -444,7 +625,7 @@ export function ProChart({
   const addDrawing = (d: Drawing) => {
     set((c) => ({ ...c, drawings: [...c.drawings, d] }));
     setSelected(d.id);
-    if (d.tool === "text") setEditing({ id: d.id, value: d.text ?? "" });
+    if (d.tool === "text" || d.tool === "callout") setEditing({ id: d.id, value: d.text ?? "" });
   };
   const updateDrawing = (id: string, fn: (d: Drawing) => Drawing) => set((c) => ({ ...c, drawings: c.drawings.map((d) => (d.id === id ? fn(d) : d)) }));
   const removeDrawing = (id: string) => {
@@ -452,6 +633,13 @@ export function ProChart({
     setSelected(null);
   };
   const onChartClick = (e: MouseEvent<HTMLDivElement>) => {
+    if (replay && replay.index === null && engine && view === "chart") {
+      // Picking where the replay starts.
+      const at = local(e);
+      const bar = at ? engine.barAt(at.x) : null;
+      if (bar !== null && allCandles.length > 1) setReplay({ index: Math.max(0, Math.min(allCandles.length - 2, bar)), playing: false, speed: replay.speed });
+      return;
+    }
     if (!tool || view !== "chart") return;
     const p = pointer(e);
     if (!p) return;
@@ -462,6 +650,11 @@ export function ProChart({
     }
     const [a, b, c] = all;
     if (tool === "brush") return;
+    if (isPattern(tool)) {
+      addDrawing({ id: newId(), tool, a, path: all });
+      pickTool(null);
+      return;
+    }
     addDrawing({
       id: newId(),
       tool,
@@ -570,7 +763,7 @@ export function ProChart({
     const at = local(e);
     const hit = engine && at ? engine.drawings.drawingAt(at.x, at.y) : null;
     const d = hit && config.drawings.find((x) => x.id === hit.id);
-    if (d?.tool === "text") setEditing({ id: d.id, value: d.text ?? "" });
+    if (d?.tool === "text" || d?.tool === "callout") setEditing({ id: d.id, value: d.text ?? "" });
   };
   const commitText = () => {
     if (!editing) return;
@@ -608,6 +801,25 @@ export function ProChart({
 
   const lockedX = config.lockedTime !== null && engine ? engine.xOf(config.lockedTime) : null;
 
+  // Time left in the current candle, on the price axis under the last price.
+  const countdownY = settings.countdown && !replay && last && engine && now !== null ? engine.yOf(last.close * k) : null;
+  const countdown =
+    countdownY !== null && now !== null && engine ? (
+      <span
+        aria-label="Time to candle close"
+        className="pointer-events-none absolute z-10 rounded-[2px] bg-panel-2/95 text-center font-mono text-[10px] text-muted"
+        style={{ top: countdownY + 9, width: engine.axisWidth(), ...(settings.scaleSide === "left" ? { left: 0 } : { right: 0 }) }}
+      >
+        {(() => {
+          const left = Math.max(0, Math.floor(now / interval) * interval + interval - now);
+          const h = Math.floor(left / 3600);
+          const m = Math.floor((left % 3600) / 60);
+          const s2 = left % 60;
+          return `${h ? `${h}:` : ""}${h ? String(m).padStart(2, "0") : m}:${String(s2).padStart(2, "0")}`;
+        })()}
+      </span>
+    ) : null;
+
   // The selected drawing's bar, just above its first point (kept inside the chart).
   const sel = selected ? config.drawings.find((d) => d.id === selected) : undefined;
   const selAt = sel && engine ? engine.drawings.screenOf(sel.a) : null;
@@ -632,7 +844,7 @@ export function ProChart({
                 }
               : null
         }
-        onEditText={sel.tool === "text" ? () => setEditing({ id: sel.id, value: sel.text ?? "" }) : null}
+        onEditText={sel.tool === "text" || sel.tool === "callout" ? () => setEditing({ id: sel.id, value: sel.text ?? "" }) : null}
         onDuplicate={() => {
           const shift = engine?.drawings.moved(sel, "body", 24, 24) ?? sel;
           addDrawing({ ...shift, id: newId() });
@@ -642,7 +854,7 @@ export function ProChart({
     ) : null;
   const editAt = editing && engine ? (() => {
     const d = config.drawings.find((x) => x.id === editing.id);
-    return d ? engine.drawings.screenOf(d.a) : null;
+    return d ? engine.drawings.screenOf(d.tool === "callout" && d.b ? d.b : d.a) : null;
   })() : null;
   const textEditor = editing && editAt ? (
     <input
@@ -684,7 +896,11 @@ export function ProChart({
         onSettings={() => setSettingsOpen(true)}
         onAddAlert={addAlert}
         formatInput={last ? fmt(last.close * k) : ""}
-        live={live}
+        live={live && !replay}
+        replaying={replay !== null}
+        compareSlot={<CompareButton current={auction.pair} items={config.compare} onChange={setCompare} />}
+        layoutSlot={layoutSlot}
+        onReplay={() => setReplay((r) => (r ? null : { index: null, playing: false, speed: 1 }))}
       />
 
       <div
@@ -707,7 +923,25 @@ export function ProChart({
       >
         <div ref={host} className={`absolute inset-0 ${view === "table" ? "invisible" : ""}`} aria-label={`${symbol} chart`} role="img" />
         {view === "chart" && (
-          <Legend inset={paletteOpen} title={`${name ?? symbol} · ${intervalLabel} · CRUX`} candle={shown} k={k} fmt={fmt} lines={studyLines} index={shownIndex} />
+          <Legend
+            inset={paletteOpen}
+            title={`${name ?? symbol} · ${intervalLabel} · CRUX`}
+            candle={shown}
+            k={k}
+            fmt={fmt}
+            studies={computedStudies.map((c) => ({ id: c.inst.id, title: c.title, hidden: Boolean(c.inst.hidden), priced: c.study.priced, lines: c.lines }))}
+            index={shownIndex}
+            onSettings={setEditingStudy}
+            onToggle={(id) => updateStudy(id, (s) => ({ ...s, hidden: !s.hidden }))}
+            onRemove={(id) => updateStudy(id, () => null)}
+            show={settings.status}
+            compares={config.compare.map((c) => ({
+              key: c.pair,
+              label: c.symbol,
+              color: c.color,
+              onRemove: () => setCompare(config.compare.filter((x) => x.pair !== c.pair)),
+            }))}
+          />
         )}
         {view === "chart" && lockedX !== null && (
           <div className="pointer-events-none absolute bottom-7 top-0 z-[5] w-px border-l border-dashed border-[#4cc9f0]/70" style={{ left: lockedX }} aria-hidden="true" />
@@ -755,7 +989,19 @@ export function ProChart({
         {tool && (
           <p className="pointer-events-none absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded-[4px] border border-line-2 bg-panel-2/95 px-2.5 py-1 text-[11.5px] text-muted">
             {TOOL_INFO[tool].label}:{" "}
-            {TOOL_POINTS[tool] === 1
+            {tool === "brush"
+              ? "drag to draw"
+              : isPattern(tool)
+                ? `click point ${points.length + 1} of ${TOOL_POINTS[tool]}${PATTERN_LABELS[tool]?.[points.length] ? ` (${PATTERN_LABELS[tool]![points.length]})` : ""}`
+                : tool === "callout"
+                  ? points.length === 0
+                    ? "click what it points at"
+                    : "click where the note goes"
+                  : tool === "pitchfork" && points.length > 0
+                    ? points.length === 1
+                      ? "click the first swing"
+                      : "click the second swing"
+                    : TOOL_POINTS[tool] === 1
               ? "click to place it"
               : points.length === 0
                 ? tool === "long" || tool === "short"
@@ -771,6 +1017,7 @@ export function ProChart({
             · {settings.snap ? "magnet on · " : ""}Esc to cancel
           </p>
         )}
+        {view === "chart" && countdown}
         {view === "table" && <TableView candles={candles} k={k} fmt={fmt} />}
         {ctx && (
           <ContextMenu
@@ -807,6 +1054,57 @@ export function ProChart({
           <p className="absolute inset-x-0 top-1/2 px-6 text-center text-[12px] text-dim">No trades since graduation. The pool opened at {fmtTokenPrice(gradPrice)}.</p>
         )}
       </div>
+      {replay && (
+        <div className="flex flex-wrap items-center gap-2 border-x border-b border-line bg-[#4cc9f0]/[0.06] px-2 py-1.5 text-[11.5px]" role="toolbar" aria-label="Bar replay">
+          <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-[#4cc9f0]">Replay</span>
+          {replay.index === null ? (
+            <span className="text-muted">Click a candle to start from it.</span>
+          ) : (
+            <>
+              <button type="button" onClick={() => setReplay({ ...replay, index: null, playing: false })} className="rounded-[3px] px-1.5 py-0.5 text-muted hover:text-chrome" title="Pick another start">
+                ⏮
+              </button>
+              <button
+                type="button"
+                onClick={() => setReplay({ ...replay, playing: !replay.playing })}
+                className="rounded-[3px] border border-[#4cc9f0]/50 px-2 py-0.5 text-[#4cc9f0] hover:bg-[#4cc9f0]/10"
+              >
+                {replay.playing ? "❚❚ Pause" : "▶ Play"}
+              </button>
+              <button
+                type="button"
+                disabled={replay.index >= allCandles.length - 1}
+                onClick={() => setReplay({ ...replay, playing: false, index: Math.min(allCandles.length - 1, replay.index! + 1) })}
+                className="rounded-[3px] px-1.5 py-0.5 text-muted hover:text-chrome disabled:opacity-40"
+                title="Next candle"
+              >
+                ⏭
+              </button>
+              <span className="flex gap-0.5" role="radiogroup" aria-label="Replay speed">
+                {[1, 3, 10].map((sp) => (
+                  <button
+                    key={sp}
+                    type="button"
+                    role="radio"
+                    aria-checked={replay.speed === sp}
+                    onClick={() => setReplay({ ...replay, speed: sp })}
+                    className={`rounded-[3px] px-1.5 py-0.5 font-mono ${replay.speed === sp ? "bg-white/[0.08] text-chrome" : "text-dim hover:text-chrome"}`}
+                  >
+                    {sp}×
+                  </button>
+                ))}
+              </span>
+              <span className="font-mono text-dim">
+                {replay.index + 1} / {allCandles.length}
+                {candles.length > 0 && ` · ${new Date(candles[candles.length - 1].time * 1000).toISOString().slice(5, 16).replace("T", " ")} UTC`}
+              </span>
+            </>
+          )}
+          <button type="button" onClick={() => setReplay(null)} className="ml-auto rounded-[3px] px-1.5 py-0.5 text-muted hover:text-chrome">
+            Back to live ✕
+          </button>
+        </div>
+      )}
       <BottomBar now={now} onRange={onRange} scale={scale} setScale={setScale} auto={engine?.isAutoScale() ?? true} onAuto={() => engine?.autoScale()} />
       <OverlaysBar settings={settings} onChange={setSettings} counts={markCounts} />
       <p className="px-1 pt-1.5 text-[11px] text-dim">
@@ -818,6 +1116,25 @@ export function ProChart({
         </a>
         .
       </p>
+      {config.compare.map((c) => (
+        <CompareFeed key={c.pair} item={c} interval={interval} onCandles={onCompareCandles} />
+      ))}
+      {editing_study && config.studies.some((s) => s.id === editing_study) && (
+        <StudySettings
+          inst={config.studies.find((s) => s.id === editing_study)!}
+          rules={config.rules}
+          onChange={(next) => updateStudy(next.id, () => next)}
+          onRules={(rules) => set((c) => ({ ...c, rules }))}
+          onRemove={() => {
+            updateStudy(editing_study, () => null);
+            set((c) => ({ ...c, rules: c.rules.filter((r) => r.study !== editing_study) }));
+            setEditingStudy(null);
+          }}
+          onClose={() => setEditingStudy(null)}
+          unitHint={config.units === "mcap" ? "market cap (USD)" : "USD per token"}
+          k={k}
+        />
+      )}
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} settings={settings} onChange={setSettings} />
     </div>
   );

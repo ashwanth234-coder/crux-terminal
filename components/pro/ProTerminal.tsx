@@ -4,7 +4,7 @@ import { useState, type ReactNode } from "react";
 import { zeroAddress, type Address } from "viem";
 import { DemandCurve } from "@/components/pro/DemandCurve";
 import { LiveTape } from "@/components/pro/LiveTape";
-import { ProChart } from "@/components/chart/ProChart";
+import { ChartGrid } from "@/components/chart/ChartGrid";
 import { NoticeBanner } from "@/components/pro/NoticeBanner";
 import { Momentum } from "@/components/pro/Momentum";
 import { TerminalShell } from "@/components/pro/TerminalShell";
@@ -79,7 +79,7 @@ export function ProTerminal({
               symbol={model.symbol ? `$${model.symbol}` : "tokens"}
             />
           ) : (
-            <ProChart auction={auction} symbol={model.symbol ? `$${model.symbol}` : "Token"} name={model.name} factory={factory} id={id} focus={focus} onFocus={setFocus} />
+            <ChartGrid auction={auction} symbol={model.symbol ? `$${model.symbol}` : "Token"} name={model.name} factory={factory} id={id} focus={focus} onFocus={setFocus} />
           )}
         </section>
 

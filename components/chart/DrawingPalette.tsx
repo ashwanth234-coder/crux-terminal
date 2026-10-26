@@ -61,6 +61,14 @@ export const TOOL_INFO: Record<DrawTool, { label: string; key?: string; icon: Re
       </>,
     ),
   },
+  callout: { label: "Callout", icon: svg(<path d="M2.5 3.5h11v6.5H7l-3 3v-3H2.5Z" {...S} strokeLinejoin="round" />) },
+  pitchfork: { label: "Pitchfork", icon: svg(<path d="M2 13 8 8M8 8l6-5M8 8l6 1M8 8l6-1M8 8 14 3M5 6.5l5 4" {...S} />) },
+  gannfan: { label: "Gann fan", icon: svg(<path d="M2.5 13.5 14 2.5M2.5 13.5 14 6.5M2.5 13.5 14 10.5M2.5 13.5 10 2.5M2.5 13.5 6 2.5" {...S} strokeWidth={1} />) },
+  xabcd: { label: "XABCD pattern", icon: svg(<path d="m1.5 12 3-8 3 5 3-6 4 9" {...S} />) },
+  abcd: { label: "ABCD pattern", icon: svg(<path d="m2 12 4-8 3 5 5-6" {...S} />) },
+  headshoulders: { label: "Head and shoulders", icon: svg(<path d="m1.5 12 2.5-5 2 2.5L8 3l2 6.5L12 7l2.5 5M2 10.5h12" {...S} strokeWidth={1.1} />) },
+  elliott: { label: "Elliott impulse wave", icon: svg(<path d="m1.5 13 2.5-5 2 2.5 3.5-7.5 2 4 3-5" {...S} />) },
+  triangle: { label: "Triangle pattern", icon: svg(<path d="m2 12 6-9 6 9Z" {...S} strokeLinejoin="round" />) },
   fib: { label: "Fib retracement", key: "F", icon: svg(<path d="M2.5 3.5h11M2.5 6.5h11M2.5 9h11M2.5 12.5h11" {...S} strokeWidth={1.1} />) },
   long: {
     label: "Long position",
@@ -95,8 +103,9 @@ export const STICKERS = ["🚀", "🔥", "💎", "🐋", "📈", "📉", "⚠️
 
 const GROUPS: { id: string; label: string; tools: DrawTool[] }[] = [
   { id: "lines", label: "Lines", tools: ["trend", "ray", "hline", "vline", "arrow", "channel"] },
-  { id: "fib", label: "Fib and positions", tools: ["fib", "long", "short"] },
-  { id: "shapes", label: "Shapes and notes", tools: ["rect", "text"] },
+  { id: "fib", label: "Fib, Gann and positions", tools: ["fib", "pitchfork", "gannfan", "long", "short"] },
+  { id: "patterns", label: "Patterns", tools: ["xabcd", "abcd", "headshoulders", "elliott", "triangle"] },
+  { id: "shapes", label: "Shapes and notes", tools: ["rect", "text", "callout"] },
 ];
 
 const CURSORS: { id: ChartSettings["cursor"]; label: string; icon: ReactNode }[] = [
@@ -193,7 +202,7 @@ export function DrawingPalette({
     setFlyTop(box ? e.currentTarget.getBoundingClientRect().top - box.top : 0);
     setFlyoutState(flyout === id ? null : id);
   };
-  const [last, setLast] = useState<Record<string, DrawTool>>({ lines: "trend", fib: "fib", shapes: "rect" });
+  const [last, setLast] = useState<Record<string, DrawTool>>({ lines: "trend", fib: "fib", patterns: "xabcd", shapes: "rect" });
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!flyout) return;
