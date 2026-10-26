@@ -9,6 +9,8 @@ import { useTradeSettings } from "@/hooks/useTradeSettings";
 import { TESTNET_USDC } from "@/lib/intents";
 import { fmtTokens } from "@/lib/launch";
 import { fmtTokenPrice, launchCaip19 } from "@/lib/launchTrade";
+import { SOLVER_MAX_IMPACT_PCT, tradeRisk } from "@/lib/risk";
+import type { PoolReserves } from "@/lib/launchTrade";
 import { KIND_LABEL, cancelStanding, listStanding, newGroup, placeStanding, standingFloor, type StandingKind, type StandingView } from "@/lib/standing";
 
 export type OrderType = "market" | StandingKind | "bracket";
@@ -147,6 +149,7 @@ export function StandingOrderForm({
   price,
   supply,
   tokenBalance,
+  reserves,
 }: {
   type: Exclude<OrderType, "market">;
   crux: CruxAccountState;
@@ -156,6 +159,8 @@ export function StandingOrderForm({
   price: number | null;
   supply: number;
   tokenBalance: bigint | null;
+  /** The pool now: an order that would move it more than the solver's cap would never fill. */
+  reserves: PoolReserves | null;
 }) {
   const settings = useTradeSettings();
   const side = type === "dip" ? "buy" : "sell";
@@ -221,7 +226,9 @@ export function StandingOrderForm({
   const triggerOf = (k: StandingKind) => (price ?? 0) * (1 + (k === "trailing" ? -pcts.trailing : pcts[k]) / 100);
   const floors = kinds.map((k) => (price ? standingFloor(side, amountIn, triggerOf(k), decimals, settings.slippageBps) : BigInt(0)));
   const overBalance = side === "buy" && crux.usdc !== null && amountIn > crux.usdc;
-  const disabled = busy || !price || amountIn === BigInt(0) || overBalance || floors.some((f) => f === BigInt(0));
+  const impact = reserves && amountIn > BigInt(0) ? (tradeRisk(side, amountIn, reserves)?.poolImpactPct ?? null) : null;
+  const tooBig = impact !== null && impact > SOLVER_MAX_IMPACT_PCT;
+  const disabled = busy || !price || amountIn === BigInt(0) || overBalance || tooBig || floors.some((f) => f === BigInt(0));
 
   const create = async () => {
     if (!crux.sign || !crux.owner || !crux.account || !price) return;
@@ -380,7 +387,13 @@ export function StandingOrderForm({
         onClick={() => void create()}
         className={buttonClass("signal", "md", `w-full rounded-xl font-semibold ${side === "sell" ? "!bg-[#e5484d] !text-white hover:!bg-[#d13d42]" : ""}`)}
       >
-        {busy ? "Signing…" : overBalance ? "Not enough USDC in your account" : side === "buy" ? "Create buy order" : "Create sell order"}
+        {busy
+          ? "Signing…"
+          : overBalance
+            ? "Not enough USDC in your account"
+            : tooBig
+              ? `Too large for this pool (over ${SOLVER_MAX_IMPACT_PCT}% price impact)`
+              : side === "buy" ? "Create buy order" : "Create sell order"}
       </button>
       {msg && <p className={`text-[11.5px] ${msg.tone === "ok" ? "text-up" : "text-down"}`}>{msg.text}</p>}
 

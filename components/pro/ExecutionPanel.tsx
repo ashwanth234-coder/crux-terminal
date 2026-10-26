@@ -668,6 +668,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
           price={market.price}
           supply={Number(auction.totalSupply) / 1e18}
           tokenBalance={accountTokens.data ?? null}
+          reserves={market.reserves}
         />
       ) : (
       <>
