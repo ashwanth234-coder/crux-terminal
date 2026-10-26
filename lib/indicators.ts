@@ -236,6 +236,317 @@ export function obv(candles: Candle[]): Series {
   });
 }
 
+const hl2 = (candles: Candle[]) => candles.map((c) => (c.high + c.low) / 2);
+const typical = (candles: Candle[]) => candles.map((c) => (c.high + c.low + c.close) / 3);
+
+/** Weighted moving average (weights 1..n, newest heaviest) of a series with gaps. */
+export function wmaOf(values: Series, n: number): Series {
+  const denom = (n * (n + 1)) / 2;
+  return values.map((_, i) => {
+    if (i < n - 1) return null;
+    let sum = 0;
+    for (let j = 0; j < n; j++) {
+      const v = values[i - n + 1 + j];
+      if (v === null) return null;
+      sum += v * (j + 1);
+    }
+    return sum / denom;
+  });
+}
+
+/** Hull moving average: WMA(2·WMA(n/2) − WMA(n), √n), fast with little lag. */
+export function hma(candles: Candle[], n = 9): Series {
+  const c = closes(candles);
+  const half = wmaOf(c, Math.max(1, Math.round(n / 2)));
+  const full = wmaOf(c, n);
+  const diff: Series = half.map((h, i) => (h === null || full[i] === null ? null : 2 * h - (full[i] as number)));
+  return wmaOf(diff, Math.max(1, Math.round(Math.sqrt(n))));
+}
+
+/** Double and triple EMA: 2·EMA − EMA(EMA), and 3·EMA − 3·EMA(EMA) + EMA(EMA(EMA)). */
+export function dema(candles: Candle[], n = 21): Series {
+  const e1 = ema(candles, n);
+  const e2 = emaOf(e1, n);
+  return e1.map((v, i) => (v === null || e2[i] === null ? null : 2 * v - (e2[i] as number)));
+}
+export function tema(candles: Candle[], n = 21): Series {
+  const e1 = ema(candles, n);
+  const e2 = emaOf(e1, n);
+  const e3 = emaOf(e2, n);
+  return e1.map((v, i) => (v === null || e2[i] === null || e3[i] === null ? null : 3 * v - 3 * (e2[i] as number) + (e3[i] as number)));
+}
+
+/** Arnaud Legoux moving average: a Gaussian-weighted window offset toward the newest prices. */
+export function alma(candles: Candle[], n = 9, offset = 0.85, sigma = 6): Series {
+  const c = closes(candles);
+  const m = offset * (n - 1);
+  const s = n / sigma;
+  const w = Array.from({ length: n }, (_, j) => Math.exp(-((j - m) ** 2) / (2 * s * s)));
+  const wsum = w.reduce((a, b) => a + b, 0);
+  return c.map((_, i) => (i < n - 1 ? null : w.reduce((acc, wj, j) => acc + wj * c[i - n + 1 + j], 0) / wsum));
+}
+
+/** Keltner channels: EMA(n) of closes ± m·ATR(n). */
+export function keltner(candles: Candle[], n = 20, m = 2): { upper: Series; mid: Series; lower: Series } {
+  const mid = ema(candles, n);
+  const a = atr(candles, n);
+  return {
+    mid,
+    upper: mid.map((v, i) => (v === null || a[i] === null ? null : v + m * (a[i] as number))),
+    lower: mid.map((v, i) => (v === null || a[i] === null ? null : v - m * (a[i] as number))),
+  };
+}
+
+/** Parabolic SAR (step 0.02, max 0.2): a trailing stop that accelerates with the trend. */
+export function psar(candles: Candle[], step = 0.02, max = 0.2): Series {
+  if (candles.length < 2) return candles.map(() => null);
+  let bull = candles[1].close >= candles[0].close;
+  let sar = bull ? candles[0].low : candles[0].high;
+  let ep = bull ? candles[0].high : candles[0].low;
+  let af = step;
+  const out: Series = [null];
+  for (let i = 1; i < candles.length; i++) {
+    const c = candles[i];
+    sar = sar + af * (ep - sar);
+    const p = candles[i - 1];
+    const pp = candles[Math.max(0, i - 2)];
+    if (bull) {
+      sar = Math.min(sar, p.low, pp.low);
+      if (c.low < sar) {
+        bull = false;
+        sar = ep;
+        ep = c.low;
+        af = step;
+      } else if (c.high > ep) {
+        ep = c.high;
+        af = Math.min(max, af + step);
+      }
+    } else {
+      sar = Math.max(sar, p.high, pp.high);
+      if (c.high > sar) {
+        bull = true;
+        sar = ep;
+        ep = c.high;
+        af = step;
+      } else if (c.low < ep) {
+        ep = c.low;
+        af = Math.min(max, af + step);
+      }
+    }
+    out.push(sar);
+  }
+  return out;
+}
+
+/** Ichimoku conversion (9) and base (26) lines: midpoints of the period's high and low. */
+export function ichimokuLines(candles: Candle[], conv = 9, base = 26): { conversion: Series; base: Series } {
+  const mid = (n: number): Series =>
+    candles.map((_, i) => {
+      if (i < n - 1) return null;
+      let hi = -Infinity;
+      let lo = Infinity;
+      for (let j = i - n + 1; j <= i; j++) {
+        hi = Math.max(hi, candles[j].high);
+        lo = Math.min(lo, candles[j].low);
+      }
+      return (hi + lo) / 2;
+    });
+  return { conversion: mid(conv), base: mid(base) };
+}
+
+/** The highest high and lowest low so far: the chart's own "52-week" range for a token younger than a year. */
+export function periodHighLow(candles: Candle[]): { high: Series; low: Series } {
+  let hi = -Infinity;
+  let lo = Infinity;
+  const high: Series = [];
+  const low: Series = [];
+  for (const c of candles) {
+    hi = Math.max(hi, c.high);
+    lo = Math.min(lo, c.low);
+    high.push(hi);
+    low.push(lo);
+  }
+  return { high, low };
+}
+
+/** Commodity channel index: (typical − SMA) / (0.015 × mean deviation). */
+export function cci(candles: Candle[], n = 20): Series {
+  const tp = typical(candles);
+  const ma = smaOf(tp, n);
+  return tp.map((v, i) => {
+    const m = ma[i];
+    if (m === null) return null;
+    let dev = 0;
+    for (let j = i - n + 1; j <= i; j++) dev += Math.abs(tp[j] - m);
+    dev /= n;
+    return dev === 0 ? 0 : (v - m) / (0.015 * dev);
+  });
+}
+
+/** Williams %R: where the close sits in the n-candle range, 0 (top) to −100 (bottom). */
+export function williamsR(candles: Candle[], n = 14): Series {
+  const d = donchian(candles, n);
+  return candles.map((c, i) => {
+    const hi = d.upper[i];
+    const lo = d.lower[i];
+    if (hi === null || lo === null) return null;
+    return hi === lo ? -50 : ((hi - c.close) / (hi - lo)) * -100;
+  });
+}
+
+/** Money flow index: RSI of typical price weighted by USDC volume (0–100). */
+export function mfi(candles: Candle[], n = 14): Series {
+  const tp = typical(candles);
+  return candles.map((_, i) => {
+    if (i < n) return null;
+    let pos = 0;
+    let neg = 0;
+    for (let j = i - n + 1; j <= i; j++) {
+      const flow = tp[j] * candles[j].volume;
+      if (tp[j] > tp[j - 1]) pos += flow;
+      else if (tp[j] < tp[j - 1]) neg += flow;
+    }
+    return neg === 0 ? (pos === 0 ? 50 : 100) : 100 - 100 / (1 + pos / neg);
+  });
+}
+
+/** Average directional index with +DI and −DI (Wilder, n). */
+export function adx(candles: Candle[], n = 14): { adx: Series; plus: Series; minus: Series } {
+  const plus: Series = [];
+  const minus: Series = [];
+  const dxs: Series = [];
+  let tr = 0;
+  let pdm = 0;
+  let mdm = 0;
+  candles.forEach((c, i) => {
+    if (i === 0) {
+      plus.push(null);
+      minus.push(null);
+      dxs.push(null);
+      return;
+    }
+    const p = candles[i - 1];
+    const up = c.high - p.high;
+    const down = p.low - c.low;
+    const t = Math.max(c.high - c.low, Math.abs(c.high - p.close), Math.abs(c.low - p.close));
+    const pd = up > down && up > 0 ? up : 0;
+    const md = down > up && down > 0 ? down : 0;
+    if (i <= n) {
+      tr += t;
+      pdm += pd;
+      mdm += md;
+    } else {
+      tr = tr - tr / n + t;
+      pdm = pdm - pdm / n + pd;
+      mdm = mdm - mdm / n + md;
+    }
+    if (i < n || tr === 0) {
+      plus.push(null);
+      minus.push(null);
+      dxs.push(null);
+      return;
+    }
+    const pdi = (100 * pdm) / tr;
+    const mdi = (100 * mdm) / tr;
+    plus.push(pdi);
+    minus.push(mdi);
+    dxs.push(pdi + mdi === 0 ? 0 : (100 * Math.abs(pdi - mdi)) / (pdi + mdi));
+  });
+  // ADX: Wilder's smoothing of DX.
+  let prev: number | null = null;
+  let seed = 0;
+  let seen = 0;
+  const out: Series = dxs.map((v) => {
+    if (v === null) return null;
+    if (prev === null) {
+      seed += v;
+      seen += 1;
+      if (seen < n) return null;
+      prev = seed / n;
+      return prev;
+    }
+    prev = (prev * (n - 1) + v) / n;
+    return prev;
+  });
+  return { adx: out, plus, minus };
+}
+
+/** Aroon up / down: how recently the n-candle high and low were set (100 = this candle). */
+export function aroon(candles: Candle[], n = 14): { up: Series; down: Series } {
+  const up: Series = [];
+  const down: Series = [];
+  candles.forEach((_, i) => {
+    if (i < n) {
+      up.push(null);
+      down.push(null);
+      return;
+    }
+    let hi = i - n;
+    let lo = i - n;
+    for (let j = i - n; j <= i; j++) {
+      if (candles[j].high >= candles[hi].high) hi = j;
+      if (candles[j].low <= candles[lo].low) lo = j;
+    }
+    up.push(((n - (i - hi)) / n) * 100);
+    down.push(((n - (i - lo)) / n) * 100);
+  });
+  return { up, down };
+}
+
+/** Awesome oscillator: SMA(5) − SMA(34) of the bars' midpoints; accelerator = AO − SMA(5) of AO. */
+export function awesome(candles: Candle[]): Series {
+  const m = hl2(candles);
+  const fast = smaOf(m, 5);
+  const slow = smaOf(m, 34);
+  return fast.map((v, i) => (v === null || slow[i] === null ? null : v - (slow[i] as number)));
+}
+export function accelerator(candles: Candle[]): Series {
+  const ao = awesome(candles);
+  const ma = smaGaps(ao, 5);
+  return ao.map((v, i) => (v === null || ma[i] === null ? null : v - (ma[i] as number)));
+}
+
+/** Rate of change (%) and momentum (price difference) over n candles. */
+export function roc(candles: Candle[], n = 9): Series {
+  return candles.map((c, i) => (i < n || candles[i - n].close === 0 ? null : (c.close / candles[i - n].close - 1) * 100));
+}
+export function momentum(candles: Candle[], n = 10): Series {
+  return candles.map((c, i) => (i < n ? null : c.close - candles[i - n].close));
+}
+
+/** TRIX: the 1-candle % change of a triple-smoothed EMA. */
+export function trix(candles: Candle[], n = 15): Series {
+  const e3 = emaOf(emaOf(ema(candles, n), n), n);
+  return e3.map((v, i) => (v === null || i === 0 || e3[i - 1] === null || e3[i - 1] === 0 ? null : (v / (e3[i - 1] as number) - 1) * 100));
+}
+
+/** Accumulation / distribution line and Chaikin money flow (n): volume weighted by where each close sits in its bar. */
+const mfMultiplier = (c: Candle) => (c.high === c.low ? 0 : (c.close - c.low - (c.high - c.close)) / (c.high - c.low));
+export function accDist(candles: Candle[]): Series {
+  let total = 0;
+  return candles.map((c) => (total += mfMultiplier(c) * c.volume));
+}
+export function cmf(candles: Candle[], n = 20): Series {
+  return candles.map((_, i) => {
+    if (i < n - 1) return null;
+    let mf = 0;
+    let vol = 0;
+    for (let j = i - n + 1; j <= i; j++) {
+      mf += mfMultiplier(candles[j]) * candles[j].volume;
+      vol += candles[j].volume;
+    }
+    return vol === 0 ? 0 : mf / vol;
+  });
+}
+
+/** Moving average of USDC volume (n). */
+export function volumeMa(candles: Candle[], n = 20): Series {
+  return smaOf(
+    candles.map((c) => c.volume),
+    n,
+  );
+}
+
 // ------------------------------------------------------- on-chain inputs
 
 /**
@@ -315,6 +626,28 @@ export type StudyId =
   | "macd"
   | "atr"
   | "obv"
+  | "hma"
+  | "wma"
+  | "dema"
+  | "tema"
+  | "alma"
+  | "psar"
+  | "ichimoku"
+  | "highlow"
+  | "keltner"
+  | "cci"
+  | "willr"
+  | "mfi"
+  | "adx"
+  | "aroon"
+  | "ao"
+  | "ac"
+  | "roc"
+  | "mom"
+  | "trix"
+  | "ad"
+  | "cmf"
+  | "volma"
   | "netflow"
   | "buypressure"
   | "holders";
@@ -360,6 +693,37 @@ export const STUDIES: Study[] = [
     needs: 1,
     compute: (c) => [line("vwap", "VWAP", "#ff9d6e", vwap(c))],
   },
+  { id: "wma", label: "WMA 20", group: "Trend", pane: "price", priced: true, needs: 20, compute: (c) => [line("wma", "WMA 20", "#90be6d", wmaOf(closes(c), 20))] },
+  { id: "hma", label: "Hull MA 9", group: "Trend", hint: "Fast moving average with little lag", pane: "price", priced: true, needs: 12, compute: (c) => [line("hma", "HMA 9", "#43aa8b", hma(c, 9))] },
+  { id: "dema", label: "Double EMA 21", group: "Trend", pane: "price", priced: true, needs: 42, compute: (c) => [line("dema", "DEMA 21", "#577590", dema(c, 21))] },
+  { id: "tema", label: "Triple EMA 21", group: "Trend", pane: "price", priced: true, needs: 63, compute: (c) => [line("tema", "TEMA 21", "#4d908e", tema(c, 21))] },
+  { id: "alma", label: "Arnaud Legoux MA 9", group: "Trend", pane: "price", priced: true, needs: 9, compute: (c) => [line("alma", "ALMA 9", "#f9844a", alma(c, 9))] },
+  { id: "psar", label: "Parabolic SAR", group: "Trend", hint: "Trailing stop that speeds up with the trend", pane: "price", priced: true, needs: 2, compute: (c) => [line("psar", "SAR", "#f9c74f", psar(c))] },
+  {
+    id: "ichimoku",
+    label: "Ichimoku (conversion, base)",
+    group: "Trend",
+    pane: "price",
+    priced: true,
+    needs: 26,
+    compute: (c) => {
+      const x = ichimokuLines(c);
+      return [line("ichiConv", "Conversion", "#4cc9f0", x.conversion), line("ichiBase", "Base", "#e5484d", x.base)];
+    },
+  },
+  {
+    id: "highlow",
+    label: "All-time high / low",
+    group: "Trend",
+    hint: "The token's highest and lowest price so far (its own 52-week range)",
+    pane: "price",
+    priced: true,
+    needs: 1,
+    compute: (c) => {
+      const x = periodHighLow(c);
+      return [line("athHigh", "High", "#5cc08c", x.high), line("athLow", "Low", "#e5484d", x.low)];
+    },
+  },
   {
     id: "supertrend",
     label: "Supertrend (10, 3)",
@@ -398,6 +762,18 @@ export const STUDIES: Study[] = [
       return [line("dcUpper", "DC upper", "#5fa8d3", d.upper), line("dcMid", "DC mid", "#8f939b", d.mid), line("dcLower", "DC lower", "#5fa8d3", d.lower)];
     },
   },
+  {
+    id: "keltner",
+    label: "Keltner Channels (20, 2)",
+    group: "Bands",
+    pane: "price",
+    priced: true,
+    needs: 20,
+    compute: (c) => {
+      const x = keltner(c);
+      return [line("kcUpper", "KC upper", "#9d8df1", x.upper), line("kcMid", "KC basis", "#b8b8ff", x.mid), line("kcLower", "KC lower", "#9d8df1", x.lower)];
+    },
+  },
   { id: "rsi", label: "RSI (14)", group: "Oscillators", pane: "pane", priced: false, needs: 15, levels: [30, 70], compute: (c) => [line("rsi", "RSI", "#b388ff", rsi(c, 14))] },
   {
     id: "stochrsi",
@@ -425,6 +801,43 @@ export const STUDIES: Study[] = [
     },
   },
   { id: "atr", label: "ATR (14)", group: "Oscillators", hint: "Average candle range: volatility", pane: "pane", priced: true, needs: 14, compute: (c) => [line("atr", "ATR", "#e9c46a", atr(c, 14))] },
+  { id: "cci", label: "CCI (20)", group: "Oscillators", pane: "pane", priced: false, needs: 20, levels: [-100, 100], compute: (c) => [line("cci", "CCI", "#4cc9f0", cci(c))] },
+  { id: "willr", label: "Williams %R (14)", group: "Oscillators", pane: "pane", priced: false, needs: 14, levels: [-80, -20], compute: (c) => [line("willr", "%R", "#c792ea", williamsR(c))] },
+  {
+    id: "adx",
+    label: "ADX / DMI (14)",
+    group: "Oscillators",
+    hint: "Trend strength, with buyers' (+DI) and sellers' (−DI) push",
+    pane: "pane",
+    priced: false,
+    needs: 28,
+    levels: [25],
+    compute: (c) => {
+      const x = adx(c);
+      return [line("adx", "ADX", "#ffd166", x.adx), line("pdi", "+DI", "#5cc08c", x.plus), line("mdi", "−DI", "#e5484d", x.minus)];
+    },
+  },
+  {
+    id: "aroon",
+    label: "Aroon (14)",
+    group: "Oscillators",
+    pane: "pane",
+    priced: false,
+    needs: 15,
+    compute: (c) => {
+      const x = aroon(c);
+      return [line("aroonUp", "Up", "#5cc08c", x.up), line("aroonDown", "Down", "#e5484d", x.down)];
+    },
+  },
+  { id: "ao", label: "Awesome Oscillator", group: "Oscillators", pane: "pane", priced: true, needs: 34, compute: (c) => [bar("ao", "AO", "#8f939b", awesome(c))] },
+  { id: "ac", label: "Accelerator Oscillator", group: "Oscillators", pane: "pane", priced: true, needs: 38, compute: (c) => [bar("ac", "AC", "#8f939b", accelerator(c))] },
+  { id: "roc", label: "Rate of Change (9)", group: "Oscillators", pane: "pane", priced: false, needs: 10, levels: [0], compute: (c) => [line("roc", "ROC %", "#f4a261", roc(c))] },
+  { id: "mom", label: "Momentum (10)", group: "Oscillators", pane: "pane", priced: true, needs: 11, levels: [0], compute: (c) => [line("mom", "MOM", "#e9c46a", momentum(c))] },
+  { id: "trix", label: "TRIX (15)", group: "Oscillators", pane: "pane", priced: false, needs: 46, levels: [0], compute: (c) => [line("trix", "TRIX", "#90be6d", trix(c))] },
+  { id: "mfi", label: "Money Flow Index (14)", group: "Volume", hint: "RSI weighted by volume", pane: "pane", priced: false, needs: 15, levels: [20, 80], compute: (c) => [line("mfi", "MFI", "#43aa8b", mfi(c))] },
+  { id: "ad", label: "Accumulation / Distribution", group: "Volume", pane: "pane", priced: false, needs: 1, compute: (c) => [line("ad", "A/D", "#7bdff2", accDist(c))] },
+  { id: "cmf", label: "Chaikin Money Flow (20)", group: "Volume", pane: "pane", priced: false, needs: 20, levels: [0], compute: (c) => [line("cmf", "CMF", "#c792ea", cmf(c))] },
+  { id: "volma", label: "Volume MA (20)", group: "Volume", pane: "pane", priced: false, needs: 20, compute: (c) => [bar("vol", "Vol", "#8f939b", c.map((x) => x.volume)), line("volma", "MA 20", "#ffd166", volumeMa(c))] },
   { id: "obv", label: "On-balance volume", group: "Volume", pane: "pane", priced: false, needs: 2, compute: (c) => [line("obv", "OBV", "#7bdff2", obv(c))] },
   {
     id: "netflow",

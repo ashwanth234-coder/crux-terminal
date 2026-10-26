@@ -10,9 +10,11 @@ export type Candle = { time: number; open: number; high: number; low: number; cl
 export const INTERVALS = [
   { seconds: 1, label: "1s" },
   { seconds: 15, label: "15s" },
+  { seconds: 30, label: "30s" },
   { seconds: 60, label: "1m" },
   { seconds: 300, label: "5m" },
   { seconds: 900, label: "15m" },
+  { seconds: 1_800, label: "30m" },
   { seconds: 3_600, label: "1h" },
   { seconds: 14_400, label: "4h" },
   { seconds: 86_400, label: "1D" },
@@ -47,5 +49,19 @@ export function toCandles(fills: Fill[], interval: number, openPrice: number | n
     }
     prevClose = f.price;
   }
+  return out;
+}
+
+/**
+ * Heikin Ashi candles: close = the bar's average price, open = the midpoint of the previous HA bar, so runs of one
+ * colour show a trend. Volume and trades carry over unchanged.
+ */
+export function heikinAshi(candles: Candle[]): Candle[] {
+  const out: Candle[] = [];
+  candles.forEach((c, i) => {
+    const close = (c.open + c.high + c.low + c.close) / 4;
+    const open = i === 0 ? (c.open + c.close) / 2 : (out[i - 1].open + out[i - 1].close) / 2;
+    out.push({ ...c, open, close, high: Math.max(c.high, open, close), low: Math.min(c.low, open, close) });
+  });
   return out;
 }

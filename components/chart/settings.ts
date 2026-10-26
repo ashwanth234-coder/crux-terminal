@@ -1,7 +1,22 @@
 import { isStudyId, type StudyId } from "@/lib/indicators";
 import { TOOL_POINTS, type Drawing } from "./drawings";
 
-export type ChartType = "candles" | "hollow" | "bars" | "line" | "area" | "baseline";
+export type ChartType =
+  | "bars"
+  | "candles"
+  | "hollow"
+  | "hlc"
+  | "line"
+  | "linemarkers"
+  | "step"
+  | "area"
+  | "hlcarea"
+  | "baseline"
+  | "columns"
+  | "highlow"
+  | "heikin";
+
+export const CHART_TYPES: ChartType[] = ["bars", "candles", "hollow", "hlc", "line", "linemarkers", "step", "area", "hlcarea", "baseline", "columns", "highlow", "heikin"];
 export type ScaleMode = "normal" | "log" | "percent";
 /** What the price axis shows: the token's price, or its market cap (price × total supply). */
 export type Units = "price" | "mcap";
@@ -23,6 +38,10 @@ export type ChartSettings = {
   minUsd: number;
   /** Drawing magnet: new points snap to the bar's open / high / low / close. */
   snap: boolean;
+  /** The pointer over the chart: a crosshair, a dot, or a plain arrow (no crosshair lines). */
+  cursor: "cross" | "dot" | "arrow";
+  /** Drawings can't be moved or edited while locked. */
+  drawLocked: boolean;
 };
 
 export const DEFAULT_SETTINGS: ChartSettings = {
@@ -35,6 +54,8 @@ export const DEFAULT_SETTINGS: ChartSettings = {
   marks: { mine: true, dev: true, top: false },
   minUsd: 0,
   snap: true,
+  cursor: "cross",
+  drawLocked: false,
 };
 
 /**
@@ -91,7 +112,7 @@ export function loadLayout(token: string): ChartConfig | null {
     const raw = localStorage.getItem(layoutKey(token));
     if (!raw) return null;
     const v = JSON.parse(raw) as Partial<ChartConfig>;
-    const types: ChartType[] = ["candles", "hollow", "bars", "line", "area", "baseline"];
+    const types = CHART_TYPES;
     return {
       interval: v.interval === "auto" || (typeof v.interval === "number" && v.interval > 0) ? v.interval : DEFAULT_CONFIG.interval,
       type: types.includes(v.type as ChartType) ? (v.type as ChartType) : DEFAULT_CONFIG.type,

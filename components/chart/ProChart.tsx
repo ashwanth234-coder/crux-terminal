@@ -101,7 +101,13 @@ export function ProChart({
   const [hoverTime, setHoverTime] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   // Drawing: the palette, the active tool, its first point and where the cursor is (for the live preview).
-  const [paletteOpen, setPaletteOpen] = useState(false);
+  // The drawing toolbar starts open on wide screens, folded away on phones.
+  const [paletteOpen, setPaletteOpen] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1024);
+  // Box zoom (drag a box to zoom into it), the sticker to place, and a brush stroke being drawn.
+  const [zoomMode, setZoomMode] = useState(false);
+  const [zoomBox, setZoomBox] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const [sticker, setSticker] = useState("🚀");
+  const [stroke, setStroke] = useState<DrawPoint[] | null>(null);
   const [tool, setTool] = useState<DrawTool | null>(null);
   const [points, setPoints] = useState<DrawPoint[]>([]);
   const [cursor, setCursor] = useState<DrawPoint | null>(null);
@@ -307,6 +313,8 @@ export function ProChart({
   // Drawings: the frame they map through (times, interval, units), the saved ones and the one being placed.
   const draft = useMemo<Drawing | null>(() => {
     if (!tool) return null;
+    if (tool === "brush") return stroke && stroke.length > 1 ? { id: "draft", tool, a: stroke[0], path: stroke } : null;
+    if (tool === "emoji") return cursor ? { id: "draft", tool, a: cursor, text: sticker } : null;
     const [p0, p1] = points;
     if (!p0) return cursor && TOOL_POINTS[tool] === 1 && tool !== "text" ? { id: "draft", tool, a: cursor } : null;
     if (!p1) {
@@ -314,7 +322,7 @@ export function ProChart({
       return { id: "draft", tool, a: p0, b, ...(tool === "long" || tool === "short" ? { c: defaultStop(p0, b) } : {}) };
     }
     return { id: "draft", tool, a: p0, b: p1, c: cursor ?? p1 };
-  }, [tool, points, cursor]);
+  }, [tool, points, cursor, stroke, sticker]);
   const shownDrawings = useMemo(() => (dragged ? config.drawings.map((d) => (d.id === dragged.id ? dragged : d)) : config.drawings), [config.drawings, dragged]);
   useEffect(() => {
     if (!engine) return;
@@ -328,8 +336,9 @@ export function ProChart({
   }, [auction.token, config]);
   // While a tool is active, clicks place points instead of panning the chart.
   useEffect(() => {
-    engine?.chart.applyOptions({ handleScroll: tool === null, handleScale: tool === null });
-  }, [engine, tool]);
+    const free = tool === null && !zoomMode;
+    engine?.chart.applyOptions({ handleScroll: free, handleScale: free });
+  }, [engine, tool, zoomMode]);
 
   // Fit the view when the timeframe changes or the first candles arrive.
   const fitKey = `${interval}:${candles.length > 0}`;
@@ -452,15 +461,65 @@ export function ProChart({
       return;
     }
     const [a, b, c] = all;
-    addDrawing({ id: newId(), tool, a, ...(b ? { b } : {}), ...(c ? { c } : tool === "long" || tool === "short" ? { c: defaultStop(a, b!) } : {}) });
+    if (tool === "brush") return;
+    addDrawing({
+      id: newId(),
+      tool,
+      a,
+      ...(b ? { b } : {}),
+      ...(c ? { c } : tool === "long" || tool === "short" ? { c: defaultStop(a, b!) } : {}),
+      ...(tool === "emoji" ? { text: sticker } : {}),
+    });
     pickTool(null);
   };
   // Pressing on a drawing grabs it (a handle moves that point, the body moves it all) instead of panning the chart.
   const onPointerDownCapture = (e: PointerEvent<HTMLDivElement>) => {
-    if (!engine || tool || view !== "chart" || e.button !== 0) return;
+    if (!engine || view !== "chart" || e.button !== 0) return;
     // The palette, the drawing bar, menus and the note editor handle their own clicks.
     if ((e.target as HTMLElement).closest("[role=toolbar],[role=menu],[role=dialog],input,button")) return;
-    const at = local(e);
+    const start = local(e);
+    if (start && (zoomMode || tool === "brush")) {
+      // Box zoom and the brush both follow a drag; the chart doesn't pan meanwhile.
+      e.stopPropagation();
+      e.preventDefault();
+      const path: DrawPoint[] = [];
+      const first = engine.pointAt(start.x, start.y, false);
+      if (first) path.push(first);
+      const move = (ev: globalThis.PointerEvent) => {
+        const cur = local(ev);
+        if (!cur) return;
+        if (zoomMode) {
+          setZoomBox({ x1: start.x, y1: start.y, x2: cur.x, y2: cur.y });
+          return;
+        }
+        const p = engine.pointAt(cur.x, cur.y, false);
+        if (p) {
+          path.push(p);
+          setStroke([...path]);
+        }
+      };
+      const up = (ev: globalThis.PointerEvent) => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        const end = local(ev);
+        if (zoomMode) {
+          if (end && Math.abs(end.x - start.x) > 8 && Math.abs(end.y - start.y) > 8) engine.zoomTo(start.x, end.x, start.y, end.y);
+          setZoomBox(null);
+          setZoomMode(false);
+          return;
+        }
+        // Thin the stroke to at most ~200 points so it stays light in the saved layout.
+        const step = Math.max(1, Math.ceil(path.length / 200));
+        const thin = path.filter((_, i) => i % step === 0 || i === path.length - 1);
+        if (thin.length > 1) set((c) => ({ ...c, drawings: [...c.drawings, { id: newId(), tool: "brush", a: thin[0], path: thin }] }));
+        setStroke(null);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+      return;
+    }
+    if (tool) return;
+    const at = start;
     const hit = at ? engine.drawings.drawingAt(at.x, at.y) : null;
     if (!hit || !at) {
       setSelected(null);
@@ -471,7 +530,8 @@ export function ProChart({
     frame.current?.focus();
     setSelected(hit.id);
     const orig = config.drawings.find((d) => d.id === hit.id);
-    if (!orig) return;
+    // Locked drawings can be selected (to delete or recolour) but not moved.
+    if (!orig || settings.drawLocked) return;
     drag.current = { orig, part: hit.part, x: at.x, y: at.y, moved: false, last: null };
     const move = (ev: globalThis.PointerEvent) => {
       const cur = local(ev);
@@ -522,9 +582,10 @@ export function ProChart({
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const mod = e.ctrlKey || e.metaKey;
     if ((e.target as HTMLElement).tagName === "INPUT") return;
-    if (e.key === "Escape" && (tool || selected)) {
+    if (e.key === "Escape" && (tool || selected || zoomMode)) {
       pickTool(null);
       setSelected(null);
+      setZoomMode(false);
     } else if ((e.key === "Delete" || e.key === "Backspace") && selected) {
       e.preventDefault();
       removeDrawing(selected);
@@ -631,7 +692,7 @@ export function ProChart({
         // On phones the chart grows by a pane's height for each indicator pane, so panes never squeeze the candles.
         style={{ "--chart-min": `${300 + 110 * computedStudies.filter((c) => c.study.pane === "pane").length}px` } as CSSProperties}
         className={`relative min-h-[300px] flex-1 touch-none overflow-hidden rounded-t-[4px] border border-line max-lg:min-h-[var(--chart-min)] ${
-          tool ? "cursor-crosshair" : dragged ? "cursor-grabbing" : hover === "body" ? "cursor-move" : hover ? "cursor-grab" : ""
+          tool || zoomMode ? "cursor-crosshair" : dragged ? "cursor-grabbing" : hover === "body" ? "cursor-move" : hover ? "cursor-grab" : ""
         }`}
         onContextMenu={onContext}
         onMouseDown={() => frame.current?.focus()}
@@ -646,7 +707,7 @@ export function ProChart({
       >
         <div ref={host} className={`absolute inset-0 ${view === "table" ? "invisible" : ""}`} aria-label={`${symbol} chart`} role="img" />
         {view === "chart" && (
-          <Legend title={`${name ?? symbol} · ${intervalLabel} · CRUX`} candle={shown} k={k} fmt={fmt} lines={studyLines} index={shownIndex} />
+          <Legend inset={paletteOpen} title={`${name ?? symbol} · ${intervalLabel} · CRUX`} candle={shown} k={k} fmt={fmt} lines={studyLines} index={shownIndex} />
         )}
         {view === "chart" && lockedX !== null && (
           <div className="pointer-events-none absolute bottom-7 top-0 z-[5] w-px border-l border-dashed border-[#4cc9f0]/70" style={{ left: lockedX }} aria-hidden="true" />
@@ -659,14 +720,28 @@ export function ProChart({
             setTool={pickTool}
             count={config.drawings.length}
             onClear={() => set((c) => ({ ...c, drawings: [] }))}
-            snap={settings.snap}
-            onSnap={() => setSettings({ ...settings, snap: !settings.snap })}
+            settings={settings}
+            onSettings={setSettings}
+            zoom={zoomMode}
+            onZoom={() => {
+              pickTool(null);
+              setZoomMode((z) => !z);
+            }}
+            sticker={sticker}
+            onSticker={setSticker}
             hidden={drawHidden}
             onHidden={() => setDrawHidden((h) => !h)}
           />
         )}
         {view === "chart" && !drawHidden && !tool && !dragged && selectedBar}
         {view === "chart" && editing && textEditor}
+        {zoomBox && (
+          <div
+            className="pointer-events-none absolute z-20 border border-[#4cc9f0] bg-[#4cc9f0]/10"
+            style={{ left: Math.min(zoomBox.x1, zoomBox.x2), top: Math.min(zoomBox.y1, zoomBox.y2), width: Math.abs(zoomBox.x2 - zoomBox.x1), height: Math.abs(zoomBox.y2 - zoomBox.y1) }}
+            aria-hidden="true"
+          />
+        )}
         {focus && view === "chart" && (
           <button
             type="button"

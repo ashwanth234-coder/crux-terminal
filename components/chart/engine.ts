@@ -10,7 +10,7 @@ import type {
   Time,
   UTCTimestamp,
 } from "lightweight-charts";
-import type { Candle } from "@/lib/candles";
+import { heikinAshi, type Candle } from "@/lib/candles";
 import type { Study, StudyLine } from "@/lib/indicators";
 import { DrawingsPrimitive, type DrawPoint } from "./drawings";
 import { palette, type ChartSettings, type ChartType, type ScaleMode } from "./settings";
@@ -39,6 +39,8 @@ export class ChartEngine {
   private main: ISeriesApi<SeriesType>;
   private type: ChartType = "candles";
   private readonly volume: ISeriesApi<"Histogram">;
+  /** Helper series some styles draw with (HLC area's high and low lines), replaced with the style. */
+  private extras: ISeriesApi<SeriesType>[] = [];
   private studySeries: ISeriesApi<SeriesType>[] = [];
   private paneLines: IPriceLine[] = [];
   private mainLines: IPriceLine[] = [];
@@ -85,7 +87,11 @@ export class ChartEngine {
     const grid = s.grid ? this.theme.line : "transparent";
     this.chart.applyOptions({
       grid: { vertLines: { color: grid }, horzLines: { color: grid } },
-      crosshair: { mode: s.magnet ? this.lc.CrosshairMode.MagnetOHLC : this.lc.CrosshairMode.Normal },
+      crosshair: {
+        mode: s.cursor === "arrow" ? this.lc.CrosshairMode.Hidden : s.magnet ? this.lc.CrosshairMode.MagnetOHLC : this.lc.CrosshairMode.Normal,
+        vertLine: { visible: s.cursor === "cross", labelVisible: s.cursor !== "arrow" },
+        horzLine: { visible: s.cursor === "cross", labelVisible: s.cursor !== "arrow" },
+      },
       timeScale: { secondsVisible: s.seconds },
     });
     this.volume.applyOptions({ visible: s.volume });
@@ -97,6 +103,24 @@ export class ChartEngine {
     const chrome = this.theme.chrome;
     const lc = this.lc;
     switch (type) {
+      case "hlc":
+        return this.chart.addSeries(lc.BarSeries, { upColor: up, downColor: down, openVisible: false, thinBars: false });
+      case "linemarkers":
+        return this.chart.addSeries(lc.LineSeries, { color: chrome, lineWidth: 2, pointMarkersVisible: true, pointMarkersRadius: 2.5 });
+      case "step":
+        return this.chart.addSeries(lc.LineSeries, { color: chrome, lineWidth: 2, lineType: lc.LineType.WithSteps });
+      case "hlcarea":
+        this.extras = [
+          this.chart.addSeries(lc.LineSeries, { color: `${up}aa`, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false }),
+          this.chart.addSeries(lc.LineSeries, { color: `${down}aa`, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false }),
+        ];
+        return this.chart.addSeries(lc.AreaSeries, { lineColor: chrome, topColor: `${chrome}22`, bottomColor: `${chrome}00`, lineWidth: 2 });
+      case "columns":
+        return this.chart.addSeries(lc.HistogramSeries, { color: up, base: 0 });
+      case "highlow":
+        return this.chart.addSeries(lc.CandlestickSeries, { upColor: up, downColor: down, wickVisible: false, borderVisible: false });
+      case "heikin":
+        return this.chart.addSeries(lc.CandlestickSeries, { upColor: up, downColor: down, wickUpColor: up, wickDownColor: down, borderVisible: false });
       case "hollow":
         return this.chart.addSeries(lc.CandlestickSeries, {
           upColor: "rgba(0,0,0,0)",
@@ -135,6 +159,8 @@ export class ChartEngine {
     this.markers?.detach();
     this.main.detachPrimitive(this.drawings);
     this.chart.removeSeries(this.main);
+    for (const s of this.extras) this.chart.removeSeries(s);
+    this.extras = [];
     this.type = type;
     this.main = this.addMain(type);
     this.markers = this.lc.createSeriesMarkers(this.main, this.markerData);
@@ -152,9 +178,24 @@ export class ChartEngine {
     const { up, down } = palette(this.settings);
     const priceFormat = { type: "custom" as const, formatter: format, minMove };
     this.main.applyOptions({ priceFormat });
-    if (this.type === "candles" || this.type === "hollow" || this.type === "bars") {
-      (this.main as ISeriesApi<"Candlestick">).setData(candles.map((c) => ({ time: t(c), open: c.open * k, high: c.high * k, low: c.low * k, close: c.close * k })));
+    const ohlc = (cs: Candle[]) => cs.map((c) => ({ time: t(c), open: c.open * k, high: c.high * k, low: c.low * k, close: c.close * k }));
+    if (this.type === "candles" || this.type === "hollow" || this.type === "bars" || this.type === "hlc") {
+      (this.main as ISeriesApi<"Candlestick">).setData(ohlc(candles));
+    } else if (this.type === "heikin") {
+      (this.main as ISeriesApi<"Candlestick">).setData(ohlc(heikinAshi(candles)));
+    } else if (this.type === "highlow") {
+      // One bar from low to high, coloured by the candle's direction.
+      (this.main as ISeriesApi<"Candlestick">).setData(
+        candles.map((c) => ({ time: t(c), open: c.low * k, high: c.high * k, low: c.low * k, close: c.high * k, color: c.close >= c.open ? up : down })),
+      );
+    } else if (this.type === "columns") {
+      (this.main as ISeriesApi<"Histogram">).setData(candles.map((c) => ({ time: t(c), value: c.close * k, color: `${c.close >= c.open ? up : down}cc` })));
     } else {
+      if (this.type === "hlcarea" && this.extras.length === 2) {
+        this.extras[0].setData(candles.map((c) => ({ time: t(c), value: c.high * k })));
+        this.extras[1].setData(candles.map((c) => ({ time: t(c), value: c.low * k })));
+        for (const s of this.extras) s.applyOptions({ priceFormat });
+      }
       if (this.type === "baseline" && candles.length) {
         (this.main as ISeriesApi<"Baseline">).applyOptions({ baseValue: { type: "price", price: candles[0].open * k } });
       }
@@ -271,6 +312,19 @@ export class ChartEngine {
   pointAt(x: number, y: number, snap: boolean): DrawPoint | null {
     const p = this.drawings.pointAtXY(x, y);
     return p && snap ? this.drawings.snap(p) : p;
+  }
+
+  /** Zooms to a box dragged on the chart: its time span and (in the chart's units) its price span. */
+  zoomTo(x1: number, x2: number, y1: number, y2: number) {
+    const l1 = this.chart.timeScale().coordinateToLogical(Math.min(x1, x2));
+    const l2 = this.chart.timeScale().coordinateToLogical(Math.max(x1, x2));
+    const p1 = this.main.coordinateToPrice(Math.max(y1, y2));
+    const p2 = this.main.coordinateToPrice(Math.min(y1, y2));
+    if (l1 !== null && l2 !== null && l2 - l1 >= 1) this.chart.timeScale().setVisibleLogicalRange({ from: l1, to: l2 });
+    if (p1 !== null && p2 !== null && p2 > p1) {
+      this.chart.priceScale("right").applyOptions({ autoScale: false });
+      this.main.priceScale().setVisibleRange({ from: p1, to: p2 });
+    }
   }
 
   xOf(time: number): number | null {

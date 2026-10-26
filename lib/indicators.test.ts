@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Candle } from "./candles.ts";
-import { atr, bollinger, donchian, ema, emaOf, flowByCandle, holdersByCandle, macd, obv, rsi, sma, smaOf, stochRsi, supertrend } from "./indicators.ts";
+import { STUDIES, adx, aroon, atr, bollinger, cci, donchian, ema, emaOf, flowByCandle, holdersByCandle, macd, obv, psar, rsi, sma, smaOf, stochRsi, supertrend, williamsR, wmaOf } from "./indicators.ts";
 
 const candles = (closes: number[]): Candle[] => closes.map((c, i) => ({ time: i, open: c, high: c, low: c, close: c, volume: 1, trades: 1 }));
 const near = (a: number | null, b: number, eps = 1e-9) => assert.ok(a !== null && Math.abs(a - b) < eps, `${a} ≈ ${b}`);
@@ -113,4 +113,42 @@ test("on-chain inputs: flow lands in its candle, holders replay transfers", () =
     new Set([POOL]),
   );
   assert.deepEqual(h, [2, 1, 1]);
+});
+
+test("WMA, Williams %R, CCI and Aroon on known values", () => {
+  assert.deepEqual(wmaOf([1, 2, 3], 3), [null, null, (1 + 4 + 9) / 6]);
+  const r = williamsR(bars([[10, 0, 5], [10, 0, 10]]), 2);
+  near(r[1], 0);
+  const flat = cci(candles([5, 5, 5, 5]), 3);
+  assert.equal(flat[3], 0);
+  const a = aroon(bars([[1, 0, 1], [2, 1, 2], [3, 2, 3]]), 2);
+  near(a.up[2], 100);
+});
+
+test("Parabolic SAR stays under a rising market, ADX is high in a clean trend", () => {
+  const up = bars(Array.from({ length: 40 }, (_, i) => [11 + i, 9 + i, 10 + i] as [number, number, number]));
+  const s = psar(up);
+  assert.ok((s[30] as number) < up[30].low);
+  const d = adx(up);
+  assert.ok((d.adx[39] as number) > 50);
+  assert.ok((d.plus[39] as number) > (d.minus[39] as number));
+});
+
+test("every study computes on a long random walk without throwing or NaN", () => {
+  let p = 100;
+  const cs: Candle[] = Array.from({ length: 300 }, (_, i) => {
+    const o = p;
+    p = Math.max(1, p + Math.sin(i) * 3 + (i % 7) - 3);
+    return { time: i * 60, open: o, high: Math.max(o, p) + 1, low: Math.min(o, p) - 1, close: p, volume: 1 + (i % 5), trades: 1 };
+  });
+  const ctx = { buyUsd: cs.map(() => 1), sellUsd: cs.map(() => 0.5), holders: cs.map((_, i) => i) };
+  for (const s of STUDIES) {
+    const lines = s.compute(cs, ctx);
+    for (const line of lines) {
+      assert.equal(line.values.length, cs.length, s.id);
+      assert.ok(line.values.every((v) => v === null || Number.isFinite(v)), `${s.id} ${line.key}`);
+    }
+    // Some lines are one-sided by design (Supertrend's down line in an uptrend), but every study shows something.
+    assert.ok(lines.some((l) => l.values.some((v) => v !== null)), `${s.id} has values`);
+  }
 });

@@ -18,6 +18,7 @@ export function Legend({
   fmt,
   lines,
   index,
+  inset = false,
 }: {
   title: string;
   candle: Candle | null;
@@ -26,6 +27,8 @@ export function Legend({
   /** Active studies' outputs and whether each is in price units (scaled by k). */
   lines: { line: StudyLine; priced: boolean }[];
   index: number;
+  /** Shifted right, clear of the open drawing toolbar. */
+  inset?: boolean;
 }) {
   const [open, setOpen] = useState(true);
   if (!candle) return null;
@@ -33,7 +36,7 @@ export function Legend({
   const pct = candle.open > 0 ? (delta / candle.open) * 100 : 0;
   const tone = delta < 0 ? "text-down" : "text-up";
   return (
-    <div className="pointer-events-none absolute left-2 top-1.5 z-10 max-w-[calc(100%-6rem)] font-mono text-[11px] leading-snug">
+    <div className={`pointer-events-none absolute top-1.5 z-10 max-w-[calc(100%-6rem)] ${inset ? "left-12" : "left-2"} font-mono text-[11px] leading-snug`}>
       <p className="flex flex-wrap items-baseline gap-x-2">
         <span className="text-chrome/90">{title}</span>
         <span>

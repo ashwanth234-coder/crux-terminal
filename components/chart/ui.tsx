@@ -130,6 +130,36 @@ export const Icon = {
       <path d="m2 11 3-4 3 3 3-6 3 3" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinejoin="round" />
     </>,
   ),
+  hlc: svg(<path d="M5 2v12M5 10h2M11 3v10M11 11h2" stroke="currentColor" strokeWidth="1.2" fill="none" />),
+  linemarkers: svg(
+    <>
+      <path d="m2 12 4-4 3 2 5-6" stroke="currentColor" strokeWidth="1.1" fill="none" strokeLinejoin="round" />
+      <circle cx="6" cy="8" r="1.4" fill="currentColor" />
+      <circle cx="9" cy="10" r="1.4" fill="currentColor" />
+      <circle cx="14" cy="4" r="1.4" fill="currentColor" />
+    </>,
+  ),
+  step: svg(<path d="M2 12h3V7h4v3h3V4h2" stroke="currentColor" strokeWidth="1.3" fill="none" />),
+  hlcarea: svg(
+    <>
+      <path d="m2 9 4-4 3 2 5-5M2 13l4-3 3 2 5-4" stroke="currentColor" strokeWidth="1" fill="none" />
+      <path d="m2 11 4-4 3 2 5-5" stroke="currentColor" strokeWidth="1.4" fill="none" />
+    </>,
+  ),
+  columns: svg(<path d="M3 13V9M6.5 13V6M10 13V8M13.5 13V4" stroke="currentColor" strokeWidth="2" fill="none" />),
+  highlow: svg(
+    <>
+      <rect x="3.5" y="4" width="3" height="7" fill="none" stroke="currentColor" strokeWidth="1.1" />
+      <rect x="9.5" y="3" width="3" height="10" fill="none" stroke="currentColor" strokeWidth="1.1" />
+    </>,
+  ),
+  heikin: svg(
+    <>
+      <path d="M5 2v12M11 4v9" stroke="currentColor" strokeWidth="1.1" />
+      <rect x="3.5" y="4" width="3" height="6" fill="none" stroke="currentColor" strokeWidth="1.1" />
+      <rect x="9.5" y="6" width="3" height="5" fill="currentColor" />
+    </>,
+  ),
   undo: svg(<path d="M5.5 4 2.5 7l3 3M3 7h6.5a4 4 0 0 1 0 8H7" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />),
   redo: svg(<path d="M10.5 4l3 3-3 3M13 7H6.5a4 4 0 0 0 0 8H9" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />),
   alert: svg(

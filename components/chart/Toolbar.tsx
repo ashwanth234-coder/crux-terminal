@@ -2,17 +2,37 @@
 
 import { useState } from "react";
 import { INTERVALS } from "@/lib/candles";
-import { STUDIES, STUDY_GROUPS, type StudyId } from "@/lib/indicators";
+import { STUDIES, STUDY_GROUPS, isStudyId, type StudyId } from "@/lib/indicators";
 import type { ChartConfig, ChartType, Units } from "./settings";
 import { Icon, MenuItem, Popover, Sep, Tool } from "./ui";
 
-const TYPES: { id: ChartType; label: string }[] = [
+const PIN_KEY = "crux:chart:pinned-intervals:v1";
+const FAV_KEY = "crux:chart:fav-studies:v1";
+const DEFAULT_PINNED = [1, 15, 60, 300, 900, 3_600, 14_400, 86_400];
+const TF_GROUPS = [
+  { label: "Seconds", from: 1, to: 60 },
+  { label: "Minutes", from: 60, to: 3_600 },
+  { label: "Hours", from: 3_600, to: 86_400 },
+  { label: "Days", from: 86_400, to: Infinity },
+];
+const longLabel = (s: number) =>
+  s < 60 ? `${s} second${s === 1 ? "" : "s"}` : s < 3_600 ? `${s / 60} minute${s === 60 ? "" : "s"}` : s < 86_400 ? `${s / 3_600} hour${s === 3_600 ? "" : "s"}` : `${s / 86_400} day${s === 86_400 ? "" : "s"}`;
+
+/** Chart styles in TradingView's order and groups (a rule between groups). */
+const TYPES: { id: ChartType; label: string; rule?: boolean }[] = [
+  { id: "bars", label: "Bars" },
   { id: "candles", label: "Candles" },
   { id: "hollow", label: "Hollow candles" },
-  { id: "bars", label: "Bars" },
-  { id: "line", label: "Line" },
-  { id: "area", label: "Area" },
+  { id: "hlc", label: "HLC bars" },
+  { id: "line", label: "Line", rule: true },
+  { id: "linemarkers", label: "Line with markers" },
+  { id: "step", label: "Step line" },
+  { id: "area", label: "Area", rule: true },
+  { id: "hlcarea", label: "HLC area" },
   { id: "baseline", label: "Baseline" },
+  { id: "columns", label: "Columns", rule: true },
+  { id: "highlow", label: "High-low" },
+  { id: "heikin", label: "Heikin Ashi", rule: true },
 ];
 
 /** The chart's top control bar. Every change to the config is one undo step. */
@@ -53,24 +73,105 @@ export function Toolbar({
 }) {
   const type = TYPES.find((t) => t.id === config.type) ?? TYPES[0];
   const [query, setQuery] = useState("");
+  // Timeframes pinned to the toolbar (★ in the menu), kept in this browser; the rest are a click away.
+  const [pinned, setPinned] = useState<number[]>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(PIN_KEY) ?? "null");
+      return Array.isArray(saved) ? saved.filter((n) => INTERVALS.some((i) => i.seconds === n)) : DEFAULT_PINNED;
+    } catch {
+      return DEFAULT_PINNED;
+    }
+  });
+  // Favourite indicators (★), listed first in the menu; kept in this browser.
+  const [favs, setFavs] = useState<StudyId[]>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(FAV_KEY) ?? "[]");
+      return Array.isArray(saved) ? saved.filter(isStudyId) : [];
+    } catch {
+      return [];
+    }
+  });
+  const toggleFav = (id: StudyId) => {
+    const next = favs.includes(id) ? favs.filter((f) => f !== id) : [...favs, id];
+    setFavs(next);
+    try {
+      localStorage.setItem(FAV_KEY, JSON.stringify(next));
+    } catch {
+      // Storage blocked: favourites last for this visit.
+    }
+  };
+  const togglePin = (s: number) => {
+    const next = pinned.includes(s) ? pinned.filter((p) => p !== s) : [...pinned, s].sort((a, b) => a - b);
+    setPinned(next);
+    try {
+      localStorage.setItem(PIN_KEY, JSON.stringify(next));
+    } catch {
+      // Storage blocked: the pins last for this visit.
+    }
+  };
   const toggleStudy = (id: StudyId) =>
     set((c) => ({ ...c, studies: c.studies.includes(id) ? c.studies.filter((s) => s !== id) : [...c.studies, id] }));
 
   return (
     <div className="flex flex-wrap items-center gap-x-0.5 gap-y-1.5 pb-2">
       <div role="radiogroup" aria-label="Timeframe" className="flex flex-wrap items-center gap-0.5">
-        {[{ seconds: "auto" as const, label: "Auto" }, ...INTERVALS].map((i) => (
-          <button
-            key={i.label}
-            type="button"
-            role="radio"
-            aria-checked={config.interval === i.seconds}
-            onClick={() => set((c) => ({ ...c, interval: i.seconds }))}
-            className={`rounded-[3px] px-1.5 py-1 font-mono text-[11px] transition-colors ${config.interval === i.seconds ? "bg-panel-2 text-chrome ring-1 ring-inset ring-signal/60" : "text-dim hover:text-chrome"}`}
-          >
-            {i.label}
-          </button>
-        ))}
+        {[{ seconds: "auto" as const, label: "Auto" }, ...INTERVALS]
+          .filter((i) => i.seconds === "auto" || pinned.includes(i.seconds) || config.interval === i.seconds)
+          .map((i) => (
+            <button
+              key={i.label}
+              type="button"
+              role="radio"
+              aria-checked={config.interval === i.seconds}
+              onClick={() => set((c) => ({ ...c, interval: i.seconds }))}
+              className={`rounded-[3px] px-1.5 py-1 font-mono text-[11px] transition-colors ${config.interval === i.seconds ? "bg-panel-2 text-chrome ring-1 ring-inset ring-signal/60" : "text-dim hover:text-chrome"}`}
+            >
+              {i.label}
+            </button>
+          ))}
+        <Popover
+          width="w-48"
+          button={(open, toggle) => (
+            <Tool label="All timeframes" active={open} onClick={toggle}>
+              {Icon.chevron}
+            </Tool>
+          )}
+        >
+          {(close) => (
+            <div role="menu" className="max-h-[min(60vh,420px)] overflow-y-auto">
+              {TF_GROUPS.map((g) => (
+                <div key={g.label}>
+                  <p className="px-2 pb-0.5 pt-1.5 text-[10px] uppercase tracking-[0.14em] text-dim">{g.label}</p>
+                  {INTERVALS.filter((i) => i.seconds >= g.from && i.seconds < g.to).map((i) => (
+                    <div key={i.seconds} className="group flex items-center">
+                      <button
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={config.interval === i.seconds}
+                        onClick={() => {
+                          set((c) => ({ ...c, interval: i.seconds }));
+                          close();
+                        }}
+                        className={`flex-1 rounded-[3px] px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-white/[0.05] ${config.interval === i.seconds ? "text-signal" : "text-chrome/85"}`}
+                      >
+                        {longLabel(i.seconds)}
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={pinned.includes(i.seconds)}
+                        aria-label={pinned.includes(i.seconds) ? `Unpin ${i.label} from the toolbar` : `Pin ${i.label} to the toolbar`}
+                        onClick={() => togglePin(i.seconds)}
+                        className={`px-2 text-[13px] transition-colors ${pinned.includes(i.seconds) ? "text-[#ffd166]" : "text-dim opacity-0 hover:text-chrome group-hover:opacity-100"}`}
+                      >
+                        {pinned.includes(i.seconds) ? "★" : "☆"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </Popover>
       </div>
       <Sep />
       <Popover
@@ -86,16 +187,17 @@ export function Toolbar({
       >
         {(close) =>
           TYPES.map((t) => (
-            <MenuItem
-              key={t.id}
-              onClick={() => {
-                set((c) => ({ ...c, type: t.id }));
-                close();
-              }}
-            >
-              <span className={config.type === t.id ? "text-signal" : "text-dim"}>{Icon[t.id]}</span>
-              <span className={config.type === t.id ? "text-chrome" : ""}>{t.label}</span>
-            </MenuItem>
+            <div key={t.id} className={t.rule ? "mt-1 border-t border-line pt-1" : ""}>
+              <MenuItem
+                onClick={() => {
+                  set((c) => ({ ...c, type: t.id }));
+                  close();
+                }}
+              >
+                <span className={config.type === t.id ? "text-signal" : "text-dim"}>{Icon[t.id]}</span>
+                <span className={config.type === t.id ? "text-chrome" : ""}>{t.label}</span>
+              </MenuItem>
+            </div>
           ))
         }
       </Popover>
@@ -121,23 +223,39 @@ export function Toolbar({
               className="mb-1 w-full rounded-[3px] border border-line-2 bg-void/60 px-2 py-1 text-[12px] text-chrome outline-none placeholder:text-dim focus:border-chrome/50"
             />
             <div className="max-h-[min(60vh,420px)] overflow-y-auto">
-              {STUDY_GROUPS.map((g) => {
-                const items = STUDIES.filter((s) => s.group === g && `${s.label} ${s.hint ?? ""} ${g}`.toLowerCase().includes(query.trim().toLowerCase()));
+              {(["Favourites", ...STUDY_GROUPS] as const).map((g) => {
+                const q = query.trim().toLowerCase();
+                const items = STUDIES.filter(
+                  (s) => (g === "Favourites" ? favs.includes(s.id) : s.group === g) && `${s.label} ${s.hint ?? ""} ${s.group}`.toLowerCase().includes(q),
+                );
                 if (items.length === 0) return null;
                 return (
                   <div key={g}>
-                    <p className={`px-2 pb-0.5 pt-1.5 text-[10px] uppercase tracking-[0.14em] ${g === "On-chain" ? "text-signal" : "text-dim"}`}>
+                    <p className={`px-2 pb-0.5 pt-1.5 text-[10px] uppercase tracking-[0.14em] ${g === "On-chain" ? "text-signal" : g === "Favourites" ? "text-[#ffd166]" : "text-dim"}`}>
                       {g}
                       {g === "On-chain" && <span className="ml-1.5 normal-case tracking-normal text-dim">from this token&apos;s own chain data</span>}
                     </p>
                     {items.map((s) => (
-                      <MenuItem key={s.id} checked={config.studies.includes(s.id)} onClick={() => toggleStudy(s.id)}>
-                        <span className="flex flex-col">
-                          <span>{s.label}</span>
-                          {s.hint && <span className="text-[10.5px] text-dim">{s.hint}</span>}
-                        </span>
-                        {s.pane === "pane" && <span className="text-[10px] text-dim">pane</span>}
-                      </MenuItem>
+                      <div key={s.id} className="group flex items-center">
+                        <button
+                          type="button"
+                          aria-pressed={favs.includes(s.id)}
+                          aria-label={favs.includes(s.id) ? `Remove ${s.label} from favourites` : `Add ${s.label} to favourites`}
+                          onClick={() => toggleFav(s.id)}
+                          className={`px-1 text-[13px] transition-colors ${favs.includes(s.id) ? "text-[#ffd166]" : "text-dim opacity-0 hover:text-chrome group-hover:opacity-100"}`}
+                        >
+                          {favs.includes(s.id) ? "★" : "☆"}
+                        </button>
+                        <div className="min-w-0 flex-1">
+                          <MenuItem checked={config.studies.includes(s.id)} onClick={() => toggleStudy(s.id)}>
+                            <span className="flex flex-col">
+                              <span>{s.label}</span>
+                              {s.hint && <span className="text-[10.5px] text-dim">{s.hint}</span>}
+                            </span>
+                            {s.pane === "pane" && <span className="text-[10px] text-dim">pane</span>}
+                          </MenuItem>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 );

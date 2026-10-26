@@ -12,6 +12,8 @@ import { useCreatorVestingDays } from "@/hooks/useCreatorVesting";
 import { batchFactory } from "@/lib/intents";
 import { useNow } from "@/hooks/useLaunchAuction";
 import { useLaunchMarket } from "@/hooks/useLaunchMarket";
+import { useLedger } from "@/hooks/useLedger";
+import { isSystem } from "@/lib/holders";
 import { usePoolSwaps } from "@/hooks/usePoolSwaps";
 import { useTokenMeta } from "@/hooks/useTokenMeta";
 import { TESTNET } from "@/lib/chains";
@@ -190,6 +192,10 @@ export function TokenBar({
   const closesIn = now === null ? null : auction.startTime + auction.batchWindow - now;
   const starred = watch.has(key);
   const vestDays = useCreatorVestingDays(batchFactory(version), BigInt(id), version);
+  // Holders and how concentrated they are, from the same ledger as the Holders tab (protocol addresses left out).
+  const { holders } = useLedger(batchFactory(version) ?? zeroAddress, id, auction);
+  const people = holders?.filter((h) => !isSystem(h)) ?? null;
+  const top10Pct = people ? people.slice(0, 10).reduce((sum, h) => sum + h.pct, 0) : null;
   const antiSniper = useAntiSniperSeconds(batchFactory(version), BigInt(id), version);
 
   return (
@@ -257,6 +263,14 @@ export function TokenBar({
                 </Stat>
                 <Stat label="Vol 24h" hint="USDC traded through the locked pool in the last 24 hours, intent fills included">
                   {volume24h !== null ? usdAmount(volume24h) : swaps.isError ? "—" : "…"}
+                </Stat>
+                <Stat label="Holders" hint="Wallets holding the token, from its transfers (pools, the auction and Crux contracts left out)">
+                  {people ? people.length.toLocaleString("en-US") : "…"}
+                </Stat>
+                <Stat label="Top 10" hint="Share of total supply held by the ten largest holders (pools and protocol contracts left out)">
+                  <span className={top10Pct !== null && top10Pct > 50 ? "text-down" : top10Pct !== null && top10Pct > 25 ? "text-[#ffd166]" : ""}>
+                    {top10Pct !== null ? `${top10Pct.toFixed(top10Pct >= 10 ? 1 : 2)}%` : "…"}
+                  </span>
                 </Stat>
                 <Stat label="LP burned" hint="Share of the pool's LP tokens held by 0x…dEaD (and Uniswap's 1,000 at 0x0), read live">
                   {lpBurnedPct !== null ? `${lpBurnedPct.toFixed(lpBurnedPct >= 99.995 ? 0 : 2)}%` : "…"}

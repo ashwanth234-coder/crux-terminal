@@ -1,7 +1,7 @@
 import type { IChartApi, IPrimitivePaneRenderer, IPrimitivePaneView, ISeriesApi, ISeriesPrimitive, Logical, SeriesAttachedParameter, SeriesType, Time } from "lightweight-charts";
 import type { Candle } from "@/lib/candles";
 
-export type DrawTool = "ray" | "hline" | "vline" | "trend" | "arrow" | "channel" | "rect" | "text" | "ruler" | "fib" | "long" | "short";
+export type DrawTool = "ray" | "hline" | "vline" | "trend" | "arrow" | "channel" | "rect" | "text" | "emoji" | "brush" | "ruler" | "fib" | "long" | "short";
 
 /** A chart point: a time (unix seconds, may be between or beyond candles) and a price in USDC per token. */
 export type DrawPoint = { time: number; price: number };
@@ -10,7 +10,7 @@ export type DrawPoint = { time: number; price: number };
  * A drawing, in units that survive timeframe and Price / MCap changes. One-point tools use `a`; a channel's `c` sets
  * its parallel line; a long / short position's `c` is its stop (`a` the entry, `b` the target).
  */
-export type Drawing = { id: string; tool: DrawTool; a: DrawPoint; b?: DrawPoint; c?: DrawPoint; color?: string; text?: string };
+export type Drawing = { id: string; tool: DrawTool; a: DrawPoint; b?: DrawPoint; c?: DrawPoint; color?: string; text?: string; path?: DrawPoint[] };
 
 /** Which part of a drawing is under the pointer: one of its points, or the whole of it. */
 export type DrawPart = "a" | "b" | "c" | "body";
@@ -21,6 +21,9 @@ export const TOOL_POINTS: Record<DrawTool, 1 | 2 | 3> = {
   hline: 1,
   vline: 1,
   text: 1,
+  emoji: 1,
+  // A brush stroke is drawn by dragging, not by clicks.
+  brush: 1,
   trend: 2,
   arrow: 2,
   rect: 2,
@@ -40,6 +43,8 @@ export const TOOL_COLOR: Record<DrawTool, string> = {
   channel: "#c792ea",
   rect: "#4cc9f0",
   text: "#f3f3f0",
+  emoji: "#f3f3f0",
+  brush: "#ff9d6e",
   ruler: "#5cc08c",
   fib: "#8f939b",
   long: "#5cc08c",
@@ -217,7 +222,7 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
       const b = d.b ? this.xy(d.b) : null;
       const stop = d.tool === "long" || d.tool === "short" ? (d.c ?? (d.b ? defaultStop(d.a, d.b) : undefined)) : d.c;
       const c = stop ? this.xy(stop) : null;
-      // Handles; one-point lines are grabbed by their body (they move as a whole anyway).
+      // Handles; one-point marks and strokes are grabbed by their body (they move as a whole anyway).
       if (TOOL_POINTS[d.tool] > 1 || d.tool === "ray") {
         if (Math.hypot(a.x - x, a.y - y) <= HANDLE) return { id: d.id, part: "a" };
         if (b && Math.hypot(b.x - x, b.y - y) <= HANDLE) return { id: d.id, part: "b" };
@@ -239,6 +244,13 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
       case "text": {
         const tw = Math.max(40, (d.text ?? "").length * 7 + 12);
         return p.x >= a.x - 4 && p.x <= a.x + tw && p.y >= a.y - 12 && p.y <= a.y + 10;
+      }
+      case "emoji":
+        return Math.abs(p.x - a.x) <= 14 && Math.abs(p.y - a.y) <= 14;
+      case "brush": {
+        const pts = (d.path ?? []).map((q) => this.xy(q)).filter((q): q is XY => q !== null);
+        for (let i = 1; i < pts.length; i++) if (distToSegment(p, pts[i - 1], pts[i]) <= NEAR) return true;
+        return false;
       }
       case "trend":
       case "arrow":
@@ -289,7 +301,7 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
       // A one-point line moves along its own axis only.
       if (d.tool === "hline") return { ...d, a: { ...d.a, price: shift(d.a)!.price } };
       if (d.tool === "vline") return { ...d, a: { ...d.a, time: shift(d.a)!.time } };
-      return { ...base, a: shift(base.a)!, b: shift(base.b), c: shift(base.c) };
+      return { ...base, a: shift(base.a)!, b: shift(base.b), c: shift(base.c), ...(base.path ? { path: base.path.map((q) => shift(q)!) } : {}) };
     }
     const next: Drawing = { ...base, [part]: shift(base[part]) };
     // A position's target and stop share the box's right edge: dragging either sets its price, b sets the width.
@@ -363,6 +375,26 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
       ctx.stroke();
       const t = new Date(Math.round(d.a.time) * 1000);
       this.label(ctx, `${t.toISOString().slice(5, 16).replace("T", " ")} UTC`, a.x, this.height - 12, color, "center");
+      return;
+    }
+    if (d.tool === "emoji") {
+      ctx.font = "22px 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(d.text || "🚀", a.x, a.y);
+      ctx.textAlign = "left";
+      ctx.font = "10.5px JetBrains Mono, ui-monospace, monospace";
+      return;
+    }
+    if (d.tool === "brush") {
+      const pts = (d.path ?? []).map((q) => this.xy(q)).filter((q): q is XY => q !== null);
+      if (pts.length < 2) return;
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y);
+      ctx.stroke();
       return;
     }
     if (d.tool === "text") {
