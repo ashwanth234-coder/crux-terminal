@@ -2,7 +2,8 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { erc20Abi, formatUnits, getAddress, isAddress, parseUnits, zeroAddress, type Address } from "viem";
-import { useConfig, useConnection, useReadContracts } from "wagmi";
+import { useConfig, useConnection, useReadContract, useReadContracts, useSwitchChain } from "wagmi";
+import { waitForTransactionReceipt } from "wagmi/actions";
 import { buttonClass } from "@/components/ui/Button";
 import { Shell } from "@/components/launch/LaunchView";
 import { useNow } from "@/hooks/useLaunchAuction";
@@ -36,13 +37,14 @@ function Card({ title, children, aside }: { title: string; children: ReactNode; 
   );
 }
 
-type Busy = null | "bind" | "change" | "cancel" | "finalize" | "withdraw" | "sweep";
+type Busy = null | "bind" | "change" | "cancel" | "finalize" | "withdraw" | "sweep" | "deposit";
 
 /** The logged-in trader's Crux account: deposit address, protection, withdrawal address and withdrawals. */
 export function AccountPanel() {
   const a = useCruxAccount();
   const config = useConfig();
-  const { address: wallet } = useConnection();
+  const { address: wallet, chainId } = useConnection();
+  const { mutateAsync: switchChain } = useSwitchChain();
   const { openConnect } = useConnectModal();
   const now = useNow();
   const [busy, setBusy] = useState<Busy>(null);
@@ -52,6 +54,16 @@ export function AccountPanel() {
   const [changing, setChanging] = useState(false);
   const [amount, setAmount] = useState("");
   const [copied, setCopied] = useState(false);
+  const [depositAmount, setDepositAmount] = useState("");
+  // The connected wallet's test USDC, for depositing straight from it (no token import in the wallet needed).
+  const walletUsdc = useReadContract({
+    chainId: TESTNET.id,
+    address: TESTNET_USDC,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    args: [wallet ?? zeroAddress],
+    query: { enabled: Boolean(wallet), refetchInterval: 15_000 },
+  });
 
   // Launch tokens the account holds: shown, and swept along with USDC.
   const { launches } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7);
@@ -121,6 +133,35 @@ export function AccountPanel() {
   })();
   const overBalance = units !== null && a.usdc !== null && units > a.usdc;
   const isBoundWallet = Boolean(wallet && bound && getAddress(wallet) === bound);
+  const depositUnits = (() => {
+    try {
+      const v = depositAmount ? parseUnits(depositAmount, 6) : null;
+      return v !== null && v > BigInt(0) ? v : null;
+    } catch {
+      return null;
+    }
+  })();
+  const overWallet = depositUnits !== null && walletUsdc.data !== undefined && depositUnits > walletUsdc.data;
+
+  /** One ordinary USDC transfer from the connected wallet to the account (the wallet asks to confirm it). */
+  const deposit = () =>
+    run(
+      "deposit",
+      async () => {
+        if (chainId !== TESTNET.id) await switchChain({ chainId: TESTNET.id });
+        const hash = await simulateThenWrite(config, wallet!, {
+          address: TESTNET_USDC,
+          abi: erc20Abi,
+          functionName: "transfer",
+          args: [account, depositUnits!],
+          chainId: TESTNET.id,
+        });
+        await waitForTransactionReceipt(config, { hash, chainId: TESTNET.id });
+        setDepositAmount("");
+        void walletUsdc.refetch();
+      },
+      `Deposited $${fmtUsdc(depositUnits ?? BigInt(0))} test USDC from your wallet.`,
+    );
 
   const sweep = () =>
     run(
@@ -184,6 +225,39 @@ export function AccountPanel() {
               Sepolia trades: anything sent on another chain can only be withdrawn back to your bound address, once the account is set up
               there. Deposits from Arbitrum, BSC and Ethereum are coming, routed through Crux intents.
             </p>
+          </div>
+          <div className="mt-4 border-t border-line pt-4">
+            <p className="text-[12px] text-dim">Deposit from your wallet</p>
+            {wallet ? (
+              <>
+                <div className="mt-2 flex items-center gap-2">
+                  <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-line bg-void/60 px-3 py-2 focus-within:border-line-2">
+                    <span className="font-mono text-dim">$</span>
+                    <label htmlFor="deposit-amount" className="sr-only">Test USDC to deposit</label>
+                    <input
+                      id="deposit-amount"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      placeholder="0.00"
+                      value={depositAmount}
+                      onChange={(e) => setDepositAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+                      className="w-full min-w-0 bg-transparent font-mono text-[15px] text-chrome outline-none placeholder:text-dim"
+                    />
+                  </div>
+                  <button type="button" disabled={!depositUnits || overWallet || busy !== null} onClick={deposit} className={buttonClass("signal", "sm", "shrink-0 font-semibold")}>
+                    {busy === "deposit" ? "Depositing…" : "Deposit"}
+                  </button>
+                </div>
+                <p className="mt-1.5 text-[11.5px] text-dim">
+                  {overWallet ? "More than your wallet holds. " : ""}From {short(wallet)} on Base Sepolia
+                  {walletUsdc.data !== undefined ? ` · wallet has $${fmtUsdc(walletUsdc.data)}` : ""}. Your wallet asks you to confirm one transfer.
+                </p>
+              </>
+            ) : (
+              <button type="button" onClick={openConnect} className={buttonClass("outline", "sm", "mt-2")}>
+                Connect a wallet to deposit from it
+              </button>
+            )}
           </div>
           {!a.deployed && (
             <p className="mt-3 text-[11.5px] leading-relaxed text-dim">
