@@ -77,7 +77,7 @@ export function ProTerminal({
               symbol={model.symbol ? `$${model.symbol}` : "tokens"}
             />
           ) : (
-            <ProChart auction={auction} symbol={model.symbol ? `$${model.symbol}` : "Token"} name={model.name} />
+            <ProChart auction={auction} symbol={model.symbol ? `$${model.symbol}` : "Token"} name={model.name} factory={factory} id={id} />
           )}
         </section>
 

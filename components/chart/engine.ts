@@ -2,6 +2,8 @@ import type {
   IChartApi,
   IPriceLine,
   ISeriesApi,
+  ISeriesMarkersPluginApi,
+  SeriesMarker,
   LogicalRange,
   MouseEventParams,
   SeriesType,
@@ -36,6 +38,8 @@ export class ChartEngine {
   private studySeries: ISeriesApi<SeriesType>[] = [];
   private paneLines: IPriceLine[] = [];
   private mainLines: IPriceLine[] = [];
+  private markers: ISeriesMarkersPluginApi<Time> | null = null;
+  private markerData: SeriesMarker<Time>[] = [];
   private settings: ChartSettings;
 
   constructor(lc: Lc, host: HTMLElement, theme: Theme, settings: ChartSettings) {
@@ -60,6 +64,7 @@ export class ChartEngine {
     this.volume = this.chart.addSeries(lc.HistogramSeries, { priceScaleId: "", priceFormat: { type: "volume" }, lastValueVisible: false, priceLineVisible: false });
     this.volume.priceScale().applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
     this.main = this.addMain("candles");
+    this.markers = lc.createSeriesMarkers(this.main, []);
     this.applySettings(settings);
   }
 
@@ -120,9 +125,17 @@ export class ChartEngine {
   setType(type: ChartType, force = false) {
     if (type === this.type && !force) return;
     this.mainLines = [];
+    this.markers?.detach();
     this.chart.removeSeries(this.main);
     this.type = type;
     this.main = this.addMain(type);
+    this.markers = this.lc.createSeriesMarkers(this.main, this.markerData);
+  }
+
+  /** Marks on the bars (B / S, D, W, T), kept across chart-style changes. */
+  setMarkers(markers: SeriesMarker<Time>[]) {
+    this.markerData = markers;
+    this.markers?.setMarkers(markers);
   }
 
   /** Candles (in USDC per token) shown in the chosen units: `k` multiplies prices (total supply for market cap). */

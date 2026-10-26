@@ -3,7 +3,7 @@
 import { Modal } from "@/components/ui/Modal";
 import type { ChartSettings } from "./settings";
 
-const ROWS: { key: Exclude<keyof ChartSettings, "palette">; label: string; hint: string }[] = [
+const ROWS: { key: Exclude<keyof ChartSettings, "palette" | "marks" | "minUsd">; label: string; hint: string }[] = [
   { key: "grid", label: "Grid lines", hint: "Horizontal and vertical guides" },
   { key: "volume", label: "Volume", hint: "Volume bars under the candles" },
   { key: "magnet", label: "Magnet crosshair", hint: "Snaps to each candle's open, high, low or close" },

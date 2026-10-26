@@ -1,9 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
-import { formatUnits } from "viem";
+import { formatUnits, getAddress, type Address } from "viem";
+import type { SeriesMarker, Time } from "lightweight-charts";
+import { useConnection } from "wagmi";
 import { useNow } from "@/hooks/useLaunchAuction";
 import { usePoolSwaps } from "@/hooks/usePoolSwaps";
+import { useCruxAccount } from "@/hooks/useCruxAccount";
+import { DESTINATION_SETTLER, useLaunchMarket } from "@/hooks/useLaunchMarket";
+import { useTokenTransfers } from "@/hooks/useTokenTransfers";
+import { barTime, markTrades, type MarkWho } from "@/lib/chartMarks";
+import { buildHolders } from "@/lib/holders";
+import { CRUX_SOLVER, PREVIOUS_SETTLERS, SETTLER } from "@/lib/intents";
 import { INTERVALS, autoInterval, toCandles } from "@/lib/candles";
 import { studyById } from "@/lib/indicators";
 import { fmtTokenPrice } from "@/lib/launchTrade";
@@ -13,11 +21,20 @@ import { ContextMenu, type ContextAt } from "./ContextMenu";
 import { ChartEngine } from "./engine";
 import { useHistory } from "./history";
 import { Legend } from "./Legend";
+import { OverlaysBar } from "./OverlaysBar";
 import { DEFAULT_CONFIG, DEFAULT_SETTINGS, loadSettings, saveSettings, type ChartSettings, type ScaleMode } from "./settings";
 import { SettingsModal } from "./SettingsModal";
 import { chartSnapshot, shareImage } from "./snapshot";
 import { TableView } from "./TableView";
 import { Toolbar } from "./Toolbar";
+
+/** How each kind of marked trader shows on the bars. */
+const MARK_STYLE: Record<MarkWho, { color: string; buy: string; sell: string }> = {
+  me: { color: "#5cc08c", buy: "B", sell: "S" },
+  dev: { color: "#c792ea", buy: "Dev", sell: "Dev" },
+  whale: { color: "#4cc9f0", buy: "W", sell: "W" },
+  top: { color: "#ffd166", buy: "T", sell: "T" },
+};
 
 const compactUsd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 2 });
 
@@ -38,8 +55,13 @@ function parseAmount(s: string): number | null {
  * overlay and pane indicators, price or market cap, %, log and auto scales, range presets, a live OHLCV legend, a
  * right-click menu, a table view, price alerts, undo / redo, a branded snapshot and fullscreen.
  */
-export function ProChart({ auction, symbol, name }: { auction: AuctionV2; symbol: string; name: string | null }) {
+export function ProChart({ auction, symbol, name, factory, id }: { auction: AuctionV2; symbol: string; name: string | null; factory: Address; id: string }) {
   const swaps = usePoolSwaps(auction.pair, auction.settledAt, true);
+  // The same reads as the Holders tab (shared queries): who holds what, and every transfer to rebuild their trades.
+  const transfers = useTokenTransfers(auction.token, factory, BigInt(id), auction.startTime - 86_400, true);
+  const market = useLaunchMarket(auction.token, auction.pair);
+  const { address: wallet } = useConnection();
+  const crux = useCruxAccount();
   const now = useNow();
   const frame = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
@@ -82,6 +104,66 @@ export function ProChart({ auction, symbol, name }: { auction: AuctionV2; symbol
     [config.studies, candles],
   );
   const intervalLabel = INTERVALS.find((i) => i.seconds === interval)?.label ?? `${interval}s`;
+
+  // ------------------------------------------------------- overlays
+
+  const me = useMemo(() => [wallet, crux.account].filter((a): a is Address => Boolean(a)).map((a) => getAddress(a)), [wallet, crux.account]);
+  const holders = useMemo(() => {
+    if (!transfers.data || !swaps.data) return [];
+    return buildHolders(transfers.data.items, swaps.data.trades, {
+      totalSupply: auction.totalSupply,
+      clearingPrice: gradPrice,
+      creator: auction.creator,
+      factory,
+      pair: auction.pair,
+      solver: CRUX_SOLVER,
+      destinationSettler: DESTINATION_SETTLER,
+      me: me[0],
+      batchPool: market.batchPool,
+    });
+  }, [transfers.data, swaps.data, auction, gradPrice, factory, me, market.batchPool]);
+  /** Your average entry and balance across your wallet and your Crux account. */
+  const mine = useMemo(() => {
+    const rows = holders.filter((h) => me.includes(getAddress(h.address)));
+    const bal = rows.reduce((s, h) => s + Number(h.balance) / 1e18, 0);
+    const priced = rows.filter((h) => h.entry !== null);
+    const pricedBal = priced.reduce((s, h) => s + Number(h.balance) / 1e18, 0);
+    const entry = pricedBal > 0 ? priced.reduce((s, h) => s + (h.entry as number) * (Number(h.balance) / 1e18), 0) / pricedBal : null;
+    return { balance: bal, entry };
+  }, [holders, me]);
+  const marks = useMemo(() => {
+    if (!transfers.data || candles.length === 0) return [];
+    const system = new Set(["pool", "auction", "solver", "settler", "burn"]);
+    const people = holders.filter((h) => !h.tags.some((t) => system.has(t)));
+    const times = candles.map((c) => c.time);
+    const venues = [auction.pair, ...(market.batchPool ? [market.batchPool] : [])];
+    return markTrades(
+      transfers.data.items,
+      {
+        sources: [...venues, CRUX_SOLVER],
+        sinks: [...venues, SETTLER, ...PREVIOUS_SETTLERS.map((p) => p.address)],
+        me,
+        dev: auction.creator,
+        whales: people.filter((h) => h.tags.includes("whale")).map((h) => h.address),
+        top: people.filter((h) => getAddress(h.address) !== getAddress(auction.creator)).slice(0, 10).map((h) => h.address),
+      },
+      (time) => {
+        const bt = barTime(times, time);
+        return bt === null ? null : (candles.find((c) => c.time === bt)?.close ?? null);
+      },
+    );
+  }, [transfers.data, candles, holders, me, auction.pair, auction.creator, market.batchPool]);
+  const shownMarks = useMemo(
+    () =>
+      marks.filter(
+        (m) => m.usd >= settings.minUsd && (m.who === "me" ? settings.marks.mine : m.who === "top" ? settings.marks.top : settings.marks.dev),
+      ),
+    [marks, settings.minUsd, settings.marks],
+  );
+  const markCounts = useMemo(
+    () => ({ mine: marks.filter((m) => m.who === "me").length, dev: marks.filter((m) => m.who === "dev" || m.who === "whale").length, top: marks.filter((m) => m.who === "top").length }),
+    [marks],
+  );
   const last = candles.length ? candles[candles.length - 1] : null;
   const hoverIndex = hoverTime === null ? -1 : candles.findIndex((c) => c.time === hoverTime);
   const shownIndex = hoverIndex >= 0 ? hoverIndex : candles.length - 1;
@@ -131,8 +213,34 @@ export function ProChart({ auction, symbol, name }: { auction: AuctionV2; symbol
     const lines: { price: number; color: string; title: string; style?: number }[] = [];
     if (settings.clearingLine && !marksHidden && gradPrice > 0) lines.push({ price: gradPrice * k, color: "#f3f3f080", title: "Auction clear" });
     for (const a of config.alerts) lines.push({ price: a * k, color: "#ffd166", title: "Alert", style: 1 });
+    if (settings.marks.mine && !marksHidden && mine.balance > 0 && mine.entry !== null && last) {
+      const pct = (last.close / mine.entry - 1) * 100;
+      lines.push({ price: mine.entry * k, color: "#4cc9f0", title: `AVG ENTRY ${fmt(mine.entry * k)} · ${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%` });
+    }
     engine.setPriceLines(lines);
-  }, [engine, candles, k, fmt, minMove, config.type, config.studies, config.alerts, settings, marksHidden, gradPrice]);
+
+    const times = candles.map((c) => c.time);
+    const bars: SeriesMarker<Time>[] = marksHidden
+      ? []
+      : shownMarks
+          .slice(-300)
+          .flatMap((m) => {
+            const time = barTime(times, m.time);
+            if (time === null) return [];
+            const style = MARK_STYLE[m.who];
+            return [
+              {
+                time: time as Time,
+                position: m.side === "buy" ? ("belowBar" as const) : ("aboveBar" as const),
+                shape: m.side === "buy" ? ("arrowUp" as const) : ("arrowDown" as const),
+                color: m.who === "me" ? (m.side === "buy" ? "#5cc08c" : "#e5484d") : style.color,
+                text: m.side === "buy" ? style.buy : style.sell,
+              },
+            ];
+          })
+          .sort((a, b) => (a.time as number) - (b.time as number));
+    engine.setMarkers(bars);
+  }, [engine, candles, k, fmt, minMove, config.type, config.studies, config.alerts, settings, marksHidden, gradPrice, shownMarks, mine, last]);
 
   // Fit the view when the timeframe changes or the first candles arrive.
   const fitKey = `${interval}:${candles.length > 0}`;
@@ -293,6 +401,7 @@ export function ProChart({ auction, symbol, name }: { auction: AuctionV2; symbol
         )}
       </div>
       <BottomBar now={now} onRange={onRange} scale={scale} setScale={setScale} auto={engine?.isAutoScale() ?? true} onAuto={() => engine?.autoScale()} />
+      <OverlaysBar settings={settings} onChange={setSettings} counts={markCounts} />
       <p className="px-1 pt-1.5 text-[11px] text-dim">
         Every trade on the locked liquidity since graduation (batch fills during an anti-sniper window, then Uniswap V2 swaps), the 0.3% pool fee
         included. {config.units === "mcap" ? "Market cap = price × total supply." : ""} Right-click the chart for more; Alt+R resets the view.

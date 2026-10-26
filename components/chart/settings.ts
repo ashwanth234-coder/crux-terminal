@@ -14,11 +14,24 @@ export type ChartSettings = {
   seconds: boolean;
   /** Up / down colours: Crux's, or the classic green / red. */
   palette: "crux" | "classic";
-  /** The auction's clearing price as a dashed line. */
+  /** The auction's clearing price as a dashed line (the overlays bar's "Batch floor"). */
   clearingLine: boolean;
+  /** Trades marked on the candles: yours (B / S, plus your average entry), the creator's and whales' (D / W), the top 10 holders' (T). */
+  marks: { mine: boolean; dev: boolean; top: boolean };
+  /** Trades under this many USD aren't marked. */
+  minUsd: number;
 };
 
-export const DEFAULT_SETTINGS: ChartSettings = { grid: true, volume: true, magnet: false, seconds: true, palette: "crux", clearingLine: true };
+export const DEFAULT_SETTINGS: ChartSettings = {
+  grid: true,
+  volume: true,
+  magnet: false,
+  seconds: true,
+  palette: "crux",
+  clearingLine: true,
+  marks: { mine: true, dev: true, top: false },
+  minUsd: 0,
+};
 
 /**
  * The chart's undoable state: everything the toolbar, the context menu and the alert button change. Undo / redo
@@ -42,7 +55,9 @@ const KEY = "crux:chart:settings:v1";
 export function loadSettings(): ChartSettings {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<ChartSettings>) } : DEFAULT_SETTINGS;
+    if (!raw) return DEFAULT_SETTINGS;
+    const saved = JSON.parse(raw) as Partial<ChartSettings>;
+    return { ...DEFAULT_SETTINGS, ...saved, marks: { ...DEFAULT_SETTINGS.marks, ...saved.marks } };
   } catch {
     return DEFAULT_SETTINGS;
   }
