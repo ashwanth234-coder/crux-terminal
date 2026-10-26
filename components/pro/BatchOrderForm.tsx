@@ -274,7 +274,7 @@ export function BatchOrderForm({ market, symbol }: { market: LaunchMarket; symbo
         </dl>
       )}
 
-      <button type="button" disabled={isConnected && disabled} onClick={submit} className={buttonClass("signal", "md", "w-full rounded-xl font-semibold")}>
+      <button type="button" disabled={isConnected && disabled} onClick={submit} className={buttonClass(isConnected ? side : "primary", "md", "w-full rounded-xl font-semibold")}>
         {busy && <KineticLoader />}
         {label}
         {!busy && <ArrowUpRight />}

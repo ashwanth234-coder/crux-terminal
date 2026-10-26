@@ -203,7 +203,7 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
 
   if (!model.account) {
     return (
-      <button type="button" onClick={model.connect} className={buttonClass("signal", "md", "w-full rounded-xl font-semibold")}>
+      <button type="button" onClick={model.connect} className={buttonClass("primary", "md", "w-full rounded-xl font-semibold")}>
         Connect wallet to bid
       </button>
     );
@@ -270,7 +270,7 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
       {rows.length > 0 && <RiskPreview rows={rows} />}
       <ProtectionRow>No front-running inside the batch: every filled bid pays the same price, whenever it arrived.</ProtectionRow>
 
-      <button type="button" disabled={disabled} onClick={() => void submit()} className={buttonClass("signal", "md", "w-full rounded-xl font-semibold max-lg:hidden")}>
+      <button type="button" disabled={disabled} onClick={() => void submit()} className={buttonClass("buy", "md", "w-full rounded-xl font-semibold max-lg:hidden")}>
         {label} <ArrowUpRight />
         <SubmitKey />
       </button>
@@ -281,7 +281,7 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
           <div className="min-w-0 flex-1">
             <AmountField id={`${uid}-dock`} value={amount} onChange={setAmount} unit="USDC" compact />
           </div>
-          <button type="button" disabled={disabled} onClick={() => void submit()} className={buttonClass("signal", "md", "shrink-0 rounded-xl px-4 font-semibold")}>
+          <button type="button" disabled={disabled} onClick={() => void submit()} className={buttonClass("buy", "md", "shrink-0 rounded-xl px-4 font-semibold")}>
             {busy ? "…" : overCap ? "Over cap" : "Bid"}
           </button>
         </div>
@@ -746,7 +746,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
 
       {side === "buy" && payFrom === "base" && !viaAccount && <OneClickBar oneClick={oneClick} />}
 
-      <button type="button" disabled={(isConnected || viaAccount) && disabled} onClick={sign} className={buttonClass("signal", "md", "w-full rounded-xl font-semibold max-lg:hidden")}>
+      <button type="button" disabled={(isConnected || viaAccount) && disabled} onClick={sign} className={buttonClass(isConnected || viaAccount ? side : "primary", "md", "w-full rounded-xl font-semibold max-lg:hidden")}>
         {isConnected || viaAccount ? label : "Connect wallet to trade"} <ArrowUpRight />
         <SubmitKey />
       </button>
@@ -776,7 +776,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
           <div className="min-w-0 flex-1">
             <AmountField id={`${uid}-dock`} value={amount} onChange={setAmount} unit={side === "buy" ? "USDC" : symbol} compact />
           </div>
-          <button type="button" disabled={(isConnected || viaAccount) && disabled} onClick={sign} className={buttonClass("signal", "md", "shrink-0 rounded-xl px-4 font-semibold capitalize")}>
+          <button type="button" disabled={(isConnected || viaAccount) && disabled} onClick={sign} className={buttonClass(isConnected || viaAccount ? side : "primary", "md", "shrink-0 rounded-xl px-4 font-semibold capitalize")}>
             {isConnected || viaAccount ? (tooBig ? "Too big" : overCap ? "Over cap" : oneClickReady || viaAccount ? `${side} now` : side) : "Connect"}
           </button>
         </div>

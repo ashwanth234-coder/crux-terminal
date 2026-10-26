@@ -154,7 +154,7 @@ export function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: 
             type="button"
             onClick={reclaim}
             disabled={refund.kind === "busy"}
-            className={buttonClass("signal", "sm", "h-8 px-3.5 text-[12px] disabled:opacity-100")}
+            className={buttonClass("primary", "sm", "h-8 px-3.5 text-[12px] disabled:opacity-100")}
           >
             {refund.kind === "busy" ? (
               <>

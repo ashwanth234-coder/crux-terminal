@@ -31,7 +31,7 @@ export async function chartSnapshot(chart: HTMLCanvasElement, head: { title: str
   }
   ctx.drawImage(chart, 0, band);
   ctx.textAlign = "right";
-  ctx.fillStyle = "#ff642d";
+  ctx.fillStyle = "#e35d2b";
   ctx.font = `600 ${px(11)} ui-sans-serif, system-ui, sans-serif`;
   ctx.fillText("cruxprotocol.xyz", right, out.height - pad);
 

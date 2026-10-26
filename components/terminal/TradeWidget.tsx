@@ -276,7 +276,7 @@ export function TradeWidget({ launch }: { launch?: LaunchTrade } = {}) {
         type="button"
         onClick={review}
         disabled={disabled}
-        className={buttonClass("signal", "sm", "mt-3 h-10 w-full rounded-lg text-[13px] font-semibold")}
+        className={buttonClass("primary", "sm", "mt-3 h-10 w-full rounded-lg text-[13px] font-semibold")}
       >
         {status.kind === "pending" ? (
           <>

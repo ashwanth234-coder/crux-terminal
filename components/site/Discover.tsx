@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { ArrowRight, ArrowUpRight, buttonClass } from "@/components/ui/Button";
-import { BaseIcon } from "@/components/ui/icons";
 import { StatusTag } from "@/components/ui/StatusTag";
 import { LaunchTokenButton } from "@/components/launch/LaunchTokenButton";
 import { useAllLaunches, type LaunchSummary } from "@/hooks/useLaunches";
@@ -49,12 +48,6 @@ function Row({ launch, now }: { launch: LaunchSummary; now: number | null }) {
           </span>
         </Link>
       </td>
-      <td className="hidden py-4 pr-4 md:table-cell">
-        <span className="inline-flex items-center gap-2 text-[12.5px] text-chrome/85">
-          <BaseIcon className="h-3.5 w-3.5" />
-          Base Sepolia
-        </span>
-      </td>
       <td className="py-4 pr-4">
         <Status phase={d.phase} />
       </td>
@@ -66,7 +59,7 @@ function Row({ launch, now }: { launch: LaunchSummary; now: number | null }) {
         <span className="block font-mono text-[13.5px] text-chrome">${fmtUsdc(a.totalDeposits)}</span>
         <span className="mt-0.5 block font-mono text-[11.5px] text-dim">of ${fmtUsdc(a.graduationTarget)}</span>
       </td>
-      <td className="w-8 py-4 pr-1 text-right text-muted transition-colors group-hover:text-signal">
+      <td className="w-8 py-4 pr-1 text-right text-muted transition-colors group-hover:text-chrome">
         <ArrowUpRight className="ml-auto h-3.5 w-3.5" />
       </td>
     </tr>
@@ -88,7 +81,7 @@ function Empty({ title, body, action = false }: { title: string; body: string; a
   );
 }
 
-/** 01 Discover: the real launch list from the deployed factories, newest and open first. */
+/** The real launch list from the deployed factories, newest and open first. */
 export function Discover() {
   const now = useNow();
   const configured = Boolean(FACTORY || FACTORY_V2 || FACTORY_V3 || FACTORY_V4 || FACTORY_V5);
@@ -101,10 +94,8 @@ export function Discover() {
   return (
     <Chapter
       id="discover"
-      index="01"
-      name="Discover"
-      title="Find your next market."
-      intro="Every launch on the Crux factories, read from Base Sepolia as you look: its status, the one price its buyers pay and how much it has raised."
+      title="Live markets."
+      intro="Every Crux launch, read from Base Sepolia as you look."
     >
       {!configured ? (
         <Empty title="No factory configured." body="This build has no Crux factory address, so there are no on-chain launches to list." />
@@ -131,7 +122,6 @@ export function Discover() {
             <thead>
               <tr className="border-b border-line font-mono text-[10px] uppercase tracking-[0.18em] text-dim">
                 <th scope="col" className="w-[44%] py-3 pl-1 pr-4 font-normal sm:w-[34%] md:w-[30%]">Token</th>
-                <th scope="col" className="hidden py-3 pr-4 font-normal md:table-cell">Network</th>
                 <th scope="col" className="py-3 pr-4 font-normal">Status</th>
                 <th scope="col" className="py-3 pr-4 text-right font-normal">Price</th>
                 <th scope="col" className="hidden py-3 pr-4 text-right font-normal sm:table-cell">Raised</th>
@@ -147,11 +137,10 @@ export function Discover() {
             </tbody>
           </table>
           <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
-            <p className="flex items-center gap-3 text-[12px] text-muted">
-              <StatusTag status="testnet" />
+            <p className="text-[12px] text-muted">
               Showing {rows.length} of {total}. Prices are testnet USDC.
             </p>
-            <Link href="/launches" className="group inline-flex items-center gap-2 text-[12px] font-medium uppercase tracking-[0.18em] text-chrome hover:text-signal">
+            <Link href="/launches" className="group inline-flex items-center gap-2 text-[13px] font-medium text-chrome hover:text-chrome/80">
               All launches <ArrowRight className="h-3 w-3" />
             </Link>
           </div>

@@ -185,7 +185,7 @@ export function CrossChainDeposit({ account, onOpened }: { account: Address; onO
             className="w-full min-w-0 bg-transparent font-mono text-[15px] text-chrome outline-none placeholder:text-dim"
           />
         </div>
-        <button type="button" disabled={!units || over || busy} onClick={() => void deposit()} className={buttonClass("signal", "sm", "shrink-0 font-semibold")}>
+        <button type="button" disabled={!units || over || busy} onClick={() => void deposit()} className={buttonClass("primary", "sm", "shrink-0 font-semibold")}>
           {busy ? "Depositing…" : "Deposit"}
         </button>
       </div>

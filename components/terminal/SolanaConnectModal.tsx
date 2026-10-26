@@ -36,7 +36,7 @@ export function SolanaConnectModal({ open, onClose }: { open: boolean; onClose: 
             <span className="text-[12px] text-signal">Connected</span>
           </div>
           <div className="flex gap-2">
-            <button type="button" onClick={onClose} className={buttonClass("signal", "sm", "flex-1 rounded-lg")}>
+            <button type="button" onClick={onClose} className={buttonClass("primary", "sm", "flex-1 rounded-lg")}>
               Done
             </button>
             <button

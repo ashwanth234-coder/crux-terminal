@@ -36,7 +36,7 @@ Landing page and terminal live at https://cruxprotocol.xyz and run as a Farcaste
 
 ## Brand Commitments
 
-Name CRUX with the geometric four-point mark (four equal tapered arms; never a cross). Visual world (2026-10-21, "Markets without borders"): coal black #0A0B0D, graphite #141518 layers, warm white #F5F3EE type, titanium #A7ADB5 detail, borders #292B2F, Signal Orange #FF642D only for the mark, primary actions, selection and live state. Bodoni Moda display serif, Archivo UI, JetBrains Mono for financial data. No WebGL, no looping motion; the hero emblem is static SVG and every figure is real testnet data or labelled DEMO / PLANNED. Hero copy: MARKETS / WITHOUT / BORDERS. · "Global markets. One execution layer." · ENTER CRUX.
+Name CRUX with the geometric four-point mark (four equal tapered arms; never a cross). Visual world (2026-10-21, "Markets without borders"): coal black #0A0B0D, graphite #141518 layers, warm white #F5F3EE type, titanium #A7ADB5 detail, borders #292B2F, Signal Orange #e35d2b only for the mark, selection and live state; warm-white primary buttons, green buy and red sell. Archivo for display and UI (one family), JetBrains Mono for financial data. Minimal and institutional: few things per screen, each said once. No WebGL, no looping motion; the hero emblem is static SVG and every figure is real testnet data or labelled DEMO / PLANNED. Hero copy: Markets / without borders. · "Global markets. One execution layer." · Enter Crux.
 
 ## Evidence on Hand
 

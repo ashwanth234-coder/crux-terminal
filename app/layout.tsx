@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Archivo, Bodoni_Moda, JetBrains_Mono } from "next/font/google";
+import { Archivo, JetBrains_Mono } from "next/font/google";
 import { Providers } from "./providers";
 import { SITE_URL, miniAppEmbed } from "@/lib/site";
 import "./globals.css";
@@ -10,15 +10,6 @@ const archivo = Archivo({
   display: "swap",
 });
 
-// High-contrast editorial serif for display type; the optical-size axis keeps its hairlines
-// fine at headline sizes and sturdier at title sizes.
-const bodoni = Bodoni_Moda({
-  variable: "--font-bodoni",
-  subsets: ["latin"],
-  axes: ["opsz"],
-  display: "swap",
-});
-
 const jetbrains = JetBrains_Mono({
   variable: "--font-jetbrains",
   subsets: ["latin"],
@@ -26,10 +17,10 @@ const jetbrains = JetBrains_Mono({
 });
 
 const DIRECTION_CONTRACT = `<!--
-THESIS: Markets without borders. Minimal, cinematic, editorial fintech: expensive through composition, type and restraint, proven with real Base Sepolia data.
-OWN-WORLD: Coal #0A0B0D, graphite #141518 layers, warm white #F5F3EE type, titanium #A7ADB5 detail, Signal Orange #FF642D for the mark, primary actions, selection and live state only; Bodoni Moda for display, Archivo for UI, JetBrains Mono for numbers; hairlines, no glows.
-STORY: Discover real launches, one uniform-price auction, intent in and execution out, liquidity locked on its home chain, value flows (live vs planned), enter.
-FIRST VIEWPORT: Serif MARKETS / WITHOUT / BORDERS. painted with the first frame, one supporting line, one ENTER CRUX link; right, the static chrome CRUX emblem on one circle and one axis.
+THESIS: Markets without borders. Minimal, institutional fintech: calm through composition, type and restraint, proven with real Base Sepolia data.
+OWN-WORLD: Coal #0A0B0D, graphite #141518 layers, warm white #F5F3EE type, titanium #A7ADB5 detail, Signal Orange #e35d2b for the mark, selection and live state only; warm-white primary buttons, green buy, red sell; Archivo for display and UI, JetBrains Mono for numbers; hairlines, no glows.
+STORY: Discover real launches, how it works (fair launch, intent execution, locked liquidity), enter.
+FIRST VIEWPORT: Markets / without / borders. painted with the first frame, one supporting line, one ENTER CRUX link; right, the static chrome CRUX emblem on one circle and one axis.
 -->`;
 
 export const metadata: Metadata = {
@@ -62,7 +53,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${archivo.variable} ${bodoni.variable} ${jetbrains.variable} antialiased`}>
+    <html lang="en" className={`${archivo.variable} ${jetbrains.variable} antialiased`}>
       <body className="min-h-svh">
         <div hidden dangerouslySetInnerHTML={{ __html: DIRECTION_CONTRACT }} />
         <Providers>{children}</Providers>

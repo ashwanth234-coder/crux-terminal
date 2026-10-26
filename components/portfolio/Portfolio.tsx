@@ -174,11 +174,11 @@ export function Portfolio() {
             </p>
             <div className="mt-5 flex flex-col justify-center gap-2 sm:flex-row">
               {!crux.loggedIn && (
-                <button type="button" onClick={crux.login} className={buttonClass("signal", "md", "font-semibold")}>
+                <button type="button" onClick={crux.login} className={buttonClass("primary", "md", "font-semibold")}>
                   Log in
                 </button>
               )}
-              <button type="button" onClick={openConnect} className={buttonClass(crux.loggedIn ? "signal" : "outline", "md", "font-semibold")}>
+              <button type="button" onClick={openConnect} className={buttonClass(crux.loggedIn ? "primary" : "outline", "md", "font-semibold")}>
                 Connect wallet
               </button>
             </div>
@@ -252,7 +252,7 @@ export function Portfolio() {
                             .join(" + ")}
                         </span>
                       </span>
-                      <Link href={c.launch.href} className={buttonClass("signal", "sm", "font-semibold")}>
+                      <Link href={c.launch.href} className={buttonClass("primary", "sm", "font-semibold")}>
                         Claim
                       </Link>
                     </li>

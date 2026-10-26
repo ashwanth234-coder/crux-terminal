@@ -557,7 +557,7 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
             type="button"
             onClick={confirm}
             disabled={busy || !address}
-            className={buttonClass("signal", "md", "mt-5 w-full rounded-xl font-semibold disabled:opacity-100")}
+            className={buttonClass("primary", "md", "mt-5 w-full rounded-xl font-semibold disabled:opacity-100")}
           >
             {busy && <KineticLoader />}
             {ctaLabel[flow.kind]}

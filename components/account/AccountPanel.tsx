@@ -104,7 +104,7 @@ export function AccountPanel() {
             Log in with email or Google to get a Crux account: a deposit address for test USDC that trades in one click, with no wallet
             pop-ups and no gas. Its funds can only trade through Crux or go back to a wallet you choose.
           </p>
-          <button type="button" onClick={a.login} className={buttonClass("signal", "md", "mt-6 font-semibold")}>
+          <button type="button" onClick={a.login} className={buttonClass("primary", "md", "mt-6 font-semibold")}>
             Log in with email or Google
           </button>
         </div>
@@ -215,7 +215,7 @@ export function AccountPanel() {
                     `Sent to ${short(a.legacy!.withdrawalAddress!)}. Now deposit it into this account below.`,
                   )
                 }
-                className={buttonClass("signal", "sm")}
+                className={buttonClass("primary", "sm")}
               >
                 1. Withdraw ${fmtUsdc(a.legacy.usdc)} to {short(a.legacy.withdrawalAddress)}
               </button>
@@ -226,12 +226,12 @@ export function AccountPanel() {
                 onClick={() =>
                   run("bind", () => setWithdrawalAddress(a.sign!, a.owner!, a.legacy!.account, wallet), `The old account now withdraws only to ${short(wallet)}. Withdraw next.`)
                 }
-                className={buttonClass("signal", "sm")}
+                className={buttonClass("primary", "sm")}
               >
                 Bind the old account to {short(wallet)} first
               </button>
             ) : (
-              <button type="button" onClick={openConnect} className={buttonClass("signal", "sm")}>
+              <button type="button" onClick={openConnect} className={buttonClass("primary", "sm")}>
                 Connect your wallet to move it
               </button>
             )}
@@ -290,7 +290,7 @@ export function AccountPanel() {
                       className="w-full min-w-0 bg-transparent font-mono text-[15px] text-chrome outline-none placeholder:text-dim"
                     />
                   </div>
-                  <button type="button" disabled={!depositUnits || overWallet || busy !== null} onClick={deposit} className={buttonClass("signal", "sm", "shrink-0 font-semibold")}>
+                  <button type="button" disabled={!depositUnits || overWallet || busy !== null} onClick={deposit} className={buttonClass("primary", "sm", "shrink-0 font-semibold")}>
                     {busy === "deposit" ? "Depositing…" : "Deposit"}
                   </button>
                 </div>
@@ -329,7 +329,7 @@ export function AccountPanel() {
                 type="button"
                 disabled={!target || invalidTarget || busy !== null}
                 onClick={() => run("bind", () => setWithdrawalAddress(sign, owner, account, target!), `Bound: withdrawals now go only to ${short(target!)}.`)}
-                className={buttonClass("signal", "md", "mt-3 w-full font-semibold")}
+                className={buttonClass("primary", "md", "mt-3 w-full font-semibold")}
               >
                 {busy === "bind" ? "Binding…" : "Bind withdrawal address"}
               </button>
@@ -351,7 +351,7 @@ export function AccountPanel() {
                       {busy === "cancel" ? "Cancelling…" : "Cancel change"}
                     </button>
                     {eta !== null && now !== null && eta <= now && (
-                      <button type="button" disabled={busy !== null} onClick={() => run("finalize", () => finalizeWithdrawalChange(owner, account), `Withdrawals now go only to ${short(pending)}.`)} className={buttonClass("signal", "sm")}>
+                      <button type="button" disabled={busy !== null} onClick={() => run("finalize", () => finalizeWithdrawalChange(owner, account), `Withdrawals now go only to ${short(pending)}.`)} className={buttonClass("primary", "sm")}>
                         {busy === "finalize" ? "Applying…" : "Finalize change"}
                       </button>
                     )}
@@ -376,7 +376,7 @@ export function AccountPanel() {
                           `Change requested: ${short(target!)} takes over in 48 hours.`,
                         )
                       }
-                      className={buttonClass("signal", "sm", "font-semibold")}
+                      className={buttonClass("primary", "sm", "font-semibold")}
                     >
                       {busy === "change" ? "Requesting…" : "Request change"}
                     </button>
@@ -434,7 +434,7 @@ export function AccountPanel() {
               await withdrawFromAccount(sign, owner, account, TESTNET_USDC, units!);
               setAmount("");
             }, `Withdrew $${fmtUsdc(units!)} to ${short(bound!)}.`)}
-            className={buttonClass("signal", "md", "mt-3 w-full font-semibold")}
+            className={buttonClass("primary", "md", "mt-3 w-full font-semibold")}
           >
             {busy === "withdraw" ? "Withdrawing…" : overBalance ? "More than the account holds" : "Withdraw"}
           </button>

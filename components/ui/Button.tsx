@@ -1,14 +1,17 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
-type Variant = "signal" | "outline" | "ghost";
+type Variant = "primary" | "buy" | "sell" | "outline" | "ghost";
 type Size = "sm" | "md";
 
 const base =
-  "group inline-flex items-center justify-center gap-2 rounded-md font-medium whitespace-nowrap transition-[background-color,border-color,color,transform] duration-200 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50";
+  "group inline-flex items-center justify-center gap-2 rounded-md font-medium whitespace-nowrap transition-[background-color,border-color,color,transform] duration-200 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-chrome active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50";
 
 const variants: Record<Variant, string> = {
-  // Flat Signal Orange: hover lightens, it never glows.
-  signal: "bg-signal text-void hover:bg-signal-lift",
+  // Flat warm white: the one primary action on a surface. Orange is kept for the mark, LIVE and selection.
+  primary: "bg-chrome text-void hover:bg-white",
+  // Trades carry their direction: green to buy, red to sell.
+  buy: "bg-up text-void hover:brightness-110",
+  sell: "bg-down text-void hover:brightness-110",
   outline: "border border-line-2 text-chrome hover:border-chrome/60 hover:bg-white/[0.04]",
   ghost: "text-muted hover:text-chrome",
 };
@@ -18,7 +21,7 @@ const sizes: Record<Size, string> = {
   md: "h-12 px-6 text-[14px]",
 };
 
-export function buttonClass(variant: Variant = "signal", size: Size = "md", extra = "") {
+export function buttonClass(variant: Variant = "primary", size: Size = "md", extra = "") {
   return `${base} ${variants[variant]} ${sizes[size]} ${extra}`;
 }
 
@@ -44,7 +47,7 @@ type LinkButtonProps = ComponentPropsWithoutRef<"a"> & {
   children: ReactNode;
 };
 
-export function LinkButton({ variant = "signal", size = "md", className = "", children, ...props }: LinkButtonProps) {
+export function LinkButton({ variant = "primary", size = "md", className = "", children, ...props }: LinkButtonProps) {
   return (
     <a className={buttonClass(variant, size, className)} {...props}>
       {children}

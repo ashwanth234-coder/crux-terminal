@@ -433,7 +433,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             </div>
           </dl>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <button type="button" onClick={viewInTerminal} className={buttonClass("signal", "md", "flex-1 rounded-xl font-semibold")}>
+            <button type="button" onClick={viewInTerminal} className={buttonClass("primary", "md", "flex-1 rounded-xl font-semibold")}>
               View in Crux Terminal <ArrowUpRight />
             </button>
             <button type="button" onClick={reset} className={buttonClass("outline", "md", "rounded-xl")}>
@@ -856,7 +856,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             </div>
           )}
 
-          <button type="submit" className={buttonClass("signal", "md", "w-full rounded-xl font-semibold")}>
+          <button type="submit" className={buttonClass("primary", "md", "w-full rounded-xl font-semibold")}>
             {accountLaunch ? "Launch from Crux account" : <>Deploy Token &amp; Initialize Auction</>} <ArrowUpRight />
           </button>
           {live && !isConnected && !accountLaunch && <p className="text-center text-[11.5px] text-dim">You&apos;ll be asked to connect a wallet first.</p>}

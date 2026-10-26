@@ -331,7 +331,7 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
     body = (
       <>
         <p className="text-[13px] text-muted">Connect a wallet on Base Sepolia to bid, settle or claim.</p>
-        <button type="button" onClick={model.connect} className={buttonClass("signal", "md", "mt-5 w-full rounded-xl font-semibold")}>
+        <button type="button" onClick={model.connect} className={buttonClass("primary", "md", "mt-5 w-full rounded-xl font-semibold")}>
           Connect wallet
         </button>
       </>
@@ -461,7 +461,7 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
         <button
           type="submit"
           disabled={!parsed || overBalance || overCap || Boolean(limitError) || (limitOn && !limitPrice)}
-          className={buttonClass("signal", "md", "mt-5 w-full rounded-xl font-semibold")}
+          className={buttonClass("primary", "md", "mt-5 w-full rounded-xl font-semibold")}
         >
           {overBalance ? "Not enough test USDC" : overCap ? "Over this wallet's cap" : needsApproval ? "Approve & bid" : "Place bid"} <ArrowUpRight />
         </button>
@@ -474,7 +474,7 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
           The window has closed. Anyone can crank the settlement: it finds the clearing price, seeds the locked pool and pays
           the creator&apos;s {V2_FEE.creatorShareBps / 100}% share of the {V2_FEE.feeBps / 100}% fee.
         </p>
-        <button type="button" onClick={() => void run(model.settle, "Settled.")} className={buttonClass("signal", "md", "mt-5 w-full rounded-xl font-semibold")}>
+        <button type="button" onClick={() => void run(model.settle, "Settled.")} className={buttonClass("primary", "md", "mt-5 w-full rounded-xl font-semibold")}>
           Settle batch auction <ArrowUpRight />
         </button>
       </>
@@ -499,7 +499,7 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
             </>
           )}
         </p>
-        <button type="button" onClick={() => void run(model.claim, "Claimed.")} className={buttonClass("signal", "md", "mt-5 w-full rounded-xl font-semibold")}>
+        <button type="button" onClick={() => void run(model.claim, "Claimed.")} className={buttonClass("primary", "md", "mt-5 w-full rounded-xl font-semibold")}>
           {phase === "cancelled" ? `Claim refund · $${fmtUsdc(model.myClaim.refund)}` : "Claim tokens"} <ArrowUpRight />
         </button>
       </>

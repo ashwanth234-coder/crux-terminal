@@ -45,7 +45,6 @@ export function Footer() {
 
       <div className="mx-auto flex max-w-[1440px] items-center justify-between border-t border-line px-4 py-6 sm:px-8 lg:px-12">
         <p className="text-[12px] text-dim">© 2026 Crux. All rights reserved.</p>
-        <p className="font-mono text-[10.5px] uppercase tracking-[0.2em] text-dim">Execute everywhere</p>
       </div>
     </footer>
   );

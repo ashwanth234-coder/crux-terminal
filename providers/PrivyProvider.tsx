@@ -18,7 +18,7 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
       appId={PRIVY_APP_ID}
       config={{
         loginMethods: ["email", "google"],
-        appearance: { theme: "dark", accentColor: "#FF642D", landingHeader: "Log in to Crux", walletChainType: "ethereum-only" },
+        appearance: { theme: "dark", accentColor: "#e35d2b", landingHeader: "Log in to Crux", walletChainType: "ethereum-only" },
         embeddedWallets: { ethereum: { createOnLogin: "users-without-wallets" }, showWalletUIs: false },
         defaultChain: TESTNET,
         supportedChains: [TESTNET],

@@ -1,6 +1,6 @@
 ---
 name: Crux
-description: Markets without borders. Minimal, cinematic, editorial fintech on coal black, where Signal Orange marks only the mark, actions, selection and live state.
+description: Markets without borders. Minimal, institutional fintech on coal black, one type family, where Signal Orange marks only the mark, selection and live state.
 colors:
   void: "#0a0b0d"
   void-2: "#0e0f12"
@@ -8,8 +8,8 @@ colors:
   panel-2: "#1a1b1f"
   line: "#292b2f"
   line-2: "#3a3d42"
-  signal: "#ff642d"
-  signal-lift: "#ff7c4d"
+  signal: "#e35d2b"
+  signal-lift: "#ee7444"
   chrome: "#f5f3ee"
   muted: "#a7adb5"
   dim: "#868c94"
@@ -17,21 +17,23 @@ colors:
   down: "#e5484d"
 typography:
   display:
-    fontFamily: "Bodoni Moda (opsz), ui-serif, Georgia, serif"
-    fontSize: "clamp(2.6rem, 12.8vw, 5.75rem); md 7.4vw; xl min(7.4vw, 7.25rem)"
-    fontWeight: 400
-    lineHeight: 0.9
-    letterSpacing: "-0.015em"
-  headline:
-    fontFamily: "Bodoni Moda"
-    fontSize: "clamp(2.5rem, 5.4vw, 4.9rem)"
-    fontWeight: 400
-    lineHeight: 0.95
-  title:
-    fontFamily: "Bodoni Moda"
-    fontSize: "22-28px"
+    fontFamily: "Archivo, ui-sans-serif, sans-serif"
+    fontSize: "clamp(2.9rem, 9.5vw, 4.5rem); md 6vw; xl min(6vw, 6rem)"
     fontWeight: 500
-    lineHeight: 1.05
+    lineHeight: 0.98
+    letterSpacing: "-0.035em"
+  headline:
+    fontFamily: "Archivo"
+    fontSize: "clamp(2.1rem, 4vw, 3.4rem)"
+    fontWeight: 500
+    lineHeight: 0.98
+    letterSpacing: "-0.035em"
+  title:
+    fontFamily: "Archivo"
+    fontSize: "22-28px"
+    fontWeight: 600
+    lineHeight: 1.1
+    letterSpacing: "-0.02em"
   body:
     fontFamily: "Archivo, ui-sans-serif, sans-serif"
     fontSize: "15px"
@@ -56,25 +58,28 @@ rounded:
   tag: "3px"
   control: "4-6px"
   panel: "8px"
-  circle: "999px (the ENTER CRUX ring and dots only)"
+  circle: "999px (status dots only)"
 spacing:
   gutter: "16px / 32px from 640 / 48px from 1024"
   section: "80px; 128px from 1024"
   header: "64px"
 components:
   button-primary:
-    backgroundColor: "{colors.signal}"
+    backgroundColor: "{colors.chrome}"
     textColor: "{colors.void}"
     rounded: "6px"
     height: "48px (md) / 36px (sm)"
+  button-buy:
+    backgroundColor: "{colors.up}"
+    textColor: "{colors.void}"
+  button-sell:
+    backgroundColor: "{colors.down}"
+    textColor: "{colors.void}"
   connect-wallet:
-    border: "1px {colors.signal} at 80%"
-    textColor: "{colors.signal}"
+    border: "1px {colors.chrome} at 70%"
+    textColor: "{colors.chrome}"
     rounded: "4px"
     height: "36px"
-  enter-crux:
-    ring: "56px circle, 1px {colors.signal} at 70%"
-    label: "uppercase, 0.32em tracking, warm white"
   status-tag:
     font: "JetBrains Mono 9.5px uppercase, 0.16em"
     rounded: "3px"
@@ -84,24 +89,25 @@ components:
 
 ## Overview
 
-**Creative North Star: "Markets without borders."** Editorial, architectural, obsidian, titanium, precision, restraint. The page should feel expensive through composition, type and negative space, not effects. Real responsive UI, never a flattened image.
+**Creative North Star: "Markets without borders."** Institutional, architectural, obsidian, titanium, precision, restraint. The page should feel trustworthy through composition, one type family and negative space, not effects. Few things per screen; say each thing once. Real responsive UI, never a flattened image.
 
-The home page opens on plain coal black: a serif MARKETS / WITHOUT / BORDERS. (WITHOUT in Signal Orange), one supporting line, one ENTER CRUX link, and on the right one monumental chrome CRUX mark on a single circle and axis. Below the fold, numbered editorial chapters (01 Discover, 02 Fair launch, 03 Execution, 04 Liquidity, 05 Token economics) show real Base Sepolia data, then the close repeats the promise.
+The home page opens on plain coal black: "Markets / without borders." in warm-white Archivo, one supporting line, the warm-white Enter Crux button with a quiet View launches link, and on the right the chrome CRUX mark on a single circle and axis. Below the fold, three parts only: Live markets (the real launch table), How Crux works (four hairline rows, each live today), and a short close. No section numbers or kickers above headings.
 
 The terminal, launch and pro views use the same tokens, packed tighter.
 
 ## Colors
 
 - **Coal Black** (void) dominates every page. **Graphite** (panel) separates layers by tone; no glows, no gradients.
-- **Signal Orange** (signal) is the only accent: the mark, primary actions, the selected nav item, LIVE state and active indicators, chapter numbers, and one rare headline word. It never fills a section, and the page is never orange.
+- **Signal Orange** (signal, #E35D2B: toned down from #FF642D in 2026-10) is the only accent: the mark, the selected nav item or control, LIVE state and active indicators. It is never a button fill, never a headline word, never a section fill.
+- **Actions** are warm white (primary) or outline. Trades carry their direction: **buy green (up), sell red (down)**, so an action never shares a hue with the down colour.
 - **Warm White** (chrome) for headlines and primary information. **Titanium** (muted) for secondary text, annotations and chart detail; **dim** for timestamps and table heads (still 4.5:1 on graphite).
 - **Borders** (line, #292B2F) for every hairline; line-2 for interactive outlines.
 - **up / down** mark price direction only. Network colours appear only on network marks (Base blue, etc.).
 
 ## Typography
 
-- **Bodoni Moda** (optical size axis) for display and titles: `.font-display` (400) and `.font-display-md` (500). Uppercase only in the hero.
-- **Archivo** for all UI words. Nav, buttons and small labels are uppercase with 0.16-0.18em tracking.
+- **Archivo** for everything with words: `.font-display` (500, -0.035em) for statements and `.font-display-md` (600, -0.02em) for titles inside the app, sentence case. One family keeps the site in one voice.
+- Archivo for all UI words too. Nav, buttons and small labels are uppercase with 0.16-0.18em tracking.
 - **JetBrains Mono** with tabular figures for every number, address and countdown, and for chapter labels.
 
 ## Brand mark
@@ -114,9 +120,9 @@ One geometric four-point mark (`CRUX_MARK_PATH` in components/site/Logo.tsx): fo
 
 ## Components
 
-- **Header**: 64px, coal with a subtle border; mark + wordmark + TESTNET tag left, the five routes centred (from lg), CONNECT WALLET ↗ right. Below lg, a menu button opens an accessible full-height list (Escape closes it).
+- **Header**: 64px, coal with a subtle border; mark + wordmark + TESTNET tag left, the routes centred (from lg), LOG IN and CONNECT WALLET ↗ (warm-white outline) right. App headers drop Protocol and Docs; the token search submits on Enter. Below lg, a menu button opens an accessible full-height list (Escape closes it).
 - **Status tags** (`components/ui/StatusTag.tsx`): LIVE (orange dot), TESTNET (titanium), DEMO (dashed), PLANNED (dashed, hollow dot). Use these words consistently; never show a simulated number as live.
-- **Chapters** (`components/site/Chapter.tsx`): hairline on top, `01 / NAME` label, serif headline, short titanium intro, then the evidence.
+- **Chapters** (`components/site/Chapter.tsx`): hairline on top, Archivo headline with a short titanium intro beside it, then the evidence. No numbers or labels above the headline.
 - **Tables and lists** use hairline rows rather than boxed cards.
 - **Balances** are never sampled: with no wallet the terminal shows "$—" and asks you to connect.
 

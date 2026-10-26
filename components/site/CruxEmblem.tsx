@@ -51,24 +51,24 @@ export function CruxEmblem({ className = "" }: { className?: string }) {
         </linearGradient>
         {/* Orange rim light on the edges nearest the core, gone by mid-arm */}
         <radialGradient id="cx-rim" gradientUnits="userSpaceOnUse" cx="12" cy="12" r="7">
-          <stop offset="0" stopColor="#ff642d" stopOpacity="1" />
-          <stop offset="0.45" stopColor="#ff642d" stopOpacity="0.55" />
-          <stop offset="1" stopColor="#ff642d" stopOpacity="0" />
+          <stop offset="0" stopColor="#e35d2b" stopOpacity="1" />
+          <stop offset="0.45" stopColor="#e35d2b" stopOpacity="0.55" />
+          <stop offset="1" stopColor="#e35d2b" stopOpacity="0" />
         </radialGradient>
         {/* The core: a small, controlled light */}
         <radialGradient id="cx-core" cx="0.5" cy="0.5" r="0.5">
           <stop offset="0" stopColor="#fff6ef" />
           <stop offset="0.1" stopColor="#ffc3a6" />
-          <stop offset="0.3" stopColor="#ff642d" stopOpacity="0.85" />
-          <stop offset="0.62" stopColor="#ff642d" stopOpacity="0.16" />
-          <stop offset="1" stopColor="#ff642d" stopOpacity="0" />
+          <stop offset="0.3" stopColor="#e35d2b" stopOpacity="0.85" />
+          <stop offset="0.62" stopColor="#e35d2b" stopOpacity="0.16" />
+          <stop offset="1" stopColor="#e35d2b" stopOpacity="0" />
         </radialGradient>
         {/* The axis: titanium at its ends, Signal Orange where it passes the core */}
         <linearGradient id="cx-axis" gradientUnits="userSpaceOnUse" x1="-240" y1="0" x2="1040" y2="0">
           <stop offset="0" stopColor="#a7adb5" stopOpacity="0" />
           <stop offset="0.3" stopColor="#a7adb5" stopOpacity="0.3" />
-          <stop offset="0.47" stopColor="#ff642d" stopOpacity="0.9" />
-          <stop offset="0.53" stopColor="#ff642d" stopOpacity="0.9" />
+          <stop offset="0.47" stopColor="#e35d2b" stopOpacity="0.9" />
+          <stop offset="0.53" stopColor="#e35d2b" stopOpacity="0.9" />
           <stop offset="0.7" stopColor="#a7adb5" stopOpacity="0.3" />
           <stop offset="1" stopColor="#a7adb5" stopOpacity="0" />
         </linearGradient>
@@ -98,7 +98,7 @@ export function CruxEmblem({ className = "" }: { className?: string }) {
       <circle cx="400" cy="400" r="58" fill="url(#cx-core)" />
 
       {/* Control points */}
-      <g className="max-md:hidden" fill="#ff642d">
+      <g className="max-md:hidden" fill="#e35d2b">
         <rect x="608" y="184" width="8" height="8" />
         <rect x="184" y="608" width="8" height="8" />
         <rect x="699" y="394" width="2" height="12" />

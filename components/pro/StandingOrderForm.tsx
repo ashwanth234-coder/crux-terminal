@@ -368,7 +368,7 @@ export function StandingOrderForm({
         type="button"
         disabled={disabled}
         onClick={() => void create()}
-        className={buttonClass("signal", "md", `w-full rounded-xl font-semibold ${side === "sell" ? "!bg-[#e5484d] !text-white hover:!bg-[#d13d42]" : ""}`)}
+        className={buttonClass(side, "md", "w-full rounded-xl font-semibold")}
       >
         {busy
           ? "Signing…"

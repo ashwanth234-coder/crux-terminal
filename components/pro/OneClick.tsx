@@ -181,7 +181,7 @@ export function OneClickBar({ oneClick }: { oneClick: OneClick }) {
         </p>
       ) : (
         <div className="mt-2 flex gap-2">
-          <button type="button" disabled={!capValid} onClick={() => void oneClick.start(capNum)} className={buttonClass("signal", "sm", "rounded-lg")}>
+          <button type="button" disabled={!capValid} onClick={() => void oneClick.start(capNum)} className={buttonClass("primary", "sm", "rounded-lg")}>
             Enable · ${capValid ? capNum.toLocaleString("en-US") : "…"} cap
           </button>
           <button type="button" onClick={() => setOpen(false)} className="text-muted underline decoration-line-2 hover:text-chrome">

@@ -99,13 +99,13 @@ export function Shell({ mode, children }: { mode: LaunchModel["mode"] | null; ch
   return (
     <div className="min-h-svh">
       <header className="border-b border-line">
-        <div className="mx-auto flex h-[72px] max-w-[1180px] items-center justify-between gap-4 px-4 sm:px-8">
+        <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between gap-4 px-4 sm:px-8 lg:px-12">
           <div className="flex items-center gap-6 sm:gap-10">
             <Link href="/" aria-label="Crux home" className="shrink-0">
               <Logo />
             </Link>
             <nav aria-label="Primary" className="hidden lg:block">
-              <SiteNav variant="inline" />
+              <SiteNav variant="inline" hide={["Docs", "Protocol"]} />
             </nav>
           </div>
           <div className="flex items-center gap-3">
@@ -113,10 +113,10 @@ export function Shell({ mode, children }: { mode: LaunchModel["mode"] | null; ch
               <StatusTag
                 status={mode === "simulated" ? "demo" : "testnet"}
                 label={mode === "simulated" ? "Simulated preview" : "Base Sepolia"}
-                className="hidden sm:inline-flex"
+                className="hidden 2xl:inline-flex"
               />
             )}
-            <TokenSearch className="hidden w-[260px] md:block" />
+            <TokenSearch className="hidden w-[220px] md:block" />
             <AccountButton />
             <WalletChip variant="header" />
           </div>
@@ -138,7 +138,7 @@ export function Notice({ title, children }: { title: string; children: ReactNode
         <h1 className="font-display-md text-[28px] text-chrome">{title}</h1>
         <p className="mt-3 text-[14px] leading-relaxed text-muted">{children}</p>
         <div className="mt-8 flex flex-col justify-center gap-2 sm:flex-row">
-          <LaunchTokenButton className={buttonClass("signal", "md", "font-semibold")} />
+          <LaunchTokenButton className={buttonClass("primary", "md", "font-semibold")} />
           <Link href="/" className={buttonClass("outline", "md")}>
             Back to Crux
           </Link>
@@ -371,7 +371,7 @@ function ActionPanel({ model, auction, phase, symbol }: { model: LaunchModel; au
     body = (
       <>
         <p className="text-[13px] leading-relaxed text-muted">Connect a wallet on Base Sepolia to deposit, settle or claim.</p>
-        <button type="button" onClick={model.connect} className={buttonClass("signal", "md", "mt-5 w-full rounded-xl font-semibold")}>
+        <button type="button" onClick={model.connect} className={buttonClass("primary", "md", "mt-5 w-full rounded-xl font-semibold")}>
           Connect wallet
         </button>
       </>
@@ -434,7 +434,7 @@ function ActionPanel({ model, auction, phase, symbol }: { model: LaunchModel; au
           </p>
         )}
 
-        <button type="submit" disabled={overBalance} className={buttonClass("signal", "md", "mt-5 w-full rounded-xl font-semibold")}>
+        <button type="submit" disabled={overBalance} className={buttonClass("buy", "md", "mt-5 w-full rounded-xl font-semibold")}>
           {needsApproval ? "Approve & deposit" : "Deposit"} <ArrowUpRight />
         </button>
         <p className="mt-2 text-center text-[11.5px] text-dim">
@@ -458,7 +458,7 @@ function ActionPanel({ model, auction, phase, symbol }: { model: LaunchModel; au
         <button
           type="button"
           onClick={() => void run(model.settle, willGraduate ? "Settled: the token graduated." : "Settled: the launch was cancelled.")}
-          className={buttonClass("signal", "md", "mt-5 w-full rounded-xl font-semibold")}
+          className={buttonClass("primary", "md", "mt-5 w-full rounded-xl font-semibold")}
         >
           Settle auction <ArrowUpRight />
         </button>
@@ -496,7 +496,7 @@ function ActionPanel({ model, auction, phase, symbol }: { model: LaunchModel; au
                 refund ? `Refunded $${fmtUsdc(model.myDeposit)} ${unit}.` : `Claimed ${fmtTokens(model.allocation)} ${symbol}.`,
               ).then(setClaimed)
             }
-            className={buttonClass("signal", "md", "mt-5 w-full rounded-xl font-semibold")}
+            className={buttonClass("primary", "md", "mt-5 w-full rounded-xl font-semibold")}
           >
             {refund ? `Claim refund · $${fmtUsdc(model.myDeposit)}` : `Claim ${fmtTokens(model.allocation)} ${symbol}`} <ArrowUpRight />
           </button>

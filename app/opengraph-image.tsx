@@ -23,13 +23,13 @@ export default function OpengraphImage() {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
           <svg width="44" height="44" viewBox="0 0 24 24">
-            <path d={CRUX_MARK_PATH} fill="#FF642D" />
+            <path d={CRUX_MARK_PATH} fill="#e35d2b" />
           </svg>
           <div style={{ fontSize: 30, letterSpacing: 14, fontWeight: 500 }}>CRUX</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", fontSize: 116, fontWeight: 400, lineHeight: 0.95, letterSpacing: -2 }}>
           <div>MARKETS</div>
-          <div style={{ color: "#FF642D" }}>WITHOUT</div>
+          <div style={{ color: "#e35d2b" }}>WITHOUT</div>
           <div>BORDERS.</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid #292B2F", paddingTop: 28 }}>

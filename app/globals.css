@@ -8,8 +8,8 @@
   --color-panel-2: #1a1b1f;
   --color-line: #292b2f;
   --color-line-2: #3a3d42;
-  --color-signal: #ff642d;
-  --color-signal-lift: #ff7c4d;
+  --color-signal: #e35d2b;
+  --color-signal-lift: #ee7444;
   --color-chrome: #f5f3ee;
   --color-muted: #a7adb5;
   --color-dim: #868c94;
@@ -18,7 +18,6 @@
   --color-down: #e5484d;
 
   --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
-  --font-serif: var(--font-bodoni), ui-serif, Georgia, serif;
   --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;
 
   /* Motion is functional only: one entrance, and a spinner while a wallet works. */
@@ -111,21 +110,21 @@ a {
 }
 
 @layer components {
-  /* Editorial serif for statements: high contrast, tight but never cramped */
+  /* Statements: Archivo set tight and firm, the same family as the interface, so the site speaks in one voice */
   .font-display {
-    font-family: var(--font-serif);
-    font-weight: 400;
-    letter-spacing: -0.015em;
-    line-height: 0.95;
+    font-family: var(--font-sans);
+    font-weight: 500;
+    letter-spacing: -0.035em;
+    line-height: 0.98;
     text-wrap: balance;
   }
 
-  /* The same serif for titles inside the app: modals, launch headings, the token bar */
+  /* Titles inside the app: modals, launch headings, the token bar */
   .font-display-md {
-    font-family: var(--font-serif);
-    font-weight: 500;
-    letter-spacing: -0.01em;
-    line-height: 1.05;
+    font-family: var(--font-sans);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
     text-wrap: balance;
   }
 

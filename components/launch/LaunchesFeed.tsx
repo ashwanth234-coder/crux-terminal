@@ -91,7 +91,7 @@ export function LaunchesFeed() {
             price, so arriving first inside the window buys nothing. Base Sepolia testnet.
           </p>
         </div>
-        <LaunchTokenButton className={buttonClass("signal", "md", "font-semibold")} />
+        <LaunchTokenButton className={buttonClass("primary", "md", "font-semibold")} />
       </div>
 
       {!FACTORY && !FACTORY_V2 && !FACTORY_V3 && !FACTORY_V4 && !FACTORY_V5 && !FACTORY_V6 && !FACTORY_V7 ? (

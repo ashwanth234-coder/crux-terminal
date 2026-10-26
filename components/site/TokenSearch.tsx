@@ -111,12 +111,12 @@ export function TokenSearch({ className = "" }: { className?: string }) {
           aria-expanded={open && hits.length > 0}
           aria-controls={`${uid}-list`}
           aria-activedescendant={open && hits[active] ? `${uid}-${active}` : undefined}
-          className="h-9 w-full min-w-0 rounded-lg border border-line bg-void/60 px-3 font-mono text-[12.5px] text-chrome outline-none placeholder:font-sans placeholder:text-dim focus:border-signal/60 [&::-webkit-search-cancel-button]:hidden"
+          className="h-9 w-full min-w-0 rounded-lg border border-line bg-void/60 px-3 font-mono text-[12.5px] text-chrome outline-none placeholder:font-sans placeholder:text-dim focus:border-chrome/50 [&::-webkit-search-cancel-button]:hidden"
         />
         <button
           type="submit"
           disabled={!direct && hits.length === 0}
-          className="h-9 shrink-0 rounded-lg border border-line-2 px-3 text-[12px] text-muted transition-colors hover:border-chrome/60 hover:text-chrome disabled:opacity-40"
+          className="sr-only focus:not-sr-only focus:h-9 focus:shrink-0 focus:rounded-lg focus:border focus:border-line-2 focus:px-3 focus:text-[12px] focus:text-chrome"
         >
           {direct ? "Open" : "Go"}
         </button>

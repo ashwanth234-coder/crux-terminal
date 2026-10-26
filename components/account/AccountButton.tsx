@@ -14,7 +14,7 @@ const noopSubscribe = () => () => {};
 export function AccountButton() {
   const a = useCruxAccount();
   const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
-  const base = "inline-flex h-9 items-center gap-2 rounded-[4px] border px-3 text-[11px] font-medium transition-colors duration-200";
+  const base = "inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-[4px] border px-3 text-[11px] font-medium transition-colors duration-200";
 
   if (!hydrated || !a.ready) return <span className={`${base} border-line text-dim`}>Account</span>;
   if (!a.loggedIn) {
