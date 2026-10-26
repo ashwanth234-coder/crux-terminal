@@ -498,7 +498,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   const tooBig = risk !== null && risk.poolImpactPct > SOLVER_MAX_IMPACT_PCT;
   const blocked = !SETTLER_DEPLOYED
     ? "Intents aren't live in this build"
-    : market.protected && side === "sell"
+    : market.protected && side === "sell" && !viaAccount
       ? "Sell in the batch directly (Batch order)"
       : !market.reserves
       ? market.loading

@@ -216,7 +216,7 @@ export function Portfolio() {
                   </thead>
                   <tbody className="divide-y divide-line">
                     {holdings.map((h) => (
-                      <HoldingRow key={`v${h.launch.version}#${h.launch.id}`} position={h} me={address!} onMark={report} onSell={sell} />
+                      <HoldingRow key={`v${h.launch.version}#${h.launch.id}`} position={h} me={address!} onMark={report} onSell={sell} sellsInWindow={viaAccount} />
                     ))}
                   </tbody>
                 </table>
@@ -288,11 +288,14 @@ function HoldingRow({
   me,
   onMark,
   onSell,
+  sellsInWindow,
 }: {
   position: Position;
   me: Address;
   onMark: (key: string, mark: Mark) => void;
   onSell: (order: OrderDraft, input: bigint) => void;
+  /** Crux account sells go through during a batch-only window too (the solver pays them up front). */
+  sellsInWindow: boolean;
 }) {
   const { launch, balance } = position;
   const auction = launch.v2;
@@ -338,7 +341,7 @@ function HoldingRow({
   };
   const sellReason = (input: bigint): { draft: OrderDraft | null; reason: string | null } => {
     if (!SETTLER_DEPLOYED) return { draft: null, reason: "Intents aren't live in this build" };
-    if (market.protected) return { draft: null, reason: "Batch-only window: sell in the batch on the token page" };
+    if (market.protected && !sellsInWindow) return { draft: null, reason: "Batch-only window: sell in the batch on the token page" };
     if (!market.reserves) return { draft: null, reason: market.loading ? "Reading the pool…" : "Pool unavailable" };
     if (!market.listedForSells) return { draft: null, reason: "Not listed for intents yet" };
     const risk = input > BigInt(0) ? tradeRisk("sell", input, market.reserves) : null;
