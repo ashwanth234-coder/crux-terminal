@@ -6,7 +6,7 @@ import { SETTLER } from "@/lib/intents";
 
 // Only destinations that exist: no social accounts or legal pages have been published yet.
 const LINKS = [
-  { label: "Discover", href: "/launches" },
+  { label: "Discover", href: "/discover" },
   { label: "Protocol", href: "/#protocol" },
   { label: "Docs", href: "/alpha-guide" },
   { label: "API", href: "/developers" },

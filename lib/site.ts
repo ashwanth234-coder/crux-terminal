@@ -27,7 +27,7 @@ export const TERMINAL_HREF = "/terminal";
  * token launch modal; the rest are routes, absolute so they work on every page.
  */
 export const NAV_LINKS = [
-  { label: "Discover", href: "/launches" },
+  { label: "Discover", href: "/discover" },
   { label: "Launch", href: null },
   { label: "Terminal", href: TERMINAL_HREF },
   { label: "Portfolio", href: "/portfolio" },

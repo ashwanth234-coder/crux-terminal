@@ -23,6 +23,8 @@ const OPEN_SALE_HOURS = 24;
 const MIN_TARGET = FACTORY || LAUNCH_FACTORY ? 1 : 1_000;
 import { useConnectModal } from "@/providers/Web3Provider";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
+import { checkLaunchNow, useLaunchGuard } from "@/hooks/useLaunchGuard";
+import type { Conflict } from "@/lib/antiVamp";
 import { launchFromAccount } from "@/lib/account";
 
 type Form = {
@@ -201,6 +203,13 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
 
   const errors = validate(form);
   const showErr = (k: keyof Form) => (touched ? errors[k] : undefined);
+  // Anti-vamp: the ticker, artwork and X link may not copy an existing Crux token (checked as the creator types).
+  const guard = useLaunchGuard(form.symbol, form.logo.trim(), form.x.trim());
+  // A block found at submit holds only for the inputs it was found for.
+  const guardKey = `${form.symbol}|${form.logo.trim()}|${form.x.trim()}`;
+  const [blocked, setBlocked] = useState<{ key: string; line: string; conflicts: Conflict[] } | null>(null);
+  const vamp =
+    (blocked?.key === guardKey ? blocked : null) ?? (guard.result && !guard.result.ok ? { line: guard.result.line, conflicts: guard.result.conflicts } : null);
   const busy = phase.kind === "simulating" || phase.kind === "deploying";
   const live = FACTORY !== null || LAUNCH_FACTORY !== null;
 
@@ -350,6 +359,13 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     setTouched(true);
     setError(null);
     if (Object.keys(errors).length) return;
+    // A fresh check right before launching: the debounced one may be a moment old.
+    const check = await checkLaunchNow({ symbol: form.symbol, image: form.logo.trim(), x: form.x.trim() });
+    if (check && !check.ok) {
+      setBlocked({ key: guardKey, line: check.line, conflicts: check.conflicts });
+      return;
+    }
+    setBlocked(null);
     try {
       await (live ? deploy() : simulate());
     } catch (err) {
@@ -856,12 +872,36 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             </div>
           )}
 
-          <button type="submit" className={buttonClass("primary", "md", "w-full rounded-xl font-semibold")}>
+          {vamp && <VampBanner line={vamp.line} conflicts={vamp.conflicts} onLink={onClose} />}
+          <button type="submit" disabled={vamp !== null} className={buttonClass("primary", "md", "w-full rounded-xl font-semibold")}>
             {accountLaunch ? "Launch from Crux account" : <>Deploy Token &amp; Initialize Auction</>} <ArrowUpRight />
           </button>
+          {guard.checking && !vamp && <p className="text-center text-[11.5px] text-dim">Checking the ticker, artwork and X link against existing Crux tokens…</p>}
           {live && !isConnected && !accountLaunch && <p className="text-center text-[11.5px] text-dim">You&apos;ll be asked to connect a wallet first.</p>}
         </form>
       )}
     </Modal>
+  );
+}
+
+/** The anti-vamp block: what this launch would copy, with a link to each original. */
+function VampBanner({ line, conflicts, onLink }: { line: string; conflicts: Conflict[]; onLink: () => void }) {
+  const originals = [...new Map(conflicts.map((c) => [c.token, c])).values()];
+  return (
+    <div role="alert" className="rounded-xl border border-down bg-down/15 px-4 py-3">
+      <p className="text-[13px] font-semibold text-white">{line}</p>
+      <p className="mt-1.5 text-[12px] leading-relaxed text-chrome/85">
+        Crux blocks launches that copy an existing token. Already on Crux:{" "}
+        {originals.map((c, i) => (
+          <span key={c.token}>
+            {i > 0 && ", "}
+            <a href={c.href} onClick={onLink} className="font-medium text-white underline decoration-white/50 underline-offset-2 hover:decoration-white">
+              ${c.symbol}
+            </a>
+          </span>
+        ))}
+        . Change the ticker, artwork or X link to continue.
+      </p>
+    </div>
   );
 }

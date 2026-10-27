@@ -10,8 +10,6 @@ import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { DESTINATION_SETTLER, useLaunchMarket } from "@/hooks/useLaunchMarket";
 import { useTokenTransfers } from "@/hooks/useTokenTransfers";
 import { useStandingOrders } from "@/hooks/useStandingOrders";
-import { loadRemoteLayout, saveRemoteLayout } from "@/lib/layoutSync";
-import { getServerAlerts, pushOn, setServerAlerts } from "@/lib/alertSync";
 import { barTime, markTrades, type MarkWho } from "@/lib/chartMarks";
 import { buildHolders } from "@/lib/holders";
 import { CRUX_SOLVER, PREVIOUS_SETTLERS, SETTLER } from "@/lib/intents";
@@ -29,13 +27,15 @@ import { DrawingBar } from "./DrawingBar";
 import { DrawingPalette, TOOL_INFO, TOOL_KEYS } from "./DrawingPalette";
 import { PATTERN_LABELS, TOOL_POINTS, defaultStop, isPattern, type DrawPart, type DrawPoint, type DrawTool, type Drawing } from "./drawings";
 import { OverlaysBar } from "./OverlaysBar";
-import { DEFAULT_CONFIG, DEFAULT_SETTINGS, layoutSavedAt, loadLayout, loadSettings, palette, parseLayout, saveLayout, saveSettings, type ChartSettings, type ScaleMode } from "./settings";
+import { DEFAULT_CONFIG, DEFAULT_SETTINGS, loadLayout, loadSettings, palette, saveSettings, type ChartSettings, type ScaleMode } from "./settings";
 import { SettingsModal } from "./SettingsModal";
 import { CompareButton, CompareFeed } from "./Compare";
 import type { SyncBus, SyncOptions } from "./sync";
 import { StudySettings } from "./StudySettings";
 import { chartSnapshot, shareImage } from "./snapshot";
 import { TableView } from "./TableView";
+import { useChartAlerts } from "./useChartAlerts";
+import { useChartLayoutSync } from "./useChartLayoutSync";
 import { Toolbar } from "./Toolbar";
 
 /** A new chart in a multi-chart layout starts on a different timeframe: auto, 1 minute, 15 minutes, 1 hour. */
@@ -80,6 +80,7 @@ export function ProChart({
   slot = 0,
   layoutSlot,
   sync,
+  external = false,
 }: {
   auction: AuctionV2;
   symbol: string;
@@ -91,6 +92,11 @@ export function ProChart({
   onFocus?: (a: Address | null) => void;
   /** Which chart of a multi-chart layout this is: each slot keeps its own saved layout. */
   slot?: number;
+  /**
+   * A token that isn't a Crux launch (lib/externalPools): `auction` carries only its token, pool and supply. Its
+   * transfers aren't read (a partial window would show wrong holders), so there are no trader marks.
+   */
+  external?: boolean;
   /** The layout picker, shown in the toolbar. */
   layoutSlot?: ReactNode;
   /** In a multi-chart layout: what the charts share (crosshair, time range, timeframe). */
@@ -107,7 +113,7 @@ export function ProChart({
   const remoteAt = useRef(0);
   const swaps = usePoolSwaps(auction.pair, auction.settledAt, true);
   // The same reads as the Holders tab (shared queries): who holds what, and every transfer to rebuild their trades.
-  const transfers = useTokenTransfers(auction.token, factory, BigInt(id), auction.startTime - 86_400, true);
+  const transfers = useTokenTransfers(auction.token, factory, BigInt(id), auction.startTime - 86_400, !external);
   const market = useLaunchMarket(auction.token, auction.pair);
   const { address: wallet } = useConnection();
   const crux = useCruxAccount();
@@ -402,41 +408,7 @@ export function ProChart({
     engine.setMarkers(bars);
   }, [engine, candles, k, fmt, minMove, config.type, drawnStudies, config.alerts, settings, marksHidden, gradPrice, shownMarks, mine, last, standingOrders, auction.token]);
 
-  // Logged in, the first chart's alerts live at the relay too, which fires them with Crux closed (web push). On
-  // arrival the relay's pending set wins (alerts that fired while you were away are gone); after that every change is
-  // sent there a moment later. Logged out, alerts stay in this tab.
-  const alertsReady = useRef(false);
-  useEffect(() => {
-    if (slot !== 0 || alertsReady.current || !crux.sign || !crux.owner) return;
-    const [sign, owner] = [crux.sign, crux.owner];
-    void getServerAlerts(sign, owner, auction.token)
-      .then((srv) => {
-        if (srv.updatedAt !== null) set((c) => ({ ...c, alerts: srv.prices, rules: srv.rules as typeof c.rules }));
-      })
-      .catch(() => {
-        // No alert service (or offline): the chart's own alerts stand.
-      })
-      .finally(() => {
-        alertsReady.current = true;
-      });
-  }, [slot, crux.sign, crux.owner, auction.token, set]);
-  useEffect(() => {
-    if (slot !== 0 || !alertsReady.current || !crux.sign || !crux.owner) return;
-    const [sign, owner] = [crux.sign, crux.owner];
-    const t = setTimeout(() => {
-      const used = new Set(config.rules.map((r) => r.study));
-      void setServerAlerts(sign, owner, auction.token, {
-        pair: auction.pair,
-        symbol,
-        interval,
-        openPrice: gradPrice,
-        prices: config.alerts,
-        rules: config.rules,
-        studies: config.studies.filter((s) => used.has(s.id)),
-      }).catch(() => {});
-    }, 2_000);
-    return () => clearTimeout(t);
-  }, [slot, crux.sign, crux.owner, auction.token, auction.pair, symbol, interval, gradPrice, config.alerts, config.rules, config.studies]);
+  useChartAlerts({ external, slot, crux, auction, symbol, interval, gradPrice, config, set, candles, last, studyCtx, fmt, k, flash, replaying });
 
   // A synced layout: apply the other charts' crosshair, time range and timeframe.
   const candlesRef = useRef(candles);
@@ -536,47 +508,7 @@ export function ProChart({
     engine.drawings.setDrawings(shownDrawings, draft, selected, drawHidden);
   }, [engine, candles, interval, k, fmt, settings, shownDrawings, draft, selected, drawHidden]);
 
-  // Layout sync state (below): a layout just loaded from another device isn't synced straight back.
-  const skipSync = useRef(false);
-  const synced = useRef(false);
-  // Every change is saved for this token, so the chart comes back as it was left.
-  useEffect(() => {
-    saveLayout(layoutKey, config, skipSync.current ? layoutSavedAt(layoutKey) : Date.now());
-  }, [layoutKey, config]);
-
-  // Logged in: the first chart's layout follows you between devices. On arrival the newer of this browser's and the
-  // synced copy wins; changes are synced a few seconds after you stop making them (signed silently by the login key).
-  useEffect(() => {
-    if (slot !== 0 || synced.current || !crux.sign || !crux.owner) return;
-    synced.current = true;
-    const [sign, owner] = [crux.sign, crux.owner];
-    void loadRemoteLayout(sign, owner, auction.token)
-      .then((remote) => {
-        if (!remote || remote.savedAt <= layoutSavedAt(layoutKey)) return;
-        const next = parseLayout(remote.layout);
-        if (!next) return;
-        skipSync.current = true;
-        replace(next);
-        saveLayout(layoutKey, next, remote.savedAt);
-      })
-      .catch(() => {
-        // No sync (relay without it, or offline): this browser's layout stands.
-      });
-  }, [slot, crux.sign, crux.owner, auction.token, layoutKey, replace]);
-  useEffect(() => {
-    if (slot !== 0 || !crux.sign || !crux.owner || !synced.current) return;
-    if (skipSync.current) {
-      skipSync.current = false;
-      return;
-    }
-    const [sign, owner] = [crux.sign, crux.owner];
-    const t = setTimeout(() => {
-      const raw = JSON.stringify(config);
-      if (raw.length > 46_000) return;
-      void saveRemoteLayout(sign, owner, auction.token, raw, layoutSavedAt(layoutKey) || Date.now()).catch(() => {});
-    }, 4_000);
-    return () => clearTimeout(t);
-  }, [slot, config, crux.sign, crux.owner, auction.token, layoutKey]);
+  useChartLayoutSync({ slot, crux, auction, layoutKey, config, replace });
   // While a tool is active, clicks place points instead of panning the chart.
   useEffect(() => {
     const free = tool === null && !zoomMode;
@@ -588,68 +520,6 @@ export function ProChart({
   useEffect(() => {
     engine?.fit();
   }, [engine, fitKey]);
-
-  // Alerts fire when the latest close crosses them, then clear (a browser notification if allowed).
-  const lastClose = last?.close ?? null;
-  const prevClose = useRef<number | null>(null);
-  useEffect(() => {
-    const prev = prevClose.current;
-    prevClose.current = lastClose;
-    if (prev === null || lastClose === null || prev === lastClose || replaying) return;
-    const hit = config.alerts.filter((a) => (prev < a && lastClose >= a) || (prev > a && lastClose <= a));
-    if (hit.length === 0) return;
-    const msg = `${symbol} crossed ${hit.map((a) => fmt(a * k)).join(", ")}`;
-    try {
-      if (typeof Notification !== "undefined" && Notification.permission === "granted" && !pushOn()) new Notification("CRUX alert", { body: msg });
-    } catch {
-      // Notifications unavailable: the in-page message below still shows.
-    }
-    setTimeout(() => {
-      flash(msg);
-      set((c) => ({ ...c, alerts: c.alerts.filter((a) => !hit.includes(a)) }));
-    }, 0);
-  }, [lastClose, config.alerts, symbol, fmt, k, flash, set, replaying]);
-
-  // Indicator alerts: a line crossing its target between the last two candles fires once for that candle.
-  const firedAt = useRef(new Map<string, number>());
-  useEffect(() => {
-    const n = candles.length - 1;
-    if (n < 1 || config.rules.length === 0 || replaying) return;
-    const seriesOf = (id: StudyId, key: string) => {
-      const inst = config.studies.find((s) => s.id === id);
-      return inst ? (computeInstance(inst, candles, studyCtx).find((l) => l.key === key)?.values ?? null) : null;
-    };
-    const fired: string[] = [];
-    const messages: string[] = [];
-    for (const r of config.rules) {
-      const a = seriesOf(r.study, r.line);
-      if (!a) continue;
-      const b = r.target === "price" ? candles.map((c) => c.close) : "line" in r.target ? seriesOf(r.study, r.target.line) : null;
-      const at = (i: number) => (b ? b[i] : (r.target as { value: number }).value);
-      const [pa, ca, pb, cb] = [a[n - 1], a[n], at(n - 1), at(n)];
-      if (pa == null || ca == null || pb == null || cb == null) continue;
-      const up = pa <= pb && ca > cb;
-      const down = pa >= pb && ca < cb;
-      if (!(r.op === "up" ? up : r.op === "down" ? down : up || down)) continue;
-      if (firedAt.current.get(r.id) === candles[n].time) continue;
-      firedAt.current.set(r.id, candles[n].time);
-      fired.push(r.id);
-      const study = studyById(r.study);
-      const target = r.target === "price" ? "the price" : "line" in r.target ? r.target.line : study.priced ? fmt(r.target.value * k) : String(r.target.value);
-      messages.push(`${symbol}: ${study.title(paramsOf(config.studies.find((s) => s.id === r.study) ?? { id: r.study }))} ${r.line} crossed ${up ? "above" : "below"} ${target}`);
-    }
-    if (fired.length === 0) return;
-    const msg = messages.join(" · ");
-    try {
-      if (typeof Notification !== "undefined" && Notification.permission === "granted" && !pushOn()) new Notification("CRUX alert", { body: msg });
-    } catch {
-      // Notifications unavailable: the in-page message still shows.
-    }
-    setTimeout(() => {
-      flash(msg);
-      set((c) => ({ ...c, rules: c.rules.filter((r) => r.repeat || !fired.includes(r.id)) }));
-    }, 0);
-  }, [candles, config.rules, config.studies, studyCtx, symbol, fmt, k, flash, set, replaying]);
 
   useEffect(() => {
     const onChange = () => setFull(document.fullscreenElement === frame.current);
@@ -1164,7 +1034,7 @@ export function ProChart({
         )}
         {swaps.isPending && <p className="absolute inset-x-0 top-1/2 text-center text-[12px] text-dim">Reading trades from Base Sepolia…</p>}
         {swaps.data && candles.length === 0 && (
-          <p className="absolute inset-x-0 top-1/2 px-6 text-center text-[12px] text-dim">No trades since graduation. The pool opened at {fmtTokenPrice(gradPrice)}.</p>
+          <p className="absolute inset-x-0 top-1/2 px-6 text-center text-[12px] text-dim">{external ? "No swaps in this pool in the last few days." : `No trades since graduation. The pool opened at ${fmtTokenPrice(gradPrice)}.`}</p>
         )}
       </div>
       {replay && (

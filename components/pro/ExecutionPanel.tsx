@@ -13,6 +13,7 @@ import { ProtectionRow, RiskPreview, type RiskRow } from "@/components/pro/RiskP
 import { cruxBatchFactoryAbi } from "@/contracts/abis/batchAuction";
 import { useLaunchMarket, type LaunchMarket } from "@/hooks/useLaunchMarket";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
+import { useBuyingPower } from "@/hooks/useBuyingPower";
 import { tradeFromAccount } from "@/lib/account";
 import type { LaunchV2Model } from "@/hooks/useLaunchV2";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
@@ -77,6 +78,39 @@ function AmountField({ id, value, onChange, unit, compact }: { id: string; value
         className={`w-full min-w-0 bg-transparent font-mono text-chrome outline-none placeholder:text-dim ${compact ? "text-[16px]" : "text-[20px]"}`}
       />
       <span className="shrink-0 text-[12px] text-muted">{unit}</span>
+    </div>
+  );
+}
+
+/**
+ * What the trader can buy with across every chain, in test USDC: the Crux account and the wallet on Base and each
+ * cross-chain origin. Tapping a source pays from it.
+ */
+function BuyingPower({ active, onPick }: { active: PayFrom | "account"; onPick: (k: PayFrom | "account") => void }) {
+  const { sources, total } = useBuyingPower();
+  if (sources.length === 0) return null;
+  return (
+    <div className="-mt-0.5 rounded-lg border border-line px-3 py-2">
+      <p className="flex items-baseline justify-between text-[11px]">
+        <span className="text-dim">Buying power, all chains</span>
+        <span className="font-mono text-[13px] text-chrome">{total !== null ? `$${fmtUsdc(total)}` : "…"}</span>
+      </p>
+      <div className="mt-1.5 flex flex-wrap gap-1">
+        {sources.map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => onPick(s.key)}
+            aria-pressed={active === s.key}
+            title={s.key === "account" ? "Pay from your Crux account (no gas, no popup)" : s.key === "base" ? "Pay from your wallet on Base" : `Pay from your wallet on ${s.name}: escrowed there, filled on Base`}
+            className={`inline-flex h-6 items-center gap-1.5 rounded-[4px] border px-2 font-mono text-[10.5px] transition-colors ${
+              active === s.key ? "border-chrome/60 text-chrome" : "border-line-2 text-muted hover:text-chrome"
+            }`}
+          >
+            <span className="font-sans">{s.name}</span> {s.usdc6 !== null ? `$${fmtUsdc(s.usdc6)}` : "…"}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -701,6 +735,19 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
             </a>
           )}
         </div>
+      )}
+      {side === "buy" && (
+        <BuyingPower
+          active={viaAccount ? "account" : payFrom}
+          onPick={(k) => {
+            if (k === "account") setFrom("account");
+            else {
+              setFrom("wallet");
+              setPayFrom(k);
+            }
+            setAmount("");
+          }}
+        />
       )}
       {side === "buy" && !viaAccount && (
         <div role="radiogroup" aria-label="Pay from" className="-mt-0.5 flex items-center gap-1.5 text-[11px]">

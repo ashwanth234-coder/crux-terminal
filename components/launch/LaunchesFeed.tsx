@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import { buttonClass } from "@/components/ui/Button";
 import { LaunchTokenButton } from "@/components/launch/LaunchTokenButton";
 import { LaunchCard } from "@/components/launch/LaunchCard";
+import { Leaderboard } from "@/components/launch/Leaderboard";
 import { Shell } from "@/components/launch/LaunchView";
 import { useAllLaunches, type LaunchSummary } from "@/hooks/useLaunches";
 import { useNow } from "@/hooks/useLaunchAuction";
@@ -80,10 +81,7 @@ export function LaunchesFeed() {
     <Shell mode={FACTORY || FACTORY_V2 || FACTORY_V3 || FACTORY_V4 || FACTORY_V5 || FACTORY_V6 || FACTORY_V7 ? "live" : null}>
       <div className="flex flex-wrap items-end justify-between gap-6">
         <div>
-          <p className="label-mono">
-            <span className="text-signal">01</span> / Discover
-          </p>
-          <h1 className="font-display mt-5 text-[clamp(2.4rem,5.4vw,4.4rem)] text-chrome">
+          <h1 className="font-display text-[clamp(2.4rem,5.4vw,4.4rem)] text-chrome">
             Every launch, <span className="text-steel">one price.</span>
           </h1>
           <p className="mt-4 max-w-[34rem] text-[14px] leading-relaxed text-muted">
@@ -93,6 +91,8 @@ export function LaunchesFeed() {
         </div>
         <LaunchTokenButton className={buttonClass("primary", "md", "font-semibold")} />
       </div>
+
+      <Leaderboard />
 
       {!FACTORY && !FACTORY_V2 && !FACTORY_V3 && !FACTORY_V4 && !FACTORY_V5 && !FACTORY_V6 && !FACTORY_V7 ? (
         <p className="mt-12 border-y border-line py-10 text-center text-[14px] text-muted">

@@ -6,12 +6,13 @@ import { base, baseSepolia, bsc } from "viem/chains";
  * yet; point NEXT_PUBLIC_ROBINHOOD_RPC at a live endpoint (or a local node).
  * Balance reads against it fail soft, see hooks/useUnifiedBalance.ts.
  */
+/** Robinhood Chain mainnet (Arbitrum Orbit, ETH gas; its testnet is 46630, without Hyperlane). */
 export const robinhoodChain = defineChain({
-  id: 46631,
+  id: 4663,
   name: "Robinhood Chain",
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   rpcUrls: {
-    default: { http: [process.env.NEXT_PUBLIC_ROBINHOOD_RPC ?? "https://rpc.robinhood.com"] },
+    default: { http: [process.env.NEXT_PUBLIC_ROBINHOOD_RPC ?? "https://rpc.mainnet.chain.robinhood.com"] },
   },
 });
 

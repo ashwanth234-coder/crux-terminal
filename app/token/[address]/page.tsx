@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description: "Open a Crux launch on Base Sepolia testnet by its token or pool contract address.",
 };
 
-/** /token/0x…: the launch page for a Crux token (or its pool) address, so a pasted contract address opens in one step. */
+/** /token/0x…: the launch page for a Crux token (or its pool) address, else the terminal for any other token. */
 export default function TokenPage({ params }: { params: Promise<{ address: string }> }) {
   return (
     <Suspense fallback={<div className="min-h-svh" />}>
@@ -34,11 +34,6 @@ async function Resolve({ params }: { params: Promise<{ address: string }> }) {
   } catch {
     return <Notice title="Couldn't read Base Sepolia">The chain didn&apos;t answer just now. Reload in a moment.</Notice>;
   }
-  // Outside the try: redirect() works by throwing.
-  if (href) redirect(href);
-  return (
-    <Notice title="Not a Crux token on Base Sepolia">
-      No Crux launch has the token or pool address <span className="break-all font-mono">{address}</span>. Crux trades test tokens launched on Base Sepolia only; check the chain and the address.
-    </Notice>
-  );
+  // Outside the try: redirect() works by throwing. Any other token opens on its own Uniswap pool.
+  redirect(href ?? `/terminal/${address}`);
 }

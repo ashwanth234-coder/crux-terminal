@@ -16,8 +16,11 @@ export type PoolTrade = {
   /** Who received the output: the trader for a direct swap, the Crux solver for an intent fill. */
   to: Address;
   viaIntent: boolean;
-  /** Where it traded: the Uniswap V2 pair, or (V5 / V6, during the anti-sniper window) the batch pool. */
-  venue: "uniswap-v2" | "batch-pool";
+  /**
+   * Where it traded: the Uniswap V2 pair, or (V5 / V6, during the anti-sniper window) the batch pool; a token that
+   * isn't a Crux launch can also trade on a Uniswap V3 pool (lib/externalPools).
+   */
+  venue: "uniswap-v2" | "uniswap-v3" | "batch-pool";
   /** Batch-pool fills only: the batch it cleared in. */
   batch?: number;
   txHash: Hex;

@@ -151,6 +151,13 @@ export function TokenBar({
   const volume24h = swaps.data && now !== null ? swaps.data.trades.filter((t) => t.time >= now - 86_400).reduce((s, t) => s + t.usdc, BigInt(0)) : null;
   const change24h = graduated && swaps.data && now !== null ? priceChange(swaps.data.trades, now, 86_400, openPrice) : null;
   const changes = graduated && swaps.data && now !== null ? FRAMES.map((f) => ({ label: f.label, pct: priceChange(swaps.data.trades, now, f.seconds, openPrice) })) : null;
+  // Fees locked: Uniswap V2 keeps 0.3% of every swap's input in the pool, and with the LP burned nobody can withdraw
+  // it. A buy's input is its USDC; a sell's is worth its USDC out / 0.997. Batch-pool fills pay no pool fee.
+  const feesLocked = swaps.data
+    ? swaps.data.trades
+        .filter((t) => t.venue === "uniswap-v2")
+        .reduce((s, t) => s + (Number(t.usdc) / 1e6) * (t.side === "buy" ? 0.003 : 0.003 / 0.997), 0)
+    : null;
 
   // LP burned: the share of the pool's LP tokens at 0x…dEaD and 0x0 (also shown, with detail, in the trust radar).
   const lp = useReadContracts({
@@ -275,6 +282,14 @@ export function TokenBar({
                 <Stat label="LP burned" hint="Share of the pool's LP tokens held by 0x…dEaD (and Uniswap's 1,000 at 0x0), read live">
                   {lpBurnedPct !== null ? `${lpBurnedPct.toFixed(lpBurnedPct >= 99.995 ? 0 : 2)}%` : "…"}
                 </Stat>
+                {lpBurnedPct !== null && lpBurnedPct >= 99 && (
+                  <Stat
+                    label="Fees locked"
+                    hint="The 0.3% Uniswap fee on every swap stays in the pool. Its LP is burned, so these fees can never be withdrawn: they deepen the pool for good"
+                  >
+                    {feesLocked === null ? "…" : feesLocked > 0 && feesLocked < 0.01 ? `$${feesLocked.toPrecision(2)}` : usdSmall(feesLocked)}
+                  </Stat>
+                )}
               </>
             ) : (
               <>

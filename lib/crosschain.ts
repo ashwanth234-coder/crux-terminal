@@ -1,5 +1,6 @@
 import { createPublicClient, fallback, http, isAddress, type Address, type Chain, type PublicClient } from "viem";
 import { arbitrumSepolia, bscTestnet, sepolia } from "viem/chains";
+import { robinhoodChain } from "./chains";
 
 /**
  * Cross-chain intents (testnet): pay with test USDC on another chain, receive on Base Sepolia.
@@ -14,8 +15,8 @@ import { arbitrumSepolia, bscTestnet, sepolia } from "viem/chains";
  * at 0x4579…bF19); one with `settler: null` isn't deployed yet
  * and isn't offered. NEXT_PUBLIC_CRUX_{CROSS_CHAIN,SEPOLIA,BSC}_SETTLER override them (e.g. a local fork).
  */
-export type OriginKey = "arbitrum" | "sepolia" | "bsc";
-export type OriginChainId = typeof arbitrumSepolia.id | typeof sepolia.id | typeof bscTestnet.id;
+export type OriginKey = "arbitrum" | "sepolia" | "bsc" | "robinhood";
+export type OriginChainId = typeof arbitrumSepolia.id | typeof sepolia.id | typeof bscTestnet.id | typeof robinhoodChain.id;
 
 export type CrossChainOrigin = {
   key: OriginKey;
@@ -89,6 +90,21 @@ export const CROSS_CHAIN_ORIGINS: CrossChainOrigin[] = [
     decimals: 18,
     faucet: "the BNB Chain testnet faucet",
     logClient: logClientFor(bscTestnet, [process.env.NEXT_PUBLIC_BSC_TESTNET_LOGS_RPC, "https://bsc-testnet-rpc.publicnode.com"]),
+  },
+  {
+    // Robinhood Chain mainnet: Hyperlane runs there, not on its testnet, so it's offered from Crux's mainnet launch, once
+    // NEXT_PUBLIC_CRUX_ROBINHOOD_SETTLER and its stablecoin (USDC or USDG, NEXT_PUBLIC_CRUX_ROBINHOOD_USDC) are set.
+    key: "robinhood",
+    name: "Robinhood Chain",
+    chain: robinhoodChain,
+    explorer: "https://explorer.mainnet.chain.robinhood.com",
+    settler: env(process.env.NEXT_PUBLIC_CRUX_ROBINHOOD_USDC) ? env(process.env.NEXT_PUBLIC_CRUX_ROBINHOOD_SETTLER) : null,
+    depositSettler: env(process.env.NEXT_PUBLIC_CRUX_ROBINHOOD_DEPOSIT_SETTLER),
+    deployBlock: block(process.env.NEXT_PUBLIC_CRUX_ROBINHOOD_SETTLER_BLOCK, 0),
+    usdc: (env(process.env.NEXT_PUBLIC_CRUX_ROBINHOOD_USDC) ?? "0x0000000000000000000000000000000000000000") as Address,
+    decimals: 6,
+    faucet: "a Robinhood Chain on-ramp",
+    logClient: logClientFor(robinhoodChain, [process.env.NEXT_PUBLIC_ROBINHOOD_LOGS_RPC, "https://rpc.mainnet.chain.robinhood.com"]),
   },
 ];
 

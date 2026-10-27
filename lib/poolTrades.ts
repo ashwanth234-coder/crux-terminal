@@ -3,6 +3,7 @@ import { batchPoolAbi, guardianAbi } from "@/lib/batchPool";
 import { CRUX_SOLVER, TESTNET_USDC } from "@/lib/intents";
 import { logClient, type ReadLogs } from "@/lib/logs";
 import { fillToTrade, swapToTrade, type PoolTrade } from "@/lib/tradeDecode";
+import { externalPoolOf, externalTradeReader } from "@/lib/externalPools";
 
 export type { PoolTrade };
 
@@ -38,6 +39,7 @@ export function readUsdcIs0(pair: Address) {
 const batchPools = new Map<Address, Promise<{ pool: Address; token: Address } | null>>();
 export function readBatchPool(pair: Address) {
   let known = batchPools.get(pair);
+  if (!known && externalPoolOf(pair)) known = Promise.resolve(null);
   if (!known) {
     known = (async () => {
       const [t0, t1] = await Promise.all([
@@ -56,6 +58,9 @@ export function readBatchPool(pair: Address) {
 
 /** Reads one block range of a pair's trades (for lib/logs scanLogs), oldest first. */
 export function poolTradeReader(pair: Address, tokenDecimals = 18): ReadLogs<PoolTrade> {
+  // A token that isn't a Crux launch: its own Uniswap pool's swaps (lib/externalPools), registered when it was found.
+  const external = externalPoolOf(pair);
+  if (external) return externalTradeReader(external);
   return async (fromBlock, toBlock) => {
     const [usdcIs0, logs, batch] = await Promise.all([
       readUsdcIs0(pair),
