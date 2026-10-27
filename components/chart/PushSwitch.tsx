@@ -14,7 +14,34 @@ export function PushSwitch() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (on) return <p className="text-[10.5px] leading-snug text-up">✓ Alerts reach this device even with Crux closed.</p>;
+  // Registers this device with the relay (again, if it already was); the relay answers with a test notification.
+  const register = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await enablePush(crux.sign!, crux.owner!);
+      setOn(true);
+    } catch (e) {
+      setError((e as Error).message.split("\n")[0]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (on) {
+    return (
+      <div className="text-[10.5px] leading-snug text-up">
+        ✓ Alerts reach this device even with Crux closed.{" "}
+        {crux.sign && crux.owner && (
+          // The browser remembers "on"; this re-registers with the relay in case it lost the device, and proves it.
+          <button type="button" disabled={busy} onClick={() => void register()} className="text-chrome underline decoration-line-2 disabled:opacity-50">
+            {busy ? "Sending…" : "Send a test"}
+          </button>
+        )}
+        {error && <p className="mt-1 text-down">{error}</p>}
+      </div>
+    );
+  }
   if (!crux.loggedIn || !crux.sign || !crux.owner) {
     return (
       <p className="text-[10.5px] leading-snug text-dim">
@@ -32,18 +59,7 @@ export function PushSwitch() {
       <button
         type="button"
         disabled={busy || !pushSupported()}
-        onClick={async () => {
-          setBusy(true);
-          setError(null);
-          try {
-            await enablePush(crux.sign!, crux.owner!);
-            setOn(true);
-          } catch (e) {
-            setError((e as Error).message.split("\n")[0]);
-          } finally {
-            setBusy(false);
-          }
-        }}
+        onClick={() => void register()}
         className="text-signal underline decoration-signal/40 disabled:opacity-50"
       >
         {busy ? "Turning on…" : "Get them with Crux closed"}
