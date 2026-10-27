@@ -36,6 +36,9 @@ export function useChartAlerts(o: {
   // arrival the relay's pending set wins (alerts that fired while you were away are gone); after that every change is
   // sent there a moment later. Logged out, alerts stay in this tab.
   const alertsReady = useRef(false);
+  // An alert this tab saw fire while push is on: the relay fires it too (by push) and clears it itself, so the tab's
+  // removal isn't sent there, or the relay would lose it before its own check and nothing would be pushed.
+  const firedHere = useRef(false);
   useEffect(() => {
     // The relay watches Crux launch pools only: an outside token's alerts fire in this tab.
     if (external || slot !== 0 || alertsReady.current || !crux.sign || !crux.owner) return;
@@ -55,6 +58,10 @@ export function useChartAlerts(o: {
     if (external || slot !== 0 || !alertsReady.current || !crux.sign || !crux.owner) return;
     const [sign, owner] = [crux.sign, crux.owner];
     const t = setTimeout(() => {
+      if (firedHere.current) {
+        firedHere.current = false;
+        return;
+      }
       const used = new Set(config.rules.map((r) => r.study));
       void setServerAlerts(sign, owner, auction.token, {
         pair: auction.pair,
@@ -84,6 +91,7 @@ export function useChartAlerts(o: {
     } catch {
       // Notifications unavailable: the in-page message below still shows.
     }
+    if (pushOn() && alertsReady.current) firedHere.current = true;
     setTimeout(() => {
       flash(msg);
       set((c) => ({ ...c, alerts: c.alerts.filter((a) => !hit.includes(a)) }));
@@ -125,6 +133,7 @@ export function useChartAlerts(o: {
     } catch {
       // Notifications unavailable: the in-page message still shows.
     }
+    if (pushOn() && alertsReady.current) firedHere.current = true;
     setTimeout(() => {
       flash(msg);
       set((c) => ({ ...c, rules: c.rules.filter((r) => r.repeat || !fired.includes(r.id)) }));
