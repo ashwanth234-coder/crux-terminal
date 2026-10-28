@@ -93,15 +93,15 @@ export const CROSS_CHAIN_ORIGINS: CrossChainOrigin[] = [
   },
   {
     // Robinhood Chain mainnet: Hyperlane runs there, not on its testnet, so it's offered from Crux's mainnet launch, once
-    // NEXT_PUBLIC_CRUX_ROBINHOOD_SETTLER and its stablecoin (USDC or USDG, NEXT_PUBLIC_CRUX_ROBINHOOD_USDC) are set.
+    // NEXT_PUBLIC_CRUX_ROBINHOOD_SETTLER is set. Orders pay in USDG (NEXT_PUBLIC_CRUX_ROBINHOOD_USDC overrides).
     key: "robinhood",
     name: "Robinhood Chain",
     chain: robinhoodChain,
     explorer: "https://explorer.mainnet.chain.robinhood.com",
-    settler: env(process.env.NEXT_PUBLIC_CRUX_ROBINHOOD_USDC) ? env(process.env.NEXT_PUBLIC_CRUX_ROBINHOOD_SETTLER) : null,
+    settler: env(process.env.NEXT_PUBLIC_CRUX_ROBINHOOD_SETTLER),
     depositSettler: env(process.env.NEXT_PUBLIC_CRUX_ROBINHOOD_DEPOSIT_SETTLER),
     deployBlock: block(process.env.NEXT_PUBLIC_CRUX_ROBINHOOD_SETTLER_BLOCK, 0),
-    usdc: (env(process.env.NEXT_PUBLIC_CRUX_ROBINHOOD_USDC) ?? "0x0000000000000000000000000000000000000000") as Address,
+    usdc: env(process.env.NEXT_PUBLIC_CRUX_ROBINHOOD_USDC) ?? robinhoodChain.contracts.usdg.address,
     decimals: 6,
     faucet: "a Robinhood Chain on-ramp",
     logClient: logClientFor(robinhoodChain, [process.env.NEXT_PUBLIC_ROBINHOOD_LOGS_RPC, "https://rpc.mainnet.chain.robinhood.com"]),
