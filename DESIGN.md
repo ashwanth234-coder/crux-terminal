@@ -96,7 +96,7 @@ components:
 
 **Creative North Star: "Markets without borders."** Institutional, architectural, high contrast, precision, restraint. The page should feel trustworthy through composition, one type family and negative space, not effects. Few things per screen; say each thing once. Real responsive UI, never a flattened image.
 
-The home page opens on pure black: "Markets / without borders." in white Archivo, one supporting line, the orange Enter Crux button with a quiet View launches link, and on the right the CRUX mark in liquid chrome inside a glass disc. Below the fold, three parts only: Live markets (the real launch table), How Crux works (four hairline rows, each live today), and a short close. No section numbers or kickers above headings.
+The home page opens on pure black: "Markets / without borders." in white Archivo, one supporting line, the orange Enter Crux button with a quiet View launches link, and on the right the interactive glass and liquid-chrome CRUX star. Below the fold, three parts only: Live markets (the real launch table), How Crux works (four hairline rows, each live today), and a short close. No section numbers or kickers above headings.
 
 The terminal, launch and pro views use the same tokens, packed tighter.
 
@@ -122,7 +122,7 @@ The terminal, launch and pro views use the same tokens, packed tighter.
 One geometric four-point mark (`CRUX_MARK_PATH` in components/site/Logo.tsx): four equal tapered arms meeting at a waist, so it reads as a convergence point, not a cross.
 - Flat Electric Orange on black: favicon (app/icon.svg), app icon and splash (public/), OG image.
 - Single colour (`CruxMark`, currentColor): legible at 16px, no glow, works on any ground.
-- Glass and liquid chrome (`CruxEmblem`): the hero version. The mark in banded liquid chrome with a horizon sheen and a thin specular edge, floating in a glass disc (faint tinted body, lit rim, inner rim, a specular arc top left and its faint reflection bottom right), one orange core of light where the arms meet, one orange point on the rim and one hairline axis. Static SVG, gradients only (no filters, no script); the glass is drawn in the theme tint so it works on black and white.
+- Glass and liquid chrome (`CruxEmblem`): the hero version, a rendered image (public/crux-emblem.webp) of the mark as a liquid-chrome glass star with an orange core, set in a black lens (invisible on the dark ground, a glass disc on the light one). It follows the pointer anywhere on the page: up to 14° of 3D tilt, a reflection sliding across the chrome (overlay blend, so the black stays black), and a core flare that brightens as the pointer nears it. A tap sends one orange pulse ring from the core; with no pointer for 3s it drifts slowly. It only animates while on screen.
 - Wordmark: CRUX in Archivo 500, chrome, 0.42em tracking.
 
 ## Components
@@ -135,11 +135,11 @@ One geometric four-point mark (`CRUX_MARK_PATH` in components/site/Logo.tsx): fo
 
 ## Motion
 
-Hover and focus feedback (200ms), the modal entrance, the wallet "kinetic" bars while work is in progress, and real transaction-state changes. No parallax, particles, carousels, simulated activity or ambient loops; the emblem is static. `prefers-reduced-motion` collapses animations and transitions.
+Hover and focus feedback (200ms), the modal entrance, the wallet "kinetic" bars while work is in progress, and real transaction-state changes. No parallax, particles, carousels or simulated activity. The one ambient motion is the hero emblem's pointer-following tilt and slow idle drift. `prefers-reduced-motion` collapses animations and transitions and keeps the emblem still.
 
 ## Don'ts
 
 - No acid lime, purple or blue glows, multicolour gradients, or orange section fills; orange fills are for primary buttons only.
 - No glow beyond primary buttons and focused inputs. No Base-blue rebrand.
 - No fabricated stats, countdowns, balances or fills. Testnet data is labelled testnet; nothing implies mainnet.
-- No WebGL or heavy 3D for the emblem.
+- No WebGL or heavy 3D for the emblem: CSS transforms over one image only.

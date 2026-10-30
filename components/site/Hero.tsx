@@ -22,7 +22,7 @@ export function Hero() {
           </div>
         </div>
 
-        <div className="relative mx-auto w-full min-w-0 max-w-[300px] md:col-span-5 md:max-w-[440px]">
+        <div className="relative mx-auto w-full min-w-0 max-w-[320px] md:col-span-5 md:max-w-[480px]">
           <CruxEmblem className="block aspect-square w-full" />
         </div>
       </div>

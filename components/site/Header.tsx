@@ -36,7 +36,7 @@ export function Header() {
         scrolled || open ? "border-line/80 bg-void/90 backdrop-blur-md" : "border-line/50 bg-void"
       }`}
     >
-      <div className="mx-auto grid h-16 max-w-[1440px] grid-cols-[1fr_auto] items-center gap-6 px-4 sm:px-8 xl:grid-cols-[auto_1fr_auto] lg:px-12">
+      <div className="mx-auto grid h-16 max-w-[1440px] grid-cols-[1fr_auto] items-center gap-3 px-4 sm:gap-6 sm:px-8 xl:grid-cols-[auto_1fr_auto] lg:px-12">
         <div className="flex items-center gap-3">
           <Link href="/" aria-label="Crux home" className="shrink-0">
             <Logo />
