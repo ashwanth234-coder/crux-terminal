@@ -96,7 +96,7 @@ components:
 
 **Creative North Star: "Markets without borders."** Institutional, architectural, high contrast, precision, restraint. The page should feel trustworthy through composition, one type family and negative space, not effects. Few things per screen; say each thing once. Real responsive UI, never a flattened image.
 
-The home page opens on pure black: "Markets / without borders." in white Archivo, one supporting line, the orange Enter Crux button with a quiet View launches link, and on the right the interactive glass and liquid-chrome CRUX star. Below the fold, three parts only: Live markets (the real launch table), How Crux works (four hairline rows, each live today), and a short close. No section numbers or kickers above headings.
+The home page opens on pure black: "Markets / without borders." in white Archivo, one supporting line, the orange Enter Crux button with a quiet View launches link, and on the right the interactive glass and liquid-chrome CRUX star. Below the fold, three parts only: Live markets (the real launch table), How Crux works (four hairline rows, each live today), and a short close with the convergence capsule. No section numbers or kickers above headings.
 
 The terminal, launch and pro views use the same tokens, packed tighter.
 
@@ -131,11 +131,12 @@ One geometric four-point mark (`CRUX_MARK_PATH` in components/site/Logo.tsx): fo
 - **Status tags** (`components/ui/StatusTag.tsx`): LIVE (orange dot), TESTNET (titanium), DEMO (dashed), PLANNED (dashed, hollow dot). Use these words consistently; never show a simulated number as live.
 - **Chapters** (`components/site/Chapter.tsx`): hairline on top, Archivo headline with a short titanium intro beside it, then the evidence. No numbers or labels above the headline.
 - **Tables and lists** use hairline rows rather than boxed cards.
+- **Convergence capsule** (`components/site/ConvergeRibbon.tsx`): the close's centrepiece between the headline and Enter Crux. Black glass in both themes; nine liquid-chrome strands loose on the left converge into one orange core with a four-point glint (many routes, one execution), warming to orange as they meet. They bend towards the pointer; entering or tapping sends an orange pulse into the core. Decorative only, never data.
 - **Balances** are never sampled: with no wallet the terminal shows "$—" and asks you to connect.
 
 ## Motion
 
-Hover and focus feedback (200ms), the modal entrance, the wallet "kinetic" bars while work is in progress, and real transaction-state changes. No parallax, particles, carousels or simulated activity. The one ambient motion is the hero emblem's pointer-following tilt and slow idle drift. `prefers-reduced-motion` collapses animations and transitions and keeps the emblem still.
+Hover and focus feedback (200ms), the modal entrance, the wallet "kinetic" bars while work is in progress, and real transaction-state changes. No parallax, particles, carousels or simulated activity. The only ambient motion is the hero emblem's and the convergence capsule's pointer-following response and slow idle drift; both pause off screen. `prefers-reduced-motion` collapses animations and transitions and keeps the emblem and the capsule still.
 
 ## Don'ts
 
