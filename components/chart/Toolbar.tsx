@@ -163,7 +163,7 @@ export function Toolbar({
                           set((c) => ({ ...c, interval: i.seconds }));
                           close();
                         }}
-                        className={`flex-1 rounded-[3px] px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-white/[0.05] ${config.interval === i.seconds ? "text-signal" : "text-chrome/85"}`}
+                        className={`flex-1 rounded-[3px] px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-tint/[0.05] ${config.interval === i.seconds ? "text-signal" : "text-chrome/85"}`}
                       >
                         {longLabel(i.seconds)}
                       </button>
@@ -416,7 +416,7 @@ function AlertButton({ onAdd, prefill, count, onClear }: { onAdd: (v: string) =>
             <PushSwitch />
           </div>
           <div className="mt-2 flex gap-1.5">
-            <button type="submit" className="flex-1 rounded-[4px] bg-chrome px-2 py-1.5 text-[12px] font-semibold text-void hover:bg-white">
+            <button type="submit" className="flex-1 rounded-[4px] bg-signal px-2 py-1.5 text-[12px] font-semibold text-on-signal glow-signal hover:bg-signal-lift">
               Add alert
             </button>
             {count > 0 && (

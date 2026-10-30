@@ -13,6 +13,7 @@ import { TokenSearch } from "@/components/site/TokenSearch";
 import { WalletChip } from "@/components/terminal/WalletChip";
 import { AccountButton } from "@/components/account/AccountButton";
 import { LanguageSwitcher } from "@/components/site/LanguageSwitcher";
+import { ThemeToggle } from "@/components/site/ThemeToggle";
 import { StatusTag } from "@/components/ui/StatusTag";
 import { useLiveLaunch, useNow, useSimulatedLaunch, type PreviewParams } from "@/hooks/useLaunchAuction";
 import { TESTNET_EXPLORER } from "@/lib/chains";
@@ -119,6 +120,7 @@ export function Shell({ mode, children }: { mode: LaunchModel["mode"] | null; ch
             )}
             <TokenSearch className="hidden w-[220px] md:block" />
             <LanguageSwitcher className="hidden md:flex" />
+            <ThemeToggle />
             <AccountButton />
             <WalletChip variant="header" />
           </div>

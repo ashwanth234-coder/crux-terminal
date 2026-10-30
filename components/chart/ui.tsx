@@ -86,7 +86,7 @@ export function MenuItem({ onClick, children, hint, checked, danger }: { onClick
       role={checked === undefined ? "menuitem" : "menuitemcheckbox"}
       aria-checked={checked}
       onClick={onClick}
-      className={`flex w-full items-center justify-between gap-3 rounded-[3px] px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-white/[0.05] ${danger ? "text-down" : "text-chrome/85"}`}
+      className={`flex w-full items-center justify-between gap-3 rounded-[3px] px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-tint/[0.05] ${danger ? "text-down" : "text-chrome/85"}`}
     >
       <span className="flex min-w-0 items-center gap-2">{children}</span>
       {hint && <span className="shrink-0 font-mono text-[10.5px] text-dim">{hint}</span>}

@@ -69,7 +69,7 @@ function Presets({ items, onPick }: { items: { label: string; value: bigint | nu
 
 function AmountField({ id, value, onChange, unit, compact }: { id: string; value: string; onChange: (v: string) => void; unit: string; compact?: boolean }) {
   return (
-    <div className={`flex items-center gap-2 rounded-lg border border-line bg-void/60 px-3 focus-within:border-line-2 ${compact ? "py-2" : "py-2.5"}`}>
+    <div className={`glow-focus flex items-center gap-2 rounded-lg border border-line bg-void/60 px-3 transition-[border-color,box-shadow] ${compact ? "py-2" : "py-2.5"}`}>
       {unit === "USDC" && <span className="font-mono text-dim">$</span>}
       <input
         id={id}
@@ -116,7 +116,7 @@ function BuyingPower({ active, onPick }: { active: PayFrom | "account"; onPick: 
                     : `Pay from your wallet on ${s.name}: escrowed there, filled on Base`
             }
             className={`inline-flex h-6 items-center gap-1.5 rounded-[4px] border px-2 font-mono text-[10.5px] transition-colors ${
-              active === s.key ? "border-chrome/60 text-chrome" : "border-line-2 text-muted hover:text-chrome"
+              active === s.key ? "border-signal text-signal" : "border-line-2 text-muted hover:text-chrome"
             }`}
           >
             <span className="font-sans">{s.name}</span> {s.usdc6 !== null ? `$${fmtUsdc(s.usdc6)}` : "…"}
@@ -771,7 +771,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
                 setFrom(f);
                 setAmount("");
               }}
-              className={`h-6 rounded-[4px] border px-2 transition-colors ${from === f ? "border-chrome/60 text-chrome" : "border-line-2 text-muted hover:text-chrome"}`}
+              className={`h-6 rounded-[4px] border px-2 transition-colors ${from === f ? "border-signal text-signal" : "border-line-2 text-muted hover:text-chrome"}`}
             >
               {f === "account" ? "Crux account" : "Wallet"}
             </button>
@@ -809,7 +809,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
                 setPayFrom(c);
                 setAmount("");
               }}
-              className={`h-6 whitespace-nowrap rounded-[4px] border px-2 transition-colors ${payFrom === c ? "border-chrome/60 text-chrome" : "border-line-2 text-muted hover:text-chrome"}`}
+              className={`h-6 whitespace-nowrap rounded-[4px] border px-2 transition-colors ${payFrom === c ? "border-signal text-signal" : "border-line-2 text-muted hover:text-chrome"}`}
             >
               {c === "base" ? "Base Sepolia" : c === "solana" ? "Solana devnet" : originByKey(c)!.name}
             </button>
@@ -842,7 +842,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
 
       {side === "buy" && payFrom === "base" && !viaAccount && <OneClickBar oneClick={oneClick} />}
 
-      <button type="button" disabled={(isConnected || viaAccount || solanaReady) && disabled} onClick={sign} className={buttonClass(isConnected || viaAccount ? side : "primary", "md", "w-full rounded-xl font-semibold max-lg:hidden")}>
+      <button type="button" disabled={(isConnected || viaAccount || solanaReady) && disabled} onClick={sign} className={buttonClass("primary", "md", "w-full rounded-xl font-semibold max-lg:hidden")}>
         {isConnected || viaAccount || viaSolana ? label : t("ticket.connect")} <ArrowUpRight />
         <SubmitKey />
       </button>
@@ -872,7 +872,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
           <div className="min-w-0 flex-1">
             <AmountField id={`${uid}-dock`} value={amount} onChange={setAmount} unit={side === "buy" ? "USDC" : symbol} compact />
           </div>
-          <button type="button" disabled={(isConnected || viaAccount || solanaReady) && disabled} onClick={sign} className={buttonClass(isConnected || viaAccount ? side : "primary", "md", "shrink-0 rounded-xl px-4 font-semibold capitalize")}>
+          <button type="button" disabled={(isConnected || viaAccount || solanaReady) && disabled} onClick={sign} className={buttonClass("primary", "md", "shrink-0 rounded-xl px-4 font-semibold capitalize")}>
             {viaSolana
               ? solana.payer
                 ? solanaPayee

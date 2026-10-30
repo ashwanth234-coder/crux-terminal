@@ -1,108 +1,89 @@
+import { CRUX_MARK_PATH } from "./Logo";
+
 /**
- * The hero's monumental CRUX mark: the same four-arm geometry as the flat mark (Logo.tsx),
- * faceted along each arm and shaded as titanium, with one small orange light at the centre.
- * Static SVG: linear and radial gradients only, no filters, no script, no motion. Each arm is
- * the top arm rotated about the centre, so the lighting turns with it like a machined part.
- *
- * Support is deliberately sparse: one circle, one horizontal axis, two alignment lines and
- * three control points. The guides drop away below `md`, where the mark is drawn alone.
+ * The hero's CRUX emblem: the four-arm mark (Logo.tsx) cast in liquid chrome, floating in a glass disc, with one
+ * Electric Orange core of light where the arms converge. Static SVG: gradients only, no filters, script or motion, so it
+ * stays crisp at any size. The glass edges are drawn in the theme tint (white on black, black on white) and the chrome
+ * reads on both grounds.
  */
 
-// Top arm, in the mark's 24-unit space (centre 12,12): the left facet, then the right.
-const FACET_L = "M12 12 L10.6 10.6 Q11.58 7.1 12 0.6 Z";
-const FACET_R = "M12 12 L12 0.6 Q12.42 7.1 13.4 10.6 Z";
-const OUTLINE =
-  "M12 0.6 Q12.42 7.1 13.4 10.6 Q16.9 11.58 23.4 12 Q16.9 12.42 13.4 13.4 Q12.42 16.9 12 23.4 Q11.58 16.9 10.6 13.4 Q7.1 12.42 0.6 12 Q7.1 11.58 10.6 10.6 Q11.58 7.1 12 0.6 Z";
-
-// 24 units → 720 of the 800 viewBox: the arms reach 342 from the centre.
-const MARK = "translate(400 400) scale(30) translate(-12 -12)";
+// 24 units → 480 of the 800 viewBox: the arms reach 228 from the centre, inside the 300-radius glass.
+const MARK = "translate(400 400) scale(20) translate(-12 -12)";
+const TINT = { stopColor: "var(--color-tint)" };
 
 export function CruxEmblem({ className = "" }: { className?: string }) {
   return (
     <svg viewBox="0 0 800 800" className={`overflow-visible ${className}`} aria-hidden="true" focusable="false">
       <defs>
-        {/* Lit facet: polished bands from tip to centre, warming to orange where the core light hits */}
-        <linearGradient id="cx-lit" gradientUnits="userSpaceOnUse" x1="12" y1="0.6" x2="12" y2="12">
-          <stop offset="0" stopColor="#4a4e55" />
-          <stop offset="0.16" stopColor="#d9d7d1" />
-          <stop offset="0.34" stopColor="#f5f3ee" />
-          <stop offset="0.5" stopColor="#8b9199" />
-          <stop offset="0.66" stopColor="#2c2e33" />
-          <stop offset="0.82" stopColor="#c9cbcc" />
-          <stop offset="0.93" stopColor="#ffd2bd" />
-          <stop offset="1" stopColor="#ff7a45" />
-        </linearGradient>
-        {/* Shaded facet: dark titanium with one reflected band */}
-        <linearGradient id="cx-shade" gradientUnits="userSpaceOnUse" x1="12" y1="0.6" x2="12" y2="12">
-          <stop offset="0" stopColor="#1a1b1f" />
-          <stop offset="0.28" stopColor="#5d6269" />
-          <stop offset="0.46" stopColor="#202226" />
-          <stop offset="0.7" stopColor="#141518" />
-          <stop offset="0.86" stopColor="#4a4e55" />
-          <stop offset="1" stopColor="#c2471c" />
-        </linearGradient>
-        {/* Specular ridge along each arm's axis */}
-        <linearGradient id="cx-ridge" gradientUnits="userSpaceOnUse" x1="12" y1="0.6" x2="12" y2="12">
-          <stop offset="0" stopColor="#ffffff" stopOpacity="0" />
-          <stop offset="0.3" stopColor="#ffffff" stopOpacity="0.9" />
-          <stop offset="0.55" stopColor="#ffffff" stopOpacity="0.15" />
-          <stop offset="0.85" stopColor="#ffffff" stopOpacity="0.7" />
-          <stop offset="1" stopColor="#ffb08a" stopOpacity="0" />
-        </linearGradient>
-        {/* Orange rim light on the edges nearest the core, gone by mid-arm */}
-        <radialGradient id="cx-rim" gradientUnits="userSpaceOnUse" cx="12" cy="12" r="7">
-          <stop offset="0" stopColor="#e35d2b" stopOpacity="1" />
-          <stop offset="0.45" stopColor="#e35d2b" stopOpacity="0.55" />
-          <stop offset="1" stopColor="#e35d2b" stopOpacity="0" />
+        {/* Glass body: a faint lit pane, brighter where the light enters at the top left */}
+        <radialGradient id="cx-glass" cx="0.34" cy="0.26" r="0.85">
+          <stop offset="0" style={TINT} stopOpacity="0.13" />
+          <stop offset="0.45" style={TINT} stopOpacity="0.045" />
+          <stop offset="1" style={TINT} stopOpacity="0.015" />
         </radialGradient>
-        {/* The core: a small, controlled light */}
-        <radialGradient id="cx-core" cx="0.5" cy="0.5" r="0.5">
-          <stop offset="0" stopColor="#fff6ef" />
-          <stop offset="0.1" stopColor="#ffc3a6" />
-          <stop offset="0.3" stopColor="#e35d2b" stopOpacity="0.85" />
-          <stop offset="0.62" stopColor="#e35d2b" stopOpacity="0.16" />
-          <stop offset="1" stopColor="#e35d2b" stopOpacity="0" />
-        </radialGradient>
-        {/* The axis: titanium at its ends, Signal Orange where it passes the core */}
-        <linearGradient id="cx-axis" gradientUnits="userSpaceOnUse" x1="-240" y1="0" x2="1040" y2="0">
-          <stop offset="0" stopColor="#a7adb5" stopOpacity="0" />
-          <stop offset="0.3" stopColor="#a7adb5" stopOpacity="0.3" />
-          <stop offset="0.47" stopColor="#e35d2b" stopOpacity="0.9" />
-          <stop offset="0.53" stopColor="#e35d2b" stopOpacity="0.9" />
-          <stop offset="0.7" stopColor="#a7adb5" stopOpacity="0.3" />
-          <stop offset="1" stopColor="#a7adb5" stopOpacity="0" />
+        {/* Glass rim: catches the light at the top left, falls away at the bottom right */}
+        <linearGradient id="cx-rim" x1="0.15" y1="0.05" x2="0.85" y2="0.95">
+          <stop offset="0" style={TINT} stopOpacity="0.6" />
+          <stop offset="0.45" style={TINT} stopOpacity="0.12" />
+          <stop offset="1" style={TINT} stopOpacity="0.3" />
         </linearGradient>
+        {/* Specular arc on the glass */}
+        <linearGradient id="cx-spec" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" style={TINT} stopOpacity="0" />
+          <stop offset="0.5" style={TINT} stopOpacity="0.55" />
+          <stop offset="1" style={TINT} stopOpacity="0" />
+        </linearGradient>
+        {/* Liquid chrome: hard reflective bands across the whole mark, the way polished metal mirrors a horizon */}
+        <linearGradient id="cx-chrome" gradientUnits="userSpaceOnUse" x1="3" y1="1" x2="21" y2="23">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="0.16" stopColor="#d6dbe2" />
+          <stop offset="0.3" stopColor="#6b727d" />
+          <stop offset="0.4" stopColor="#15171b" />
+          <stop offset="0.47" stopColor="#3a3f47" />
+          <stop offset="0.5" stopColor="#f4f6f9" />
+          <stop offset="0.58" stopColor="#a4abb6" />
+          <stop offset="0.72" stopColor="#23262c" />
+          <stop offset="0.86" stopColor="#c9ced6" />
+          <stop offset="1" stopColor="#ffffff" />
+        </linearGradient>
+        {/* A soft horizon sheen over the chrome, so it reads as liquid rather than flat */}
+        <linearGradient id="cx-sheen" gradientUnits="userSpaceOnUse" x1="12" y1="0.6" x2="12" y2="23.4">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0.5" />
+          <stop offset="0.38" stopColor="#ffffff" stopOpacity="0" />
+          <stop offset="0.62" stopColor="#000000" stopOpacity="0" />
+          <stop offset="1" stopColor="#000000" stopOpacity="0.35" />
+        </linearGradient>
+        {/* The core: Electric Orange light at the convergence point */}
+        <radialGradient id="cx-core">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="0.14" stopColor="#ffd2b8" />
+          <stop offset="0.32" stopColor="#ff5500" stopOpacity="0.95" />
+          <stop offset="0.65" stopColor="#ff5500" stopOpacity="0.28" />
+          <stop offset="1" stopColor="#ff5500" stopOpacity="0" />
+        </radialGradient>
       </defs>
 
-      {/* Guides */}
-      <g className="max-md:hidden">
-        <circle cx="400" cy="400" r="300" fill="none" stroke="#a7adb5" strokeOpacity="0.24" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-        <path d="M452 348 L612 188" stroke="#a7adb5" strokeOpacity="0.32" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-        <path d="M348 452 L188 612" stroke="#a7adb5" strokeOpacity="0.32" strokeWidth="1" strokeDasharray="3 5" vectorEffect="non-scaling-stroke" />
-        <path d="M188 612 A300 300 0 0 0 400 700" fill="none" stroke="#a7adb5" strokeOpacity="0.4" strokeWidth="1" strokeDasharray="2 6" vectorEffect="non-scaling-stroke" />
-      </g>
-      <line x1="-240" y1="400" x2="1040" y2="400" stroke="url(#cx-axis)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+      {/* One hairline axis through the centre: the precision line */}
+      <line x1="40" y1="400" x2="760" y2="400" style={{ stroke: "var(--color-tint)" }} strokeOpacity="0.1" strokeWidth="1" />
 
-      {/* The mark */}
+      {/* The glass disc: body, outer rim, inner rim, and the specular arc at the top left */}
+      <circle cx="400" cy="400" r="300" fill="url(#cx-glass)" />
+      <circle cx="400" cy="400" r="300" fill="none" stroke="url(#cx-rim)" strokeWidth="1.6" />
+      <circle cx="400" cy="400" r="284" fill="none" style={{ stroke: "var(--color-tint)" }} strokeOpacity="0.06" strokeWidth="1" />
+      <path d="M 158 290 A 266 266 0 0 1 290 158" fill="none" stroke="url(#cx-spec)" strokeWidth="2.4" strokeLinecap="round" />
+      {/* Its faint reflection on the far side of the glass */}
+      <path d="M 642 510 A 266 266 0 0 1 510 642" fill="none" stroke="url(#cx-spec)" strokeOpacity="0.45" strokeWidth="1.6" strokeLinecap="round" />
+
+      {/* The mark in liquid chrome, a sheen over it, and a thin specular edge */}
       <g transform={MARK}>
-        {[0, 90, 180, 270].map((deg) => (
-          <g key={deg} transform={`rotate(${deg} 12 12)`}>
-            <path d={FACET_L} fill="url(#cx-lit)" />
-            <path d={FACET_R} fill="url(#cx-shade)" />
-            <path d="M12 0.9 L12 11.4" stroke="url(#cx-ridge)" strokeWidth="0.045" />
-          </g>
-        ))}
-        <path d={OUTLINE} fill="none" stroke="#a7adb5" strokeOpacity="0.35" strokeWidth="0.03" strokeLinejoin="round" />
-        <path d={OUTLINE} fill="none" stroke="url(#cx-rim)" strokeWidth="0.07" strokeLinejoin="round" />
+        <path d={CRUX_MARK_PATH} fill="url(#cx-chrome)" />
+        <path d={CRUX_MARK_PATH} fill="url(#cx-sheen)" />
+        <path d={CRUX_MARK_PATH} fill="none" stroke="#ffffff" strokeOpacity="0.55" strokeWidth="0.06" strokeLinejoin="round" />
       </g>
-      <circle cx="400" cy="400" r="58" fill="url(#cx-core)" />
 
-      {/* Control points */}
-      <g className="max-md:hidden" fill="#e35d2b">
-        <rect x="608" y="184" width="8" height="8" />
-        <rect x="184" y="608" width="8" height="8" />
-        <rect x="699" y="394" width="2" height="12" />
-      </g>
+      {/* The core of light, and one orange point on the rim */}
+      <circle cx="400" cy="400" r="34" fill="url(#cx-core)" />
+      <circle cx="612" cy="188" r="4.5" fill="#ff5500" />
     </svg>
   );
 }

@@ -36,7 +36,7 @@ const unitless = (v: number) => (Math.abs(v) >= 1_000 ? new Intl.NumberFormat("e
 export class ChartEngine {
   readonly chart: IChartApi;
   private readonly lc: Lc;
-  private readonly theme: Theme;
+  private theme: Theme;
   private main: ISeriesApi<SeriesType>;
   private type: ChartType = "candles";
   private readonly volume: ISeriesApi<"Histogram">;
@@ -88,6 +88,17 @@ export class ChartEngine {
 
   remove() {
     this.chart.remove();
+  }
+
+  /** New colours (the site's light / dark switch), applied in place: the view, drawings and settings are kept. */
+  setTheme(theme: Theme) {
+    this.theme = theme;
+    this.chart.applyOptions({
+      layout: { textColor: theme.text, panes: { separatorColor: theme.line, separatorHoverColor: `${theme.chrome}33` } },
+      rightPriceScale: { borderColor: theme.line },
+      timeScale: { borderColor: theme.line },
+    });
+    this.applySettings(this.settings);
   }
 
   /** Grid, background, crosshair, scales, time zone, volume, up / down colours. */

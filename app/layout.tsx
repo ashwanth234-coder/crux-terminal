@@ -3,6 +3,7 @@ import { Archivo, JetBrains_Mono } from "next/font/google";
 import { Providers } from "./providers";
 import { SITE_URL, miniAppEmbed } from "@/lib/site";
 import "./globals.css";
+import { THEME_SCRIPT } from "@/lib/theme";
 
 const archivo = Archivo({
   variable: "--font-archivo",
@@ -17,10 +18,10 @@ const jetbrains = JetBrains_Mono({
 });
 
 const DIRECTION_CONTRACT = `<!--
-THESIS: Markets without borders. Minimal, institutional fintech: calm through composition, type and restraint, proven with real Base Sepolia data.
-OWN-WORLD: Coal #0A0B0D, graphite #141518 layers, warm white #F5F3EE type, titanium #A7ADB5 detail, Signal Orange #e35d2b for the mark, selection and live state only; warm-white primary buttons, green buy, red sell; Archivo for display and UI, JetBrains Mono for numbers; hairlines, no glows.
+THESIS: Markets without borders. A stark, high-contrast execution terminal, proven with real testnet data.
+OWN-WORLD: Dark: pure black #000000 ground, #0A0A0A / #111111 elevated panels, pure white type. Light: pure white ground, black type. Electric Orange #FF5500 for primary actions (black text on orange, both themes), active states and critical figures, with a soft orange glow (0 0 15px rgba(255,85,0,0.4)) on primary buttons and focused inputs; green buy, red sell for direction only; Archivo for display and UI, JetBrains Mono for numbers; hairlines.
 STORY: Discover real launches, how it works (fair launch, intent execution, locked liquidity), enter.
-FIRST VIEWPORT: Markets / without / borders. painted with the first frame, one supporting line, one ENTER CRUX link; right, the static chrome CRUX emblem on one circle and one axis.
+FIRST VIEWPORT: Markets / without / borders. painted with the first frame, one supporting line, one ENTER CRUX link; right, the static CRUX emblem in liquid chrome inside a glass disc, with an orange core.
 -->`;
 
 export const metadata: Metadata = {
@@ -45,7 +46,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a0b0d",
+  themeColor: "#000000",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -53,7 +54,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${archivo.variable} ${jetbrains.variable} antialiased`}>
+    <html lang="en" className={`${archivo.variable} ${jetbrains.variable} antialiased`} suppressHydrationWarning>
+      <head>
+        {/* The saved light / dark theme, applied before first paint */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className="min-h-svh">
         <div hidden dangerouslySetInnerHTML={{ __html: DIRECTION_CONTRACT }} />
         <Providers>{children}</Providers>

@@ -37,7 +37,7 @@ export function WalletChip({ variant = "compact" }: { variant?: "header" | "comp
         className={`group inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-[4px] border px-3 text-[11px] font-medium transition-colors duration-200 sm:px-4 ${
           connected
             ? "border-line-2 font-mono text-chrome hover:border-chrome/50"
-            : "border-chrome/70 uppercase tracking-[0.16em] text-chrome hover:border-chrome hover:bg-white/[0.06]"
+            : "border-chrome/70 uppercase tracking-[0.16em] text-chrome hover:border-chrome hover:bg-tint/[0.06]"
         }`}
       >
         {connected && address ? (

@@ -11,7 +11,7 @@ export type LegendStudy = { id: StudyId; title: string; hidden: boolean; priced:
 
 export type LegendShow = { ohlc: boolean; change: boolean; volume: boolean; studies: boolean };
 
-const btn = "pointer-events-auto grid h-4 w-4 place-items-center rounded-[2px] text-dim hover:bg-white/[0.08] hover:text-chrome";
+const btn = "pointer-events-auto grid h-4 w-4 place-items-center rounded-[2px] text-dim hover:bg-tint/[0.08] hover:text-chrome";
 
 /**
  * Top-left of the chart: the hovered candle (or the latest) as O H L C with its change, the volume, and one row per
@@ -120,7 +120,7 @@ export function Legend({
             <button
               type="button"
               onClick={() => onSettings(s.id)}
-              className={`pointer-events-auto rounded-[2px] px-0.5 hover:bg-white/[0.06] ${s.hidden ? "text-dim line-through" : "text-chrome/80"}`}
+              className={`pointer-events-auto rounded-[2px] px-0.5 hover:bg-tint/[0.06] ${s.hidden ? "text-dim line-through" : "text-chrome/80"}`}
               title="Settings"
             >
               {s.title}

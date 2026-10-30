@@ -54,7 +54,7 @@ export function SecurityBadges({ factory, auction, version, id }: { factory: Add
                 type="button"
                 aria-expanded={expanded}
                 onClick={() => setOpen(expanded ? null : c.key)}
-                className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-white/[0.02]"
+                className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-tint/[0.02]"
               >
                 <Mark state={c.state} />
                 <span className="flex-1 text-[12.5px] text-muted">{c.label}</span>

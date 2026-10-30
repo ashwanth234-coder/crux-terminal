@@ -121,7 +121,7 @@ export function PayWithSelect({ value, onChange, availableFor, unavailable = {},
                 onPointerEnter={() => setActive(i)}
                 onClick={() => choose(s)}
                 className={`flex cursor-pointer items-center justify-between gap-3 rounded-lg px-2.5 py-2 ${
-                  i === active ? "bg-white/[0.05]" : ""
+                  i === active ? "bg-tint/[0.05]" : ""
                 }`}
               >
                 <span className="min-w-0 leading-tight">

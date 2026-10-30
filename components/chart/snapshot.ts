@@ -6,7 +6,7 @@ export async function chartSnapshot(chart: HTMLCanvasElement, head: { title: str
   out.width = chart.width;
   out.height = chart.height + band;
   const ctx = out.getContext("2d")!;
-  ctx.fillStyle = "#0a0b0d";
+  ctx.fillStyle = "#000000";
   ctx.fillRect(0, 0, out.width, out.height);
   const pad = Math.round(18 * Math.max(1, scale));
   const px = (n: number) => `${Math.round(n * Math.max(1, scale))}px`;
@@ -31,7 +31,7 @@ export async function chartSnapshot(chart: HTMLCanvasElement, head: { title: str
   }
   ctx.drawImage(chart, 0, band);
   ctx.textAlign = "right";
-  ctx.fillStyle = "#e35d2b";
+  ctx.fillStyle = "#ff5500";
   ctx.font = `600 ${px(11)} ui-sans-serif, system-ui, sans-serif`;
   ctx.fillText("cruxprotocol.xyz", right, out.height - pad);
 

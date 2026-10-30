@@ -99,7 +99,7 @@ export function ConnectModal({ open, onClose }: { open: boolean; onClose: () => 
                 type="button"
                 disabled={isPending}
                 onClick={() => connect({ connector: c })}
-                className="flex w-full items-center gap-3 rounded-xl border border-line bg-void/50 px-3.5 py-3 text-left transition-colors hover:border-signal/50 hover:bg-white/[0.03] disabled:opacity-60"
+                className="flex w-full items-center gap-3 rounded-xl border border-line bg-void/50 px-3.5 py-3 text-left transition-colors hover:border-signal/50 hover:bg-tint/[0.03] disabled:opacity-60"
               >
                 <ConnectorIcon connector={c} />
                 <span className="min-w-0 flex-1 leading-tight">

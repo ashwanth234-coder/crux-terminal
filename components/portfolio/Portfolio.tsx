@@ -366,7 +366,7 @@ function HoldingRow({
 
   const td = "px-4 py-3 text-right font-mono text-[12.5px]";
   return (
-    <tr className="hover:bg-white/[0.02]">
+    <tr className="hover:bg-tint/[0.02]">
       <td className="px-4 py-3">
         <Link href={launch.href} className="group inline-flex flex-col">
           <span className="text-[13px] text-chrome group-hover:text-signal">${symbol}</span>

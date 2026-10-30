@@ -60,7 +60,7 @@ export function TopTraders({
           </thead>
           <tbody className="divide-y divide-line">
             {rows.slice(0, SHOWN).map((t) => (
-              <tr key={t.address} className="hover:bg-white/[0.02]">
+              <tr key={t.address} className="hover:bg-tint/[0.02]">
                 <td className={`${td} font-mono text-dim`}>{all.indexOf(t) + 1}</td>
                 <td className={td}>
                   <span className="inline-flex items-center gap-2">

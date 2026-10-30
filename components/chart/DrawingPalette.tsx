@@ -150,7 +150,7 @@ function Btn({
           ? "bg-signal/15 text-signal ring-1 ring-inset ring-signal/60"
           : danger
             ? "text-muted hover:bg-down/10 hover:text-down"
-            : "text-muted hover:bg-white/[0.05] hover:text-chrome"
+            : "text-muted hover:bg-tint/[0.05] hover:text-chrome"
       }`}
     >
       {children}
@@ -283,7 +283,7 @@ export function DrawingPalette({
         onClick();
         setFlyout(null);
       }}
-      className={`flex w-full items-center gap-2.5 rounded-[3px] px-2 py-1.5 text-left text-[12px] transition-colors ${active ? "bg-signal/10 text-signal" : "text-muted hover:bg-white/[0.05] hover:text-chrome"}`}
+      className={`flex w-full items-center gap-2.5 rounded-[3px] px-2 py-1.5 text-left text-[12px] transition-colors ${active ? "bg-signal/10 text-signal" : "text-muted hover:bg-tint/[0.05] hover:text-chrome"}`}
     >
       {icon}
       <span className="flex-1">{text}</span>
@@ -413,7 +413,7 @@ export function DrawingPalette({
                     setTool("emoji");
                     setFlyout(null);
                   }}
-                  className={`grid h-8 place-items-center rounded-[3px] text-[17px] hover:bg-white/[0.06] ${sticker === e && tool === "emoji" ? "bg-signal/15" : ""}`}
+                  className={`grid h-8 place-items-center rounded-[3px] text-[17px] hover:bg-tint/[0.06] ${sticker === e && tool === "emoji" ? "bg-signal/15" : ""}`}
                 >
                   {e}
                 </button>

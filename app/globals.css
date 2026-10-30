@@ -1,21 +1,26 @@
 @import "tailwindcss";
 
 @theme inline {
-  /* Obsidian & titanium: coal ground, graphite layers, warm white type, Signal Orange as the one accent */
-  --color-void: #0a0b0d;
-  --color-void-2: #0e0f12;
-  --color-panel: #141518;
-  --color-panel-2: #1a1b1f;
-  --color-line: #292b2f;
-  --color-line-2: #3a3d42;
-  --color-signal: #e35d2b;
-  --color-signal-lift: #ee7444;
-  --color-chrome: #f5f3ee;
-  --color-muted: #a7adb5;
-  --color-dim: #868c94;
+  /* High contrast: pure black or pure white ground, stark type, Electric Orange (#FF5500) for primary actions, active
+     states and critical figures. Values per theme are below (:root is dark, [data-theme="light"] is light). */
+  --color-void: var(--void);
+  --color-void-2: var(--void-2);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-signal: var(--signal);
+  --color-signal-lift: var(--signal-lift);
+  /* Text on an orange fill: black in both themes (about 6.6:1 against #FF5500; white would be about 3.2:1) */
+  --color-on-signal: var(--on-signal);
+  --color-chrome: var(--chrome);
+  --color-muted: var(--muted);
+  --color-dim: var(--dim);
+  /* Hover and row tints: white on dark, black on light */
+  --color-tint: var(--tint);
   /* Price direction only, never decoration */
-  --color-up: #5cc08c;
-  --color-down: #e5484d;
+  --color-up: var(--up);
+  --color-down: var(--down);
 
   --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;
@@ -49,6 +54,43 @@
 
 :root {
   color-scheme: dark;
+  --void: #000000;
+  --void-2: #050505;
+  --panel: #0a0a0a;
+  --panel-2: #111111;
+  --line: #1f1f1f;
+  --line-2: #2e2e2e;
+  --signal: #ff5500;
+  --signal-lift: #ff7733;
+  --on-signal: #000000;
+  --chrome: #ffffff;
+  --muted: #a3a3a3;
+  --dim: #7a7a7a;
+  --tint: #ffffff;
+  --up: #22c55e;
+  --down: #ef4444;
+  /* The orange glow on primary buttons and focused inputs */
+  --glow: 0 0 15px rgba(255, 85, 0, 0.4);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --void: #ffffff;
+  --void-2: #fafafa;
+  --panel: #ffffff;
+  --panel-2: #f4f4f4;
+  --line: #e5e5e5;
+  --line-2: #d0d0d0;
+  --signal: #ff5500;
+  --signal-lift: #e64d00;
+  --on-signal: #000000;
+  --chrome: #000000;
+  --muted: #4a4a4a;
+  --dim: #6b6b6b;
+  --tint: #000000;
+  --up: #15803d;
+  --down: #dc2626;
+  --glow: 0 0 15px rgba(255, 85, 0, 0.35);
 }
 
 html {
@@ -67,7 +109,7 @@ body {
 
 ::selection {
   background: var(--color-signal);
-  color: var(--color-void);
+  color: var(--color-on-signal);
 }
 
 /* Browser surfaces carry the world too */
@@ -147,9 +189,18 @@ a {
     color: var(--color-muted);
   }
 
-  /* Graphite surface: tone, not sheen or glow */
+  /* Elevated surface: tone, not sheen */
   .panel-sheen {
     background: var(--color-panel);
+  }
+
+  /* The orange glow: primary buttons, and inputs while focused */
+  .glow-signal {
+    box-shadow: var(--glow);
+  }
+  .glow-focus:focus-within {
+    border-color: var(--color-signal);
+    box-shadow: var(--glow);
   }
 }
 

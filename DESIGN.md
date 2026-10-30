@@ -1,20 +1,24 @@
 ---
 name: Crux
-description: Markets without borders. Minimal, institutional fintech on coal black, one type family, where Signal Orange marks only the mark, selection and live state.
+description: Markets without borders. High-contrast institutional fintech on pure black (or pure white), one type family, where Electric Orange #FF5500 carries primary actions, active states and critical figures.
 colors:
-  void: "#0a0b0d"
-  void-2: "#0e0f12"
-  panel: "#141518"
-  panel-2: "#1a1b1f"
-  line: "#292b2f"
-  line-2: "#3a3d42"
-  signal: "#e35d2b"
-  signal-lift: "#ee7444"
-  chrome: "#f5f3ee"
-  muted: "#a7adb5"
-  dim: "#868c94"
-  up: "#5cc08c"
-  down: "#e5484d"
+  # dark (default) / light (data-theme="light")
+  void: "#000000 / #ffffff"
+  void-2: "#050505 / #fafafa"
+  panel: "#0a0a0a / #ffffff"
+  panel-2: "#111111 / #f4f4f4"
+  line: "#1f1f1f / #e5e5e5"
+  line-2: "#2e2e2e / #d0d0d0"
+  signal: "#ff5500"
+  signal-lift: "#ff7733 / #e64d00"
+  on-signal: "#000000"
+  chrome: "#ffffff / #000000"
+  muted: "#a3a3a3 / #4a4a4a"
+  dim: "#7a7a7a / #6b6b6b"
+  tint: "#ffffff / #000000"
+  up: "#22c55e / #15803d"
+  down: "#ef4444 / #dc2626"
+  glow: "0 0 15px rgba(255,85,0,0.4) (0.35 in light)"
 typography:
   display:
     fontFamily: "Archivo, ui-sans-serif, sans-serif"
@@ -65,8 +69,9 @@ spacing:
   header: "64px"
 components:
   button-primary:
-    backgroundColor: "{colors.chrome}"
-    textColor: "{colors.void}"
+    backgroundColor: "{colors.signal}"
+    textColor: "{colors.on-signal}"
+    shadow: "{colors.glow}"
     rounded: "6px"
     height: "48px (md) / 36px (sm)"
   button-buy:
@@ -89,19 +94,21 @@ components:
 
 ## Overview
 
-**Creative North Star: "Markets without borders."** Institutional, architectural, obsidian, titanium, precision, restraint. The page should feel trustworthy through composition, one type family and negative space, not effects. Few things per screen; say each thing once. Real responsive UI, never a flattened image.
+**Creative North Star: "Markets without borders."** Institutional, architectural, high contrast, precision, restraint. The page should feel trustworthy through composition, one type family and negative space, not effects. Few things per screen; say each thing once. Real responsive UI, never a flattened image.
 
-The home page opens on plain coal black: "Markets / without borders." in warm-white Archivo, one supporting line, the warm-white Enter Crux button with a quiet View launches link, and on the right the chrome CRUX mark on a single circle and axis. Below the fold, three parts only: Live markets (the real launch table), How Crux works (four hairline rows, each live today), and a short close. No section numbers or kickers above headings.
+The home page opens on pure black: "Markets / without borders." in white Archivo, one supporting line, the orange Enter Crux button with a quiet View launches link, and on the right the CRUX mark in liquid chrome inside a glass disc. Below the fold, three parts only: Live markets (the real launch table), How Crux works (four hairline rows, each live today), and a short close. No section numbers or kickers above headings.
 
 The terminal, launch and pro views use the same tokens, packed tighter.
 
 ## Colors
 
-- **Coal Black** (void) dominates every page. **Graphite** (panel) separates layers by tone; no glows, no gradients.
-- **Signal Orange** (signal, #E35D2B: toned down from #FF642D in 2026-10) is the only accent: the mark, the selected nav item or control, LIVE state and active indicators. It is never a button fill, never a headline word, never a section fill.
-- **Actions** are warm white (primary) or outline. Trades carry their direction: **buy green (up), sell red (down)**, so an action never shares a hue with the down colour.
-- **Warm White** (chrome) for headlines and primary information. **Titanium** (muted) for secondary text, annotations and chart detail; **dim** for timestamps and table heads (still 4.5:1 on graphite).
-- **Borders** (line, #292B2F) for every hairline; line-2 for interactive outlines.
+- **Two grounds, one accent.** Dark (default) is pure black (void #000000) with #050505 / #111111 cards and pure white text; light is pure white with black text. A sun/moon toggle beside the language switcher flips `data-theme` on `<html>`, saved in localStorage (`crux.theme`) and applied before paint; the chart recolours live.
+- **Electric Orange** (signal, #FF5500, the same in both themes) is for primary actions, active states (selected chip, language, nav) and critical figures such as fees locked. It is not for headlines, section fills or decoration.
+- **Text on orange is always pure black** (on-signal), in both themes.
+- **Glow**: a soft orange glow (`.glow-signal`, 0 0 15px rgba(255,85,0,0.4)) on primary buttons, and on inputs while focused (`.glow-focus`). Nowhere else.
+- **Actions** are orange (primary) or outline. Trades carry their direction: **buy green (up), sell red (down)**.
+- **chrome** for headlines and primary information; **muted** for secondary text; **dim** for timestamps and table heads. **tint** (white on dark, black on light) for translucent washes (`bg-tint/[0.04]`), never raw white.
+- **Borders** (line) for every hairline; line-2 for interactive outlines.
 - **up / down** mark price direction only. Network colours appear only on network marks (Base blue, etc.).
 
 ## Typography
@@ -113,14 +120,14 @@ The terminal, launch and pro views use the same tokens, packed tighter.
 ## Brand mark
 
 One geometric four-point mark (`CRUX_MARK_PATH` in components/site/Logo.tsx): four equal tapered arms meeting at a waist, so it reads as a convergence point, not a cross.
-- Flat Signal Orange: favicon (app/icon.svg), app icon and splash (public/), OG image.
+- Flat Electric Orange on black: favicon (app/icon.svg), app icon and splash (public/), OG image.
 - Single colour (`CruxMark`, currentColor): legible at 16px, no glow, works on any ground.
-- Chrome (`CruxEmblem`): the hero version, static SVG with linear/radial gradients only (no filters, no script), one small orange light at the centre, one circle, one horizontal axis, two alignment lines, three orange control points. Below md the guides drop away.
-- Wordmark: CRUX in Archivo 500, warm white, 0.42em tracking.
+- Glass and liquid chrome (`CruxEmblem`): the hero version. The mark in banded liquid chrome with a horizon sheen and a thin specular edge, floating in a glass disc (faint tinted body, lit rim, inner rim, a specular arc top left and its faint reflection bottom right), one orange core of light where the arms meet, one orange point on the rim and one hairline axis. Static SVG, gradients only (no filters, no script); the glass is drawn in the theme tint so it works on black and white.
+- Wordmark: CRUX in Archivo 500, chrome, 0.42em tracking.
 
 ## Components
 
-- **Header**: 64px, coal with a subtle border; mark + wordmark + TESTNET tag left, the routes centred (from lg), LOG IN and CONNECT WALLET ↗ (warm-white outline) right. App headers drop Protocol and Docs; the token search submits on Enter. Below lg, a menu button opens an accessible full-height list (Escape closes it).
+- **Header**: 64px, void with a subtle border; mark + wordmark + TESTNET tag left, the routes centred (from xl), language switcher, theme toggle, LOG IN and CONNECT WALLET ↗ (outline) right. App headers drop Protocol and Docs; the token search submits on Enter. Below xl, a menu button opens an accessible full-height list (Escape closes it).
 - **Status tags** (`components/ui/StatusTag.tsx`): LIVE (orange dot), TESTNET (titanium), DEMO (dashed), PLANNED (dashed, hollow dot). Use these words consistently; never show a simulated number as live.
 - **Chapters** (`components/site/Chapter.tsx`): hairline on top, Archivo headline with a short titanium intro beside it, then the evidence. No numbers or labels above the headline.
 - **Tables and lists** use hairline rows rather than boxed cards.
@@ -132,6 +139,7 @@ Hover and focus feedback (200ms), the modal entrance, the wallet "kinetic" bars 
 
 ## Don'ts
 
-- No acid lime, purple or blue glows, multicolour gradients, or orange backgrounds.
+- No acid lime, purple or blue glows, multicolour gradients, or orange section fills; orange fills are for primary buttons only.
+- No glow beyond primary buttons and focused inputs. No Base-blue rebrand.
 - No fabricated stats, countdowns, balances or fills. Testnet data is labelled testnet; nothing implies mainnet.
 - No WebGL or heavy 3D for the emblem.

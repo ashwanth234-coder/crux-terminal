@@ -119,7 +119,7 @@ export function StudySettings({
                           role="radio"
                           aria-checked={(inst.widths?.[l.key] ?? 1) === w}
                           onClick={() => onChange({ ...inst, widths: { ...inst.widths, [l.key]: w } })}
-                          className={`grid h-6 w-6 place-items-center rounded-[3px] ${(inst.widths?.[l.key] ?? 1) === w ? "bg-white/[0.08]" : "hover:bg-white/[0.05]"}`}
+                          className={`grid h-6 w-6 place-items-center rounded-[3px] ${(inst.widths?.[l.key] ?? 1) === w ? "bg-tint/[0.08]" : "hover:bg-tint/[0.05]"}`}
                           title={`${w}px`}
                         >
                           <span className="w-4 rounded-full bg-chrome" style={{ height: w }} />
