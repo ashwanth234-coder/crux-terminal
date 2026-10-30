@@ -27,11 +27,21 @@ const SECTIONS = [
   { id: "feedback", title: "Feedback" },
 ] as const;
 
-const CONTRACTS = [
-  { name: "CruxFactoryV3 (launches)", address: "0x4894e685553d10FCCc0AfeC0840f686254939cF0" },
-  { name: "CruxSettler (intent escrow)", address: "0x570b679cBeDA67322B7d6a348985B6189E8C9e82" },
-  { name: "CruxDestinationSettler (fills)", address: "0x300a835939D2beBed59C543470DCD9a9c8065822" },
+/** The live testnet contracts (Base Sepolia unless a link says otherwise). */
+const CONTRACTS: { name: string; address: string; href?: string }[] = [
+  { name: "CruxFactoryV7 (launches)", address: "0xeacB98371D5597c20A9ECDf6f09726817489722e" },
+  { name: "CruxSettlerV4 (intent escrow)", address: "0x399147a5960A120A3b8b89A33a30500a561145D9" },
+  { name: "CruxDestinationSettlerV2 (fills)", address: "0x62e5ed6BC2f604fad76152045559805c11D1cdf4" },
+  { name: "CruxLister (automatic listing)", address: "0xCC99DaBf30b73978be799957717a2f7600cb39BF" },
+  { name: "CruxFillProver (Hyperlane fill proofs)", address: "0x7cb1aDd4975CbF1a5a3FA4fd60F11b010E4b29e8" },
+  { name: "CruxAccountFactoryV2 (Crux accounts)", address: "0xf8962965f04e20B95dAdD931fDe00121906a97DC" },
+  { name: "Admin Safe (2-of-3)", address: "0x49441cbA3cF9Db98d39Df4bDf8bF1a9D4Ea4fb6d" },
   { name: "Solver + keeper wallet", address: "0x69E422d3Cca945a44210684b57F85f556212AD67" },
+  {
+    name: "crux_escrow (Pay from Solana, Solana devnet)",
+    address: "51VZTKfmnS85fvJ1rEBCuVQveqHg2XeN44ZiHeeNa8m5",
+    href: "https://explorer.solana.com/address/51VZTKfmnS85fvJ1rEBCuVQveqHg2XeN44ZiHeeNa8m5?cluster=devnet",
+  },
 ];
 
 function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
@@ -269,8 +279,9 @@ export default function AlphaGuidePage() {
               you refund.
             </Callout>
             <p className="text-[14px] text-chrome/65">
-              A token marked {b("not listed")} graduated recently and is waiting for the team to register it for intent trading
-              (see Trust disclosures). Fees: a 0.30% solver spread plus Uniswap&apos;s 0.3% pool fee, both included in the quote.
+              A token marked {b("not listed")} graduated moments ago: the keeper lists every graduation of a Crux factory
+              automatically, usually within seconds. Fees: a 0.30% solver spread plus Uniswap&apos;s 0.3% pool fee, both included in
+              the quote.
             </p>
           </Section>
 
@@ -313,22 +324,25 @@ export default function AlphaGuidePage() {
             <ul className="divide-y divide-line rounded-xl border border-line bg-panel">
               {[
                 ["One solver.", "A single solver daemon run by the Crux team fills every intent. If it's down, intents don't fill and you refund after the deadline."],
-                ["A centralized settlement verifier.", "Escrow is released by an allow-listed verifier (the team's solver wallet), not by a cross-chain proof."],
-                ["Manual token registration.", "After each graduation, the team registers the token on the settlers before it can trade via intents. The owner key controls listings, verifiers and the fee treasury."],
-                ["Unaudited contracts, testnet only.", "Nothing here has been audited. Never use a wallet that holds real funds, and never share a private key or seed phrase with anyone, including us."],
+                ["Escrow pays only the proven filler.", "On Base, the settler releases your escrow only to the solver the destination contract recorded as delivering your exact order; nobody else, the team included, can redirect it. Unfilled orders refund to you after the deadline."],
+                ["Cross-chain orders settle on a Hyperlane proof.", "Paid from Ethereum, Arbitrum or BSC testnets, or from Solana devnet: the escrow on that chain is released only when a Hyperlane message from the Crux fill prover on Base proves who filled the order. This trusts Hyperlane's validators (the default security module). With no proof, you refund 6 hours after the deadline."],
+                ["Crux accounts: withdrawals only to your wallet.", "An email or Google account can trade, but its funds can only be withdrawn to the wallet you bound. Changing that wallet waits 48 hours (a timelock), and your current wallet can cancel the change and sweep everything to itself."],
+                ["Standing orders run without you.", "Take profit, stop loss, trailing stop and buy-the-dip orders wait for their price with this page closed. Your signed floor is enforced on-chain, so an order can never fill below it; the keeper decides when to send it. Orders in one group (TP + SL) are one-cancels-the-other: when one fills, the other can't."],
+                ["Automatic listing, admin by a Safe.", "Graduated tokens are listed for intent trading by a permissionless lister. Admin settings (the fee treasury, new factories, session limits) need 2 of the 3 signers of the Crux Safe."],
+                ["Unaudited contracts, testnet only.", "Nothing here has been audited. The next contract set (including settler V5) is frozen for an external audit that hasn't started yet. Never use a wallet that holds real funds, and never share a private key or seed phrase with anyone, including us."],
               ].map(([t, d]) => (
                 <li key={t} className="px-4 py-3.5 text-[14px] leading-relaxed text-chrome/75">
                   {b(t)} {d}
                 </li>
               ))}
             </ul>
-            <p className="text-[14px] text-chrome/65">What you can verify yourself, on Basescan:</p>
+            <p className="text-[14px] text-chrome/65">What you can verify yourself, on Basescan (and Solana Explorer):</p>
             <dl className="divide-y divide-line rounded-xl border border-line bg-panel text-[13px]">
               {CONTRACTS.map((c) => (
                 <div key={c.address} className="flex flex-col gap-1.5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <dt className="text-muted">{c.name}</dt>
                   <dd>
-                    <Ext href={`${BASESCAN}/address/${c.address}`}>
+                    <Ext href={c.href ?? `${BASESCAN}/address/${c.address}`}>
                       <span className="font-mono text-[12px]">
                         {c.address.slice(0, 6)}…{c.address.slice(-4)}
                       </span>

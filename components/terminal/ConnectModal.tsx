@@ -126,8 +126,8 @@ export function ConnectModal({ open, onClose }: { open: boolean; onClose: () => 
       )}
 
       <p className="mt-5 font-mono text-[10px] leading-relaxed text-dim">
-        Crux reads Base, BSC and Robinhood Chain balances to build your unified buying power. Nothing is signed until you
-        confirm an intent.
+        Crux reads your balances on Base, Ethereum, Arbitrum, BSC and Solana (Robinhood Chain at mainnet) to build your unified
+        buying power. Nothing is signed until you confirm an intent.
       </p>
     </Modal>
   );
