@@ -2,14 +2,14 @@ import { PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.j
 import { bytesToHex, keccak256, type Address } from "viem";
 
 /**
- * Pay from Solana (S1, devnet): the crux_escrow program (crux-solana) escrows USDG per order; the Crux solver fills the
+ * Pay from Solana (S1, devnet): the crux_escrow program (crux-solana) escrows USDC per order; the Crux solver fills the
  * order on Base Sepolia, CruxFillProver proves the fill back to Solana through Hyperlane, and the escrow pays only that
  * filler. With no proof, the user refunds 6 hours after the fill deadline. Encodings mirror the program exactly.
  */
 export const SOLANA_ESCROW_PROGRAM = new PublicKey(process.env.NEXT_PUBLIC_CRUX_SOLANA_ESCROW ?? "51VZTKfmnS85fvJ1rEBCuVQveqHg2XeN44ZiHeeNa8m5");
-/** Paxos USDG on Solana devnet: Token-2022, 6 decimals, the escrow's only input (1:1 with Base test USDC). */
-export const USDG_DEVNET_MINT = new PublicKey("4F6PM96JJxngmHnZLBh9n58RH4aTVNWvDs2nuwrT5BP7");
-export const TOKEN_2022_PROGRAM = new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
+/** Circle USDC on Solana devnet: classic SPL Token, 6 decimals, the escrow's only input (1:1 with Base test USDC). */
+export const USDC_DEVNET_MINT = new PublicKey("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
+export const TOKEN_PROGRAM = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 export const ASSOCIATED_TOKEN_PROGRAM = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 /** The chain orders are delivered on (Base Sepolia). */
 const DESTINATION_CHAIN_ID = BigInt(84532);
@@ -46,7 +46,7 @@ const le = (value: bigint, bytes: number) => {
 const beWord = (value: bigint) => le(value, 32).reverse();
 
 export const associatedTokenAddress = (owner: PublicKey) =>
-  PublicKey.findProgramAddressSync([owner.toBuffer(), TOKEN_2022_PROGRAM.toBuffer(), USDG_DEVNET_MINT.toBuffer()], ASSOCIATED_TOKEN_PROGRAM)[0];
+  PublicKey.findProgramAddressSync([owner.toBuffer(), TOKEN_PROGRAM.toBuffer(), USDC_DEVNET_MINT.toBuffer()], ASSOCIATED_TOKEN_PROGRAM)[0];
 export const orderAddress = (fillHash: Uint8Array) =>
   PublicKey.findProgramAddressSync([utf8("order"), fillHash], SOLANA_ESCROW_PROGRAM)[0];
 export const orderIdMarkerAddress = (orderId: Uint8Array) =>
@@ -90,7 +90,7 @@ export function newSolanaOrder(o: { user: PublicKey; amount: bigint; tokenOut: s
   return { ...o, nonce, fillDeadline, orderId, fillHash: keccak(originData), originData };
 }
 
-/** crux_escrow `open`: escrows `amount` of the user's USDG for this order. */
+/** crux_escrow `open`: escrows `amount` of the user's USDC for this order. */
 export function openInstruction(order: SolanaOrder, batchWindow: number): TransactionInstruction {
   const tokenOut = utf8(order.tokenOut);
   const data = Uint8Array.from([
@@ -111,12 +111,12 @@ export function openInstruction(order: SolanaOrder, batchWindow: number): Transa
     programId: SOLANA_ESCROW_PROGRAM,
     keys: [
       { pubkey: order.user, isSigner: true, isWritable: true },
-      { pubkey: USDG_DEVNET_MINT, isSigner: false, isWritable: false },
+      { pubkey: USDC_DEVNET_MINT, isSigner: false, isWritable: false },
       { pubkey: associatedTokenAddress(order.user), isSigner: false, isWritable: true },
       { pubkey: orderKey, isSigner: false, isWritable: true },
       { pubkey: orderIdMarkerAddress(order.orderId), isSigner: false, isWritable: true },
       { pubkey: associatedTokenAddress(orderKey), isSigner: false, isWritable: true },
-      { pubkey: TOKEN_2022_PROGRAM, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PROGRAM, isSigner: false, isWritable: false },
       { pubkey: ASSOCIATED_TOKEN_PROGRAM, isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     ],
@@ -124,7 +124,7 @@ export function openInstruction(order: SolanaOrder, batchWindow: number): Transa
   });
 }
 
-/** crux_escrow `refund`: returns an unproven order's USDG to its user once the grace period has passed. Anyone may send it. */
+/** crux_escrow `refund`: returns an unproven order's USDC to its user once the grace period has passed. Anyone may send it. */
 export function refundInstruction(user: PublicKey, fillHash: Uint8Array): TransactionInstruction {
   const orderKey = orderAddress(fillHash);
   return new TransactionInstruction({
@@ -132,10 +132,10 @@ export function refundInstruction(user: PublicKey, fillHash: Uint8Array): Transa
     keys: [
       { pubkey: orderKey, isSigner: false, isWritable: true },
       { pubkey: user, isSigner: false, isWritable: true },
-      { pubkey: USDG_DEVNET_MINT, isSigner: false, isWritable: false },
+      { pubkey: USDC_DEVNET_MINT, isSigner: false, isWritable: false },
       { pubkey: associatedTokenAddress(orderKey), isSigner: false, isWritable: true },
       { pubkey: associatedTokenAddress(user), isSigner: false, isWritable: true },
-      { pubkey: TOKEN_2022_PROGRAM, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PROGRAM, isSigner: false, isWritable: false },
     ],
     data: Buffer.from(REFUND_IX),
   });

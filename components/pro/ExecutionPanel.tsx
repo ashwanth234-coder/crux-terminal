@@ -70,7 +70,7 @@ function Presets({ items, onPick }: { items: { label: string; value: bigint | nu
 function AmountField({ id, value, onChange, unit, compact }: { id: string; value: string; onChange: (v: string) => void; unit: string; compact?: boolean }) {
   return (
     <div className={`flex items-center gap-2 rounded-lg border border-line bg-void/60 px-3 focus-within:border-line-2 ${compact ? "py-2" : "py-2.5"}`}>
-      {(unit === "USDC" || unit === "USDG") && <span className="font-mono text-dim">$</span>}
+      {unit === "USDC" && <span className="font-mono text-dim">$</span>}
       <input
         id={id}
         inputMode="decimal"
@@ -112,7 +112,7 @@ function BuyingPower({ active, onPick }: { active: PayFrom | "account"; onPick: 
                 : s.key === "base"
                   ? "Pay from your wallet on Base"
                   : s.key === "solana"
-                    ? "Pay with USDG on Solana devnet: escrowed there, filled on Base"
+                    ? "Pay with USDC on Solana devnet: escrowed there, filled on Base"
                     : `Pay from your wallet on ${s.name}: escrowed there, filled on Base`
             }
             className={`inline-flex h-6 items-center gap-1.5 rounded-[4px] border px-2 font-mono text-[10.5px] transition-colors ${
@@ -485,7 +485,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   });
   // A buy can pay from any live cross-chain origin; its USDC balance is shown and compared in 6-decimal units.
   const fromOrigin = side === "buy" && payFrom !== "base" && payFrom !== "solana" && !viaAccount ? originByKey(payFrom) : null;
-  // Pay from Solana: USDG on devnet, escrowed by crux_escrow and filled here on Base (SolanaIntentModal). Delivered to
+  // Pay from Solana: USDC on devnet, escrowed by crux_escrow and filled here on Base (SolanaIntentModal). Delivered to
   // the connected Base wallet, else the Crux account.
   const viaSolana = side === "buy" && payFrom === "solana" && !viaAccount;
   const solana = useSolanaPayer();
@@ -509,7 +509,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   const usdcBalance = viaAccount
     ? crux.usdc
     : viaSolana
-      ? solana.usdg
+      ? solana.usdc
       : address && usdc.data !== undefined
         ? toUsdc6(usdc.data, fromOrigin?.decimals ?? 6)
         : null;
@@ -562,7 +562,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   const label =
     blocked ??
     (overBalance
-      ? `Not enough ${side === "buy" ? (viaSolana ? "USDG on Solana" : "test USDC") : symbol}${viaAccount ? " in your account" : ""}`
+      ? `Not enough ${side === "buy" ? (viaSolana ? "USDC on Solana" : "test USDC") : symbol}${viaAccount ? " in your account" : ""}`
       : tooBig
         ? t("ticket.tooLarge")
         : overCap
@@ -757,7 +757,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
       <label htmlFor={`${uid}-amt`} className="sr-only">
         {side === "buy" ? "USDC to spend" : `${symbol} to sell`}
       </label>
-      <AmountField id={`${uid}-amt`} value={amount} onChange={setAmount} unit={side === "buy" ? (viaSolana ? "USDG" : "USDC") : symbol} />
+      <AmountField id={`${uid}-amt`} value={amount} onChange={setAmount} unit={side === "buy" ? "USDC" : symbol} />
       {crux.loggedIn && crux.account && (
         <div role="radiogroup" aria-label="Trade from" className="-mt-0.5 flex items-center gap-1.5 text-[11px]">
           <span className="mr-0.5 text-dim">Trade from</span>
@@ -820,7 +820,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
         <span>
           {side === "buy"
             ? viaSolana
-              ? "USDG on Solana devnet · delivered on Base · Hyperlane-proven"
+              ? "USDC on Solana devnet · delivered on Base · Hyperlane-proven"
               : fromOrigin
                 ? `${fromOrigin.name} test USDC · delivered on Base · Hyperlane-proven`
                 : "Base Sepolia test USDC"
@@ -870,7 +870,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
       <MobileDock>
         <div className="flex items-center gap-2">
           <div className="min-w-0 flex-1">
-            <AmountField id={`${uid}-dock`} value={amount} onChange={setAmount} unit={side === "buy" ? (viaSolana ? "USDG" : "USDC") : symbol} compact />
+            <AmountField id={`${uid}-dock`} value={amount} onChange={setAmount} unit={side === "buy" ? "USDC" : symbol} compact />
           </div>
           <button type="button" disabled={(isConnected || viaAccount || solanaReady) && disabled} onClick={sign} className={buttonClass(isConnected || viaAccount ? side : "primary", "md", "shrink-0 rounded-xl px-4 font-semibold capitalize")}>
             {viaSolana

@@ -14,7 +14,7 @@ const MECHANISMS = [
   },
   {
     name: "Any chain in",
-    body: "Pay with test USDC on Arbitrum, Ethereum or BSC, or USDG on Solana. The solver fills on Base; no bridge, no network switch.",
+    body: "Pay with test USDC on Arbitrum, Ethereum, BSC or Solana. The solver fills on Base; no bridge, no network switch.",
     fact: "Five networks",
   },
   {

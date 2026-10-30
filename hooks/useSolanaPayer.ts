@@ -26,7 +26,7 @@ export type SolanaPayer = {
 
 /**
  * Who pays a Solana order: a connected Solana wallet (Phantom, Solflare, any Wallet Standard wallet), else the Solana
- * embedded wallet of an email / Google login. Plus that payer's USDG (devnet) and SOL for fees.
+ * embedded wallet of an email / Google login. Plus that payer's USDC (devnet) and SOL for fees.
  */
 export function useSolanaPayer() {
   const adapter = useWallet();
@@ -69,7 +69,7 @@ export function useSolanaPayer() {
     queryFn: async () => {
       const connection = solanaDevnet();
       const owner = payer!.publicKey;
-      const [lamports, usdg] = await Promise.all([
+      const [lamports, usdc] = await Promise.all([
         connection.getBalance(owner),
         connection
           .getTokenAccountBalance(associatedTokenAddress(owner))
@@ -79,15 +79,15 @@ export function useSolanaPayer() {
             throw err;
           }),
       ]);
-      return { sol: lamports / 1e9, usdg };
+      return { sol: lamports / 1e9, usdc };
     },
   });
 
   return {
     payer,
     connect: openSolana,
-    /** USDG in 6-decimal units (1:1 with Base test USDC), null while unknown. */
-    usdg: balances.data?.usdg ?? null,
+    /** USDC in 6-decimal units (1:1 with Base test USDC), null while unknown. */
+    usdc: balances.data?.usdc ?? null,
     sol: balances.data?.sol ?? null,
     refetch: balances.refetch,
   };

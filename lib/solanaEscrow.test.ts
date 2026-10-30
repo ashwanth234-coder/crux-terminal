@@ -12,9 +12,9 @@ import {
 
 const TEST_WALLET = new PublicKey("54drirH8v2r6WQqXesLTWfcBS9GbN3c2ckVDaKBo4jFC");
 
-test("derives the wallet's USDG account exactly as the Solana CLI does", () => {
-  // `solana find-program-derived-address` for this wallet's Token-2022 USDG account (checked 2026-10-29).
-  assert.equal(associatedTokenAddress(TEST_WALLET).toBase58(), "2X6sLgQeeLHKNeFXYNdeJ8Z3mieaJkWH33b3HYdhyb1P");
+test("derives the wallet's USDC account exactly as the Solana CLI does", () => {
+  // `solana find-program-derived-address` for this wallet's USDC account, classic SPL Token (checked 2026-10-30).
+  assert.equal(associatedTokenAddress(TEST_WALLET).toBase58(), "EVB59znGH1W6p3xEXLeWmcwJno422bidPwwDLNFS2Ux5");
 });
 
 test("originData is the program's ABI layout", () => {

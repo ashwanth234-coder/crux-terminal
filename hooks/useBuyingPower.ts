@@ -12,7 +12,7 @@ export type PowerSource = { key: PayFrom | "account"; name: string; usdc6: bigin
 
 /**
  * Everything the trader can buy with right now, in test USDC (6 decimals): the connected wallet on Base Sepolia and
- * on every live cross-chain origin (filled on Base through the solver), USDG on Solana devnet when a Solana wallet is
+ * on every live cross-chain origin (filled on Base through the solver), USDC on Solana devnet when a Solana wallet is
  * connected (1:1, filled on Base the same way), plus the Crux account on Base. A source that
  * can't be read is null and left out of the total.
  */
@@ -36,7 +36,7 @@ export function useBuyingPower(): { sources: PowerSource[]; total: bigint | null
       ]
     : [];
   const account: PowerSource[] = crux.loggedIn && crux.account ? [{ key: "account", name: "Crux account", usdc6: crux.usdc }] : [];
-  const solanaSource: PowerSource[] = solana.payer ? [{ key: "solana", name: "Solana", usdc6: solana.usdg }] : [];
+  const solanaSource: PowerSource[] = solana.payer ? [{ key: "solana", name: "Solana", usdc6: solana.usdc }] : [];
   const sources = [...account, ...wallet, ...solanaSource];
   const known = sources.filter((s) => s.usdc6 !== null);
   return { sources, total: known.length ? known.reduce((s, x) => s + (x.usdc6 as bigint), BigInt(0)) : null };
