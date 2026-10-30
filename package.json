@@ -15,6 +15,7 @@
     "@farcaster/miniapp-sdk": "^0.3.0",
     "@farcaster/miniapp-wagmi-connector": "^2.0.0",
     "@privy-io/react-auth": "3.48.1",
+    "@solana-program/memo": "0.10.0",
     "@solana/wallet-adapter-base": "^0.9.28",
     "@solana/wallet-adapter-phantom": "^0.9.30",
     "@solana/wallet-adapter-react": "^0.15.40",

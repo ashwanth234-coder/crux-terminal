@@ -2,17 +2,20 @@ import { defineChain, type Address } from "viem";
 import { base, baseSepolia, bsc } from "viem/chains";
 
 /**
- * Robinhood Chain (EVM spoke). The default RPC host does not resolve publicly
- * yet; point NEXT_PUBLIC_ROBINHOOD_RPC at a live endpoint (or a local node).
- * Balance reads against it fail soft, see hooks/useUnifiedBalance.ts.
+ * Robinhood Chain mainnet (Arbitrum Orbit, ETH gas; its testnet is 46630, without Hyperlane). Canonical tokens from
+ * docs.robinhood.com/chain/contracts, checked on-chain 2026-10-28: USDG (Paxos "Global Dollar", 6 decimals), Crux's
+ * stablecoin here, and WETH. Balance reads against it fail soft, see hooks/useUnifiedBalance.ts.
  */
-/** Robinhood Chain mainnet (Arbitrum Orbit, ETH gas; its testnet is 46630, without Hyperlane). */
 export const robinhoodChain = defineChain({
   id: 4663,
   name: "Robinhood Chain",
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   rpcUrls: {
     default: { http: [process.env.NEXT_PUBLIC_ROBINHOOD_RPC ?? "https://rpc.mainnet.chain.robinhood.com"] },
+  },
+  contracts: {
+    usdg: { address: "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168" },
+    weth: { address: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73" },
   },
 });
 
@@ -26,14 +29,15 @@ export type ChainKey = "base" | "solana" | "bsc" | "robinhood";
 
 type UsdcSpec = { address: Address; decimals: number };
 
-/** USDC per EVM chain. Robinhood's is only known once configured. */
+/** The dollar stablecoin per EVM chain: USDC, and USDG on Robinhood Chain (NEXT_PUBLIC_ROBINHOOD_USDC overrides). */
 export const USDC: Partial<Record<Exclude<ChainKey, "solana">, UsdcSpec>> = {
   base: { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", decimals: 6 },
   // Binance-peg USDC on BSC uses 18 decimals.
   bsc: { address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", decimals: 18 },
-  ...(process.env.NEXT_PUBLIC_ROBINHOOD_USDC
-    ? { robinhood: { address: process.env.NEXT_PUBLIC_ROBINHOOD_USDC as Address, decimals: 6 } }
-    : {}),
+  robinhood: {
+    address: (process.env.NEXT_PUBLIC_ROBINHOOD_USDC as Address | undefined) ?? robinhoodChain.contracts.usdg.address,
+    decimals: 6,
+  },
 };
 
 /** Chainlink USD feeds (8 decimals) used to value native gas balances. */

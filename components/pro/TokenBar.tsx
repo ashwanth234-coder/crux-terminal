@@ -23,6 +23,15 @@ import { PRICE_DECIMALS, fmtUsdcExact, graduationNeeds, marketCapUsd, priceUsd, 
 import { priceChange, usdAmount } from "@/lib/orderflow";
 import { SITE_URL } from "@/lib/site";
 import { launchKey, useWatchlist } from "@/lib/watchlist";
+import type { Key } from "@/lib/i18n";
+import { useT } from "@/providers/I18nProvider";
+
+/** A phase label ("Graduated", "Live"…) in the chosen language; one without a translation stays as it is. */
+function phaseLabel(t: ReturnType<typeof useT>, label: string) {
+  const key = `phase.${label}` as Key;
+  const out = t(key);
+  return out === key ? label : out;
+}
 
 export type PhaseStatus = { label: string; tone: string; dot: string };
 
@@ -134,6 +143,7 @@ export function TokenBar({
   version: BatchVersion;
   id: string;
 }) {
+  const t = useT();
   const now = useNow();
   const market = useLaunchMarket(auction.token, auction.pair);
   const meta = useTokenMeta(auction.token);
@@ -185,7 +195,7 @@ export function TokenBar({
   const shareText = graduated ? `Trading ${ticker} via CRUX intent routing` : `Auction live for ${ticker} on CRUX`;
   const shareHref = `https://x.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(link)}`;
 
-  const priceLabel = graduated ? "Price" : "Projected";
+  const priceLabel = graduated ? t("stat.price") : t("stat.projected");
   const price = graduated ? (market.price !== null ? fmtTokenPrice(market.price) : "…") : indicativePrice !== null ? `$${priceUsd(indicativePrice)}` : "—";
   const supply = Number(auction.totalSupply) / 1e18;
   const mcap = graduated
@@ -224,11 +234,11 @@ export function TokenBar({
               {copied ? Icon.check : Icon.copy}
             </button>
             <span className="whitespace-nowrap rounded-[3px] border border-line px-1.5 py-[3px] font-mono text-[9.5px] uppercase leading-none tracking-[0.16em] text-muted">
-              Base Sepolia · USDC pair
+              {t("stat.pair")}
             </span>
             <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-[3px] border px-1.5 py-[3px] font-mono text-[9.5px] uppercase leading-none tracking-[0.16em] ${status.tone}`}>
               <span className={`h-[5px] w-[5px] rounded-full ${status.dot}`} aria-hidden="true" />
-              {status.label}
+              {phaseLabel(t, status.label)}
             </span>
             <VestingBadge days={vestDays} />
             <AntiSniperBadge seconds={antiSniper} />
@@ -249,10 +259,10 @@ export function TokenBar({
                 {pctText(change24h)} <span className="text-dim">24h</span>
               </span>
             )}
-            {phase === "scheduled" && opensIn !== null && <Stat label="Opens in">{formatRemaining(opensIn)}</Stat>}
-            {phase === "open" && closesIn !== null && <Stat label="Closes in">{formatRemaining(closesIn)}</Stat>}
+            {phase === "scheduled" && opensIn !== null && <Stat label={t("stat.opensIn")}>{formatRemaining(opensIn)}</Stat>}
+            {phase === "open" && closesIn !== null && <Stat label={t("stat.closesIn")}>{formatRemaining(closesIn)}</Stat>}
             {graduated && now !== null && auction.settledAt > 0 && (
-              <Stat label="Age" hint={`Trading since ${new Date(auction.settledAt * 1000).toLocaleString()}`}>
+              <Stat label={t("stat.age")} hint={`Trading since ${new Date(auction.settledAt * 1000).toLocaleString()}`}>
                 {formatRemaining(Math.max(0, now - auction.settledAt))}
               </Stat>
             )}
@@ -260,31 +270,31 @@ export function TokenBar({
 
           {/* Stats strip */}
           <div className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1">
-            <Stat label="MCap" hint="Price × total supply">
+            <Stat label={t("stat.mcap")} hint="Price × total supply">
               {mcap}
             </Stat>
             {graduated ? (
               <>
-                <Stat label="Liq" hint="Both sides of the locked pool, in USDC">
+                <Stat label={t("stat.liq")} hint="Both sides of the locked pool, in USDC">
                   {market.reserves ? usdSmall((Number(market.reserves.usdc) / 1e6) * 2) : "…"}
                 </Stat>
-                <Stat label="Vol 24h" hint="USDC traded through the locked pool in the last 24 hours, intent fills included">
+                <Stat label={t("stat.vol24h")} hint="USDC traded through the locked pool in the last 24 hours, intent fills included">
                   {volume24h !== null ? usdAmount(volume24h) : swaps.isError ? "—" : "…"}
                 </Stat>
-                <Stat label="Holders" hint="Wallets holding the token, from its transfers (pools, the auction and Crux contracts left out)">
+                <Stat label={t("stat.holders")} hint="Wallets holding the token, from its transfers (pools, the auction and Crux contracts left out)">
                   {people ? people.length.toLocaleString("en-US") : "…"}
                 </Stat>
-                <Stat label="Top 10" hint="Share of total supply held by the ten largest holders (pools and protocol contracts left out)">
+                <Stat label={t("stat.top10")} hint="Share of total supply held by the ten largest holders (pools and protocol contracts left out)">
                   <span className={top10Pct !== null && top10Pct > 50 ? "text-down" : top10Pct !== null && top10Pct > 25 ? "text-[#ffd166]" : ""}>
                     {top10Pct !== null ? `${top10Pct.toFixed(top10Pct >= 10 ? 1 : 2)}%` : "…"}
                   </span>
                 </Stat>
-                <Stat label="LP burned" hint="Share of the pool's LP tokens held by 0x…dEaD (and Uniswap's 1,000 at 0x0), read live">
+                <Stat label={t("stat.lpBurned")} hint="Share of the pool's LP tokens held by 0x…dEaD (and Uniswap's 1,000 at 0x0), read live">
                   {lpBurnedPct !== null ? `${lpBurnedPct.toFixed(lpBurnedPct >= 99.995 ? 0 : 2)}%` : "…"}
                 </Stat>
                 {lpBurnedPct !== null && lpBurnedPct >= 99 && (
                   <Stat
-                    label="Fees locked"
+                    label={t("stat.feesLocked")}
                     hint="The 0.3% Uniswap fee on every swap stays in the pool. Its LP is burned, so these fees can never be withdrawn: they deepen the pool for good"
                   >
                     {feesLocked === null ? "…" : feesLocked > 0 && feesLocked < 0.01 ? `$${feesLocked.toPrecision(2)}` : usdSmall(feesLocked)}
@@ -293,7 +303,7 @@ export function TokenBar({
               </>
             ) : (
               <>
-                <Stat label="Bids">
+                <Stat label={t("stat.bids")}>
                   ${fmtUsdcExact(auction.totalDeposits)} / ${fmtUsdcExact(graduationNeeds(auction))}
                 </Stat>
                 <Stat label="LP" hint="At graduation the factory mints the pool's LP straight to 0x…dEaD">

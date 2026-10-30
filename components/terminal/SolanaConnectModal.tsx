@@ -19,7 +19,7 @@ export function SolanaConnectModal({ open, onClose }: { open: boolean; onClose: 
   const notInstalled = wallets.filter((w) => w.readyState === WalletReadyState.NotDetected);
 
   return (
-    <Modal open={open} onClose={onClose} title="Connect Solana" subtitle="Adds SOL and SPL-USDC to your unified buying power.">
+    <Modal open={open} onClose={onClose} title="Connect Solana" subtitle="Pay for Base trades with USDG on Solana devnet, and see your Solana balances.">
       {/* Wallet detection only exists in the browser; building the list while closed would
           differ between server and client render (hydration mismatch). */}
       {!open ? null : connected && publicKey ? (
@@ -95,7 +95,7 @@ export function SolanaConnectModal({ open, onClose }: { open: boolean; onClose: 
             ))}
           </ul>
           <p className="mt-5 text-[11.5px] leading-relaxed text-dim">
-            Crux only reads your SOL and USDC balances. Nothing is signed or sent from this step.
+            Connecting only reads your balances. Nothing is signed until you confirm a Pay from Solana order in your wallet.
           </p>
         </>
       )}

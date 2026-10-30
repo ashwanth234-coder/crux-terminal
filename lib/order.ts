@@ -39,8 +39,7 @@ export function sourceAsset(id: PaySourceId): { caip19: string; decimals: number
     case "solana-usdc":
       return { caip19: CAIP19.SOLANA_USDC, decimals: 6 };
     case "robinhood-usdc":
-      // Fall back to the Base rail until Robinhood USDC is configured.
-      return { caip19: CAIP19.ROBINHOOD_USDC ?? CAIP19.BASE_USDC, decimals: 6 };
+      return { caip19: CAIP19.ROBINHOOD_USDC, decimals: 6 };
     default:
       return { caip19: CAIP19.BASE_USDC, decimals: 6 };
   }

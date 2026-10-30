@@ -6,10 +6,8 @@ export const CAIP19 = {
   BASE_USDC: "eip155:8453/erc20:0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
   BASE_ETH: "eip155:8453/native",
   SOLANA_USDC: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp/token:EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-  /** Only addressable once NEXT_PUBLIC_ROBINHOOD_USDC is configured. */
-  ROBINHOOD_USDC: process.env.NEXT_PUBLIC_ROBINHOOD_USDC
-    ? `eip155:46631/erc20:${process.env.NEXT_PUBLIC_ROBINHOOD_USDC}`
-    : null,
+  /** Robinhood Chain's USDG (mainnet 4663); NEXT_PUBLIC_ROBINHOOD_USDC overrides the token. */
+  ROBINHOOD_USDC: `eip155:4663/erc20:${process.env.NEXT_PUBLIC_ROBINHOOD_USDC ?? "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"}`,
 } as const;
 
 export const USDC_DECIMALS = 6;

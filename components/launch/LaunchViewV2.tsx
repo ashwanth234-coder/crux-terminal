@@ -19,6 +19,7 @@ import { VestingBadge } from "@/components/ui/VestingBadge";
 import { AntiSniperBadge } from "@/components/ui/AntiSniperBadge";
 import { useAntiSniperSeconds } from "@/hooks/useAntiSniper";
 import { USDC_DECIMALS, fmtTokens, fmtUsdc, formatRemaining, launchError, type TxStep } from "@/lib/launch";
+import { useT } from "@/providers/I18nProvider";
 import {
   NO_LIMIT,
   V2_FEE,
@@ -145,6 +146,7 @@ function LockIcon() {
 }
 
 function ViewV2({ model, auction, id }: { model: LaunchV2Model; auction: AuctionV2; id: string }) {
+  const t = useT();
   const vestDays = useCreatorVestingDays(batchFactory(model.version), BigInt(id), model.version);
   const antiSniper = useAntiSniperSeconds(batchFactory(model.version), BigInt(id), model.version);
   const now = useNow();
@@ -231,7 +233,7 @@ function ViewV2({ model, auction, id }: { model: LaunchV2Model; auction: Auction
 
           <dl className="mt-6 divide-y divide-line border-t border-line">
             <Row
-              label={phase === "graduated" || phase === "cancelled" ? "Clearing price" : "Clearing price if it closed now"}
+              label={phase === "graduated" || phase === "cancelled" ? t("auction.clearingPrice") : t("auction.clearingNow")}
               hint={
                 phase === "graduated"
                   ? "Every filled bid paid this"

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { ArrowUpRight } from "@/components/ui/Button";
 import { LaunchTokenButton } from "@/components/launch/LaunchTokenButton";
 import { NAV_LINKS, TERMINAL_HREF } from "@/lib/site";
+import { useT } from "@/providers/I18nProvider";
 
 const INLINE =
   "relative inline-flex items-center py-2 text-[11.5px] font-medium uppercase leading-none tracking-[0.18em] text-chrome/75 transition-colors duration-200 hover:text-chrome aria-[current=page]:text-signal";
@@ -19,6 +20,7 @@ const ROW =
  */
 export function SiteNav({ variant, onNavigate, hide = [] }: { variant: "inline" | "rows"; onNavigate?: () => void; hide?: string[] }) {
   const pathname = usePathname();
+  const t = useT();
   const items = NAV_LINKS.filter((l) => !hide.includes(l.label));
   return (
     <ul className={variant === "inline" ? "flex items-center gap-6 lg:gap-9" : "flex flex-col"}>
@@ -27,7 +29,7 @@ export function SiteNav({ variant, onNavigate, hide = [] }: { variant: "inline" 
           {link.href === null ? (
             <LaunchTokenButton
               onOpen={onNavigate}
-              label={link.label}
+              label={t(`nav.${link.label}`)}
               icon={variant === "rows"}
               className={variant === "inline" ? INLINE : ROW}
             />
@@ -39,7 +41,7 @@ export function SiteNav({ variant, onNavigate, hide = [] }: { variant: "inline" 
               aria-current={pathname.startsWith("/launch/") ? "page" : undefined}
               className={variant === "inline" ? INLINE : ROW}
             >
-              {link.label}
+              {t(`nav.${link.label}`)}
               {variant === "rows" && <ArrowUpRight className="h-4 w-4 text-dim" />}
             </a>
           ) : (
@@ -49,7 +51,7 @@ export function SiteNav({ variant, onNavigate, hide = [] }: { variant: "inline" 
               aria-current={link.href === pathname ? "page" : undefined}
               className={variant === "inline" ? INLINE : ROW}
             >
-              {link.label}
+              {t(`nav.${link.label}`)}
               {variant === "rows" && <ArrowUpRight className="h-4 w-4 text-dim" />}
             </Link>
           )}

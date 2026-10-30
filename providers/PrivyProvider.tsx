@@ -9,8 +9,11 @@ export const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? "cmvnt6cvy00
 
 /**
  * Email / Google login for Crux accounts (lib/account.ts). New users get an Ethereum embedded wallet, which owns their
- * CruxAccount and signs its trades silently (no wallet pop-ups). External wallets keep using the site's own Connect
- * button (wagmi), so this provider adds a login path without touching it.
+ * CruxAccount and signs its trades silently (no wallet pop-ups). Solana embedded wallets are not created yet (they
+ * need Solana enabled for the app in the Privy dashboard); Pay from Solana uses Phantom / Solflare through the wallet
+ * adapter, and hooks/useSolanaPayer picks up a Privy Solana wallet if one exists. External wallets keep using the
+ * site's own Connect buttons (wagmi, and the Solana wallet adapter), so this provider adds a login path without
+ * touching them.
  */
 export function PrivyProvider({ children }: { children: ReactNode }) {
   return (
@@ -19,7 +22,10 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
       config={{
         loginMethods: ["email", "google"],
         appearance: { theme: "dark", accentColor: "#e35d2b", landingHeader: "Log in to Crux", walletChainType: "ethereum-only" },
-        embeddedWallets: { ethereum: { createOnLogin: "users-without-wallets" }, showWalletUIs: false },
+        embeddedWallets: {
+          ethereum: { createOnLogin: "users-without-wallets" },
+          showWalletUIs: false,
+        },
         defaultChain: TESTNET,
         supportedChains: [TESTNET],
       }}

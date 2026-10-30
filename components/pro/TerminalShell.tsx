@@ -8,6 +8,7 @@ import { SiteNav } from "@/components/site/SiteNav";
 import { TokenSearch } from "@/components/site/TokenSearch";
 import { WalletChip } from "@/components/terminal/WalletChip";
 import { AccountButton } from "@/components/account/AccountButton";
+import { LanguageSwitcher } from "@/components/site/LanguageSwitcher";
 import { SmartAccountHint } from "@/components/ui/SmartAccountNote";
 import { StatusTag } from "@/components/ui/StatusTag";
 
@@ -29,6 +30,7 @@ export function TerminalShell({ children }: { children: ReactNode }) {
         <div className="flex items-center gap-3">
           <TokenSearch className="hidden w-[240px] md:block" />
           <StatusTag status="testnet" label="Base Sepolia" className="hidden xl:inline-flex" />
+          <LanguageSwitcher className="hidden md:flex" />
           <AccountButton />
           <span className="flex items-center gap-1">
             <WalletChip variant="header" />
