@@ -6,6 +6,8 @@ import { useConnection, useReadContract } from "wagmi";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { KineticLoader } from "@/components/ui/Modal";
 import { IntentModal } from "@/components/terminal/IntentModal";
+import { SolanaIntentModal, type SolanaOrderRequest } from "@/components/terminal/SolanaIntentModal";
+import { useSolanaPayer } from "@/hooks/useSolanaPayer";
 import { BatchOrderForm } from "@/components/pro/BatchOrderForm";
 import { OneClickBar, OneClickOrderStatus, useOneClick, useOrderWatch, type OneClickOrder } from "@/components/pro/OneClick";
 import { PresetKey, SubmitKey, useExecutionHotkeys } from "@/components/pro/hotkeys";
@@ -102,7 +104,15 @@ function BuyingPower({ active, onPick }: { active: PayFrom | "account"; onPick: 
             type="button"
             onClick={() => onPick(s.key)}
             aria-pressed={active === s.key}
-            title={s.key === "account" ? "Pay from your Crux account (no gas, no popup)" : s.key === "base" ? "Pay from your wallet on Base" : `Pay from your wallet on ${s.name}: escrowed there, filled on Base`}
+            title={
+              s.key === "account"
+                ? "Pay from your Crux account (no gas, no popup)"
+                : s.key === "base"
+                  ? "Pay from your wallet on Base"
+                  : s.key === "solana"
+                    ? "Pay with USDG on Solana devnet: escrowed there, filled on Base"
+                    : `Pay from your wallet on ${s.name}: escrowed there, filled on Base`
+            }
             className={`inline-flex h-6 items-center gap-1.5 rounded-[4px] border px-2 font-mono text-[10.5px] transition-colors ${
               active === s.key ? "border-chrome/60 text-chrome" : "border-line-2 text-muted hover:text-chrome"
             }`}
@@ -470,7 +480,15 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
     query: { enabled: crux.account !== null, refetchInterval: 10_000 },
   });
   // A buy can pay from any live cross-chain origin; its USDC balance is shown and compared in 6-decimal units.
-  const fromOrigin = side === "buy" && payFrom !== "base" && !viaAccount ? originByKey(payFrom) : null;
+  const fromOrigin = side === "buy" && payFrom !== "base" && payFrom !== "solana" && !viaAccount ? originByKey(payFrom) : null;
+  // Pay from Solana: USDG on devnet, escrowed by crux_escrow and filled here on Base (SolanaIntentModal). Delivered to
+  // the connected Base wallet, else the Crux account.
+  const viaSolana = side === "buy" && payFrom === "solana" && !viaAccount;
+  const solana = useSolanaPayer();
+  const solanaPayee = address ?? crux.account ?? null;
+  const [solanaRequest, setSolanaRequest] = useState<SolanaOrderRequest | null>(null);
+  /** Solana payer and Base recipient both set: the ticket then validates like any other. */
+  const solanaReady = viaSolana && solana.payer !== null && solanaPayee !== null;
   // One-click (CruxSettlerV4 sessions): Base buys signed by this browser's session key, no wallet popup.
   const oneClick = useOneClick();
   const [oneClickOrder, setOneClickOrder] = useState<OneClickOrder | null>(null);
@@ -484,7 +502,13 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
     chainId: fromOrigin ? fromOrigin.chain.id : TESTNET.id,
     query: { enabled: Boolean(address), refetchInterval: 15_000 },
   });
-  const usdcBalance = viaAccount ? crux.usdc : address && usdc.data !== undefined ? toUsdc6(usdc.data, fromOrigin?.decimals ?? 6) : null;
+  const usdcBalance = viaAccount
+    ? crux.usdc
+    : viaSolana
+      ? solana.usdg
+      : address && usdc.data !== undefined
+        ? toUsdc6(usdc.data, fromOrigin?.decimals ?? 6)
+        : null;
   const tokenBalance = viaAccount ? (accountTokens.data ?? null) : market.tokenBalance;
 
   const decimals = side === "buy" ? 6 : market.decimals;
@@ -504,7 +528,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
             price: qty > 0 ? notional / qty : 0,
             notional,
             source: TEST_USDC_SOURCE,
-            originLabel: fromOrigin ? fromOrigin.name : "Base Sepolia",
+            originLabel: viaSolana ? "Solana devnet" : fromOrigin ? fromOrigin.name : "Base Sepolia",
             asset: { address: market.token, caip19: market.caip19, decimals: market.decimals },
             slippageBps: trade.slippageBps,
             ...(fromOrigin ? { payFrom: fromOrigin.key } : {}),
@@ -534,13 +558,19 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   const label =
     blocked ??
     (overBalance
-      ? `Not enough ${side === "buy" ? "test USDC" : symbol}${viaAccount ? " in your account" : ""}`
+      ? `Not enough ${side === "buy" ? (viaSolana ? "USDG on Solana" : "test USDC") : symbol}${viaAccount ? " in your account" : ""}`
       : tooBig
         ? "Too large for this pool"
         : overCap
           ? "Over your one-click cap"
           : viaAccount
             ? `${side === "buy" ? "Buy" : "Sell"} now · Crux account`
+            : viaSolana
+              ? !solana.payer
+                ? "Connect a Solana wallet"
+                : !solanaPayee
+                  ? "Connect a Base wallet to receive"
+                  : "Pay from Solana"
             : oneClickReady
               ? "Buy now · one-click"
               : "Sign trade intent");
@@ -620,6 +650,19 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   const sign = () => {
     if (viaAccount) {
       if (!disabled && draft) void accountTrade();
+      return;
+    }
+    if (viaSolana) {
+      if (!solana.payer) return solana.connect();
+      if (!solanaPayee) return openConnect(); // somewhere on Base to deliver to
+      if (disabled || !draft || !input) return;
+      setSolanaRequest({
+        draft,
+        amount: input,
+        minAmountOut: parseUnits(minReceived(draft).toFixed(6), market.decimals),
+        tokenOut: market.caip19,
+        payee: solanaPayee,
+      });
       return;
     }
     if (!isConnected) {
@@ -752,7 +795,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
       {side === "buy" && !viaAccount && (
         <div role="radiogroup" aria-label="Pay from" className="-mt-0.5 flex items-center gap-1.5 text-[11px]">
           <span className="mr-0.5 text-dim">Pay from</span>
-          {(["base", ...LIVE_ORIGINS.map((o) => o.key)] as PayFrom[]).map((c) => (
+          {(["base", ...LIVE_ORIGINS.map((o) => o.key), "solana"] as PayFrom[]).map((c) => (
             <button
               key={c}
               type="button"
@@ -764,7 +807,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
               }}
               className={`h-6 rounded-[4px] border px-2 transition-colors ${payFrom === c ? "border-chrome/60 text-chrome" : "border-line-2 text-muted hover:text-chrome"}`}
             >
-              {c === "base" ? "Base Sepolia" : originByKey(c)!.name}
+              {c === "base" ? "Base Sepolia" : c === "solana" ? "Solana devnet" : originByKey(c)!.name}
             </button>
           ))}
         </div>
@@ -772,9 +815,11 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
       <div className="-mt-1.5 flex items-baseline justify-between text-[11px] text-dim">
         <span>
           {side === "buy"
-            ? fromOrigin
-              ? `${fromOrigin.name} test USDC · delivered on Base · Hyperlane-proven`
-              : "Base Sepolia test USDC"
+            ? viaSolana
+              ? "USDG on Solana devnet · delivered on Base · Hyperlane-proven"
+              : fromOrigin
+                ? `${fromOrigin.name} test USDC · delivered on Base · Hyperlane-proven`
+                : "Base Sepolia test USDC"
             : `Selling ${symbol}`}
         </span>
         <span className="font-mono text-muted">
@@ -793,8 +838,8 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
 
       {side === "buy" && payFrom === "base" && !viaAccount && <OneClickBar oneClick={oneClick} />}
 
-      <button type="button" disabled={(isConnected || viaAccount) && disabled} onClick={sign} className={buttonClass(isConnected || viaAccount ? side : "primary", "md", "w-full rounded-xl font-semibold max-lg:hidden")}>
-        {isConnected || viaAccount ? label : "Connect wallet to trade"} <ArrowUpRight />
+      <button type="button" disabled={(isConnected || viaAccount || solanaReady) && disabled} onClick={sign} className={buttonClass(isConnected || viaAccount ? side : "primary", "md", "w-full rounded-xl font-semibold max-lg:hidden")}>
+        {isConnected || viaAccount || viaSolana ? label : "Connect wallet to trade"} <ArrowUpRight />
         <SubmitKey />
       </button>
       <OneClickOrderStatus order={oneClickOrder} to={viaAccount ? "your Crux account" : undefined} />
@@ -823,8 +868,22 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
           <div className="min-w-0 flex-1">
             <AmountField id={`${uid}-dock`} value={amount} onChange={setAmount} unit={side === "buy" ? "USDC" : symbol} compact />
           </div>
-          <button type="button" disabled={(isConnected || viaAccount) && disabled} onClick={sign} className={buttonClass(isConnected || viaAccount ? side : "primary", "md", "shrink-0 rounded-xl px-4 font-semibold capitalize")}>
-            {isConnected || viaAccount ? (tooBig ? "Too big" : overCap ? "Over cap" : oneClickReady || viaAccount ? `${side} now` : side) : "Connect"}
+          <button type="button" disabled={(isConnected || viaAccount || solanaReady) && disabled} onClick={sign} className={buttonClass(isConnected || viaAccount ? side : "primary", "md", "shrink-0 rounded-xl px-4 font-semibold capitalize")}>
+            {viaSolana
+              ? solana.payer
+                ? solanaPayee
+                  ? "Pay"
+                  : "Connect Base"
+                : "Connect Solana"
+              : isConnected || viaAccount
+                ? tooBig
+                  ? "Too big"
+                  : overCap
+                    ? "Over cap"
+                    : oneClickReady || viaAccount
+                      ? `${side} now`
+                      : side
+                : "Connect"}
           </button>
         </div>
         {risk && signedMin !== null && (
@@ -838,6 +897,13 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
       )}
 
       <IntentModal order={order} open={order !== null} onClose={() => setOrder(null)} />
+      <SolanaIntentModal
+        request={solanaRequest}
+        onClose={() => {
+          setSolanaRequest(null);
+          setAmount("");
+        }}
+      />
     </div>
   );
 }

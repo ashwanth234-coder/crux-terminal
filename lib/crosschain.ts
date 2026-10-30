@@ -115,8 +115,8 @@ export function originByKey(key: OriginKey) {
   return LIVE_ORIGINS.find((o) => o.key === key) ?? null;
 }
 
-/** Where a buy's USDC comes from: Base Sepolia, or a cross-chain origin. */
-export type PayFrom = "base" | OriginKey;
+/** Where a buy's USDC comes from: Base Sepolia, a cross-chain EVM origin, or USDG on Solana devnet (lib/solanaEscrow). */
+export type PayFrom = "base" | OriginKey | "solana";
 
 /** refund() succeeds once block.timestamp > fillDeadline + 6 hours (REFUND_GRACE) with no proof. */
 export const CROSS_CHAIN_REFUND_GRACE_SECONDS = 6 * 3600 + 1;
