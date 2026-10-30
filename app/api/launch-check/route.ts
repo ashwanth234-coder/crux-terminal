@@ -2,6 +2,7 @@ import { connection } from "next/server";
 import { checkLaunch, conflictLine, normalizeTicker, type GuardLaunch } from "@/lib/antiVamp";
 import { artworkOf } from "@/lib/artwork";
 import { readLaunches } from "@/lib/launchFeed";
+import { MAX_IMAGE_DATA_URI } from "@/lib/tokenMeta";
 
 /**
  * POST /api/launch-check { symbol, image?, x? }: whether a proposed launch copies an existing Crux token (lib/antiVamp):
@@ -26,7 +27,8 @@ export async function POST(request: Request) {
   }
   const str = (v: unknown, max: number) => (typeof v === "string" && v.length <= max ? v.trim() : "");
   const symbol = str(body.symbol, 32);
-  const image = str(body.image, 2_048);
+  // An https URL, or an uploaded display image (a small data: URI).
+  const image = str(body.image, MAX_IMAGE_DATA_URI);
   const x = str(body.x, 512);
   if (!normalizeTicker(symbol)) return json({ error: "symbol is required" }, 400);
 

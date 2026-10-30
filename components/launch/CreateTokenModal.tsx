@@ -26,15 +26,16 @@ import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { checkLaunchNow, useLaunchGuard } from "@/hooks/useLaunchGuard";
 import type { Conflict } from "@/lib/antiVamp";
 import { launchFromAccount } from "@/lib/account";
+import { imageDataUri } from "@/lib/tokenMeta";
+import { DisplayImageField } from "./DisplayImageField";
 
 type Form = {
   name: string;
   symbol: string;
   description: string;
-  /** Optional https logo URL, stored with the metadata. */
+  /** Optional display image, stored with the metadata: an uploaded image (a small WebP data: URI) or an https URL. */
   logo: string;
   x: string;
-  farcaster: string;
   website: string;
   supply: string;
   target: string;
@@ -57,7 +58,6 @@ const INITIAL: Form = {
   description: "",
   logo: "",
   x: "",
-  farcaster: "",
   website: "",
   supply: "1,000,000,000",
   target: FACTORY || LAUNCH_FACTORY ? "10" : "50,000",
@@ -89,7 +89,7 @@ function validate(f: Form) {
   if (f.name.trim().length < 2) errors.name = "Give the token a name (2–32 characters).";
   if (!/^[A-Z0-9]{2,10}$/.test(f.symbol)) errors.symbol = "2–10 letters or numbers, e.g. CRUX.";
   if (f.website && !/^https?:\/\/\S+\.\S+/.test(f.website)) errors.website = "Use a full URL starting with https://";
-  if (f.logo.trim() && !/^https:\/\/\S+\.\S+/.test(f.logo.trim())) errors.logo = "Use an https:// image URL.";
+  if (f.logo.trim() && !imageDataUri(f.logo) && !/^https:\/\/\S+\.\S+/.test(f.logo.trim())) errors.logo = "Upload an image or use an https:// image URL.";
   const supply = Number(digits(f.supply));
   if (!supply || supply < 1_000) errors.supply = "Supply must be at least 1,000.";
   const target = Number(digits(f.target));
@@ -128,7 +128,7 @@ function metadataURI(f: Form) {
     symbol: f.symbol,
     description: f.description.trim(),
     ...(f.logo.trim() ? { image: f.logo.trim() } : {}),
-    links: { x: f.x.trim(), farcaster: f.farcaster.trim(), website: f.website.trim() },
+    links: { x: f.x.trim(), website: f.website.trim() },
   });
   return `data:application/json;base64,${btoa(unescape(encodeURIComponent(json)))}`;
 }
@@ -551,25 +551,13 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             />
           </Field>
 
-          <Field id={id("logo")} label="Logo URL" error={showErr("logo")} hint="Optional, https image">
-            <input
-              id={id("logo")}
-              className={inputCls}
-              placeholder="https://…/logo.png"
-              inputMode="url"
-              value={form.logo}
-              aria-invalid={Boolean(showErr("logo"))}
-              aria-describedby={`${id("logo")}-msg`}
-              onChange={(e) => set("logo", e.target.value)}
-            />
+          <Field id={id("logo")} label="Display image" error={showErr("logo")}>
+            <DisplayImageField id={id("logo")} value={form.logo} onChange={(v) => set("logo", v)} invalid={Boolean(showErr("logo"))} inputCls={inputCls} />
           </Field>
 
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field id={id("x")} label="X">
               <input id={id("x")} className={inputCls} placeholder="@handle" value={form.x} onChange={(e) => set("x", e.target.value)} />
-            </Field>
-            <Field id={id("fc")} label="Farcaster">
-              <input id={id("fc")} className={inputCls} placeholder="@handle" value={form.farcaster} onChange={(e) => set("farcaster", e.target.value)} />
             </Field>
             <Field id={id("web")} label="Website" error={showErr("website")}>
               <input

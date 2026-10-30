@@ -5,7 +5,7 @@ export const tokenMetaAbi = parseAbi(["function metadataURI() view returns (stri
 
 export type TokenMeta = {
   description: string | null;
-  /** https URL of the logo the creator gave at launch, if any. */
+  /** The display image the creator gave at launch, if any: an https URL or an uploaded image (a small data: URI). */
   image: string | null;
   links: { x: string | null; farcaster: string | null; website: string | null };
 };
@@ -21,6 +21,13 @@ function https(url: unknown): string | null {
   } catch {
     return null;
   }
+}
+
+/** An uploaded display image: a base64 PNG, JPEG or WebP data URI, at most 32 KB (never SVG, so never script). */
+export const MAX_IMAGE_DATA_URI = 32_768;
+export function imageDataUri(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > MAX_IMAGE_DATA_URI) return null;
+  return /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(value) ? value : null;
 }
 
 /** "@crux", "crux" or a full URL → a profile link on `host`. */
@@ -43,7 +50,7 @@ export function parseTokenMeta(uri: string | undefined): TokenMeta {
     const description = typeof json?.description === "string" && json.description.trim() ? json.description.trim().slice(0, 500) : null;
     return {
       description,
-      image: https(json?.image),
+      image: https(json?.image) ?? imageDataUri(json?.image),
       links: { x: handle(links.x, "x.com"), farcaster: handle(links.farcaster, "farcaster.xyz"), website: https(links.website) },
     };
   } catch {
