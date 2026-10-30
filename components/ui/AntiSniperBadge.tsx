@@ -1,4 +1,7 @@
+"use client";
+
 import type { ReactNode } from "react";
+import { useT } from "@/providers/I18nProvider";
 
 /** "60s", "15m", "24h": a batch window in the badge's few characters. */
 export function shortWindow(seconds: number) {
@@ -14,6 +17,7 @@ export function shortWindow(seconds: number) {
  * setting is still loading (seconds === null).
  */
 export function AntiSniperBadge({ seconds, className = "" }: { seconds: number | null; className?: string }) {
+  const t = useT();
   if (seconds === null) return null;
   const on = seconds > 0;
   const icon: ReactNode = on ? (
@@ -39,7 +43,7 @@ export function AntiSniperBadge({ seconds, className = "" }: { seconds: number |
       } ${className}`}
     >
       {icon}
-      {on ? `Anti-sniper ${shortWindow(seconds)}` : "Unprotected"}
+      {on ? t("badge.antiSniper", { window: shortWindow(seconds) }) : t("badge.unprotected")}
     </span>
   );
 }

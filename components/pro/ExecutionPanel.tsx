@@ -8,6 +8,7 @@ import { KineticLoader } from "@/components/ui/Modal";
 import { IntentModal } from "@/components/terminal/IntentModal";
 import { SolanaIntentModal, type SolanaOrderRequest } from "@/components/terminal/SolanaIntentModal";
 import { useSolanaPayer } from "@/hooks/useSolanaPayer";
+import { useT } from "@/providers/I18nProvider";
 import { BatchOrderForm } from "@/components/pro/BatchOrderForm";
 import { OneClickBar, OneClickOrderStatus, useOneClick, useOrderWatch, type OneClickOrder } from "@/components/pro/OneClick";
 import { PresetKey, SubmitKey, useExecutionHotkeys } from "@/components/pro/hotkeys";
@@ -89,12 +90,13 @@ function AmountField({ id, value, onChange, unit, compact }: { id: string; value
  * cross-chain origin. Tapping a source pays from it.
  */
 function BuyingPower({ active, onPick }: { active: PayFrom | "account"; onPick: (k: PayFrom | "account") => void }) {
+  const t = useT();
   const { sources, total } = useBuyingPower();
   if (sources.length === 0) return null;
   return (
     <div className="-mt-0.5 rounded-lg border border-line px-3 py-2">
       <p className="flex items-baseline justify-between text-[11px]">
-        <span className="text-dim">Buying power, all chains</span>
+        <span className="text-dim">{t("ticket.buyingPower")}</span>
         <span className="font-mono text-[13px] text-chrome">{total !== null ? `$${fmtUsdc(total)}` : "…"}</span>
       </p>
       <div className="mt-1.5 flex flex-wrap gap-1">
@@ -379,6 +381,7 @@ function Status({ busy, error, done }: { busy: Busy; error: string | null; done:
  * Uniswap pool.
  */
 function GraduatedDesk({ auction, symbol }: { auction: AuctionV2; symbol: string }) {
+  const t = useT();
   const market = useLaunchMarket(auction.token, auction.pair);
   const [mode, setMode] = useState<"batch" | "intent">("batch");
   const now = useNow();
@@ -396,7 +399,7 @@ function GraduatedDesk({ auction, symbol }: { auction: AuctionV2; symbol: string
   if (!market.protected) {
     return (
       <section aria-label="Trade via intent" className="p-4">
-        <h2 className="mb-3 text-[14px] font-medium text-chrome">Trade via intent</h2>
+        <h2 className="mb-3 text-[14px] font-medium text-chrome">{t("ticket.title")}</h2>
         <TradeForm auction={auction} symbol={symbol} />
       </section>
     );
@@ -453,6 +456,7 @@ function ProtectionNote({ market }: { market: LaunchMarket }) {
 // ------------------------------------------------------------------ graduated: trade via intent
 
 function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) {
+  const t = useT();
   const uid = useId();
   const { address, isConnected } = useConnection();
   const { openConnect } = useConnectModal();
@@ -560,26 +564,26 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
     (overBalance
       ? `Not enough ${side === "buy" ? (viaSolana ? "USDG on Solana" : "test USDC") : symbol}${viaAccount ? " in your account" : ""}`
       : tooBig
-        ? "Too large for this pool"
+        ? t("ticket.tooLarge")
         : overCap
           ? "Over your one-click cap"
           : viaAccount
             ? `${side === "buy" ? "Buy" : "Sell"} now · Crux account`
             : viaSolana
               ? !solana.payer
-                ? "Connect a Solana wallet"
+                ? t("ticket.connectSolana")
                 : !solanaPayee
                   ? "Connect a Base wallet to receive"
-                  : "Pay from Solana"
+                  : t("ticket.payFromSolana")
             : oneClickReady
               ? "Buy now · one-click"
-              : "Sign trade intent");
+              : t("ticket.sign"));
 
   const rows: RiskRow[] =
     risk && draft && signedMin !== null
       ? [
           {
-            label: "You receive",
+            label: t("ticket.youReceive"),
             value: side === "buy" ? `${fmtTokens(risk.out)} ${symbol}` : usd6(risk.out),
             hint: "The solver's quote from the locked pool, alone in its batch.",
           },
@@ -590,12 +594,12 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
             hint: `Versus the pool's mid price: ${risk.poolImpactPct.toFixed(2)}% pool impact (incl. Uniswap's 0.3% fee) plus the 0.3% solver spread.`,
           },
           {
-            label: "Min. received",
+            label: t("ticket.minReceived"),
             value: side === "buy" ? `${signedMin.toLocaleString("en-US", { maximumFractionDigits: 2 })} ${symbol}` : `$${signedMin.toFixed(6)}`,
             hint: `Guaranteed on-chain: signed into your intent, ${(trade.slippageBps / 100).toFixed(trade.slippageBps % 100 === 0 ? 0 : 1)}% under the quote (your slippage setting). It can't fill below this.`,
           },
           {
-            label: "Liquidity impact",
+            label: t("ticket.liquidityImpact"),
             value: pct(risk.poolImpactPct),
             tone: risk.poolImpactPct > 5 ? "caution" : "plain",
             hint: `How far this trade moves the locked pool's price. The solver skips anything over ${SOLVER_MAX_IMPACT_PCT}%.`,
@@ -706,7 +710,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
                 side === s ? (s === "buy" ? "bg-up/15 text-up ring-1 ring-inset ring-up/60" : "bg-down/15 text-down ring-1 ring-inset ring-down/60") : "text-muted hover:text-chrome"
               }`}
             >
-              {s}
+              {s === "buy" ? t("ticket.buy") : t("ticket.sell")}
             </button>
           ))}
         </div>
@@ -717,15 +721,15 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
             onChange={(e) => setOrderType(e.target.value as OrderType)}
             className="h-10 appearance-none rounded-lg border border-line bg-void/60 pl-3 pr-7 text-[12.5px] text-chrome outline-none focus:border-line-2"
           >
-            <option value="market">Market</option>
+            <option value="market">{t("ticket.market")}</option>
             {side === "buy" ? (
-              <option value="dip">Buy dip</option>
+              <option value="dip">{t("ticket.buyDip")}</option>
             ) : (
               <>
-                <option value="stopLoss">Stop loss</option>
-                <option value="takeProfit">Take profit</option>
-                <option value="trailing">Trailing stop</option>
-                <option value="bracket">TP + SL</option>
+                <option value="stopLoss">{t("ticket.stopLoss")}</option>
+                <option value="takeProfit">{t("ticket.takeProfit")}</option>
+                <option value="trailing">{t("ticket.trailing")}</option>
+                <option value="bracket">{t("ticket.bracket")}</option>
               </>
             )}
           </select>
@@ -794,7 +798,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
       )}
       {side === "buy" && !viaAccount && (
         <div role="radiogroup" aria-label="Pay from" className="-mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px]">
-          <span className="mr-0.5 text-dim">Pay from</span>
+          <span className="mr-0.5 text-dim">{t("ticket.payFrom")}</span>
           {(["base", ...LIVE_ORIGINS.map((o) => o.key), "solana"] as PayFrom[]).map((c) => (
             <button
               key={c}
@@ -829,17 +833,17 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
 
       <Presets items={presets} onPick={pick} />
       <div className="-mt-1 flex items-center justify-between gap-2">
-        <span className="text-[11px] text-dim">{side === "buy" ? "Quick buy · keys 1–4" : "Share of your bag · keys 1–4"}</span>
+        <span className="text-[11px] text-dim">{side === "buy" ? t("ticket.quickBuy") : t("ticket.shareOfBag")}</span>
         <TradeSettingsButton />
       </div>
 
       {rows.length > 0 && <RiskPreview rows={rows} note={tooBig ? `The solver skips orders that move a pool more than ${SOLVER_MAX_IMPACT_PCT}% in one batch. Trade smaller.` : undefined} />}
-      <ProtectionRow>Your signed minimum is enforced on-chain: the fill can&apos;t come in below it.</ProtectionRow>
+      <ProtectionRow>{t("ticket.minEnforced")}</ProtectionRow>
 
       {side === "buy" && payFrom === "base" && !viaAccount && <OneClickBar oneClick={oneClick} />}
 
       <button type="button" disabled={(isConnected || viaAccount || solanaReady) && disabled} onClick={sign} className={buttonClass(isConnected || viaAccount ? side : "primary", "md", "w-full rounded-xl font-semibold max-lg:hidden")}>
-        {isConnected || viaAccount || viaSolana ? label : "Connect wallet to trade"} <ArrowUpRight />
+        {isConnected || viaAccount || viaSolana ? label : t("ticket.connect")} <ArrowUpRight />
         <SubmitKey />
       </button>
       <OneClickOrderStatus order={oneClickOrder} to={viaAccount ? "your Crux account" : undefined} />

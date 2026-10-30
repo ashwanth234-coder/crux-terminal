@@ -1,10 +1,14 @@
+"use client";
+
 import type { ReactNode } from "react";
+import { useT } from "@/providers/I18nProvider";
 
 /**
  * The creator-vesting trust badge: a vested launch earns it, an instant unlock carries a warning.
  * Renders nothing while the setting is still loading (days === null).
  */
 export function VestingBadge({ days, className = "" }: { days: number | null; className?: string }) {
+  const t = useT();
   if (days === null) return null;
   const vested = days > 0;
   const icon: ReactNode = vested ? (
@@ -30,7 +34,7 @@ export function VestingBadge({ days, className = "" }: { days: number | null; cl
       } ${className}`}
     >
       {icon}
-      {vested ? `${days}D vested` : "Instant unlock"}
+      {vested ? t("badge.vested", { days }) : t("badge.instantUnlock")}
     </span>
   );
 }

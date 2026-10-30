@@ -23,6 +23,7 @@ import { FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FA
 import { fmtTokens, fmtUsdc, formatRemaining } from "@/lib/launch";
 import { simulateThenWrite } from "@/lib/preflight";
 import { useConnectModal } from "@/providers/Web3Provider";
+import { useT } from "@/providers/I18nProvider";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
@@ -42,6 +43,7 @@ type Busy = null | "bind" | "change" | "cancel" | "finalize" | "withdraw" | "swe
 
 /** The logged-in trader's Crux account: deposit address, protection, withdrawal address and withdrawals. */
 export function AccountPanel() {
+  const t = useT();
   const a = useCruxAccount();
   const config = useConfig();
   const { address: wallet, chainId } = useConnection();
@@ -180,12 +182,12 @@ export function AccountPanel() {
         {bound ? (
           <span className="inline-flex items-center gap-1.5 rounded-[3px] border border-up/40 px-2 py-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-up">
             <span className="h-1.5 w-1.5 rounded-full bg-up" aria-hidden="true" />
-            Protected · withdrawals only to {short(bound)}
+            {t("vault.protected", { address: short(bound) })}
           </span>
         ) : (
           <span className="inline-flex items-center gap-1.5 rounded-[3px] border border-down/60 bg-down/[0.06] px-2 py-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-down">
             <span className="h-1.5 w-1.5 rounded-full bg-down" aria-hidden="true" />
-            Not protected yet: bind a withdrawal address
+            {t("vault.notProtected")}
           </span>
         )}
         {pending && (
@@ -321,8 +323,7 @@ export function AccountPanel() {
           {!bound ? (
             <>
               <p className="text-[12.5px] leading-relaxed text-muted">
-                Withdrawals can only ever go here: bind a wallet you control. The first binding is instant; changing it later takes 48
-                hours, and this wallet can cancel the change.
+                {t("vault.bindRule")}
               </p>
               <AddressField value={to} onChange={setTo} invalid={invalidTarget} wallet={wallet} onConnect={openConnect} />
               <button

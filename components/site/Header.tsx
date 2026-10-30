@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { WalletChip } from "@/components/terminal/WalletChip";
 import { AccountButton } from "@/components/account/AccountButton";
+import { LanguageSwitcher } from "@/components/site/LanguageSwitcher";
 import { StatusTag } from "@/components/ui/StatusTag";
 import { Logo } from "./Logo";
 import { SiteNav } from "./SiteNav";
@@ -47,6 +48,7 @@ export function Header() {
         </nav>
 
         <div className="flex items-center justify-end gap-2">
+          <LanguageSwitcher className="hidden md:flex" />
           <AccountButton />
           <WalletChip variant="header" />
           <button
@@ -72,6 +74,7 @@ export function Header() {
         className="h-[calc(100svh-64px)] overflow-y-auto border-t border-line px-4 pb-8 sm:px-8 lg:hidden"
       >
         <SiteNav variant="rows" onNavigate={() => setOpen(false)} />
+        <LanguageSwitcher className="mt-5 flex" />
         <div className="mt-6 flex items-center gap-3 text-[12px] text-muted">
           <StatusTag status="testnet" />
           Base Sepolia. Nothing here is on mainnet.
