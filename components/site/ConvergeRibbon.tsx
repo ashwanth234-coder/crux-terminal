@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { LANDING_CHAINS, chainGlyph, type ChainKey } from "./ChainMarks";
 
 /**
  * The close's centrepiece: nine liquid-chrome strands in a glass capsule, loose and rippling on the left, converging
- * into one orange core on the right, beside Enter Crux: many routes, one execution. The strands bend towards the
+ * into one orange core on the right, beside Enter Crux: many routes, one execution. Four strands start at a chain's mark
+ * (Ethereum, BNB Chain, Solana, and Robinhood Chain dimmed as Soon) and the core is Base, where everything settles. The strands bend towards the
  * pointer like liquid metal, and the chrome bands shimmer as they move; entering or tapping the capsule sends an orange
  * pulse down every strand into the core, which flares. With no pointer they drift slowly. prefers-reduced-motion
  * draws them once, still. The capsule is black glass in both themes. SVG paths rebuilt per frame (9 x 97 points), only while on screen.
@@ -15,6 +17,14 @@ const WIDTHS = [1.1, 1.5, 2, 2.6, 3.6, 2.6, 2, 1.5, 1.1];
 const POINTS = 96;
 const PULSE_MS = 1100;
 const SPARK = 0.14; // dash length, in path lengths
+/** Which strands leave from a chain's mark; the rest are unlabelled routes. */
+const ROUTES: [strand: number, chain: ChainKey][] = [
+  [1, "ethereum"],
+  [3, "bnb"],
+  [5, "solana"],
+  [7, "robinhood"],
+];
+const MARK_PX = 16;
 
 export function ConvergeRibbon({ className = "" }: { className?: string }) {
   const box = useRef<HTMLDivElement>(null);
@@ -37,6 +47,8 @@ export function ConvergeRibbon({ className = "" }: { className?: string }) {
     const halo = s.querySelector<SVGCircleElement>("[data-halo]")!;
     const dot = s.querySelector<SVGCircleElement>("[data-dot]")!;
     const tail = s.querySelector<SVGLineElement>("[data-tail]")!;
+    const routes = [...s.querySelectorAll<SVGGElement>("[data-route]")];
+    const baseLabel = s.querySelector<SVGGElement>("[data-base]")!;
 
     let w = 0;
     let h = 0;
@@ -50,7 +62,7 @@ export function ConvergeRibbon({ className = "" }: { className?: string }) {
 
     const strand = (i: number, t: number) => {
       const mid = h / 2;
-      const startX = h * 0.4;
+      const startX = h * 0.42;
       const endX = w - h / 2;
       const sigma = Math.max(60, w * 0.09);
       let d = "";
@@ -64,7 +76,8 @@ export function ConvergeRibbon({ className = "" }: { className?: string }) {
           Math.sin(u * 22 - t * 0.0017 + i * 2.3) * h * 0.025 * free;
         const lift = (py - mid) * 0.8 * pull * Math.exp(-((x - px) ** 2) / (2 * sigma * sigma)) * Math.sqrt(free);
         const room = h / 2 - 8; // soft limit: strands ease towards the glass edge instead of flattening on it
-        const y = mid + room * Math.tanh((spread + wave + lift) / room);
+        const pin = Math.min(1, u / 0.22) ** 2; // the start stays on its chain's mark; the motion grows from there
+        const y = mid + room * Math.tanh((spread + pin * (wave + lift)) / room);
         d += `${k ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`;
       }
       return d;
@@ -87,6 +100,9 @@ export function ConvergeRibbon({ className = "" }: { className?: string }) {
         sp.setAttribute("stroke-dashoffset", offset);
         sp.style.opacity = live ? sp.dataset.spark! : "0";
       }
+      // Each chain's mark lights in its own colour as the pulse leaves it.
+      const lit = p >= 0 && p < 0.35;
+      for (const g of routes) g.style.color = lit ? g.dataset.color! : "#ffffff";
       if (p > 0.92 && p < 1.05) kick = 1;
       kick *= 0.93;
       halo.setAttribute("r", (h * (0.5 + kick * 0.3)).toFixed(1));
@@ -105,8 +121,8 @@ export function ConvergeRibbon({ className = "" }: { className?: string }) {
       h = r.height;
       s.setAttribute("viewBox", `0 0 ${w} ${h}`);
       chrome.setAttribute("y2", String(h));
-      fade.setAttribute("x1", String(h * 0.4));
-      fade.setAttribute("x2", String(h * 0.4 + w * 0.16));
+      fade.setAttribute("x1", String(h * 0.3));
+      fade.setAttribute("x2", String(h * 0.42 + w * 0.05));
       heat.setAttribute("x1", String(w * 0.4));
       heat.setAttribute("x2", String(w - h / 2));
       for (const c of [halo, dot, ...glints]) {
@@ -117,6 +133,13 @@ export function ConvergeRibbon({ className = "" }: { className?: string }) {
       tail.setAttribute("x2", String(w));
       tail.setAttribute("y1", String(h / 2));
       tail.setAttribute("y2", String(h / 2));
+      const room = h / 2 - 8;
+      routes.forEach((g, n) => {
+        const y = h / 2 + room * Math.tanh(((ROUTES[n][0] - (STRANDS - 1) / 2) * h * 0.1) / room);
+        const scale = MARK_PX / 24;
+        g.setAttribute("transform", `translate(${(h * 0.24 - MARK_PX / 2).toFixed(1)} ${(y - MARK_PX / 2).toFixed(1)}) scale(${scale})`);
+      });
+      baseLabel.setAttribute("transform", `translate(${(w - h * 0.5).toFixed(1)} ${(h - 16).toFixed(1)})`);
       if (!px) px = w * 0.35;
       if (!py) py = h / 2;
       draw(still ? 0 : performance.now());
@@ -226,7 +249,7 @@ export function ConvergeRibbon({ className = "" }: { className?: string }) {
 
         <g mask="url(#cr-mask)">
         {Array.from({ length: STRANDS }, (_, i) => (
-          <path key={`b${i}`} data-body fill="none" stroke="url(#cr-chrome)" strokeWidth={WIDTHS[i]} strokeLinecap="round" strokeLinejoin="round" />
+          <path key={`b${i}`} data-body fill="none" stroke="url(#cr-chrome)" strokeWidth={WIDTHS[i]} opacity={i === 7 ? 0.4 : 1} strokeLinecap="round" strokeLinejoin="round" />
         ))}
         {Array.from({ length: STRANDS }, (_, i) => (
           <path key={`h${i}`} data-heat fill="none" stroke="url(#cr-heat)" strokeWidth={WIDTHS[i] + 0.6} strokeLinecap="round" style={{ mixBlendMode: "screen" }} />
@@ -242,11 +265,31 @@ export function ConvergeRibbon({ className = "" }: { className?: string }) {
         ])}
         </g>
 
+        {/* The chains the routes leave from; Robinhood Chain is dimmed until it is live */}
+        {ROUTES.map(([, key]) => {
+          const c = LANDING_CHAINS.find((x) => x.key === key)!;
+          return (
+            <g key={key} data-route data-color={c.color} opacity={c.live ? 0.85 : 0.35} style={{ color: "#ffffff", transition: "color 200ms" }}>
+              <title>{`${c.name}: ${c.network}`}</title>
+              {chainGlyph(key)}
+            </g>
+          );
+        })}
+
         <circle data-halo fill="url(#cr-core)" />
         {/* A four-point glint at the core, echoing the CRUX star */}
         <ellipse data-glint ry="1.4" fill="url(#cr-glint)" />
         <ellipse data-glint rx="1.2" fill="url(#cr-glint)" />
         <circle data-dot fill="#ffffff" />
+        {/* Where it all lands */}
+        <g data-base style={{ ["--notch" as string]: "#050505" }}>
+          <g transform="translate(-34 -9) scale(0.5)" style={{ color: "#ffffff" }}>
+            {chainGlyph("base")}
+          </g>
+          <text x="-20" y="0" fill="#ffffff" fillOpacity="0.75" fontSize="9.5" letterSpacing="1.6" className="font-mono uppercase">
+            Base
+          </text>
+        </g>
       </svg>
     </div>
   );

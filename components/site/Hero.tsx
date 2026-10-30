@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CruxEmblem } from "./CruxEmblem";
+import { ChainStrip } from "./ChainStrip";
 import { EnterCrux } from "./EnterCrux";
 
 export function Hero() {
@@ -13,13 +14,14 @@ export function Hero() {
             <br />
             without borders.
           </h1>
-          <p className="mt-6 max-w-md text-[16px] leading-relaxed text-muted md:mt-8 md:text-[18px]">Global markets. One execution layer.</p>
+          <p className="mt-6 max-w-md text-[16px] leading-relaxed text-muted md:mt-8 md:text-[18px]">Launch and trade from the chain you&rsquo;re on. Everything settles on Base.</p>
           <div className="mt-9 flex flex-wrap items-center gap-x-8 gap-y-4 md:mt-12">
             <EnterCrux />
             <Link href="/launches" className="text-[14px] font-medium text-muted transition-colors hover:text-chrome">
               View launches
             </Link>
           </div>
+          <ChainStrip className="mt-12 md:mt-16" />
         </div>
 
         <div className="relative mx-auto w-full min-w-0 max-w-[320px] md:col-span-5 md:max-w-[480px]">
