@@ -7,7 +7,7 @@ import { useI18n } from "@/providers/I18nProvider";
 export function LanguageSwitcher({ className = "" }: { className?: string }) {
   const { lang, setLang, t } = useI18n();
   return (
-    <div role="radiogroup" aria-label={t("lang.label")} className={`items-center gap-0.5 font-mono text-[10.5px] ${className}`}>
+    <div role="radiogroup" aria-label={t("lang.label")} className={`shrink-0 items-center gap-0.5 whitespace-nowrap font-mono text-[10.5px] ${className}`}>
       {LANGS.map((l, i) => (
         <span key={l.code} className="inline-flex items-center">
           {i > 0 && (
@@ -21,7 +21,7 @@ export function LanguageSwitcher({ className = "" }: { className?: string }) {
             aria-checked={lang === l.code}
             lang={l.code}
             onClick={() => setLang(l.code)}
-            className={`rounded-[3px] px-1 py-0.5 transition-colors ${lang === l.code ? "text-chrome" : "text-muted hover:text-chrome"}`}
+            className={`whitespace-nowrap rounded-[3px] px-1 py-0.5 transition-colors ${lang === l.code ? "text-signal" : "text-muted hover:text-chrome"}`}
           >
             {l.label}
           </button>

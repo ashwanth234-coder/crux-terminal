@@ -96,7 +96,7 @@ export function Leaderboard() {
               </thead>
               <tbody>
                 {q.data.coins.map((c, i) => (
-                  <tr key={c.token} className="border-b border-line/70 hover:bg-white/[0.02]">
+                  <tr key={c.token} className="border-b border-line/70 hover:bg-tint/[0.02]">
                     <td className={`${td} font-mono text-dim`}>{i + 1}</td>
                     <td className={td}>
                       <Link href={c.href} className="font-medium text-chrome hover:underline">
@@ -132,7 +132,7 @@ export function Leaderboard() {
             </thead>
             <tbody>
               {q.data.traders.map((t, i) => (
-                <tr key={t.address} className="border-b border-line/70 hover:bg-white/[0.02]">
+                <tr key={t.address} className="border-b border-line/70 hover:bg-tint/[0.02]">
                   <td className={`${td} font-mono text-dim`}>{i + 1}</td>
                   <td className={td}>
                     <a href={`${TESTNET_EXPLORER}/address/${t.address}`} target="_blank" rel="noopener noreferrer" className="font-mono text-chrome hover:underline">

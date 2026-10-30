@@ -26,7 +26,7 @@ export function TableView({ candles, k, fmt }: { candles: Candle[]; k: number; f
           {rows.map((c) => {
             const pct = c.open > 0 ? (c.close / c.open - 1) * 100 : 0;
             return (
-              <tr key={c.time} className="hover:bg-white/[0.02]">
+              <tr key={c.time} className="hover:bg-tint/[0.02]">
                 <td className={`${td} text-muted`}>{stamp(c.time)}</td>
                 <td className={`${td} text-chrome/85`}>{fmt(c.open * k)}</td>
                 <td className={`${td} text-chrome/85`}>{fmt(c.high * k)}</td>

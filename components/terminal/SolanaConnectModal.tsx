@@ -60,7 +60,7 @@ export function SolanaConnectModal({ open, onClose }: { open: boolean; onClose: 
                     disabled={connecting}
                     // Selecting is enough: the provider's autoConnect connects the chosen wallet.
                     onClick={() => select(w.adapter.name)}
-                    className="flex w-full items-center gap-3 rounded-xl border border-line bg-void/50 px-3.5 py-3 text-left transition-colors hover:border-signal/50 hover:bg-white/[0.03] disabled:opacity-60"
+                    className="flex w-full items-center gap-3 rounded-xl border border-line bg-void/50 px-3.5 py-3 text-left transition-colors hover:border-signal/50 hover:bg-tint/[0.03] disabled:opacity-60"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element -- wallet icons are data URIs from the wallet */}
                     <img src={w.adapter.icon} alt="" className="h-7 w-7 rounded-lg" />

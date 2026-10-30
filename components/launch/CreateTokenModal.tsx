@@ -889,13 +889,13 @@ function VampBanner({ line, conflicts, onLink }: { line: string; conflicts: Conf
   const originals = [...new Map(conflicts.map((c) => [c.token, c])).values()];
   return (
     <div role="alert" className="rounded-xl border border-down bg-down/15 px-4 py-3">
-      <p className="text-[13px] font-semibold text-white">{line}</p>
+      <p className="text-[13px] font-semibold text-chrome">{line}</p>
       <p className="mt-1.5 text-[12px] leading-relaxed text-chrome/85">
         Crux blocks launches that copy an existing token. Already on Crux:{" "}
         {originals.map((c, i) => (
           <span key={c.token}>
             {i > 0 && ", "}
-            <a href={c.href} onClick={onLink} className="font-medium text-white underline decoration-white/50 underline-offset-2 hover:decoration-white">
+            <a href={c.href} onClick={onLink} className="font-medium text-chrome underline decoration-chrome/50 underline-offset-2 hover:decoration-chrome">
               ${c.symbol}
             </a>
           </span>

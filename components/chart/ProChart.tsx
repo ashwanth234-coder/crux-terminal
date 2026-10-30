@@ -53,6 +53,14 @@ const MARK_STYLE: Record<MarkWho, { color: string; buy: string; sell: string }> 
 const compactUsd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 2 });
 
 const css = (name: string, fallback: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+/** The chart's colours from the site's tokens, so it follows the light / dark switch. */
+const chartTheme = () => ({
+  bg: css("--color-void", "#000000"),
+  line: css("--color-line", "#1f1f1f"),
+  text: css("--color-muted", "#a3a3a3"),
+  chrome: css("--color-chrome", "#ffffff"),
+  dim: css("--color-dim", "#7a7a7a"),
+});
 
 /** "$140.6K", "0.000141", "1.2m" → a number (K / M / B suffixes, $ and commas ignored), or null. */
 function parseAmount(s: string): number | null {
@@ -307,6 +315,14 @@ export function ProChart({
 
   // -------------------------------------------------------------- engine
 
+  // The site's theme switch (ThemeToggle) recolours the chart in place.
+  useEffect(() => {
+    if (!engine) return;
+    const recolour = () => engine.setTheme(chartTheme());
+    window.addEventListener("crux-theme", recolour);
+    return () => window.removeEventListener("crux-theme", recolour);
+  }, [engine]);
+
   useEffect(() => {
     let disposed = false;
     let created: ChartEngine | null = null;
@@ -316,7 +332,7 @@ export function ProChart({
       created = new ChartEngine(
         lc,
         host.current,
-        { bg: css("--color-void", "#0a0b0d"), line: css("--color-line", "#292b2f"), text: css("--color-muted", "#8f939b"), chrome: css("--color-chrome", "#f3f3f0"), dim: css("--color-dim", "#5d6168") },
+        chartTheme(),
         loadSettings(),
       );
       created.onCrosshair((p) => {
@@ -1071,7 +1087,7 @@ export function ProChart({
                     role="radio"
                     aria-checked={replay.speed === sp}
                     onClick={() => setReplay({ ...replay, speed: sp })}
-                    className={`rounded-[3px] px-1.5 py-0.5 font-mono ${replay.speed === sp ? "bg-white/[0.08] text-chrome" : "text-dim hover:text-chrome"}`}
+                    className={`rounded-[3px] px-1.5 py-0.5 font-mono ${replay.speed === sp ? "bg-tint/[0.08] text-chrome" : "text-dim hover:text-chrome"}`}
                   >
                     {sp}×
                   </button>

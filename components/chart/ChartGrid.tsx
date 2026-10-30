@@ -93,7 +93,7 @@ export function ChartGrid(props: Omit<ComponentProps<typeof ProChart>, "slot" | 
                 setLayout(l);
                 close();
               }}
-              className={`flex w-full items-center gap-2 rounded-[3px] px-2 py-1.5 text-left text-[12px] hover:bg-white/[0.05] ${layout === l ? "text-signal" : "text-chrome/85"}`}
+              className={`flex w-full items-center gap-2 rounded-[3px] px-2 py-1.5 text-left text-[12px] hover:bg-tint/[0.05] ${layout === l ? "text-signal" : "text-chrome/85"}`}
             >
               {icon(l)} {LABEL[l]}
             </button>
@@ -114,7 +114,7 @@ export function ChartGrid(props: Omit<ComponentProps<typeof ProChart>, "slot" | 
                   role="menuitemcheckbox"
                   aria-checked={opts[k]}
                   onClick={() => toggleSync(k)}
-                  className="flex w-full items-center justify-between rounded-[3px] px-2 py-1.5 text-left text-[12px] text-chrome/85 hover:bg-white/[0.05]"
+                  className="flex w-full items-center justify-between rounded-[3px] px-2 py-1.5 text-left text-[12px] text-chrome/85 hover:bg-tint/[0.05]"
                 >
                   {label}
                   <span className={`font-mono text-[10.5px] ${opts[k] ? "text-signal" : "text-dim"}`}>{opts[k] ? "on" : "off"}</span>

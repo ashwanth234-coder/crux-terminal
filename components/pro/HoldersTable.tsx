@@ -70,7 +70,7 @@ export function HoldersTable({
               const upct = h.entry !== null && price !== null && !system ? (price / h.entry - 1) * 100 : null;
               const rank = all.indexOf(h) + 1;
               return (
-                <tr key={h.address} className="hover:bg-white/[0.02]">
+                <tr key={h.address} className="hover:bg-tint/[0.02]">
                   <td className={`${td} font-mono text-dim`}>{rank}</td>
                   <td className={td}>
                     <span className="inline-flex items-center gap-2">

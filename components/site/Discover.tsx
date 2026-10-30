@@ -39,7 +39,7 @@ function Row({ launch, now }: { launch: LaunchSummary; now: number | null }) {
   const a = launch.auction;
   const ticker = launch.symbol ? `$${launch.symbol}` : `Auction #${launch.id}`;
   return (
-    <tr className="group relative border-b border-line transition-colors duration-200 hover:bg-white/[0.02]">
+    <tr className="group relative border-b border-line transition-colors duration-200 hover:bg-tint/[0.02]">
       <td className="py-4 pl-1 pr-4">
         <Link href={launch.href} className="block after:absolute after:inset-0 after:content-['']">
           <span className="block text-[15px] font-medium text-chrome">{ticker}</span>

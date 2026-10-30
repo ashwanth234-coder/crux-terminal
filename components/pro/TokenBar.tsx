@@ -297,7 +297,9 @@ export function TokenBar({
                     label={t("stat.feesLocked")}
                     hint="The 0.3% Uniswap fee on every swap stays in the pool. Its LP is burned, so these fees can never be withdrawn: they deepen the pool for good"
                   >
-                    {feesLocked === null ? "…" : feesLocked > 0 && feesLocked < 0.01 ? `$${feesLocked.toPrecision(2)}` : usdSmall(feesLocked)}
+                    <span className="text-signal">
+                      {feesLocked === null ? "…" : feesLocked > 0 && feesLocked < 0.01 ? `$${feesLocked.toPrecision(2)}` : usdSmall(feesLocked)}
+                    </span>
                   </Stat>
                 )}
               </>

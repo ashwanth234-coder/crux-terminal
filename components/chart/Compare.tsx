@@ -84,7 +84,7 @@ export function CompareButton({ current, items, onChange }: { current: Address; 
                           ],
                     )
                   }
-                  className="flex w-full items-center justify-between gap-2 rounded-[3px] px-2 py-1.5 text-left text-[12px] text-chrome/85 hover:bg-white/[0.05] disabled:opacity-40"
+                  className="flex w-full items-center justify-between gap-2 rounded-[3px] px-2 py-1.5 text-left text-[12px] text-chrome/85 hover:bg-tint/[0.05] disabled:opacity-40"
                 >
                   <span>
                     {l.symbol ? `$${l.symbol}` : `#${l.id}`} <span className="text-dim">{l.name}</span>

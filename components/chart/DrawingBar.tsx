@@ -30,7 +30,7 @@ export function DrawingBar({
   onDelete: () => void;
 }) {
   const current = drawing.color ?? TOOL_COLOR[drawing.tool];
-  const btn = "grid h-7 min-w-7 place-items-center rounded-[3px] px-1.5 text-[11px] text-muted transition-colors hover:bg-white/[0.06] hover:text-chrome";
+  const btn = "grid h-7 min-w-7 place-items-center rounded-[3px] px-1.5 text-[11px] text-muted transition-colors hover:bg-tint/[0.06] hover:text-chrome";
   return (
     <div
       role="toolbar"
@@ -51,7 +51,7 @@ export function DrawingBar({
           aria-label={`Colour ${c}`}
           aria-pressed={current === c}
           onClick={() => onColor(c)}
-          className={`grid h-7 w-5 place-items-center rounded-[3px] ${current === c ? "bg-white/[0.08]" : "hover:bg-white/[0.05]"}`}
+          className={`grid h-7 w-5 place-items-center rounded-[3px] ${current === c ? "bg-tint/[0.08]" : "hover:bg-tint/[0.05]"}`}
         >
           <span className="h-3 w-3 rounded-full" style={{ background: c, boxShadow: current === c ? "0 0 0 1.5px #0a0b0d, 0 0 0 2.5px #f3f3f0" : undefined }} />
         </button>

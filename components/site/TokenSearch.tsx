@@ -142,7 +142,7 @@ export function TokenSearch({ className = "" }: { className?: string }) {
                 onMouseDown={(e) => e.preventDefault()}
                 onMouseEnter={() => setActive(i)}
                 onClick={() => go(`/launch/v${h.version}/${h.auctionId}`)}
-                className={`flex cursor-pointer items-center justify-between gap-3 px-3 py-2 ${i === active ? "bg-white/[0.04]" : ""}`}
+                className={`flex cursor-pointer items-center justify-between gap-3 px-3 py-2 ${i === active ? "bg-tint/[0.04]" : ""}`}
               >
                 <span className="min-w-0">
                   <span className="text-[13px] text-chrome">${h.symbol || "TOKEN"}</span>{" "}

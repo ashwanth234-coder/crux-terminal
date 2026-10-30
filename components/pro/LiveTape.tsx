@@ -263,7 +263,7 @@ export function LiveTape({
               ? tradeRows.slice(0, shown).map((t) => {
                   const route = t.viaIntent ? "intent" : t.venue === "batch-pool" ? "batch" : null;
                   return (
-                    <tr key={`${t.txHash}-${t.logIndex}-${t.usdc}`} className={`hover:bg-white/[0.02] ${t.side === "buy" ? "bg-up/[0.025]" : "bg-down/[0.025]"}`}>
+                    <tr key={`${t.txHash}-${t.logIndex}-${t.usdc}`} className={`hover:bg-tint/[0.02] ${t.side === "buy" ? "bg-up/[0.025]" : "bg-down/[0.025]"}`}>
                       <td className={`${td} font-mono text-dim`}>
                         <a href={`${TESTNET_EXPLORER}/tx/${t.txHash}`} target="_blank" rel="noopener noreferrer" className="hover:text-chrome" title={new Date(t.time * 1000).toLocaleString()}>
                           {ago(now, t.time)}
@@ -299,7 +299,7 @@ export function LiveTape({
                   );
                 })
               : bidRows.slice(0, shown).map((b) => (
-                  <tr key={`${b.txHash}-${b.account}-${b.totalQuote}`} className="hover:bg-white/[0.02]">
+                  <tr key={`${b.txHash}-${b.account}-${b.totalQuote}`} className="hover:bg-tint/[0.02]">
                     <td className={`${td} font-mono text-dim`}>
                       <a href={`${TESTNET_EXPLORER}/tx/${b.txHash}`} target="_blank" rel="noopener noreferrer" className="hover:text-chrome">
                         {ago(now, b.time)}
