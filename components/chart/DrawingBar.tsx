@@ -53,7 +53,7 @@ export function DrawingBar({
           onClick={() => onColor(c)}
           className={`grid h-7 w-5 place-items-center rounded-[3px] ${current === c ? "bg-tint/[0.08]" : "hover:bg-tint/[0.05]"}`}
         >
-          <span className="h-3 w-3 rounded-full" style={{ background: c, boxShadow: current === c ? "0 0 0 1.5px #0a0b0d, 0 0 0 2.5px #f3f3f0" : undefined }} />
+          <span className="h-3 w-3 rounded-full" style={{ background: c, boxShadow: current === c ? "0 0 0 1.5px var(--color-void), 0 0 0 2.5px var(--color-signal)" : undefined }} />
         </button>
       ))}
       <span className="mx-0.5 h-4 w-px bg-line" aria-hidden="true" />

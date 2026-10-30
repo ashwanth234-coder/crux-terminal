@@ -22,7 +22,7 @@ export function GET() {
       imageUrl: `${SITE_URL}/opengraph-image`,
       buttonTitle: "Launch Crux",
       splashImageUrl: `${SITE_URL}/splash.png`,
-      splashBackgroundColor: "#0a0b0d",
+      splashBackgroundColor: "#000000",
       primaryCategory: "finance",
       tags: ["trading", "omnichain", "defi", "intents"],
       requiredChains: ["eip155:8453"],

@@ -11,7 +11,7 @@ export const miniAppEmbed = {
       name: "Crux",
       url: SITE_URL,
       splashImageUrl: `${SITE_URL}/splash.png`,
-      splashBackgroundColor: "#0a0b0d",
+      splashBackgroundColor: "#000000",
     },
   },
 } as const;

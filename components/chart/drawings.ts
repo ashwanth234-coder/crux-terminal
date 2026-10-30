@@ -980,8 +980,8 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
       if (!p) continue;
       const s = this.xy(p);
       if (!s) continue;
-      ctx.fillStyle = "#0a0b0d";
-      ctx.strokeStyle = "#f3f3f0";
+      ctx.fillStyle = "#000000";
+      ctx.strokeStyle = "#ff5500";
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.arc(s.x, s.y, 4.5, 0, Math.PI * 2);
