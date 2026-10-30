@@ -3,8 +3,9 @@ import { Logo } from "./Logo";
 import { StatusTag } from "@/components/ui/StatusTag";
 import { TESTNET_EXPLORER } from "@/lib/chains";
 import { SETTLER } from "@/lib/intents";
+import { CONTACT_EMAIL } from "@/lib/site";
 
-// Only destinations that exist: no social accounts or legal pages have been published yet.
+// Only destinations that exist: no legal pages have been published yet.
 const LINKS = [
   { label: "Discover", href: "/discover" },
   { label: "Protocol", href: "/#protocol" },
@@ -43,8 +44,14 @@ export function Footer() {
         </nav>
       </div>
 
-      <div className="mx-auto flex max-w-[1440px] items-center justify-between border-t border-line px-4 py-6 sm:px-8 lg:px-12">
+      <div className="mx-auto flex max-w-[1440px] flex-col gap-3 border-t border-line px-4 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12">
         <p className="text-[12px] text-dim">© 2026 Crux. All rights reserved.</p>
+        <p className="text-[12px] text-dim">
+          Contact{" "}
+          <a href={`mailto:${CONTACT_EMAIL}`} className="text-chrome/80 underline decoration-line-2 underline-offset-4 transition-colors hover:text-signal hover:decoration-signal">
+            {CONTACT_EMAIL}
+          </a>
+        </p>
       </div>
     </footer>
   );

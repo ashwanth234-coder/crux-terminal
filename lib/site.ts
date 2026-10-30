@@ -1,5 +1,8 @@
 export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
+/** Where people reach the team. */
+export const CONTACT_EMAIL = "info@cruxprotocol.xyz";
+
 /** Payload for the `fc:miniapp` meta tag (Mini App embed spec, version 1). */
 export const miniAppEmbed = {
   version: "1",
