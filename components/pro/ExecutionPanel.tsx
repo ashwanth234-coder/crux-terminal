@@ -69,7 +69,7 @@ function Presets({ items, onPick }: { items: { label: string; value: bigint | nu
 function AmountField({ id, value, onChange, unit, compact }: { id: string; value: string; onChange: (v: string) => void; unit: string; compact?: boolean }) {
   return (
     <div className={`flex items-center gap-2 rounded-lg border border-line bg-void/60 px-3 focus-within:border-line-2 ${compact ? "py-2" : "py-2.5"}`}>
-      {unit === "USDC" && <span className="font-mono text-dim">$</span>}
+      {(unit === "USDC" || unit === "USDG") && <span className="font-mono text-dim">$</span>}
       <input
         id={id}
         inputMode="decimal"
@@ -753,7 +753,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
       <label htmlFor={`${uid}-amt`} className="sr-only">
         {side === "buy" ? "USDC to spend" : `${symbol} to sell`}
       </label>
-      <AmountField id={`${uid}-amt`} value={amount} onChange={setAmount} unit={side === "buy" ? "USDC" : symbol} />
+      <AmountField id={`${uid}-amt`} value={amount} onChange={setAmount} unit={side === "buy" ? (viaSolana ? "USDG" : "USDC") : symbol} />
       {crux.loggedIn && crux.account && (
         <div role="radiogroup" aria-label="Trade from" className="-mt-0.5 flex items-center gap-1.5 text-[11px]">
           <span className="mr-0.5 text-dim">Trade from</span>
@@ -793,7 +793,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
         />
       )}
       {side === "buy" && !viaAccount && (
-        <div role="radiogroup" aria-label="Pay from" className="-mt-0.5 flex items-center gap-1.5 text-[11px]">
+        <div role="radiogroup" aria-label="Pay from" className="-mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px]">
           <span className="mr-0.5 text-dim">Pay from</span>
           {(["base", ...LIVE_ORIGINS.map((o) => o.key), "solana"] as PayFrom[]).map((c) => (
             <button
@@ -805,7 +805,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
                 setPayFrom(c);
                 setAmount("");
               }}
-              className={`h-6 rounded-[4px] border px-2 transition-colors ${payFrom === c ? "border-chrome/60 text-chrome" : "border-line-2 text-muted hover:text-chrome"}`}
+              className={`h-6 whitespace-nowrap rounded-[4px] border px-2 transition-colors ${payFrom === c ? "border-chrome/60 text-chrome" : "border-line-2 text-muted hover:text-chrome"}`}
             >
               {c === "base" ? "Base Sepolia" : c === "solana" ? "Solana devnet" : originByKey(c)!.name}
             </button>
@@ -866,7 +866,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
       <MobileDock>
         <div className="flex items-center gap-2">
           <div className="min-w-0 flex-1">
-            <AmountField id={`${uid}-dock`} value={amount} onChange={setAmount} unit={side === "buy" ? "USDC" : symbol} compact />
+            <AmountField id={`${uid}-dock`} value={amount} onChange={setAmount} unit={side === "buy" ? (viaSolana ? "USDG" : "USDC") : symbol} compact />
           </div>
           <button type="button" disabled={(isConnected || viaAccount || solanaReady) && disabled} onClick={sign} className={buttonClass(isConnected || viaAccount ? side : "primary", "md", "shrink-0 rounded-xl px-4 font-semibold capitalize")}>
             {viaSolana

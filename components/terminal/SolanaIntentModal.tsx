@@ -51,9 +51,14 @@ async function sendSigned(payer: SolanaPayer, ix: TransactionInstruction) {
   const tx = new Transaction({ feePayer: payer.publicKey, blockhash, lastValidBlockHeight }).add(ix);
   const signed = await payer.sign(tx);
   const signature = await connection.sendRawTransaction(signed, { preflightCommitment: "confirmed" });
-  const res = await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
-  if (res.value.err) throw new Error(`Transaction failed: ${JSON.stringify(res.value.err)}`);
-  return signature;
+  // Poll the status rather than confirmTransaction, which needs a websocket and getBlockHeight: the relay serves neither.
+  for (let i = 0; i < 60; i++) {
+    const { value } = await connection.getSignatureStatus(signature);
+    if (value?.err) throw new Error(`Transaction failed: ${JSON.stringify(value.err)}`);
+    if (value?.confirmationStatus === "confirmed" || value?.confirmationStatus === "finalized") return signature;
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  throw new Error(`Not confirmed after 90 s; check it on Solana Explorer: ${signature}`);
 }
 
 function message(err: unknown) {
