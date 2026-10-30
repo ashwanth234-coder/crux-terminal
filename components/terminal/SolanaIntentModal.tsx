@@ -19,10 +19,10 @@ import {
   type SolanaOrder,
 } from "@/lib/solanaEscrow";
 
-/** A Base buy paid with USDG on Solana devnet: the amounts are the ones the ticket quoted and will be signed. */
+/** A Base buy paid with USDC on Solana devnet: the amounts are the ones the ticket quoted and will be signed. */
 export type SolanaOrderRequest = {
   draft: OrderDraft;
-  /** USDG escrowed, 6 decimals. */
+  /** USDC escrowed, 6 decimals. */
   amount: bigint;
   /** The signed floor, in the token's units. */
   minAmountOut: bigint;
@@ -80,7 +80,7 @@ function Row({ label, value, hint }: { label: string; value: string; hint?: stri
 }
 
 export function SolanaIntentModal({ request, onClose }: { request: SolanaOrderRequest | null; onClose: () => void }) {
-  const { payer, connect, usdg, sol, refetch } = useSolanaPayer();
+  const { payer, connect, usdc, sol, refetch } = useSolanaPayer();
   const [flow, setFlow] = useState<Flow>({ kind: "idle" });
   const placed = flow.kind === "open" || flow.kind === "refunding" || flow.kind === "refunded" ? flow.order : null;
   const signature = "signature" in flow ? flow.signature : null;
@@ -144,17 +144,17 @@ export function SolanaIntentModal({ request, onClose }: { request: SolanaOrderRe
   if (!request) return null;
   const { draft } = request;
   const usd = (n: bigint) => `${(Number(n) / 1e6).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
-  const short_ = !payer ? null : usdg === null ? "Reading your USDG…" : usdg < request.amount ? `Not enough USDG on Solana devnet (you have ${usd(usdg)})` : sol !== null && sol < 0.01 ? "Add a little devnet SOL for fees and rent (about 0.01)" : null;
+  const short_ = !payer ? null : usdc === null ? "Reading your USDC…" : usdc < request.amount ? `Not enough USDC on Solana devnet (you have ${usd(usdc)})` : sol !== null && sol < 0.01 ? "Add a little devnet SOL for fees and rent (about 0.01)" : null;
 
   const note =
     flow.kind === "signing"
       ? `Approve the order in ${payer?.label ?? "your wallet"}…`
       : flow.kind === "sending"
-        ? "Escrowing your USDG on Solana devnet…"
+        ? "Escrowing your USDC on Solana devnet…"
         : flow.kind === "refunding"
-          ? "Refunding your USDG…"
+          ? "Refunding your USDC…"
           : flow.kind === "refunded"
-            ? "Refunded: your USDG is back in your Solana wallet."
+            ? "Refunded: your USDC is back in your Solana wallet."
             : flow.kind === "error"
               ? flow.message
               : flow.kind === "open"
@@ -163,9 +163,9 @@ export function SolanaIntentModal({ request, onClose }: { request: SolanaOrderRe
                   : status.data?.state === "proven"
                     ? "Filled on Base Sepolia. The Hyperlane proof reached Solana; the escrow is settling."
                     : refundable
-                      ? "No solver filled this order in time. Refund your USDG."
+                      ? "No solver filled this order in time. Refund your USDC."
                       : "Escrowed on Solana. Waiting for the solver's fill on Base Sepolia (then a Hyperlane proof, about a minute)."
-                : `Pay with USDG on Solana devnet, receive $${draft.symbol} on Base Sepolia. Testnet only, no real funds.`;
+                : `Pay with USDC on Solana devnet, receive $${draft.symbol} on Base Sepolia. Testnet only, no real funds.`;
 
   return (
     <Modal open onClose={close} locked={busy} title="Review intent" subtitle="Pay from Solana: escrowed on Solana, filled on Base, proven by Hyperlane.">
@@ -177,7 +177,7 @@ export function SolanaIntentModal({ request, onClose }: { request: SolanaOrderRe
       <div className="mt-5 grid grid-cols-1 gap-3 rounded-xl border border-line bg-void/60 p-4 min-[420px]:grid-cols-2">
         <div>
           <p className="text-[12px] text-muted">You pay</p>
-          <p className="mt-1.5 font-mono text-[18px] text-chrome">{usd(request.amount)} USDG</p>
+          <p className="mt-1.5 font-mono text-[18px] text-chrome">{usd(request.amount)} USDC</p>
           <p className="mt-0.5 text-[12px] text-muted">on Solana devnet</p>
         </div>
         <div className="min-[420px]:text-right">
@@ -212,7 +212,7 @@ export function SolanaIntentModal({ request, onClose }: { request: SolanaOrderRe
         <div className="mt-5 space-y-3">
           {refundable && flow.kind === "open" && (
             <button type="button" onClick={refund} className={buttonClass("primary", "md", "w-full rounded-xl font-semibold")}>
-              Refund USDG
+              Refund USDC
             </button>
           )}
           <button type="button" onClick={close} disabled={busy} className={buttonClass("outline", "sm", "w-full rounded-lg")}>

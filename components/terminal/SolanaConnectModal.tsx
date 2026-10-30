@@ -19,7 +19,7 @@ export function SolanaConnectModal({ open, onClose }: { open: boolean; onClose: 
   const notInstalled = wallets.filter((w) => w.readyState === WalletReadyState.NotDetected);
 
   return (
-    <Modal open={open} onClose={onClose} title="Connect Solana" subtitle="Pay for Base trades with USDG on Solana devnet, and see your Solana balances.">
+    <Modal open={open} onClose={onClose} title="Connect Solana" subtitle="Pay for Base trades with USDC on Solana devnet, and see your Solana balances.">
       {/* Wallet detection only exists in the browser; building the list while closed would
           differ between server and client render (hydration mismatch). */}
       {!open ? null : connected && publicKey ? (
