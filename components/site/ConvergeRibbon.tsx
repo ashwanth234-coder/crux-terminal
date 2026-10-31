@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { LANDING_CHAINS, chainGlyph, type ChainKey } from "./ChainMarks";
+import { NETWORKS } from "@/lib/networks";
+import { chainGlyph, type ChainKey } from "./ChainMarks";
 
 /**
  * The close's centrepiece: nine liquid-chrome strands in a glass capsule, loose and rippling on the left, converging
- * into one orange core on the right, beside Enter Crux: many routes, one execution. Four strands start at a chain's mark
- * (Ethereum, BNB Chain, Solana, and Robinhood Chain dimmed as Soon) and the core is Base, where everything settles. The strands bend towards the
+ * into one orange core on the right, beside Enter Crux: many routes, one execution. Five strands start at a chain's mark
+ * (Ethereum, Arbitrum, BNB Chain, Solana, and Robinhood Chain dimmed as Soon (Mainnet)) and the core is Base. The strands bend towards the
  * pointer like liquid metal, and the chrome bands shimmer as they move; entering or tapping the capsule sends an orange
  * pulse down every strand into the core, which flares. With no pointer they drift slowly. prefers-reduced-motion
  * draws them once, still. The capsule is black glass in both themes. SVG paths rebuilt per frame (9 x 97 points), only while on screen.
@@ -19,12 +20,12 @@ const PULSE_MS = 1100;
 const SPARK = 0.14; // dash length, in path lengths
 /** Which strands leave from a chain's mark; the rest are unlabelled routes. */
 const ROUTES: [strand: number, chain: ChainKey][] = [
-  [1, "ethereum"],
-  [3, "bnb"],
-  [5, "solana"],
-  [7, "robinhood"],
+  [0, "ethereum"],
+  [2, "arbitrum"],
+  [4, "bnb"],
+  [6, "solana"],
+  [8, "robinhood"],
 ];
-const MARK_PX = 16;
 
 export function ConvergeRibbon({ className = "" }: { className?: string }) {
   const box = useRef<HTMLDivElement>(null);
@@ -136,8 +137,8 @@ export function ConvergeRibbon({ className = "" }: { className?: string }) {
       const room = h / 2 - 8;
       routes.forEach((g, n) => {
         const y = h / 2 + room * Math.tanh(((ROUTES[n][0] - (STRANDS - 1) / 2) * h * 0.1) / room);
-        const scale = MARK_PX / 24;
-        g.setAttribute("transform", `translate(${(h * 0.24 - MARK_PX / 2).toFixed(1)} ${(y - MARK_PX / 2).toFixed(1)}) scale(${scale})`);
+        const px = Math.min(16, h * 0.11); // five marks share the left edge; smaller capsules get smaller marks
+        g.setAttribute("transform", `translate(${(h * 0.24 - px / 2).toFixed(1)} ${(y - px / 2).toFixed(1)}) scale(${px / 24})`);
       });
       baseLabel.setAttribute("transform", `translate(${(w - h * 0.5).toFixed(1)} ${(h - 16).toFixed(1)})`);
       if (!px) px = w * 0.35;
@@ -249,7 +250,7 @@ export function ConvergeRibbon({ className = "" }: { className?: string }) {
 
         <g mask="url(#cr-mask)">
         {Array.from({ length: STRANDS }, (_, i) => (
-          <path key={`b${i}`} data-body fill="none" stroke="url(#cr-chrome)" strokeWidth={WIDTHS[i]} opacity={i === 7 ? 0.4 : 1} strokeLinecap="round" strokeLinejoin="round" />
+          <path key={`b${i}`} data-body fill="none" stroke="url(#cr-chrome)" strokeWidth={WIDTHS[i]} opacity={i === 8 ? 0.4 : 1} strokeLinecap="round" strokeLinejoin="round" />
         ))}
         {Array.from({ length: STRANDS }, (_, i) => (
           <path key={`h${i}`} data-heat fill="none" stroke="url(#cr-heat)" strokeWidth={WIDTHS[i] + 0.6} strokeLinecap="round" style={{ mixBlendMode: "screen" }} />
@@ -265,9 +266,9 @@ export function ConvergeRibbon({ className = "" }: { className?: string }) {
         ])}
         </g>
 
-        {/* The chains the routes leave from; Robinhood Chain is dimmed until it is live */}
+        {/* The chains the routes leave from; Robinhood Chain is dimmed until it is live (Soon (Mainnet)) */}
         {ROUTES.map(([, key]) => {
-          const c = LANDING_CHAINS.find((x) => x.key === key)!;
+          const c = NETWORKS.find((x) => x.key === key)!;
           return (
             <g key={key} data-route data-color={c.color} opacity={c.live ? 0.85 : 0.35} style={{ color: "#ffffff", transition: "color 200ms" }}>
               <title>{`${c.name}: ${c.network}`}</title>

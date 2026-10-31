@@ -1,35 +1,23 @@
 import type { ReactNode } from "react";
+import type { NetworkKey } from "@/lib/networks";
 
 /**
- * The chains Crux reaches, for the landing page. Marks are simple single-colour glyphs (currentColor) drawn on a 24-unit
- * grid; each network's own colour appears only on its mark, on hover. `live` is what works today on testnet; the rest
- * is labelled Soon. Everything settles on Base.
+ * Chain marks for the landing page (the list itself is lib/networks.ts). Simple single-colour glyphs (currentColor) on
+ * a 24-unit grid; each network's own colour appears only on its mark, on hover.
  */
-export type ChainKey = "base" | "ethereum" | "bnb" | "solana" | "robinhood";
-
-export type LandingChain = {
-  key: ChainKey;
-  name: string;
-  /** Where it runs today, for the tooltip (never implies mainnet). */
-  network: string;
-  live: boolean;
-  /** The network's own colour, shown on its mark only. */
-  color: string;
-};
-
-export const LANDING_CHAINS: LandingChain[] = [
-  { key: "base", name: "Base", network: "Base Sepolia (testnet). Tokens, auctions and pools live here.", live: true, color: "#0052ff" },
-  { key: "ethereum", name: "Ethereum", network: "Ethereum Sepolia (testnet)", live: true, color: "#627eea" },
-  { key: "bnb", name: "BNB Chain", network: "BNB Chain testnet", live: true, color: "#f0b90b" },
-  { key: "solana", name: "Solana", network: "Solana devnet (USDC)", live: true, color: "#14f195" },
-  { key: "robinhood", name: "Robinhood Chain", network: "After the audit (mainnet-only chain)", live: false, color: "#ccff00" },
-];
+export type ChainKey = NetworkKey;
 
 const MARKS: Record<ChainKey, ReactNode> = {
   base: (
     <>
       <circle cx="12" cy="12" r="10" fill="currentColor" />
       <rect x="0" y="10.6" width="12.6" height="2.8" fill="var(--notch, var(--color-void))" />
+    </>
+  ),
+  arbitrum: (
+    <>
+      <path d="M12 1.6 21 6.8v10.4L12 22.4 3 17.2V6.8Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M10.6 6.8h2.3l4.3 11.3-1.9 1.1L12 11.2l-3.3 8-1.9-1.1Z" fill="currentColor" />
     </>
   ),
   ethereum: (

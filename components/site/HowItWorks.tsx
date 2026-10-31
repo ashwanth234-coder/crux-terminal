@@ -1,4 +1,5 @@
 import { Chapter } from "./Chapter";
+import { ORIGIN_NAMES, SOON_LINE } from "@/lib/networks";
 
 // Each one is live on Base Sepolia today; nothing planned is listed here.
 const MECHANISMS = [
@@ -14,7 +15,7 @@ const MECHANISMS = [
   },
   {
     name: "Any chain in",
-    body: "Pay with test USDC on Arbitrum, Ethereum, BSC or Solana. The solver fills on Base; no bridge, no network switch.",
+    body: `Pay with test USDC on ${ORIGIN_NAMES}. The solver fills on Base; no bridge, no network switch. ${SOON_LINE}.`,
     fact: "Five networks",
   },
   {

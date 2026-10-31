@@ -270,7 +270,7 @@ export function AccountPanel() {
             <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
               Send test USDC to this address on <span className="text-chrome">Base Sepolia</span> only. The address is the same on every chain,
               but only Base Sepolia trades: anything sent straight to it on another chain can only be withdrawn back to your bound address, once
-              the account is set up there. To move USDC from Arbitrum, Ethereum or BSC, use <span className="text-chrome">Deposit from another
+              the account is set up there. To move USDC from Arbitrum, Ethereum or BNB Chain, use <span className="text-chrome">Deposit from another
               chain</span> below instead.
             </p>
           </div>

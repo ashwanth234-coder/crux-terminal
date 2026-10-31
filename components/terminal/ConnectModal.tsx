@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useConnect, useConnectors, type Connector } from "wagmi";
 import { Modal, KineticLoader } from "@/components/ui/Modal";
 import { initFarcaster } from "@/lib/farcaster";
+import { LIVE_NAMES, SOON_LINE } from "@/lib/networks";
 
 const COPY: Record<string, { name: string; detail: string }> = {
   farcaster: { name: "Farcaster Wallet", detail: "The wallet in this Farcaster client" },
@@ -126,8 +127,8 @@ export function ConnectModal({ open, onClose }: { open: boolean; onClose: () => 
       )}
 
       <p className="mt-5 font-mono text-[10px] leading-relaxed text-dim">
-        Crux reads your balances on Base, Ethereum, Arbitrum, BSC and Solana (Robinhood Chain at mainnet) to build your unified
-        buying power. Nothing is signed until you confirm an intent.
+        Crux reads your test USDC on {LIVE_NAMES} (testnets) to show your buying power. {SOON_LINE}. Nothing is signed
+        until you confirm an order.
       </p>
     </Modal>
   );

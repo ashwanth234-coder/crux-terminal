@@ -33,6 +33,7 @@ import { placeOneClick } from "@/lib/session";
 import { SOLVER_MAX_IMPACT_PCT, bidRisk, tradeRisk } from "@/lib/risk";
 import { PAY_SOURCES } from "@/lib/tokens";
 import { useConnectModal } from "@/providers/Web3Provider";
+import { ORIGIN_NAMES, SOON_MAINNET, SOON_NETWORKS } from "@/lib/networks";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const pct = (v: number) => `${v >= 0 ? "−" : "+"}${Math.abs(v).toFixed(2)}%`;
@@ -121,6 +122,11 @@ function BuyingPower({ active, onPick }: { active: PayFrom | "account"; onPick: 
           >
             <span className="font-sans">{s.name}</span> {s.usdc6 !== null ? `$${fmtUsdc(s.usdc6)}` : "…"}
           </button>
+        ))}
+        {SOON_NETWORKS.map((n) => (
+          <span key={n.key} title={n.network} className="inline-flex h-6 items-center rounded-[4px] border border-dashed border-line-2 px-2 text-[10.5px] text-dim">
+            {n.name} · {SOON_MAINNET}
+          </span>
         ))}
       </div>
     </div>
@@ -261,7 +267,7 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
         <span>Paying with: Base Sepolia test USDC</span>
         <span className="font-mono text-chrome/80">{balance !== null ? `$${fmtUsdc(balance)}` : "…"}</span>
       </div>
-      <p className="-mt-2 text-[11px] text-dim">Other chains: planned.</p>
+      <p className="-mt-2 text-[11px] text-dim">Bids pay from Base Sepolia for now. Paying from {ORIGIN_NAMES} works once the token trades.</p>
 
       <label htmlFor={`${uid}-amt`} className="sr-only">
         Bid amount
