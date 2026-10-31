@@ -866,31 +866,39 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             </ul>
           )}
 
-          {canLaunchFromAccount && (
-            <div className="flex flex-col gap-2">
-              <div role="radiogroup" aria-label="Launch as" className="flex items-center gap-1.5 text-[12px]">
-                <span className="mr-1 text-dim">Launch as</span>
-                {(["account", "wallet"] as const).map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    role="radio"
-                    aria-checked={launchAs === v}
-                    onClick={() => setLaunchAs(v)}
-                    className={`h-7 rounded-[4px] border px-2.5 transition-colors ${launchAs === v ? "border-chrome/60 text-chrome" : "border-line-2 text-muted hover:text-chrome"}`}
-                  >
-                    {v === "account" ? "Crux account · no gas" : "Wallet"}
-                  </button>
-                ))}
-              </div>
-              {accountLaunch && (
+          {canLaunchFromAccount ? (
+            <div className="flex flex-col gap-1.5">
+              {accountLaunch ? (
+                <p className="rounded-lg border border-signal/40 bg-signal/5 px-3 py-2 text-[11.5px] leading-relaxed text-muted">
+                  <span className="text-chrome">Launching from your Crux account · no gas.</span> Signed with your login and launched on Base by
+                  Crux, whatever chain your coins are on. Your Crux account is the creator, so the creator fee and your share land there,
+                  withdrawable only to your bound address.
+                  {LAUNCH_FACTORY?.version === 8 && " Account launches get an ordinary token address; a wallet launch gets a …5afe one."}
+                </p>
+              ) : (
                 <p className="text-[11.5px] leading-relaxed text-dim">
-                  Signed with your login and launched on Base by Crux: no gas and nothing needed on Base, whatever chain your coins are on.
-                  Your Crux account is the creator, so the creator fee and your share land there, withdrawable only to your bound address.
-                  {LAUNCH_FACTORY?.version === 8 && " Account launches get an ordinary token address; launch from your wallet for a …5afe one."}
+                  Launching from your wallet: you pay a little Base Sepolia gas{LAUNCH_FACTORY?.version === 8 ? " and the token gets a …5afe address" : ""}.
                 </p>
               )}
+              <button
+                type="button"
+                onClick={() => setLaunchAs(accountLaunch ? "wallet" : "account")}
+                className="self-start text-[11.5px] text-dim underline decoration-line-2 underline-offset-2 transition-colors hover:text-chrome"
+              >
+                {accountLaunch ? "Launch from a wallet instead" : "← Launch from my Crux account"}
+              </button>
             </div>
+          ) : (
+            FACTORY_V7 !== null &&
+            !crux.loggedIn && (
+              <p className="rounded-lg border border-line px-3 py-2 text-[11.5px] leading-snug text-muted">
+                <span className="text-chrome">Launch from a Crux account:</span> no gas, nothing needed on Base, and your creator earnings land in
+                the account.{" "}
+                <button type="button" onClick={crux.login} className="text-signal hover:underline">
+                  Log in
+                </button>
+              </p>
+            )
           )}
 
           {vamp && <VampBanner line={vamp.line} conflicts={vamp.conflicts} onLink={onClose} />}

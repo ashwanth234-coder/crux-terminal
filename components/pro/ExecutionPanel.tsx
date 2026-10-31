@@ -268,7 +268,7 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
         <span>Paying with: Base Sepolia test USDC</span>
         <span className="font-mono text-chrome/80">{balance !== null ? `$${fmtUsdc(balance)}` : "…"}</span>
       </div>
-      <p className="-mt-2 text-[11px] text-dim">Bids pay from Base Sepolia for now. Paying from {ORIGIN_NAMES} works once the token trades.</p>
+      <p className="-mt-2 text-[11px] text-dim">Bids come from your wallet on Base Sepolia for now: Crux accounts can&apos;t bid in auctions yet (that needs an account contract update, after the audit). Once the token trades, your Crux account, or a wallet on {ORIGIN_NAMES}, can buy it.</p>
 
       <label htmlFor={`${uid}-amt`} className="sr-only">
         Bid amount
@@ -765,32 +765,39 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
         {side === "buy" ? "USDC to spend" : `${symbol} to sell`}
       </label>
       <AmountField id={`${uid}-amt`} value={amount} onChange={setAmount} unit={side === "buy" ? "USDC" : symbol} />
-      {crux.loggedIn && crux.account && (
-        <div role="radiogroup" aria-label="Trade from" className="-mt-0.5 flex items-center gap-1.5 text-[11px]">
-          <span className="mr-0.5 text-dim">Trade from</span>
-          {(["account", "wallet"] as const).map((f) => (
-            <button
-              key={f}
-              type="button"
-              role="radio"
-              aria-checked={from === f}
-              onClick={() => {
-                setFrom(f);
-                setAmount("");
-              }}
-              className={`h-6 rounded-[4px] border px-2 transition-colors ${from === f ? "border-signal text-signal" : "border-line-2 text-muted hover:text-chrome"}`}
-            >
-              {f === "account" ? "Crux account" : "Wallet"}
-            </button>
-          ))}
-          {viaAccount && (
+      {/* The Crux account is the default way to trade; a wallet is the secondary path. */}
+      {crux.loggedIn && crux.account ? (
+        viaAccount && (
+          <div className="-mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-signal/40 bg-signal/5 px-3 py-2 text-[11.5px]">
+            <span className="text-chrome">Crux account</span>
+            <span className="font-mono text-chrome/85">{crux.usdc !== null ? `$${fmtUsdc(crux.usdc)}` : "…"}</span>
+            <span className="text-dim">· no gas, no pop-up</span>
             <a href="/account" className={`ml-auto ${crux.withdrawalAddress ? "text-dim" : "text-down"} hover:text-chrome`}>
               {crux.withdrawalAddress ? "Deposit / withdraw" : "Not protected yet"}
             </a>
-          )}
-        </div>
+          </div>
+        )
+      ) : (
+        <p className="-mt-0.5 rounded-lg border border-line px-3 py-2 text-[11.5px] leading-snug text-muted">
+          <span className="text-chrome">Trade from a Crux account:</span> deposit once from any chain, then trade with no gas or pop-ups.{" "}
+          <button type="button" onClick={crux.login} className="text-signal hover:underline">
+            Log in
+          </button>
+        </p>
       )}
-      {side === "buy" && (
+      {crux.loggedIn && crux.account && (
+        <button
+          type="button"
+          onClick={() => {
+            setFrom(viaAccount ? "wallet" : "account");
+            setAmount("");
+          }}
+          className="-mt-1 self-start text-[11px] text-dim underline decoration-line-2 underline-offset-2 transition-colors hover:text-chrome"
+        >
+          {viaAccount ? "Pay from a wallet instead" : "← Back to Crux account"}
+        </button>
+      )}
+      {side === "buy" && !viaAccount && (
         <BuyingPower
           active={viaAccount ? "account" : payFrom}
           onPick={(k) => {
