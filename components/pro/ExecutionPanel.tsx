@@ -88,40 +88,52 @@ function AmountField({ id, value, onChange, unit, compact }: { id: string; value
 }
 
 /**
- * What the trader can buy with across every chain, in test USDC: the Crux account and the wallet on Base and each
- * cross-chain origin. Tapping a source pays from it.
+ * Where a wallet buy is paid from: one chip per chain (Base, each live origin, Solana) with that wallet's test USDC
+ * when it can be read, and the networks coming at mainnet. The total is the wallet's buying power across all of them.
+ * Chips show even before a wallet on that chain is connected, so the chain can be picked first.
  */
-function BuyingPower({ active, onPick }: { active: PayFrom | "account"; onPick: (k: PayFrom | "account") => void }) {
+function PayFromPicker({ active, onPick }: { active: PayFrom; onPick: (k: PayFrom) => void }) {
   const t = useT();
-  const { sources, total } = useBuyingPower();
-  if (sources.length === 0) return null;
+  const { sources } = useBuyingPower();
+  const known = new Map(sources.map((s) => [s.key, s.usdc6]));
+  const chips: { key: PayFrom; name: string; usdc6: bigint | null }[] = [
+    { key: "base", name: "Base", usdc6: known.get("base") ?? null },
+    ...LIVE_ORIGINS.map((o) => ({ key: o.key as PayFrom, name: o.name.replace(/ (Sepolia|testnet)$/, ""), usdc6: known.get(o.key) ?? null })),
+    { key: "solana", name: "Solana", usdc6: known.get("solana") ?? null },
+  ];
+  const balances = chips.filter((c) => c.usdc6 !== null);
+  const total = balances.length ? balances.reduce((sum, c) => sum + (c.usdc6 as bigint), BigInt(0)) : null;
   return (
-    <div className="-mt-0.5 rounded-lg border border-line px-3 py-2">
+    <div role="radiogroup" aria-label={t("ticket.payFrom")} className="-mt-0.5 rounded-lg border border-line px-3 py-2">
       <p className="flex items-baseline justify-between text-[11px]">
-        <span className="text-dim">{t("ticket.buyingPower")}</span>
-        <span className="font-mono text-[13px] text-chrome">{total !== null ? `$${fmtUsdc(total)}` : "…"}</span>
+        <span className="text-dim">{t("ticket.payFrom")}</span>
+        {total !== null && (
+          <span className="text-dim">
+            all chains <span className="font-mono text-[13px] text-chrome">${fmtUsdc(total)}</span>
+          </span>
+        )}
       </p>
       <div className="mt-1.5 flex flex-wrap gap-1">
-        {sources.map((s) => (
+        {chips.map((c) => (
           <button
-            key={s.key}
+            key={c.key}
             type="button"
-            onClick={() => onPick(s.key)}
-            aria-pressed={active === s.key}
+            role="radio"
+            aria-checked={active === c.key}
+            onClick={() => onPick(c.key)}
             title={
-              s.key === "account"
-                ? "Pay from your Crux account: no gas, no pop-up"
-                : s.key === "base"
-                  ? "Pay from your wallet on Base: an approval if needed, then one transaction, paid in a little Base Sepolia ETH"
-                  : s.key === "solana"
-                    ? `Pay with USDC on Solana devnet, filled on Base in about 20 s. Needs ${solAmount(SOLANA_OPEN_SOL)} for fees and storage; ${solAmount(SOLANA_RETURNED_SOL)} comes back when the order fills or is refunded`
-                    : `Pay from your wallet on ${s.name}, filled on Base: an approval if needed, then one transaction, paid in a little ${originByKey(s.key as Exclude<PayFrom, "base" | "solana">)?.chain.nativeCurrency.symbol ?? "test gas"} on ${s.name}`
+              c.key === "base"
+                ? "Pay from your wallet on Base: an approval if needed, then one transaction, paid in a little Base Sepolia ETH"
+                : c.key === "solana"
+                  ? `Pay with USDC on Solana devnet, filled on Base in about 20 s. Needs ${solAmount(SOLANA_OPEN_SOL)} for fees and storage; ${solAmount(SOLANA_RETURNED_SOL)} comes back when the order fills or is refunded`
+                  : `Pay from your wallet on ${c.name}, filled on Base: an approval if needed, then one transaction, paid in a little ${originByKey(c.key as Exclude<PayFrom, "base" | "solana">)?.chain.nativeCurrency.symbol ?? "test gas"} on ${c.name}`
             }
             className={`inline-flex h-6 items-center gap-1.5 rounded-[4px] border px-2 font-mono text-[10.5px] transition-colors ${
-              active === s.key ? "border-signal text-signal" : "border-line-2 text-muted hover:text-chrome"
+              active === c.key ? "border-signal text-signal" : "border-line-2 text-muted hover:text-chrome"
             }`}
           >
-            <span className="font-sans">{s.name}</span> {s.usdc6 !== null ? `$${fmtUsdc(s.usdc6)}` : "…"}
+            <span className="font-sans">{c.name}</span>
+            {c.usdc6 !== null && <span>${fmtUsdc(c.usdc6)}</span>}
           </button>
         ))}
         {SOON_NETWORKS.map((n) => (
@@ -798,37 +810,13 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
         </button>
       )}
       {side === "buy" && !viaAccount && (
-        <BuyingPower
-          active={viaAccount ? "account" : payFrom}
+        <PayFromPicker
+          active={payFrom}
           onPick={(k) => {
-            if (k === "account") setFrom("account");
-            else {
-              setFrom("wallet");
-              setPayFrom(k);
-            }
+            setPayFrom(k);
             setAmount("");
           }}
         />
-      )}
-      {side === "buy" && !viaAccount && (
-        <div role="radiogroup" aria-label="Pay from" className="-mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px]">
-          <span className="mr-0.5 text-dim">{t("ticket.payFrom")}</span>
-          {(["base", ...LIVE_ORIGINS.map((o) => o.key), "solana"] as PayFrom[]).map((c) => (
-            <button
-              key={c}
-              type="button"
-              role="radio"
-              aria-checked={payFrom === c}
-              onClick={() => {
-                setPayFrom(c);
-                setAmount("");
-              }}
-              className={`h-6 whitespace-nowrap rounded-[4px] border px-2 transition-colors ${payFrom === c ? "border-signal text-signal" : "border-line-2 text-muted hover:text-chrome"}`}
-            >
-              {c === "base" ? "Base Sepolia" : c === "solana" ? "Solana devnet" : originByKey(c)!.name}
-            </button>
-          ))}
-        </div>
       )}
       <div className="-mt-1.5 flex items-baseline justify-between text-[11px] text-dim">
         <span>
