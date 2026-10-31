@@ -38,6 +38,8 @@ type Form = {
   logo: string;
   x: string;
   website: string;
+  telegram: string;
+  github: string;
   supply: string;
   target: string;
   batchAuction: boolean;
@@ -60,6 +62,8 @@ const INITIAL: Form = {
   logo: "",
   x: "",
   website: "",
+  telegram: "",
+  github: "",
   supply: "1,000,000,000",
   target: FACTORY || LAUNCH_FACTORY ? "10" : "50,000",
   batchAuction: true,
@@ -129,7 +133,7 @@ function metadataURI(f: Form) {
     symbol: f.symbol,
     description: f.description.trim(),
     ...(f.logo.trim() ? { image: f.logo.trim() } : {}),
-    links: { x: f.x.trim(), website: f.website.trim() },
+    links: { x: f.x.trim(), website: f.website.trim(), telegram: f.telegram.trim(), github: f.github.trim() },
   });
   return `data:application/json;base64,${btoa(unescape(encodeURIComponent(json)))}`;
 }
@@ -620,6 +624,12 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                 aria-describedby={`${id("web")}-msg`}
                 onChange={(e) => set("website", e.target.value)}
               />
+            </Field>
+            <Field id={id("tg")} label="Telegram">
+              <input id={id("tg")} className={inputCls} placeholder="@group or https://t.me/…" value={form.telegram} onChange={(e) => set("telegram", e.target.value)} />
+            </Field>
+            <Field id={id("gh")} label="GitHub">
+              <input id={id("gh")} className={inputCls} placeholder="org or https://github.com/…" value={form.github} onChange={(e) => set("github", e.target.value)} />
             </Field>
           </div>
 

@@ -16,7 +16,8 @@ import { useLedger } from "@/hooks/useLedger";
 import { isSystem } from "@/lib/holders";
 import { usePoolSwaps } from "@/hooks/usePoolSwaps";
 import { useTokenMeta } from "@/hooks/useTokenMeta";
-import { TESTNET } from "@/lib/chains";
+import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
+import { usePresence } from "@/hooks/usePresence";
 import { formatRemaining } from "@/lib/launch";
 import { fmtTokenPrice } from "@/lib/launchTrade";
 import { PRICE_DECIMALS, fmtUsdcExact, graduationNeeds, marketCapUsd, priceUsd, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
@@ -112,6 +113,34 @@ const Icon = {
       <path d="M1.8 8h12.4M8 1.8c1.8 1.7 2.6 3.8 2.6 6.2S9.8 12.5 8 14.2C6.2 12.5 5.4 10.4 5.4 8S6.2 3.5 8 1.8Z" fill="none" stroke="currentColor" strokeWidth="1.1" />
     </svg>
   ),
+  telegram: (
+    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
+      <path d="M21.4 3.6 2.9 10.8c-1 .4-1 1.8 0 2.1l4.6 1.5 1.8 5.6c.2.7 1.1.9 1.6.4l2.6-2.4 4.6 3.4c.6.4 1.4.1 1.6-.6l3.2-15.5c.2-1-.7-1.9-1.5-1.7ZM9.6 14.2l8.4-7.4-6.6 8.4-.3 3.3-1.5-4.3Z" />
+    </svg>
+  ),
+  github: (
+    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
+      <path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 2.9.8.1-.7.4-1.1.6-1.4-2.2-.2-4.6-1.1-4.6-5a3.9 3.9 0 0 1 1-2.7c-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.8 1a9.6 9.6 0 0 1 5 0c1.9-1.3 2.8-1 2.8-1 .5 1.4.2 2.4.1 2.7a3.9 3.9 0 0 1 1 2.7c0 3.9-2.4 4.8-4.6 5 .4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2Z" />
+    </svg>
+  ),
+  search: (
+    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" aria-hidden="true">
+      <circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" strokeWidth="1.3" />
+      <path d="m10.4 10.4 3.4 3.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  ),
+  explorer: (
+    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" aria-hidden="true">
+      <rect x="2" y="2.5" width="12" height="11" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M4.5 6h7M4.5 8.5h7M4.5 11h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  ),
+  eye: (
+    <svg viewBox="0 0 16 16" className="h-3 w-3" aria-hidden="true">
+      <path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8Z" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+      <circle cx="8" cy="8" r="1.9" fill="currentColor" />
+    </svg>
+  ),
   share: (
     <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" aria-hidden="true">
       <path d="M8 2v8M4.8 5 8 1.8 11.2 5M3 9v4.2h10V9" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
@@ -122,7 +151,8 @@ const Icon = {
 /**
  * The terminal's header, as dense as a pro DEX terminal but every number real: identity (logo, ticker, chain,
  * status, one-tap contract copy), price with its 24h change, and the MCAP · LIQ · VOL 24H · LP BURNED strip.
- * Actions: watchlist, token info, the creator's socials, share.
+ * Actions: watchlist, token info, the creator's socials (each only if they linked it), the explorer, an X search for
+ * the contract, share. Beside the badges: how many tabs have the token open right now.
  */
 export function TokenBar({
   auction,
@@ -214,6 +244,7 @@ export function TokenBar({
   const people = holders?.filter((h) => !isSystem(h)) ?? null;
   const top10Pct = people ? people.slice(0, 10).reduce((sum, h) => sum + h.pct, 0) : null;
   const antiSniper = useAntiSniperSeconds(batchFactory(version), BigInt(id), version);
+  const viewers = usePresence(auction.token);
 
   return (
     <div className="border-b border-line bg-void">
@@ -245,6 +276,16 @@ export function TokenBar({
             </span>
             <VestingBadge days={vestDays} />
             <AntiSniperBadge seconds={antiSniper} />
+            {viewers !== null && (
+              <span
+                title="Tabs open on this token right now (each checks in every 20 seconds)"
+                className="inline-flex shrink-0 items-center gap-1 rounded-[3px] border border-line px-1.5 py-[3px] font-mono text-[10.5px] leading-none text-muted"
+              >
+                <span className="text-signal">{Icon.eye}</span>
+                {viewers.toLocaleString("en-US")}
+                <span className="sr-only">watching now</span>
+              </span>
+            )}
           </div>
           {name && <p className="mt-1 text-[12px] uppercase tracking-[0.12em] text-muted lg:hidden">{name}</p>}
 
@@ -360,6 +401,22 @@ export function TokenBar({
               {Icon.web}
             </IconButton>
           )}
+          {meta.links.telegram && (
+            <IconButton label="Telegram" href={meta.links.telegram}>
+              {Icon.telegram}
+            </IconButton>
+          )}
+          {meta.links.github && (
+            <IconButton label="GitHub" href={meta.links.github}>
+              {Icon.github}
+            </IconButton>
+          )}
+          <IconButton label="Search X for this contract" href={`https://x.com/search?q=${auction.token}&f=live`}>
+            {Icon.search}
+          </IconButton>
+          <IconButton label="View on Basescan (Base Sepolia)" href={`${TESTNET_EXPLORER}/token/${auction.token}`}>
+            {Icon.explorer}
+          </IconButton>
           <IconButton label="Share on X" href={shareHref}>
             {Icon.share}
           </IconButton>

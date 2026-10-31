@@ -53,6 +53,8 @@ export function TokenInfo({
     meta.links.x && { label: "X", href: meta.links.x },
     meta.links.farcaster && { label: "Farcaster", href: meta.links.farcaster },
     meta.links.website && { label: "Website", href: meta.links.website },
+    meta.links.telegram && { label: "Telegram", href: meta.links.telegram },
+    meta.links.github && { label: "GitHub", href: meta.links.github },
   ].filter(Boolean) as { label: string; href: string }[];
 
   return (

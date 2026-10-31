@@ -7,10 +7,10 @@ export type TokenMeta = {
   description: string | null;
   /** The display image the creator gave at launch, if any: an https URL or an uploaded image (a small data: URI). */
   image: string | null;
-  links: { x: string | null; farcaster: string | null; website: string | null };
+  links: { x: string | null; farcaster: string | null; website: string | null; telegram: string | null; github: string | null };
 };
 
-const EMPTY: TokenMeta = { description: null, image: null, links: { x: null, farcaster: null, website: null } };
+const EMPTY: TokenMeta = { description: null, image: null, links: { x: null, farcaster: null, website: null, telegram: null, github: null } };
 
 /** Only plain https URLs are ever turned into links or images. */
 function https(url: unknown): string | null {
@@ -51,7 +51,13 @@ export function parseTokenMeta(uri: string | undefined): TokenMeta {
     return {
       description,
       image: https(json?.image) ?? imageDataUri(json?.image),
-      links: { x: handle(links.x, "x.com"), farcaster: handle(links.farcaster, "farcaster.xyz"), website: https(links.website) },
+      links: {
+        x: handle(links.x, "x.com"),
+        farcaster: handle(links.farcaster, "farcaster.xyz"),
+        website: https(links.website),
+        telegram: handle(links.telegram, "t.me"),
+        github: handle(links.github, "github.com"),
+      },
     };
   } catch {
     return EMPTY;

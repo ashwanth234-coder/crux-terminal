@@ -22,3 +22,12 @@ test("launches without Farcaster still parse, and older Farcaster links still sh
   assert.equal(parseTokenMeta(meta({ links: { x: "@crux", website: "https://crux.example" } })).links.farcaster, null);
   assert.equal(parseTokenMeta(meta({ links: { farcaster: "@crux" } })).links.farcaster, "https://farcaster.xyz/crux");
 });
+
+test("Telegram and GitHub take a handle or a link; launches without them show none", () => {
+  const links = parseTokenMeta(meta({ links: { telegram: "@cruxchat", github: "crux-labs" } })).links;
+  assert.equal(links.telegram, "https://t.me/cruxchat");
+  assert.equal(links.github, "https://github.com/crux-labs");
+  assert.equal(parseTokenMeta(meta({ links: { github: "https://github.com/crux-labs/app" } })).links.github, "https://github.com/crux-labs/app");
+  assert.equal(parseTokenMeta(meta({ links: { telegram: "javascript:alert(1)" } })).links.telegram, null);
+  assert.equal(parseTokenMeta(meta({ links: { x: "@crux" } })).links.github, null);
+});

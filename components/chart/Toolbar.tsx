@@ -7,9 +7,7 @@ import type { ChartConfig, ChartType, Units } from "./settings";
 import { Icon, MenuItem, Popover, Sep, Tool } from "./ui";
 import { PushSwitch } from "./PushSwitch";
 
-const PIN_KEY = "crux:chart:pinned-intervals:v1";
 const FAV_KEY = "crux:chart:fav-studies:v1";
-const DEFAULT_PINNED = [1, 15, 60, 300, 900, 3_600, 14_400, 86_400];
 const TF_GROUPS = [
   { label: "Seconds", from: 1, to: 60 },
   { label: "Minutes", from: 60, to: 3_600 },
@@ -93,15 +91,6 @@ export function Toolbar({
 }) {
   const type = TYPES.find((t) => t.id === config.type) ?? TYPES[0];
   const [query, setQuery] = useState("");
-  // Timeframes pinned to the toolbar (★ in the menu), kept in this browser; the rest are a click away.
-  const [pinned, setPinned] = useState<number[]>(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(PIN_KEY) ?? "null");
-      return Array.isArray(saved) ? saved.filter((n) => INTERVALS.some((i) => i.seconds === n)) : DEFAULT_PINNED;
-    } catch {
-      return DEFAULT_PINNED;
-    }
-  });
   // Favourite indicators (★), listed first in the menu; kept in this browser.
   const [favs, setFavs] = useState<StudyId[]>(() => {
     try {
@@ -120,15 +109,6 @@ export function Toolbar({
       // Storage blocked: favourites last for this visit.
     }
   };
-  const togglePin = (s: number) => {
-    const next = pinned.includes(s) ? pinned.filter((p) => p !== s) : [...pinned, s].sort((a, b) => a - b);
-    setPinned(next);
-    try {
-      localStorage.setItem(PIN_KEY, JSON.stringify(next));
-    } catch {
-      // Storage blocked: the pins last for this visit.
-    }
-  };
   const toggleStudy = (id: StudyId) =>
     set((c) => ({ ...c, studies: c.studies.some((s) => s.id === id) ? c.studies.filter((s) => s.id !== id) : [...c.studies, { id }] }));
 
@@ -142,58 +122,51 @@ export function Toolbar({
           <Sep />
         </>
       )}
-      <div role="radiogroup" aria-label="Timeframe" className="flex shrink-0 items-center gap-0.5">
-        {[{ seconds: "auto" as const, label: "Auto" }, ...INTERVALS]
-          .filter((i) => i.seconds === "auto" || pinned.includes(i.seconds) || config.interval === i.seconds)
-          .map((i) => (
-            <button
-              key={i.label}
-              type="button"
-              role="radio"
-              aria-checked={config.interval === i.seconds}
-              onClick={() => set((c) => ({ ...c, interval: i.seconds }))}
-              className={`rounded-[3px] px-1.5 py-1 font-mono text-[11px] transition-colors ${config.interval === i.seconds ? "bg-panel-2 text-chrome ring-1 ring-inset ring-signal/60" : "text-dim hover:text-chrome"}`}
-            >
-              {i.label}
-            </button>
-          ))}
+      {/* The timeframe, as on TradingView: one button showing the current interval, every interval in its menu. */}
+      <div role="group" aria-label="Timeframe" className="flex shrink-0 items-center">
         <Popover
           width="w-48"
           button={(open, toggle) => (
-            <Tool label="All timeframes" active={open} onClick={toggle}>
-              {Icon.chevron}
+            <Tool label={`Timeframe: ${config.interval === "auto" ? "Auto" : longLabel(config.interval)}`} active={open} onClick={toggle} className="px-2">
+              <span className="flex items-center gap-1 font-mono text-[11.5px] text-chrome">
+                {config.interval === "auto" ? "Auto" : (INTERVALS.find((i) => i.seconds === config.interval)?.label ?? "Auto")}
+                {Icon.chevron}
+              </span>
             </Tool>
           )}
         >
           {(close) => (
-            <div role="menu" className="max-h-[min(60vh,420px)] overflow-y-auto">
+            <div role="menu" className="max-h-[min(60vh,440px)] overflow-y-auto">
+              <button
+                type="button"
+                role="menuitemradio"
+                aria-checked={config.interval === "auto"}
+                onClick={() => {
+                  set((c) => ({ ...c, interval: "auto" }));
+                  close();
+                }}
+                className={`w-full rounded-[3px] px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-tint/[0.05] ${config.interval === "auto" ? "text-signal" : "text-chrome/85"}`}
+              >
+                Auto <span className="text-dim">· fits the history</span>
+              </button>
               {TF_GROUPS.map((g) => (
                 <div key={g.label}>
                   <p className="px-2 pb-0.5 pt-1.5 text-[10px] uppercase tracking-[0.14em] text-dim">{g.label}</p>
                   {INTERVALS.filter((i) => i.seconds >= g.from && i.seconds < g.to).map((i) => (
-                    <div key={i.seconds} className="group flex items-center">
-                      <button
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={config.interval === i.seconds}
-                        onClick={() => {
-                          set((c) => ({ ...c, interval: i.seconds }));
-                          close();
-                        }}
-                        className={`flex-1 rounded-[3px] px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-tint/[0.05] ${config.interval === i.seconds ? "text-signal" : "text-chrome/85"}`}
-                      >
-                        {longLabel(i.seconds)}
-                      </button>
-                      <button
-                        type="button"
-                        aria-pressed={pinned.includes(i.seconds)}
-                        aria-label={pinned.includes(i.seconds) ? `Unpin ${i.label} from the toolbar` : `Pin ${i.label} to the toolbar`}
-                        onClick={() => togglePin(i.seconds)}
-                        className={`px-2 text-[13px] transition-colors ${pinned.includes(i.seconds) ? "text-[#ffd166]" : "text-dim opacity-0 hover:text-chrome group-hover:opacity-100"}`}
-                      >
-                        {pinned.includes(i.seconds) ? "★" : "☆"}
-                      </button>
-                    </div>
+                    <button
+                      key={i.seconds}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={config.interval === i.seconds}
+                      onClick={() => {
+                        set((c) => ({ ...c, interval: i.seconds }));
+                        close();
+                      }}
+                      className={`flex w-full items-center justify-between rounded-[3px] px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-tint/[0.05] ${config.interval === i.seconds ? "text-signal" : "text-chrome/85"}`}
+                    >
+                      {longLabel(i.seconds)}
+                      <span className="font-mono text-[10.5px] text-dim">{i.label}</span>
+                    </button>
                   ))}
                 </div>
               ))}
