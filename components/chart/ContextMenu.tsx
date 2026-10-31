@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { ChartOrderKind } from "@/lib/chartOrders";
+import type { ScaleMode } from "./settings";
 import { MenuItem } from "./ui";
 
 export type ContextAt = { x: number; y: number; price: number | null; time: number | null };
@@ -111,6 +112,81 @@ export function ContextMenu({
       <div className="my-1 border-t border-line" />
       <MenuItem onClick={act(onResetLayout)}>Reset this token&apos;s layout</MenuItem>
       <MenuItem onClick={act(onSettings)}>⚙ Settings…</MenuItem>
+    </div>
+  );
+}
+
+/** Right-click on the price axis: how prices are scaled, as on a trading terminal. */
+export function ScaleMenu({
+  at,
+  onClose,
+  auto,
+  onAuto,
+  onReset,
+  scale,
+  setScale,
+  inverted,
+  onInvert,
+}: {
+  at: { x: number; y: number };
+  onClose: () => void;
+  auto: boolean;
+  onAuto: () => void;
+  onReset: () => void;
+  scale: ScaleMode;
+  setScale: (m: ScaleMode) => void;
+  inverted: boolean;
+  onInvert: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) onClose();
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+  const act = (fn: () => void) => () => {
+    fn();
+    onClose();
+  };
+  const tick = (on: boolean) => <span className={`inline-block w-3.5 text-signal ${on ? "" : "invisible"}`}>✓</span>;
+  const MODES: { mode: ScaleMode; label: string; hint?: string }[] = [
+    { mode: "normal", label: "Regular" },
+    { mode: "percent", label: "Percent" },
+    { mode: "indexed", label: "Indexed to 100" },
+    { mode: "log", label: "Logarithmic" },
+  ];
+  return (
+    <div
+      ref={ref}
+      role="menu"
+      aria-label="Price scale"
+      style={{ left: at.x, top: at.y }}
+      className="absolute z-40 w-56 rounded-[5px] border border-line-2 bg-panel-2 p-1 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.9)]"
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <MenuItem onClick={act(onAuto)} hint="Alt+A">
+        {tick(auto)} Auto (fits data to screen)
+      </MenuItem>
+      <MenuItem onClick={act(onReset)} hint="Alt+R">
+        {tick(false)} Reset price scale
+      </MenuItem>
+      <div className="my-1 border-t border-line" />
+      {MODES.map((m) => (
+        <MenuItem key={m.mode} onClick={act(() => setScale(m.mode))} hint={m.hint}>
+          {tick(scale === m.mode)} {m.label}
+        </MenuItem>
+      ))}
+      <div className="my-1 border-t border-line" />
+      <MenuItem onClick={act(onInvert)} hint="Alt+I">
+        {tick(inverted)} Invert scale
+      </MenuItem>
     </div>
   );
 }

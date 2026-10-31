@@ -56,10 +56,12 @@ export class ChartEngine {
   private settings: ChartSettings;
   /** The price axis the candles, overlays and compared lines share. */
   private side: "left" | "right" = "right";
+  private readonly host: HTMLElement;
   private watermark: { applyOptions(o: object): void; detach(): void } | null = null;
 
   constructor(lc: Lc, host: HTMLElement, theme: Theme, settings: ChartSettings) {
     this.lc = lc;
+    this.host = host;
     this.theme = theme;
     this.settings = settings;
     this.chart = lc.createChart(host, {
@@ -350,9 +352,40 @@ export class ChartEngine {
   }
 
   setScale(mode: ScaleMode) {
-    const m = mode === "log" ? this.lc.PriceScaleMode.Logarithmic : mode === "percent" ? this.lc.PriceScaleMode.Percentage : this.lc.PriceScaleMode.Normal;
+    const m =
+      mode === "log"
+        ? this.lc.PriceScaleMode.Logarithmic
+        : mode === "percent"
+          ? this.lc.PriceScaleMode.Percentage
+          : mode === "indexed"
+            ? this.lc.PriceScaleMode.IndexedTo100
+            : this.lc.PriceScaleMode.Normal;
     this.chart.priceScale("right").applyOptions({ mode: m });
     this.chart.priceScale("left").applyOptions({ mode: m });
+  }
+
+  /** Flips the price axis upside down (higher prices lower), as a trading terminal's Invert scale. */
+  setInverted(on: boolean) {
+    this.chart.priceScale("right").applyOptions({ invertScale: on });
+    this.chart.priceScale("left").applyOptions({ invertScale: on });
+  }
+
+  /** Whether the newest bar has scrolled out of view to the right (the chart shows older history). */
+  scrolledBack(): boolean {
+    return this.chart.timeScale().scrollPosition() < -1;
+  }
+
+  /** Back to the newest bar, keeping the zoom. */
+  scrollToLatest() {
+    const ts = this.chart.timeScale();
+    ts.scrollToPosition(ts.options().rightOffset, false);
+  }
+
+  /** Calls `on` whenever the visible bars change (scrolling, zooming, new data). Returns the unsubscribe. */
+  onViewChange(on: () => void): () => void {
+    const ts = this.chart.timeScale();
+    ts.subscribeVisibleLogicalRangeChange(on);
+    return () => ts.unsubscribeVisibleLogicalRangeChange(on);
   }
 
   /** The token's symbol faintly behind the candles, or nothing. */
@@ -368,8 +401,14 @@ export class ChartEngine {
   }
 
   /** The price axis's width, for labels that sit on it. */
+  /**
+   * The price axis's width in pixels. The library can report 0 for it after a resize; then it's the chart's width less
+   * the plotting area's (the time scale spans exactly the plotting area).
+   */
   axisWidth(): number {
-    return this.chart.priceScale(this.side).width();
+    const own = this.chart.priceScale(this.side).width();
+    if (own > 0) return own;
+    return Math.max(0, this.host.clientWidth - this.chart.timeScale().width());
   }
 
   /** Where a price (in the chart's units) sits on the price axis. */

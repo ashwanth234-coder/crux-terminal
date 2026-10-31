@@ -20,7 +20,7 @@ import { studyById } from "@/lib/indicators";
 import { fmtTokenPrice } from "@/lib/launchTrade";
 import { PRICE_DECIMALS, type AuctionV2 } from "@/lib/launchV2";
 import { BottomBar } from "./BottomBar";
-import { ContextMenu, type ContextAt } from "./ContextMenu";
+import { ContextMenu, ScaleMenu, type ContextAt } from "./ContextMenu";
 import { ChartEngine } from "./engine";
 import { useHistory } from "./history";
 import { Legend } from "./Legend";
@@ -149,6 +149,12 @@ export function ProChart({
   const [full, setFull] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [ctx, setCtx] = useState<ContextAt | null>(null);
+  // The price scale's own menu (right-click on the axis), its upside-down mode, and whether the newest bar is in view.
+  const [scaleMenu, setScaleMenu] = useState<{ x: number; y: number } | null>(null);
+  const [inverted, setInverted] = useState(false);
+  const [scrolledBack, setScrolledBack] = useState(false);
+  // Which axis the pointer is over: drag (or scroll) the price axis to stretch prices, the time axis to zoom time.
+  const [overAxis, setOverAxis] = useState<"price" | "time" | null>(null);
   const [hoverTime, setHoverTime] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   // Drawing: the palette, the active tool, its first point and where the cursor is (for the live preview).
@@ -598,6 +604,17 @@ export function ProChart({
     };
   }, [engine, view, settings.scaleSide]);
 
+  useEffect(() => {
+    engine?.setInverted(inverted);
+  }, [engine, inverted]);
+  // The "scroll to the newest bar" button shows only while the newest bar is out of view.
+  useEffect(() => {
+    if (!engine) return;
+    const check = () => setScrolledBack(engine.scrolledBack());
+    check();
+    return engine.onViewChange(check);
+  }, [engine]);
+
   // Fit the view when the timeframe changes or the first candles arrive.
   const fitKey = `${interval}:${candles.length > 0}`;
   useEffect(() => {
@@ -615,6 +632,8 @@ export function ProChart({
   const reset = () => {
     engine?.reset();
     setScale("normal");
+    setInverted(false);
+    setAutoOn(true);
   };
   const toggleFull = () => {
     if (document.fullscreenElement) void document.exitFullscreen();
@@ -659,6 +678,13 @@ export function ProChart({
     const r = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - r.left;
     const y = e.clientY - r.top;
+    const axis = engine.axisWidth();
+    if (settings.scaleSide === "left" ? x < axis : x > r.width - axis) {
+      setCtx(null);
+      setScaleMenu({ x: Math.max(4, Math.min(x - 224, r.width - 232)), y: Math.min(y, r.height - 250) });
+      return;
+    }
+    setScaleMenu(null);
     const bar = engine.barAt(x);
     const time = bar === null || candles.length === 0 ? null : candles[Math.max(0, Math.min(candles.length - 1, bar))].time;
     setCtx({ x: Math.min(x, r.width - 248), y: Math.min(y, r.height - 280), price: engine.priceAt(y), time });
@@ -816,7 +842,14 @@ export function ProChart({
     }
     if (!engine || drag.current) return;
     const at = local(e);
-    const part = at ? (engine.drawings.drawingAt(at.x, at.y)?.part ?? null) : null;
+    const box = area.current?.getBoundingClientRect();
+    const axis = engine.axisWidth();
+    const onPrice = at && box ? (settings.scaleSide === "left" ? at.x < axis : at.x > box.width - axis) : false;
+    // The time axis is the strip under the candles (the library's own, about 28 px).
+    const onTime = at && box ? !onPrice && at.y > box.height - 28 : false;
+    const next = onPrice ? "price" : onTime ? "time" : null;
+    if (next !== overAxis) setOverAxis(next);
+    const part = at && !next ? (engine.drawings.drawingAt(at.x, at.y)?.part ?? null) : null;
     if (part !== hover) setHover(part);
   };
   const onDoubleClick = (e: MouseEvent<HTMLDivElement>) => {
@@ -850,6 +883,13 @@ export function ProChart({
     } else if (e.altKey && e.key.toLowerCase() === "r") {
       e.preventDefault();
       reset();
+    } else if (e.altKey && !mod && e.key.toLowerCase() === "a") {
+      e.preventDefault();
+      engine?.autoScale();
+      setAutoOn(true);
+    } else if (e.altKey && !mod && e.key.toLowerCase() === "i") {
+      e.preventDefault();
+      setInverted((v) => !v);
     } else if (mod && e.key.toLowerCase() === "z" && !e.shiftKey) {
       e.preventDefault();
       undo();
@@ -997,7 +1037,19 @@ export function ProChart({
         // On phones the chart grows by a pane's height for each indicator pane, so panes never squeeze the candles.
         style={{ "--chart-min": `${300 + 110 * computedStudies.filter((c) => c.study.pane === "pane").length}px` } as CSSProperties}
         className={`relative min-h-[300px] min-w-0 flex-1 touch-none overflow-hidden max-lg:min-h-[var(--chart-min)] ${
-          tool || zoomMode ? "cursor-crosshair" : dragged ? "cursor-grabbing" : hover === "body" ? "cursor-move" : hover ? "cursor-grab" : ""
+          tool || zoomMode
+            ? "cursor-crosshair"
+            : dragged
+              ? "cursor-grabbing"
+              : overAxis === "price"
+                ? "cursor-ns-resize"
+                : overAxis === "time"
+                  ? "cursor-ew-resize"
+                  : hover === "body"
+                    ? "cursor-move"
+                    : hover
+                      ? "cursor-grab"
+                      : ""
         }`}
         onContextMenu={onContext}
         onMouseDown={() => frame.current?.focus()}
@@ -1008,7 +1060,10 @@ export function ProChart({
         onClick={onChartClick}
         onDoubleClick={onDoubleClick}
         onMouseMove={onAreaMove}
-        onMouseLeave={() => setHover(null)}
+        onMouseLeave={() => {
+          setHover(null);
+          setOverAxis(null);
+        }}
       >
         <div ref={host} className={`absolute inset-0 ${view === "table" ? "invisible" : ""}`} aria-label={`${symbol} chart`} role="img" />
         {view === "chart" && (
@@ -1097,6 +1152,55 @@ export function ProChart({
         )}
         {view === "chart" && countdown}
         {view === "table" && <TableView candles={candles} k={k} fmt={fmt} />}
+        {view === "chart" && engine && !autoOn && (
+          // As on a trading terminal: once the price axis was stretched by hand, "A" fits it to the data again.
+          <button
+            type="button"
+            onClick={() => {
+              engine.autoScale();
+              setAutoOn(true);
+            }}
+            title="Auto (fits data to screen)"
+            aria-label="Fit the price scale to the data"
+            style={{ width: 22, ...(settings.scaleSide === "left" ? { left: Math.max(4, engine.axisWidth() / 2 - 11) } : { right: Math.max(4, engine.axisWidth() / 2 - 11) }) }}
+            className="absolute bottom-8 z-20 grid h-[22px] place-items-center rounded-[4px] border border-line-2 bg-panel-2/95 font-mono text-[11px] font-semibold text-signal shadow hover:border-signal/60"
+          >
+            A
+          </button>
+        )}
+        {view === "chart" && engine && scrolledBack && (
+          <button
+            type="button"
+            onClick={() => engine.scrollToLatest()}
+            title="Scroll to the newest bar"
+            aria-label="Scroll to the newest bar"
+            style={settings.scaleSide === "left" ? { right: 8 } : { right: engine.axisWidth() + 8 }}
+            className="absolute bottom-8 z-20 grid h-[22px] w-[26px] place-items-center rounded-[4px] border border-line-2 bg-panel-2/95 text-[13px] leading-none text-chrome shadow hover:border-chrome/50"
+          >
+            »
+          </button>
+        )}
+        {scaleMenu && (
+          <ScaleMenu
+            at={scaleMenu}
+            onClose={() => setScaleMenu(null)}
+            auto={autoOn}
+            onAuto={() => {
+              engine?.autoScale();
+              setAutoOn(true);
+            }}
+            onReset={() => {
+              engine?.autoScale();
+              setAutoOn(true);
+              setScale("normal");
+              setInverted(false);
+            }}
+            scale={scale}
+            setScale={setScale}
+            inverted={inverted}
+            onInvert={() => setInverted((v) => !v)}
+          />
+        )}
         {ctx && (
           <ContextMenu
             at={ctx}

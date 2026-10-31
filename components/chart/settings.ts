@@ -18,7 +18,8 @@ export type ChartType =
   | "heikin";
 
 export const CHART_TYPES: ChartType[] = ["bars", "candles", "hollow", "hlc", "line", "linemarkers", "step", "area", "hlcarea", "baseline", "columns", "highlow", "heikin"];
-export type ScaleMode = "normal" | "log" | "percent";
+/** Price scale modes, as on a trading terminal: regular, percent from the first visible bar, indexed to 100, log. */
+export type ScaleMode = "normal" | "log" | "percent" | "indexed";
 /** What the price axis shows: the token's price, or its market cap (price × total supply). */
 export type Units = "price" | "mcap";
 
