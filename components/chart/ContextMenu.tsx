@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import type { ChartOrderKind } from "@/lib/chartOrders";
 import { MenuItem } from "./ui";
 
 export type ContextAt = { x: number; y: number; price: number | null; time: number | null };
@@ -23,6 +24,7 @@ export function ContextMenu({
   drawings,
   onRemoveDrawings,
   onResetLayout,
+  orders,
 }: {
   at: ContextAt;
   fmt: (v: number) => string;
@@ -40,6 +42,8 @@ export function ContextMenu({
   drawings: number;
   onRemoveDrawings: () => void;
   onResetLayout: () => void;
+  /** Trading from the chart (Crux launches): the market's price in chart units, and how to open an order at a price. */
+  orders?: { last: number | null; onOrder: (kind: ChartOrderKind, price: number) => void };
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -73,6 +77,26 @@ export function ContextMenu({
         <MenuItem onClick={act(() => onCopyPrice(at.price!))}>
           Copy <span className="font-mono">{fmt(at.price)}</span>
         </MenuItem>
+      )}
+      {orders && at.price !== null && orders.last !== null && (
+        <>
+          <div className="my-1 border-t border-line" />
+          {at.price > orders.last ? (
+            <MenuItem onClick={act(() => orders.onOrder("takeProfit", at.price!))}>
+              <span className="text-up">Take profit</span> at <span className="font-mono">{fmt(at.price)}</span>
+            </MenuItem>
+          ) : (
+            <>
+              <MenuItem onClick={act(() => orders.onOrder("stopLoss", at.price!))}>
+                <span className="text-down">Stop loss</span> at <span className="font-mono">{fmt(at.price)}</span>
+              </MenuItem>
+              <MenuItem onClick={act(() => orders.onOrder("dip", at.price!))}>
+                <span className="text-up">Buy the dip</span> at <span className="font-mono">{fmt(at.price)}</span>
+              </MenuItem>
+            </>
+          )}
+          <div className="my-1 border-t border-line" />
+        </>
       )}
       {lockedTime !== null ? (
         <MenuItem onClick={act(() => onLockTime(null))}>Unlock vertical line</MenuItem>

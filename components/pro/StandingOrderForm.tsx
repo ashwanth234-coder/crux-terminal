@@ -151,6 +151,7 @@ export function StandingOrderForm({
   supply,
   tokenBalance,
   reserves,
+  preset,
 }: {
   type: Exclude<OrderType, "market">;
   crux: CruxAccountState;
@@ -162,11 +163,19 @@ export function StandingOrderForm({
   tokenBalance: bigint | null;
   /** The pool now: an order that would move it more than the solver's cap would never fill. */
   reserves: PoolReserves | null;
+  /** A trigger picked on the chart (USD per token), for one of this form's kinds. */
+  preset?: { kind: StandingKind; price: number } | null;
 }) {
   const settings = useTradeSettings();
   const side = type === "dip" ? "buy" : "sell";
   const kinds: StandingKind[] = type === "bracket" ? ["takeProfit", "stopLoss"] : [type];
-  const [pcts, setPcts] = useState<Record<StandingKind, number>>({ dip: RANGE.dip.start, stopLoss: RANGE.stopLoss.start, takeProfit: RANGE.takeProfit.start, trailing: RANGE.trailing.start });
+  const [pcts, setPcts] = useState<Record<StandingKind, number>>(() => {
+    const start = { dip: RANGE.dip.start, stopLoss: RANGE.stopLoss.start, takeProfit: RANGE.takeProfit.start, trailing: RANGE.trailing.start };
+    if (!preset || !price || !kinds.includes(preset.kind)) return start;
+    const r = RANGE[preset.kind];
+    const pct = Math.round(((preset.price / price - 1) * 100) * 10) / 10;
+    return { ...start, [preset.kind]: Math.min(r.max, Math.max(r.min, pct)) };
+  });
   const [usdc, setUsdc] = useState("");
   const [share, setShare] = useState(100);
   const [lifetime, setLifetime] = useState(LIFETIMES[1].seconds);

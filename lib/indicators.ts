@@ -845,7 +845,7 @@ export function easeOfMovement(candles: Candle[], n = 14): Series {
   );
 }
 
-export type StudyContext = { buyUsd: number[]; sellUsd: number[]; holders: Series };
+export type StudyContext = { buyUsd: number[]; sellUsd: number[]; holders: Series; poolUsd?: Series; top10?: Series };
 
 export const EMPTY_CONTEXT: StudyContext = { buyUsd: [], sellUsd: [], holders: [] };
 
@@ -893,6 +893,62 @@ export function holdersByCandle(times: number[], interval: number, transfers: { 
       j++;
     }
     out.push(count);
+  }
+  return out;
+}
+
+/**
+ * USDC in the pool at each candle's close, worked back from the pool's USDC now (`nowUsd`) through every swap since:
+ * a buy paid USDC in, a sell took it out. An estimate from the trades the chart reads (fees included).
+ */
+export function poolByCandle(times: number[], interval: number, nowUsd: number, trades: { time: number; side: "buy" | "sell"; usd: number }[]): Series {
+  const sorted = [...trades].sort((a, b) => b.time - a.time);
+  const out: Series = new Array<number | null>(times.length).fill(null);
+  let usd = nowUsd;
+  let j = 0;
+  for (let i = times.length - 1; i >= 0; i--) {
+    const end = times[i] + interval;
+    // Undo every trade after this candle closed.
+    while (j < sorted.length && sorted[j].time >= end) {
+      usd -= sorted[j].side === "buy" ? sorted[j].usd : -sorted[j].usd;
+      j++;
+    }
+    out[i] = Math.max(0, usd);
+  }
+  return out;
+}
+
+/** The share of `supply` (percent) the ten largest holders had at each candle's close, from transfers in time order. */
+export function top10ByCandle(times: number[], interval: number, transfers: { from: string; to: string; value: bigint; time: number }[], exclude: Set<string>, supply: bigint): Series {
+  if (supply <= BigInt(0)) return times.map(() => null);
+  const bal = new Map<string, bigint>();
+  const zero = BigInt(0);
+  const add = (a: string, v: bigint) => {
+    const k = a.toLowerCase();
+    if (exclude.has(k)) return;
+    bal.set(k, (bal.get(k) ?? zero) + v);
+  };
+  const out: Series = [];
+  let j = 0;
+  for (const t of times) {
+    const end = t + interval;
+    let moved = false;
+    while (j < transfers.length && transfers[j].time < end) {
+      const x = transfers[j];
+      if (x.value > zero) {
+        add(x.from, -x.value);
+        add(x.to, x.value);
+        moved = true;
+      }
+      j++;
+    }
+    if (!moved && out.length > 0) {
+      out.push(out[out.length - 1]);
+      continue;
+    }
+    const top = [...bal.values()].filter((v) => v > zero).sort((a, b) => (a > b ? -1 : a < b ? 1 : 0)).slice(0, 10);
+    const held = top.reduce((acc, v) => acc + v, zero);
+    out.push(Number((held * BigInt(1_000_000)) / supply) / 10_000);
   }
   return out;
 }
@@ -966,7 +1022,9 @@ export type StudyId =
   | "vprofile"
   | "netflow"
   | "buypressure"
-  | "holders";
+  | "holders"
+  | "liquidity"
+  | "top10";
 
 export type StudyGroup = "Trend" | "Bands" | "Oscillators" | "Volume" | "On-chain";
 
@@ -1641,6 +1699,29 @@ export const STUDIES: Study[] = [
     priced: false,
     params: [],
     compute: (c, ctx) => [line("holders", "Holders", "#c792ea", aligned(c, ctx.holders))],
+  },
+  {
+    id: "liquidity",
+    label: "Pool liquidity",
+    title: () => "Pool USDC",
+    group: "On-chain",
+    hint: "USDC in the pool at each candle's close, worked back from its reserves now through every swap since",
+    pane: "pane",
+    priced: false,
+    params: [],
+    compute: (c, ctx) => [line("liquidity", "Pool USDC", "#4cc9f0", aligned(c, ctx.poolUsd ?? []))],
+  },
+  {
+    id: "top10",
+    label: "Top 10 holders' share",
+    title: () => "Top 10 %",
+    group: "On-chain",
+    hint: "Share of the supply the ten largest wallets held at each candle's close (pools and protocol contracts left out)",
+    pane: "pane",
+    priced: false,
+    params: [],
+    levels: () => [25, 50],
+    compute: (c, ctx) => [line("top10", "Top 10 %", "#ffd166", aligned(c, ctx.top10 ?? []))],
   },
 ];
 

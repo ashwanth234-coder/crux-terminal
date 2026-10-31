@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useState, type ReactNode } from "react";
 import { erc20Abi, formatUnits, parseUnits, zeroAddress, type Address, type Hex } from "viem";
 import { useConnection, useReadContract } from "wagmi";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
@@ -24,6 +24,7 @@ import { LIVE_ORIGINS, originByKey, toUsdc6, type PayFrom } from "@/lib/crosscha
 import { SETTLER_DEPLOYED, TESTNET_USDC } from "@/lib/intents";
 import { TradeSettingsButton } from "@/components/pro/TradeSettingsButton";
 import { StandingOrderForm, type OrderType } from "@/components/pro/StandingOrderForm";
+import { useOrderRequests, type ChartOrderKind, type ChartOrderRequest } from "@/lib/chartOrders";
 import { useTradeSettings } from "@/hooks/useTradeSettings";
 import { USDC_DECIMALS, fmtTokens, fmtUsdc, formatRemaining, launchError, type TxStep } from "@/lib/launch";
 import { fmtTokenPrice, launchCaip19 } from "@/lib/launchTrade";
@@ -485,6 +486,14 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   // Market, or a standing order the keeper sends at its price (Crux account only): FOMO's Buy Dip / Stop Loss /
   // Take Profit, plus a trailing stop and take profit + stop loss together.
   const [orderType, setOrderType] = useState<OrderType>("market");
+  // A trigger picked on the chart (right-click → take profit / stop loss / buy the dip): the form reopens at it.
+  const [preset, setPreset] = useState<{ kind: ChartOrderKind; price: number; n: number } | null>(null);
+  const onChartOrder = useCallback((r: ChartOrderRequest) => {
+    setOrderType(r.kind);
+    setPreset((p) => ({ kind: r.kind, price: r.price, n: (p?.n ?? 0) + 1 }));
+    document.querySelector('[aria-label="Execution"]')?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, []);
+  useOrderRequests(auction.token, onChartOrder);
   const [amount, setAmount] = useState("");
   const [order, setOrder] = useState<OrderDraft | null>(null);
   // Buys can pay with test USDC on Base Sepolia, or on Arbitrum Sepolia (escrowed there, filled here on Base).
@@ -760,6 +769,8 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
 
       {orderType !== "market" ? (
         <StandingOrderForm
+          key={preset ? `chart-${preset.n}` : "form"}
+          preset={preset}
           type={orderType}
           crux={crux}
           token={market.token}

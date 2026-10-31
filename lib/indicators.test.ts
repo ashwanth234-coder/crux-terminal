@@ -141,7 +141,7 @@ test("every study computes on a long random walk without throwing or NaN", () =>
     p = Math.max(1, p + Math.sin(i) * 3 + (i % 7) - 3);
     return { time: i * 60, open: o, high: Math.max(o, p) + 1, low: Math.min(o, p) - 1, close: p, volume: 1 + (i % 5), trades: 1 };
   });
-  const ctx = { buyUsd: cs.map(() => 1), sellUsd: cs.map(() => 0.5), holders: cs.map((_, i) => i) };
+  const ctx = { buyUsd: cs.map(() => 1), sellUsd: cs.map(() => 0.5), holders: cs.map((_, i) => i), poolUsd: cs.map((_, i) => 1_000 + i), top10: cs.map(() => 42) };
   for (const s of STUDIES.filter((x) => !x.special)) {
     const lines = s.compute(cs, ctx, paramsOf({ id: s.id }));
     for (const line of lines) {
@@ -195,4 +195,31 @@ test("round 2 studies: known values", async () => {
   // Envelopes sit a fixed percentage around the SMA.
   const e = x.envelope(c, 3, 10);
   assert.ok(Math.abs(e.upper[9]! - 9 * 1.1) < 1e-9 && Math.abs(e.lower[9]! - 9 * 0.9) < 1e-9);
+});
+
+test("pool liquidity is worked back from the reserves now through each later swap", async () => {
+  const { poolByCandle } = await import("./indicators.ts");
+  // Candles at 0, 60, 120; a $10 buy at 70 and a $4 sell at 130; $100 in the pool now.
+  const out = poolByCandle([0, 60, 120], 60, 100, [
+    { time: 70, side: "buy", usd: 10 },
+    { time: 130, side: "sell", usd: 4 },
+  ]);
+  // After the sell (close of 120..180): 100. Before it (close of 60..120): 104. Before the buy (close of 0..60): 94.
+  assert.deepEqual(out, [94, 104, 100]);
+});
+
+test("top-10 share follows the transfers, leaving out excluded addresses", async () => {
+  const { top10ByCandle } = await import("./indicators.ts");
+  const supply = BigInt(1000);
+  const out = top10ByCandle(
+    [0, 60],
+    60,
+    [
+      { from: "0xpool", to: "0xa", value: BigInt(300), time: 10 },
+      { from: "0xpool", to: "0xb", value: BigInt(100), time: 70 },
+    ],
+    new Set(["0xpool"]),
+    supply,
+  );
+  assert.deepEqual(out, [30, 40]);
 });

@@ -10,10 +10,11 @@ import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { DESTINATION_SETTLER, useLaunchMarket } from "@/hooks/useLaunchMarket";
 import { useTokenTransfers } from "@/hooks/useTokenTransfers";
 import { useStandingOrders } from "@/hooks/useStandingOrders";
+import { useCreatorVestingDays } from "@/hooks/useCreatorVesting";
 import { barTime, markTrades, type MarkWho } from "@/lib/chartMarks";
 import { buildHolders } from "@/lib/holders";
 import { CRUX_SOLVER, PREVIOUS_SETTLERS, SETTLER } from "@/lib/intents";
-import { EMPTY_CONTEXT, computeInstance, flowByCandle, holdersByCandle, paramsOf, type StudyContext, type StudyId } from "@/lib/indicators";
+import { EMPTY_CONTEXT, computeInstance, flowByCandle, holdersByCandle, paramsOf, poolByCandle, top10ByCandle, type StudyContext, type StudyId } from "@/lib/indicators";
 import { INTERVALS, autoInterval, fillGaps, toCandles, type Candle } from "@/lib/candles";
 import { studyById } from "@/lib/indicators";
 import { fmtTokenPrice } from "@/lib/launchTrade";
@@ -28,6 +29,7 @@ import { DrawingPalette, TOOL_INFO, TOOL_KEYS } from "./DrawingPalette";
 import { PATTERN_LABELS, TOOL_POINTS, defaultStop, isPattern, type DrawPart, type DrawPoint, type DrawTool, type Drawing } from "./drawings";
 import { OverlaysButton } from "./OverlaysBar";
 import { SymbolSwitch } from "./SymbolSwitch";
+import { requestOrderAt } from "@/lib/chartOrders";
 import { TemplatesButton } from "./Templates";
 import { DEFAULT_CONFIG, DEFAULT_SETTINGS, loadLayout, loadSettings, palette, saveSettings, type ChartSettings, type ScaleMode } from "./settings";
 import { SettingsModal } from "./SettingsModal";
@@ -125,6 +127,8 @@ export function ProChart({
   // The same reads as the Holders tab (shared queries): who holds what, and every transfer to rebuild their trades.
   const transfers = useTokenTransfers(auction.token, factory, BigInt(id), auction.startTime - 86_400, !external);
   const market = useLaunchMarket(auction.token, auction.pair);
+  // The launch's own milestones, marked on the bars: graduation, the anti-sniper window closing, the creator's unlock.
+  const vestDays = useCreatorVestingDays(external ? null : factory, external ? null : BigInt(id), 4);
   const { address: wallet } = useConnection();
   const crux = useCruxAccount();
   const { orders: standingOrders } = useStandingOrders();
@@ -220,15 +224,30 @@ export function ProChart({
       interval,
       (swaps.data?.trades ?? []).map((t) => ({ time: t.time, side: t.side, usd: Number(t.usdc) / 1e6 })),
     );
-    if (!config.studies.some((s) => s.id === "holders" && !s.hidden) || !transfers.data) return { ...flow, holders: [] };
+    const shown = (id: StudyId) => config.studies.some((s) => s.id === id && !s.hidden);
+    const poolUsd =
+      shown("liquidity") && market.reserves
+        ? poolByCandle(
+            times,
+            interval,
+            Number(market.reserves.usdc) / 1e6,
+            (swaps.data?.trades ?? []).map((t) => ({ time: t.time, side: t.side, usd: Number(t.usdc) / 1e6 })),
+          )
+        : [];
+    if ((!shown("holders") && !shown("top10")) || !transfers.data) return { ...flow, holders: [], poolUsd };
     const exclude = new Set(
       [auction.pair, factory, CRUX_SOLVER, DESTINATION_SETTLER, SETTLER, ...PREVIOUS_SETTLERS.map((p) => p.address), market.batchPool ?? "", "0x000000000000000000000000000000000000dEaD", "0x0000000000000000000000000000000000000000"]
         .filter(Boolean)
         .map((a) => a.toLowerCase()),
     );
     const moves = transfers.data.items.filter((t) => t.kind === "transfer");
-    return { ...flow, holders: holdersByCandle(times, interval, moves, exclude) };
-  }, [config.studies, candles, interval, swaps.data, transfers.data, auction.pair, factory, market.batchPool]);
+    return {
+      ...flow,
+      poolUsd,
+      holders: shown("holders") ? holdersByCandle(times, interval, moves, exclude) : [],
+      top10: shown("top10") ? top10ByCandle(times, interval, moves, exclude, auction.totalSupply) : [],
+    };
+  }, [config.studies, candles, interval, swaps.data, transfers.data, auction.pair, auction.totalSupply, factory, market.batchPool, market.reserves]);
   // Every study the trader added, with their settings; hidden ones keep their place in the legend but aren't drawn.
   const computedStudies = useMemo(
     () =>
@@ -425,8 +444,20 @@ export function ProChart({
             ];
           })
           .sort((a, b) => (a.time as number) - (b.time as number));
-    engine.setMarkers(bars);
-  }, [engine, candles, k, fmt, minMove, config.type, drawnStudies, config.alerts, settings, marksHidden, gradPrice, shownMarks, mine, last, standingOrders, auction.token]);
+    const milestones: { time: number; text: string; color: string }[] = [];
+    if (!external && !marksHidden && auction.settledAt > 0) {
+      milestones.push({ time: auction.settledAt, text: "Graduated", color: "#f3f3f0" });
+      if (market.protectedUntil && market.protectedUntil > auction.settledAt) milestones.push({ time: market.protectedUntil, text: "Anti-sniper ends", color: "#5cc08c" });
+      if (vestDays) milestones.push({ time: auction.settledAt + vestDays * 86_400, text: "Creator unlocked", color: "#ffd166" });
+    }
+    const events: SeriesMarker<Time>[] = milestones.flatMap((m) => {
+      // Only within the candles: a milestone still to come has no bar to sit on yet.
+      if (times.length === 0 || m.time < times[0] || m.time > times[times.length - 1] + interval) return [];
+      const time = barTime(times, m.time);
+      return time === null ? [] : [{ time: time as Time, position: "aboveBar" as const, shape: "square" as const, color: m.color, text: m.text, size: 0.6 }];
+    });
+    engine.setMarkers([...bars, ...events].sort((a, b) => (a.time as number) - (b.time as number)));
+  }, [engine, candles, k, fmt, minMove, config.type, drawnStudies, config.alerts, settings, marksHidden, gradPrice, shownMarks, mine, last, standingOrders, auction.token, auction.settledAt, external, market.protectedUntil, vestDays, interval]);
 
   useChartAlerts({ external, slot, crux, auction, symbol, interval, gradPrice, config, set, candles, last, studyCtx, fmt, k, flash, replaying });
 
@@ -1083,6 +1114,11 @@ export function ProChart({
               replace(DEFAULT_CONFIG);
               flash("Chart layout reset for this token");
             }}
+            orders={
+              external
+                ? undefined
+                : { last: last ? last.close * k : null, onOrder: (kind, at) => requestOrderAt({ token: auction.token, kind, price: at / k }) }
+            }
           />
         )}
         {toast && (
