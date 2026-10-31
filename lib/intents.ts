@@ -133,13 +133,23 @@ export const FACTORY_V6 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V6) ??
 const FACTORY_V7_ADDRESS: Address | null = "0xeacB98371D5597c20A9ECDf6f09726817489722e";
 export const FACTORY_V7 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V7) ?? FACTORY_V7_ADDRESS;
 
-/** The batch factory behind a launch version (/launch/v2…v7/[id]). */
-export function batchFactory(version: 2 | 3 | 4 | 5 | 6 | 7): Address | null {
-  return version === 7 ? FACTORY_V7 : version === 6 ? FACTORY_V6 : version === 5 ? FACTORY_V5 : version === 4 ? FACTORY_V4 : version === 3 ? FACTORY_V3 : FACTORY_V2;
+/**
+ * CruxFactoryV8: V7 with every launch token at an address ending in 5afe (the creator's app mines the CREATE2 salt, see
+ * lib/tokenSalt.ts). Safe-owned from block one, no account factory on testnet, so it takes wallet launches; launches
+ * from a Crux account stay on V7. crux-contracts/broadcast/DeployFactoryV8.s.sol; NEXT_PUBLIC_CRUX_FACTORY_V8 overrides it.
+ */
+const FACTORY_V8_ADDRESS: Address | null = "0x3AdAd45b7B0327B28EF8bdDB3efbf4e3f72AC58c";
+export const FACTORY_V8 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V8) ?? FACTORY_V8_ADDRESS;
+
+/** The batch factory behind a launch version (/launch/v2…v8/[id]). */
+export function batchFactory(version: 2 | 3 | 4 | 5 | 6 | 7 | 8): Address | null {
+  return version === 8 ? FACTORY_V8 : version === 7 ? FACTORY_V7 : version === 6 ? FACTORY_V6 : version === 5 ? FACTORY_V5 : version === 4 ? FACTORY_V4 : version === 3 ? FACTORY_V3 : FACTORY_V2;
 }
 
-/** Where new launches go: the newest batch factory configured. */
-export const LAUNCH_FACTORY: { address: Address; version: 2 | 3 | 4 | 5 | 6 | 7 } | null = FACTORY_V7
+/** Where new wallet launches go: the newest batch factory configured. */
+export const LAUNCH_FACTORY: { address: Address; version: 2 | 3 | 4 | 5 | 6 | 7 | 8 } | null = FACTORY_V8
+  ? { address: FACTORY_V8, version: 8 }
+  : FACTORY_V7
   ? { address: FACTORY_V7, version: 7 }
   : FACTORY_V6
   ? { address: FACTORY_V6, version: 6 }

@@ -10,6 +10,7 @@ import {
   FACTORY_V5,
   FACTORY_V6,
   FACTORY_V7,
+  FACTORY_V8,
   PREVIOUS_SETTLERS,
   SETTLER,
 } from "@/lib/intents";
@@ -50,7 +51,7 @@ export type TraderRank = {
   markets: string[];
 };
 
-const factoryOf: Record<number, Address | null | undefined> = { 2: FACTORY_V2, 3: FACTORY_V3, 4: FACTORY_V4, 5: FACTORY_V5, 6: FACTORY_V6, 7: FACTORY_V7 };
+const factoryOf: Record<number, Address | null | undefined> = { 2: FACTORY_V2, 3: FACTORY_V3, 4: FACTORY_V4, 5: FACTORY_V5, 6: FACTORY_V6, 7: FACTORY_V7, 8: FACTORY_V8 };
 
 async function coinRow(p: PairInfo, l: FeedLaunch, now: number): Promise<CoinRow> {
   const { trades } = await readTrades(l).catch(() => ({ trades: [] }));

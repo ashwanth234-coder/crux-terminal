@@ -5,7 +5,7 @@ import { getAddress, type Address } from "viem";
 import { useAllLaunches } from "@/hooks/useLaunches";
 import { usePoolSwaps } from "@/hooks/usePoolSwaps";
 import { toCandles, type Candle } from "@/lib/candles";
-import { FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7 } from "@/lib/intents";
+import { FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7, FACTORY_V8 } from "@/lib/intents";
 import { Popover, Tool } from "./ui";
 
 /** A token compared on the chart: its pool, when it started trading, and its line's colour. */
@@ -27,7 +27,7 @@ export function CompareFeed({ item, interval, onCandles }: { item: CompareItem; 
  * the candles all switch to a % scale from the first visible bar, so their moves line up.
  */
 export function CompareButton({ current, items, onChange }: { current: Address; items: CompareItem[]; onChange: (next: CompareItem[]) => void }) {
-  const { launches } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7);
+  const { launches } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7, FACTORY_V8);
   const [query, setQuery] = useState("");
   const tradable = launches.filter((l) => l.v2 && l.v2.status === 1 && getAddress(l.v2.pair) !== getAddress(current));
   const q = query.trim().toLowerCase();

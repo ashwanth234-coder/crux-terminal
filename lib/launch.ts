@@ -97,6 +97,7 @@ export function formatRemaining(seconds: number) {
 }
 
 const REVERTS: Record<string, string> = {
+  NotVanity: "The token address wasn't a …5afe one (the launch details changed after it was prepared). Try again.",
   UnknownAuction: "No auction with this id exists on the factory.",
   NotLive: "This auction has already been settled.",
   WindowClosed: "The deposit window has closed. Settle the auction to finish it.",

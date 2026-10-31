@@ -2,7 +2,7 @@ import { connection } from "next/server";
 import { createPublicClient, http } from "viem";
 import { baseSepolia } from "viem/chains";
 import { cruxBatchFactoryAbi } from "@/contracts/abis/batchAuction";
-import { FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7 } from "@/lib/intents";
+import { FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7, FACTORY_V8 } from "@/lib/intents";
 import { phaseV2, toAuctionV2, type AuctionV2 } from "@/lib/launchV2";
 
 /** How many of the newest V3 auctions to consider. */
@@ -26,16 +26,26 @@ function pickTerminal(auctions: { id: number; auction: AuctionV2 }[], now: numbe
 }
 
 async function latestTerminal(): Promise<string> {
-  // The newest factory first: V5 once deployed, else V4, else V3.
-  const version = FACTORY_V7 ? 7 : FACTORY_V6 ? 6 : FACTORY_V5 ? 5 : FACTORY_V4 ? 4 : 3;
-  const address = FACTORY_V7 ?? FACTORY_V6 ?? FACTORY_V5 ?? FACTORY_V4 ?? FACTORY_V3;
-  if (!address) return FALLBACK;
-  const factory = { address, abi: cruxBatchFactoryAbi } as const;
-  const count = Number(await client.readContract({ ...factory, functionName: "auctionCount" }));
+  // The newest factory that has launches: a factory fresh out of deployment has none yet.
+  const candidates = ([[8, FACTORY_V8], [7, FACTORY_V7], [6, FACTORY_V6], [5, FACTORY_V5], [4, FACTORY_V4], [3, FACTORY_V3]] as const).filter(
+    (c): c is readonly [8 | 7 | 6 | 5 | 4 | 3, `0x${string}`] => c[1] !== null,
+  );
+  let version: number | null = null;
+  let factory: { address: `0x${string}`; abi: typeof cruxBatchFactoryAbi } | null = null;
+  let count = 0;
+  for (const [v, address] of candidates) {
+    const f = { address, abi: cruxBatchFactoryAbi } as const;
+    const n = Number(await client.readContract({ ...f, functionName: "auctionCount" }));
+    if (n > 0) {
+      [version, factory, count] = [v, f, n];
+      break;
+    }
+  }
+  if (!factory || version === null) return FALLBACK;
   const ids = Array.from({ length: Math.min(count, LOOKBACK) }, (_, i) => count - 1 - i);
   if (ids.length === 0) return FALLBACK;
   const results = await client.multicall({
-    contracts: ids.map((id) => ({ ...factory, functionName: "getAuction" as const, args: [BigInt(id)] as const })),
+    contracts: ids.map((id) => ({ ...factory!, functionName: "getAuction" as const, args: [BigInt(id)] as const })),
   });
   const auctions = ids.flatMap((id, i) => {
     const r = results[i];

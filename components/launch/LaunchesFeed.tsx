@@ -8,7 +8,7 @@ import { Leaderboard } from "@/components/launch/Leaderboard";
 import { Shell } from "@/components/launch/LaunchView";
 import { useAllLaunches, type LaunchSummary } from "@/hooks/useLaunches";
 import { useNow } from "@/hooks/useLaunchAuction";
-import { FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7 } from "@/lib/intents";
+import { FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7, FACTORY_V8 } from "@/lib/intents";
 import { type Phase } from "@/lib/launch";
 import { describeLaunch } from "@/lib/launchSummary";
 import { launchKey, useWatchlist } from "@/lib/watchlist";
@@ -51,7 +51,7 @@ function sortRows(rows: Row[], sort: Sort) {
 export function LaunchesFeed() {
   const uid = useId();
   const now = useNow();
-  const { total, launches, loading, error } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7);
+  const { total, launches, loading, error } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7, FACTORY_V8);
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<Sort>("ending");
   const watchlist = useWatchlist();
@@ -78,7 +78,7 @@ export function LaunchesFeed() {
   const visible = sortRows(rows.filter(matches), sort);
 
   return (
-    <Shell mode={FACTORY || FACTORY_V2 || FACTORY_V3 || FACTORY_V4 || FACTORY_V5 || FACTORY_V6 || FACTORY_V7 ? "live" : null}>
+    <Shell mode={FACTORY || FACTORY_V2 || FACTORY_V3 || FACTORY_V4 || FACTORY_V5 || FACTORY_V6 || FACTORY_V7 || FACTORY_V8 ? "live" : null}>
       <div className="flex flex-wrap items-end justify-between gap-6">
         <div>
           <h1 className="font-display text-[clamp(2.4rem,5.4vw,4.4rem)] text-chrome">
@@ -94,7 +94,7 @@ export function LaunchesFeed() {
 
       <Leaderboard />
 
-      {!FACTORY && !FACTORY_V2 && !FACTORY_V3 && !FACTORY_V4 && !FACTORY_V5 && !FACTORY_V6 && !FACTORY_V7 ? (
+      {!FACTORY && !FACTORY_V2 && !FACTORY_V3 && !FACTORY_V4 && !FACTORY_V5 && !FACTORY_V6 && !FACTORY_V7 && !FACTORY_V8 ? (
         <p className="mt-12 border-y border-line py-10 text-center text-[14px] text-muted">
           This build has no Crux factory configured (NEXT_PUBLIC_CRUX_FACTORY), so there are no on-chain launches to list.
         </p>

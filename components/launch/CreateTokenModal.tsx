@@ -4,12 +4,12 @@ import { useId, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { getAddress, keccak256, parseAbi, parseEventLogs, parseUnits, toHex, type Address, type Hex } from "viem";
 import { useConfig, useConnection, useReadContract, useSwitchChain } from "wagmi";
-import { waitForTransactionReceipt } from "wagmi/actions";
+import { readContract, waitForTransactionReceipt } from "wagmi/actions";
 import { Modal, KineticLoader } from "@/components/ui/Modal";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
-import { cruxBatchFactoryAbi, cruxFactoryAbi, factoryV4Abi, factoryV6Abi } from "@/contracts/abis/batchAuction";
+import { cruxBatchFactoryAbi, cruxFactoryAbi, factoryV4Abi, factoryV6Abi, factoryV8Abi } from "@/contracts/abis/batchAuction";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
-import { BATCH_WINDOW_SECONDS, FACTORY, LAUNCH_FACTORY } from "@/lib/intents";
+import { BATCH_WINDOW_SECONDS, FACTORY, FACTORY_V7, LAUNCH_FACTORY } from "@/lib/intents";
 import { V2_FEE, V2_MIN_LEAD_SECONDS, V2_SPLIT, V2_WINDOWS, buyersNeeded, windowLabel } from "@/lib/launchV2";
 import { launchError, previewHref } from "@/lib/launch";
 import { simulateThenWrite } from "@/lib/preflight";
@@ -28,6 +28,7 @@ import type { Conflict } from "@/lib/antiVamp";
 import { launchFromAccount } from "@/lib/account";
 import { imageDataUri } from "@/lib/tokenMeta";
 import { DisplayImageField } from "./DisplayImageField";
+import { endsIn5afe, mineTokenSalt } from "@/lib/tokenSalt";
 
 type Form = {
   name: string;
@@ -183,7 +184,8 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
   // with the account as creator (no gas, nothing needed on Base). The wallet stays one tap away.
   const crux = useCruxAccount();
   const [launchAs, setLaunchAs] = useState<"account" | "wallet">("account");
-  const canLaunchFromAccount = LAUNCH_FACTORY?.version === 7 && crux.loggedIn && crux.launchAccount !== null;
+  // Gasless launches from a Crux account go through V7 (V8 can't name a Crux account as creator on testnet).
+  const canLaunchFromAccount = FACTORY_V7 !== null && crux.loggedIn && crux.launchAccount !== null;
   const accountLaunch = canLaunchFromAccount && launchAs === "account";
   // V6 launches take the factory's batch-only window when created (owner-tunable); V5's is always 24 hours.
   const protectionWindow = useReadContract({
@@ -270,9 +272,9 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     router.push(`/launch/v7/${auctionId.toString()}`);
   };
 
-  /** CruxFactoryV2/V3: scheduled start, per-wallet cap, locked liquidity (same createAuction on both). */
-  const deployV2 = async (factory: Address, version: 2 | 3 | 4 | 5 | 6 | 7) => {
-    if (version === 7 && accountLaunch) return deployFromAccount(factory);
+  /** CruxFactoryV2 and later: scheduled start, per-wallet cap, locked liquidity. */
+  const deployV2 = async (factory: Address, version: 2 | 3 | 4 | 5 | 6 | 7 | 8) => {
+    if (accountLaunch && FACTORY_V7) return deployFromAccount(FACTORY_V7);
     if (!isConnected || !address) {
       openConnect();
       return;
@@ -284,7 +286,37 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     setPhase({ kind: "deploying", label: "Checking the launch settings…" });
     const params = launchParams();
     const onPrompt = () => setPhase({ kind: "deploying", label: "Confirm the launch in your wallet…" });
-    // V6 records both creator choices; V4/V5 the vesting choice; V2/V3 always vest over 30 days.
+    // V8 deploys the token at a 5afe address: mine the salt for this wallet against the factory's init-code hash.
+    if (version >= 8) {
+      setPhase({ kind: "deploying", label: "Preparing your …5afe token address…" });
+      const unsalted = { ...params, salt: `0x${"0".repeat(64)}` as Hex };
+      const [deployer, initHash] = await Promise.all([
+        readContract(config, { address: factory, abi: factoryV8Abi, functionName: "tokenDeployer", chainId: TESTNET.id }),
+        readContract(config, { address: factory, abi: factoryV8Abi, functionName: "tokenInitCodeHash", args: [unsalted, address], chainId: TESTNET.id }),
+      ]);
+      // Let the label paint before the (about a second of) hashing.
+      await sleep(30);
+      const { salt, token } = mineTokenSalt(deployer, initHash);
+      const salted = { ...params, salt };
+      const predicted = await readContract(config, { address: factory, abi: factoryV8Abi, functionName: "predictToken", args: [salted, address], chainId: TESTNET.id });
+      if (getAddress(predicted) !== getAddress(token) || !endsIn5afe(predicted)) throw new Error("The token address didn't check out. Try again.");
+      const short5afe = `${predicted.slice(0, 6)}…${predicted.slice(-4)}`;
+      const v8hash = await simulateThenWrite(
+        config,
+        address,
+        { address: factory, abi: factoryV8Abi, functionName: "createAuctionWithOptions", chainId: TESTNET.id, args: [salted, form.instantUnlock, form.antiSniper] },
+        () => setPhase({ kind: "deploying", label: `Confirm the launch in your wallet · token ${short5afe}` }),
+      );
+      setPhase({ kind: "deploying", label: `Deploying $${form.symbol} at ${short5afe}…`, hash: v8hash });
+      const receipt = await waitForTransactionReceipt(config, { hash: v8hash, chainId: TESTNET.id });
+      const [created] = parseEventLogs({ abi: cruxBatchFactoryAbi, eventName: "AuctionCreated", logs: receipt.logs });
+      if (!created) throw new Error("Deployed, but no AuctionCreated event was found in the receipt.");
+      reset();
+      onClose();
+      router.push(`/launch/v8/${created.args.auctionId.toString()}`);
+      return;
+    }
+    // V6/V7 record both creator choices; V4/V5 the vesting choice; V2/V3 always vest over 30 days.
     const hash =
       version >= 6
         ? await simulateThenWrite(
@@ -855,6 +887,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                 <p className="text-[11.5px] leading-relaxed text-dim">
                   Signed with your login and launched on Base by Crux: no gas and nothing needed on Base, whatever chain your coins are on.
                   Your Crux account is the creator, so the creator fee and your share land there, withdrawable only to your bound address.
+                  {LAUNCH_FACTORY?.version === 8 && " Account launches get an ordinary token address; launch from your wallet for a …5afe one."}
                 </p>
               )}
             </div>
