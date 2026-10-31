@@ -17,7 +17,7 @@ import { usePoolSwaps } from "@/hooks/usePoolSwaps";
 import { useTokenTransfers } from "@/hooks/useTokenTransfers";
 import { TESTNET } from "@/lib/chains";
 import { buildHolders } from "@/lib/holders";
-import { CRUX_SOLVER, FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7, SETTLER_DEPLOYED, TESTNET_USDC, batchFactory } from "@/lib/intents";
+import { CRUX_SOLVER, FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7, FACTORY_V8, SETTLER_DEPLOYED, TESTNET_USDC, batchFactory } from "@/lib/intents";
 import { fmtTokens, fmtUsdc } from "@/lib/launch";
 import { fmtTokenPrice, launchCaip19 } from "@/lib/launchTrade";
 import { PRICE_DECIMALS, type AuctionV2, type BatchVersion } from "@/lib/launchV2";
@@ -60,7 +60,7 @@ export function Portfolio() {
   // Whose positions: the Crux account when logged in (unless the wallet is picked), else the connected wallet.
   const address = viaAccount ? crux.account! : wallet;
   const isConnected = Boolean(address);
-  const { launches, loading } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7);
+  const { launches, loading } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7, FACTORY_V8);
   const batch = useMemo(
     () => launches.filter((l): l is Position["launch"] => l.v2 !== null && l.version !== 1 && batchFactory(l.version as BatchVersion) !== null),
     [launches],

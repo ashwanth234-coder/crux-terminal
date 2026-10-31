@@ -20,7 +20,7 @@ export const V2_MIN_LEAD_SECONDS = 180;
  * vesting choice), V5 (V4 + 24 hours of batch-only trading in CruxBatchPool after graduation), V6 (V5 with a
  * per-launch window, 15 minutes by default, in CruxBatchPoolV2).
  */
-export type BatchVersion = 2 | 3 | 4 | 5 | 6 | 7;
+export type BatchVersion = 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 /** V3 and V4 put bid limits on the same 1% price-tick grid (V4 is V3 plus the creator's vesting choice). */
 export const usesTicks = (version: BatchVersion) => version >= 3;

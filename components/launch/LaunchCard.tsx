@@ -32,7 +32,7 @@ function Bar({ value, className }: { value: number; className: string }) {
 /** Identity first, then the one price everyone pays, then how far the auction has come. */
 export function LaunchCard({ launch, phase, now }: { launch: LaunchSummary; phase: Phase; now: number | null }) {
   const { auction, id } = launch;
-  const batchFactoryAddress = launch.version >= 2 ? batchFactory(launch.version as 2 | 3 | 4 | 5 | 6 | 7) : null;
+  const batchFactoryAddress = launch.version >= 2 ? batchFactory(launch.version as 2 | 3 | 4 | 5 | 6 | 7 | 8) : null;
   const vestDays = useCreatorVestingDays(batchFactoryAddress, id, launch.version);
   const antiSniper = useAntiSniperSeconds(batchFactoryAddress, id, launch.version);
   const badge = BADGE[phase];

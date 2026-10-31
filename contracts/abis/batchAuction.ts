@@ -1494,8 +1494,10 @@ export const factoryV4Abi = parseAbi([
   "function createAuctionWithVesting((string name, string symbol, string metadataURI, uint256 totalSupply, uint256 graduationTarget, uint64 startTime, uint32 batchWindow, uint256 maxAllocationPerWallet) params, bool instantUnlock) returns (uint256 auctionId, address token)",
   "function creatorVestingDuration(uint256 auctionId) view returns (uint256)",
   "event CreatorVestingSet(uint256 indexed auctionId, uint256 duration)",
-]);
-
+]);
+
+
+
 /**
  * CruxFactoryV6 additions: the creator's anti-sniper choice (one uniform-price batch after graduation, or straight to
  * Uniswap) next to V4's vesting choice, and the per-launch window it fixes (0 = unprotected).
@@ -1505,4 +1507,19 @@ export const factoryV6Abi = parseAbi([
   "function batchProtection(uint256 auctionId) view returns (uint256)",
   "function protectionWindow() view returns (uint256)",
   "event BatchProtectionSet(uint256 indexed auctionId, uint256 duration)",
+]);
+
+/**
+ * CruxFactoryV8: V6/V7's launch with a CREATE2 `salt` in the parameters (mined so the token address ends in 5afe), and
+ * the views a miner needs. Reads (getAuction, auctionCount, …) are V7's, unchanged.
+ */
+const V8_PARAMS =
+  "(string name, string symbol, string metadataURI, uint256 totalSupply, uint256 graduationTarget, uint64 startTime, uint32 batchWindow, uint256 maxAllocationPerWallet, bytes32 salt)";
+export const factoryV8Abi = parseAbi([
+  `function createAuctionWithOptions(${V8_PARAMS} params, bool instantUnlock, bool antiSniper) returns (uint256 auctionId, address token)`,
+  `function tokenInitCodeHash(${V8_PARAMS} params, address creator) view returns (bytes32)`,
+  `function predictToken(${V8_PARAMS} params, address creator) view returns (address)`,
+  "function tokenDeployer() view returns (address)",
+  // CruxTokenV2VanityDeployer's, bubbled up through the factory.
+  "error NotVanity(address token)",
 ]);
