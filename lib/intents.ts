@@ -135,10 +135,11 @@ export const FACTORY_V7 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V7) ??
 
 /**
  * CruxFactoryV8: V7 with every launch token at an address ending in 5afe (the creator's app mines the CREATE2 salt, see
- * lib/tokenSalt.ts). Safe-owned from block one, no account factory on testnet, so it takes wallet launches; launches
- * from a Crux account stay on V7. crux-contracts/broadcast/DeployFactoryV8.s.sol; NEXT_PUBLIC_CRUX_FACTORY_V8 overrides it.
+ * lib/tokenSalt.ts). Safe-owned from block one and bound to CruxAccountFactoryV3, so it takes wallet launches and
+ * gasless launches from a 5afe Crux account. crux-contracts/broadcast/DeployOneAccount.s.sol (it replaced the first V8,
+ * 0x3AdA…C58c, which had no account factory and no launches); NEXT_PUBLIC_CRUX_FACTORY_V8 overrides it.
  */
-const FACTORY_V8_ADDRESS: Address | null = "0x3AdAd45b7B0327B28EF8bdDB3efbf4e3f72AC58c";
+const FACTORY_V8_ADDRESS: Address | null = "0xdB9f226fb44D5E8d25e2aACA4f7080c83011CfB5";
 export const FACTORY_V8 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V8) ?? FACTORY_V8_ADDRESS;
 
 /** The batch factory behind a launch version (/launch/v2…v8/[id]). */
