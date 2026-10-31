@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useId, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { erc20Abi, formatUnits, parseUnits, zeroAddress, type Address, type Hex } from "viem";
 import { useConnection, useReadContract } from "wagmi";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
@@ -25,7 +26,7 @@ import { SETTLER_DEPLOYED, TESTNET_USDC } from "@/lib/intents";
 import { TradeSettingsButton } from "@/components/pro/TradeSettingsButton";
 import { StandingOrderForm, type OrderType } from "@/components/pro/StandingOrderForm";
 import { useOrderRequests, type ChartOrderKind, type ChartOrderRequest } from "@/lib/chartOrders";
-import { useTradeSettings } from "@/hooks/useTradeSettings";
+import { slippageFor, useTradeSettings } from "@/hooks/useTradeSettings";
 import { USDC_DECIMALS, fmtTokens, fmtUsdc, formatRemaining, launchError, type TxStep } from "@/lib/launch";
 import { fmtTokenPrice, launchCaip19 } from "@/lib/launchTrade";
 import { NO_LIMIT, V3_TICK_STEP_PERCENT, parsePriceUsd, priceUsd, usesTicks, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
@@ -562,7 +563,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
             source: TEST_USDC_SOURCE,
             originLabel: viaSolana ? "Solana devnet" : fromOrigin ? fromOrigin.name : "Base Sepolia",
             asset: { address: market.token, caip19: market.caip19, decimals: market.decimals },
-            slippageBps: trade.slippageBps,
+            slippageBps: slippageFor(trade, side),
             ...(fromOrigin ? { payFrom: fromOrigin.key } : {}),
           };
         })()
@@ -624,7 +625,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
           {
             label: t("ticket.minReceived"),
             value: side === "buy" ? `${signedMin.toLocaleString("en-US", { maximumFractionDigits: 2 })} ${symbol}` : `$${signedMin.toFixed(6)}`,
-            hint: `Guaranteed on-chain: signed into your intent, ${(trade.slippageBps / 100).toFixed(trade.slippageBps % 100 === 0 ? 0 : 1)}% under the quote (your slippage setting). It can't fill below this.`,
+            hint: `Guaranteed on-chain: signed into your intent, ${(slippageFor(trade, side) / 100).toFixed(slippageFor(trade, side) % 100 === 0 ? 0 : 1)}% under the quote (your ${side} slippage). It can't fill below this.`,
           },
           {
             label: t("ticket.liquidityImpact"),
@@ -707,7 +708,22 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   };
 
   const pick = (v: bigint) => setAmount(formatUnits(v, decimals));
-  const fraction = (v: bigint | null, n: number) => (v ? (v * BigInt(n)) / BigInt(100) : null);
+  // One-click trading (the gear's switch): a quick size places the order as soon as the ticket has priced it, which is
+  // the next render, or at once when that size is already in the box. From a wallet it opens the review to confirm.
+  // The latest submit, priced for whatever is in the box (refreshed after every render).
+  const submitLatest = useRef(sign);
+  useLayoutEffect(() => {
+    submitLatest.current = sign;
+  });
+  const quick = (v: bigint) => {
+    // Nothing to trade from yet (logged out, no wallet): a quick size only fills the box.
+    if (!trade.instant || !(viaAccount || isConnected)) return pick(v);
+    const next = formatUnits(v, decimals);
+    // Render the new size now, so the submit below sees the order priced for it.
+    flushSync(() => setAmount(next));
+    submitLatest.current();
+  };
+  const fraction = (v: bigint | null, n: number) => (v ? (v * BigInt(Math.round(n * 100))) / BigInt(10_000) : null);
   // Buys: the trader's four dollar sizes (the gear sets them), unavailable beyond the balance. Sells: a share of the bag.
   const usdcUnits = (usd: number) => BigInt(Math.round(usd * 1e6));
   const presets =
@@ -716,8 +732,8 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
           label: `$${usd.toLocaleString("en-US", { maximumFractionDigits: 2 })}`,
           value: usdcBalance !== null && usdcUnits(usd) > usdcBalance ? null : usdcUnits(usd),
         }))
-      : [25, 50, 75, 100].map((n) => ({ label: `${n}%`, value: fraction(tokenBalance, n) }));
-  useExecutionHotkeys({ presets: presets.map((p) => () => p.value && pick(p.value)), onSubmit: sign });
+      : trade.sellPresets.map((n) => ({ label: `${n}%`, value: fraction(tokenBalance, n) }));
+  useExecutionHotkeys({ presets: presets.map((p) => () => p.value && quick(p.value)), onSubmit: sign });
 
   return (
     <div className="flex flex-col gap-3">
@@ -851,10 +867,13 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
         </span>
       </div>
 
-      <Presets items={presets} onPick={pick} />
+      <Presets items={presets} onPick={quick} />
       <div className="-mt-1 flex items-center justify-between gap-2">
-        <span className="text-[11px] text-dim">{side === "buy" ? t("ticket.quickBuy") : t("ticket.shareOfBag")}</span>
-        <TradeSettingsButton />
+        <span className="text-[11px] text-dim">
+          {side === "buy" ? t("ticket.quickBuy") : t("ticket.shareOfBag")}
+          {trade.instant && <span className="text-signal"> · one click</span>}
+        </span>
+        <TradeSettingsButton side={side} />
       </div>
 
       {rows.length > 0 && <RiskPreview rows={rows} note={tooBig ? `Crux skips orders that move a pool more than ${SOLVER_MAX_IMPACT_PCT}% in one batch. Trade smaller.` : undefined} />}

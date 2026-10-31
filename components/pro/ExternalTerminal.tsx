@@ -14,7 +14,7 @@ import { buttonClass } from "@/components/ui/Button";
 import { KineticLoader } from "@/components/ui/Modal";
 import { useNow } from "@/hooks/useLaunchAuction";
 import { usePoolSwaps } from "@/hooks/usePoolSwaps";
-import { useTradeSettings } from "@/hooks/useTradeSettings";
+import { slippageFor, useTradeSettings } from "@/hooks/useTradeSettings";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import {
   discoverPool,
@@ -270,8 +270,9 @@ function SwapPanel({ pool, symbol }: { pool: ExternalPool; symbol: string }) {
   const { address, chainId, isConnected } = useConnection();
   const { mutateAsync: switchChain } = useSwitchChain();
   const { openConnect } = useConnectModal();
-  const { slippageBps } = useTradeSettings();
+  const tradeSettings = useTradeSettings();
   const [side, setSide] = useState<Side>("buy");
+  const slippageBps = slippageFor(tradeSettings, side);
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -385,7 +386,7 @@ function SwapPanel({ pool, symbol }: { pool: ExternalPool; symbol: string }) {
     <div className="space-y-4 p-4">
       <div className="flex items-center justify-between">
         <h2 className="text-[15px] font-medium text-chrome">Swap on Uniswap</h2>
-        <TradeSettingsButton />
+        <TradeSettingsButton side={side} />
       </div>
       <div role="tablist" aria-label="Side" className="grid grid-cols-2 gap-1 rounded-lg border border-line bg-void/60 p-1">
         {(["buy", "sell"] as const).map((s) => (

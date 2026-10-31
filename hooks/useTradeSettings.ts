@@ -1,33 +1,61 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { SLIPPAGE_BPS } from "@/lib/intents";
 
 /**
  * The trader's own execution settings, kept in this browser and shared by every order ticket on the page: the
- * slippage allowance signed into each order's minimum, and the four dollar sizes of the quick-buy buttons.
+ * slippage allowance signed into each order's minimum (buys and sells set apart, as memecoin terminals do), the four
+ * quick-buy dollar sizes and quick-sell shares, and whether a quick size trades at once (one click or key 1–4).
  */
-export type TradeSettings = { slippageBps: number; buyPresets: number[] };
+export type TradeSettings = {
+  /** Buy slippage, basis points. */
+  slippageBps: number;
+  sellSlippageBps: number;
+  buyPresets: number[];
+  /** Percent of the bag, 1–100. */
+  sellPresets: number[];
+  /** A quick size places the order straight away (from a Crux account or a one-click session) instead of filling the box. */
+  instant: boolean;
+};
 
 const KEY = "crux:trade-settings:v1";
-export const DEFAULT_TRADE_SETTINGS: TradeSettings = { slippageBps: SLIPPAGE_BPS, buyPresets: [10, 20, 50, 100] };
-/** The widest allowance the ticket will sign: past this a "minimum" protects nothing. */
-export const MAX_SLIPPAGE_BPS = 2_000;
+/** Memecoin-terminal defaults: 10% either way. Crux fills at the batch's one price; this is only the floor. */
+export const DEFAULT_SLIPPAGE_BPS = 1_000;
+export const DEFAULT_TRADE_SETTINGS: TradeSettings = {
+  slippageBps: DEFAULT_SLIPPAGE_BPS,
+  sellSlippageBps: DEFAULT_SLIPPAGE_BPS,
+  buyPresets: [10, 20, 50, 100],
+  sellPresets: [25, 50, 75, 100],
+  instant: true,
+};
+/** The widest allowance the ticket will sign (the relay's price guard refuses anything looser). */
+export const MAX_SLIPPAGE_BPS = 5_000;
 export const MIN_SLIPPAGE_BPS = 10;
 
 let cached: TradeSettings | null = null;
 const listeners = new Set<() => void>();
 
+const clampBps = (v: unknown, fallback: number) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(MAX_SLIPPAGE_BPS, Math.max(MIN_SLIPPAGE_BPS, Math.round(n))) : fallback;
+};
+const four = (v: unknown, ok: (n: number) => boolean, fallback: number[]) => {
+  const list = Array.isArray(v) ? v.map(Number) : [];
+  return list.length === 4 && list.every(ok) ? list : fallback;
+};
+
 function read(): TradeSettings {
   if (cached) return cached;
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) ?? "null");
-    const bps = Number(raw?.slippageBps);
-    const presets = Array.isArray(raw?.buyPresets) ? raw.buyPresets.map(Number) : [];
+    // Settings saved before the per-side split (and its 0.5% default) start from the memecoin defaults.
+    const migrated = raw && raw.sellSlippageBps === undefined;
     cached = {
-      slippageBps: Number.isFinite(bps) ? Math.min(MAX_SLIPPAGE_BPS, Math.max(MIN_SLIPPAGE_BPS, Math.round(bps))) : SLIPPAGE_BPS,
-      buyPresets:
-        presets.length === 4 && presets.every((v: number) => Number.isFinite(v) && v > 0) ? presets : DEFAULT_TRADE_SETTINGS.buyPresets,
+      slippageBps: migrated ? DEFAULT_SLIPPAGE_BPS : clampBps(raw?.slippageBps, DEFAULT_SLIPPAGE_BPS),
+      sellSlippageBps: migrated ? DEFAULT_SLIPPAGE_BPS : clampBps(raw?.sellSlippageBps, DEFAULT_SLIPPAGE_BPS),
+      buyPresets: four(raw?.buyPresets, (n) => Number.isFinite(n) && n > 0, DEFAULT_TRADE_SETTINGS.buyPresets),
+      sellPresets: four(raw?.sellPresets, (n) => Number.isFinite(n) && n > 0 && n <= 100, DEFAULT_TRADE_SETTINGS.sellPresets),
+      instant: typeof raw?.instant === "boolean" ? raw.instant : true,
     };
   } catch {
     cached = DEFAULT_TRADE_SETTINGS;
@@ -53,3 +81,6 @@ const subscribe = (l: () => void) => {
 export function useTradeSettings(): TradeSettings {
   return useSyncExternalStore(subscribe, read, () => DEFAULT_TRADE_SETTINGS);
 }
+
+/** The slippage for a side, in basis points. */
+export const slippageFor = (s: TradeSettings, side: "buy" | "sell") => (side === "buy" ? s.slippageBps : s.sellSlippageBps);

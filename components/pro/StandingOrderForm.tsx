@@ -5,7 +5,7 @@ import { formatUnits, parseUnits, type Address, type Hex } from "viem";
 import { buttonClass } from "@/components/ui/Button";
 import { TradeSettingsButton } from "@/components/pro/TradeSettingsButton";
 import type { CruxAccountState } from "@/hooks/useCruxAccount";
-import { useTradeSettings } from "@/hooks/useTradeSettings";
+import { slippageFor, useTradeSettings } from "@/hooks/useTradeSettings";
 import { useStandingOrders } from "@/hooks/useStandingOrders";
 import { TESTNET_USDC } from "@/lib/intents";
 import { fmtTokens } from "@/lib/launch";
@@ -216,7 +216,7 @@ export function StandingOrderForm({
         ? (tokenBalance * BigInt(Math.round(share * 100))) / BigInt(10_000)
         : BigInt(0);
   const triggerOf = (k: StandingKind) => (price ?? 0) * (1 + (k === "trailing" ? -pcts.trailing : pcts[k]) / 100);
-  const floors = kinds.map((k) => (price ? standingFloor(side, amountIn, triggerOf(k), decimals, settings.slippageBps) : BigInt(0)));
+  const floors = kinds.map((k) => (price ? standingFloor(side, amountIn, triggerOf(k), decimals, slippageFor(settings, side)) : BigInt(0)));
   const overBalance = side === "buy" && crux.usdc !== null && amountIn > crux.usdc;
   const impact = reserves && amountIn > BigInt(0) ? (tradeRisk(side, amountIn, reserves)?.poolImpactPct ?? null) : null;
   const tooBig = impact !== null && impact > SOLVER_MAX_IMPACT_PCT;
@@ -304,7 +304,7 @@ export function StandingOrderForm({
                 ${v}
               </button>
             ))}
-            <TradeSettingsButton />
+            <TradeSettingsButton side={side} />
           </div>
         </>
       ) : (
@@ -332,7 +332,7 @@ export function StandingOrderForm({
                 {p}%
               </button>
             ))}
-            <TradeSettingsButton />
+            <TradeSettingsButton side={side} />
           </div>
         </>
       )}
@@ -366,7 +366,7 @@ export function StandingOrderForm({
             </div>
           ))}
           <p className="px-3 py-1.5 text-[10.5px] leading-snug text-dim">
-            The minimum is the trigger price less the 0.6% pool fee and spread and your {(settings.slippageBps / 100).toFixed(1)}% slippage. If the price gaps past it, the
+            The minimum is the trigger price less the 0.6% pool fee and spread and your {(slippageFor(settings, side) / 100).toFixed(1)}% {side} slippage. If the price gaps past it, the
             order refunds to your account instead of filling worse.
             {side === "sell" && kinds.some((k) => k === "stopLoss" || k === "trailing") && " The keeper decides when a stop sells; it can never sell under the minimum."}
           </p>
