@@ -17,7 +17,7 @@ import { PAY_SOURCES, usd } from "@/lib/tokens";
 /** A graduated Crux launch: Base Sepolia only, priced from its locked pool, paid in Base Sepolia test USDC. */
 export type LaunchTrade = { symbol: string; market: LaunchMarket };
 
-const NOT_LISTED = "Not listed for intents yet";
+const NOT_LISTED = "Not listed for Crux orders yet";
 
 const TEST_USDC_SOURCE = PAY_SOURCES.find((s) => s.id === "base-usdc") ?? PAY_SOURCES[0];
 
@@ -65,7 +65,7 @@ export function TradeWidget({ launch }: { launch: LaunchTrade }) {
   const overBudget = !isConnected ? false : side === "buy" ? notional > available : qty > tokenHeld;
   // Why this token can't be traded right now (shown on the button).
   const blocked = !SETTLER_DEPLOYED
-    ? "Intents aren't live in this build"
+    ? "Crux orders aren't live in this build"
     : !market.reserves
       ? market.loading
         ? "Reading the pool…"
@@ -197,14 +197,14 @@ export function TradeWidget({ launch }: { launch: LaunchTrade }) {
           side === "sell" ? `Not enough $${symbol}` : "Insufficient test USDC"
         ) : (
           <>
-            Review Intent <ArrowRight />
+            Review order <ArrowRight />
           </>
         )}
       </button>
 
       <p aria-live="polite" className="mt-2 min-h-[30px] text-center text-[11px] leading-snug text-muted">
         {blocked === NOT_LISTED ? (
-          <>This launch isn&apos;t listed on the intent settlers yet · Base Sepolia testnet</>
+          <>This launch isn&apos;t listed for Crux orders yet · Base Sepolia testnet</>
         ) : (
           <>Base Sepolia testnet · priced from the locked Uniswap pool · test funds only</>
         )}

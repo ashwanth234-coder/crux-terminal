@@ -9,13 +9,13 @@ const MECHANISMS = [
     fact: "One clearing price",
   },
   {
-    name: "Intent execution",
-    body: "Sign what you want, not how to get it. A solver fills the order from its own capital and is repaid from escrow.",
-    fact: "ERC-7683 orders",
+    name: "One-signature orders",
+    body: "Sign what you want, not how to get it. Crux fills your order in a batch where everyone pays the same price, and your funds move only when it fills.",
+    fact: "Everyone pays the same price",
   },
   {
     name: "Any chain in",
-    body: `Pay with test USDC on ${ORIGIN_NAMES}. The solver fills on Base; no bridge, no network switch. ${SOON_LINE}.`,
+    body: `Pay with test USDC on ${ORIGIN_NAMES}. Crux fills on Base; no bridge, no network switch. ${SOON_LINE}.`,
     fact: "Five networks",
   },
   {

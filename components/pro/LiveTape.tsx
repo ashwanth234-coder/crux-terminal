@@ -51,7 +51,7 @@ function CruxBadge({ venue }: { venue: "intent" | "batch" }) {
     <span
       title={
         venue === "intent"
-          ? "Through Crux: a signed intent with an on-chain minimum, filled by the Crux solver in a batch"
+          ? "Through Crux: a signed order with an on-chain minimum, filled by Crux in a batch at one price"
           : "Through Crux: cleared in the anti-sniper batch pool at the batch's one uniform price"
       }
       className="inline-flex items-center gap-1 rounded-[3px] border border-signal/50 bg-signal/10 px-1.5 py-px font-mono text-[9.5px] uppercase tracking-[0.12em] text-signal"
@@ -279,7 +279,7 @@ export function LiveTape({
                       <td className={td}>
                         <span className="inline-flex items-center gap-1.5">
                           {t.viaIntent ? (
-                            <Trader address={t.to} label="Crux solver" focused={false} />
+                            <Trader address={t.to} label="Crux" focused={false} />
                           ) : (
                             <Trader address={t.to} me={mine.has(t.to.toLowerCase())} focused={focus !== null && getAddress(focus) === getAddress(t.to)} onFocus={onFocus} />
                           )}

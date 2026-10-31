@@ -32,7 +32,7 @@ export function MyOrders({ token, symbol }: { token: Address; symbol: string }) 
     <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-line">
       <SolanaOrders token={token} />
       {!SETTLER_DEPLOYED
-        ? note("The intent settler isn't deployed on this build.")
+        ? note("Crux orders aren't live on this build.")
         : !isConnected || !enabled
           ? note(`Connect a wallet to see your ${symbol} orders.`)
           : error && intents.length === 0
@@ -40,7 +40,7 @@ export function MyOrders({ token, symbol }: { token: Address; symbol: string }) 
             : isLoading
               ? note("Reading your orders from Base Sepolia…")
               : mine.length === 0
-                ? note(`No ${symbol} orders from this wallet yet. Signed trade intents show here until a solver fills them.`)
+                ? note(`No ${symbol} orders from this wallet yet. Signed orders show here until they fill.`)
                 : (
                     <ul className="divide-y divide-line px-3">
                       {mine.map((intent) => (

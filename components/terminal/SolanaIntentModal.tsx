@@ -157,18 +157,18 @@ export function SolanaIntentModal({ request, onClose }: { request: SolanaOrderRe
               ? flow.message
               : flow.kind === "open"
                 ? status.data?.state === "closed"
-                  ? `Done: $${draft.symbol} delivered to ${short(request.payee)} on Base Sepolia, and the solver was repaid on Solana.`
+                  ? `Done: $${draft.symbol} delivered to ${short(request.payee)} on Base Sepolia, settled from Solana.`
                   : status.data?.state === "proven"
-                    ? "Filled on Base Sepolia. The Hyperlane proof reached Solana; the escrow is settling."
+                    ? "Filled on Base Sepolia. Confirming on Solana; nothing more to do."
                     : refundable
-                      ? "No solver filled this order in time. Refund your USDC."
+                      ? "Not filled in time. Refund your USDC."
                       : refundAt !== null && status.data?.late
                         ? `Not filled in time. Your refund is available at ${refundClock(refundAt)}; My orders keeps the button for you.`
-                      : "Escrowed on Solana. Waiting for the solver's fill on Base Sepolia (then a Hyperlane proof, about a minute)."
+                      : "USDC held on Solana. Crux fills it on Base Sepolia, usually in about 20 s; Solana confirms shortly after."
                 : `Pay with USDC on Solana devnet, receive $${draft.symbol} on Base Sepolia. Testnet only, no real funds.`;
 
   return (
-    <Modal open onClose={close} locked={busy} title="Review intent" subtitle="Pay from Solana: escrowed on Solana, filled on Base, proven by Hyperlane.">
+    <Modal open onClose={close} locked={busy} title="Review order" subtitle="Pay from Solana, receive on Base. Settled from Solana in about 20 s.">
       <p role="status" aria-live="polite" className={`flex items-start gap-2 text-[12.5px] leading-snug ${flow.kind === "error" ? "text-down" : "text-chrome/85"}`}>
         {(busy || (flow.kind === "open" && status.data?.state !== "closed" && !refundable)) && <KineticLoader className="mt-0.5 shrink-0 text-signal" />}
         <span>{note}</span>
@@ -192,7 +192,7 @@ export function SolanaIntentModal({ request, onClose }: { request: SolanaOrderRe
       <dl className="mt-3 divide-y divide-line">
         <Row label="Paid from" value={payer ? `${payer.label} · ${short(payer.publicKey.toBase58())}` : "Not connected"} />
         <Row label="Delivered to" value={short(request.payee)} hint="Your address on Base Sepolia" />
-        <Row label="Settlement" value="Hyperlane fill proof" hint="The escrow pays the solver only after Base proves the fill; otherwise you can refund 6 h after the deadline" />
+        <Row label="Settlement" value="Settled from Solana" hint="Your USDC is released only once the fill on Base is confirmed on Solana; otherwise you can refund it 6 h after the deadline" />
         <Row
           label="Solana cost"
           value={solAmount(SOLANA_OPEN_SOL)}

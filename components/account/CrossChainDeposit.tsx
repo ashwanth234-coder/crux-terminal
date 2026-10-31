@@ -203,7 +203,7 @@ export function CrossChainDeposit({ account, onOpened }: { account: Address; onO
           <a href={`${step.origin.explorer}/tx/${step.hash}`} target="_blank" rel="noopener noreferrer" className="underline decoration-line-2">
             tx
           </a>
-          ). The Crux solver pays it into your account on Base within a minute or two; your balance above updates by itself. If it isn&apos;t
+          ). Crux pays it into your account on Base within a minute or two; your balance above updates by itself. If it isn&apos;t
           filled, you can refund it on {step.origin.name} 6 hours after its deadline.
         </p>
       )}

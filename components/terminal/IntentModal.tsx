@@ -71,7 +71,7 @@ const ORDER_FILLED = parseAbiItem(ORDER_FILLED_EVENT);
 const ESCROW_SETTLED = 2;
 const ESCROW_REFUNDED = 3;
 
-const STEPS = ["Quote ready", "Awaiting signature", "Intent submitted", "Settlement confirmed"] as const;
+const STEPS = ["Quote ready", "Sign", "Order placed", "Filled"] as const;
 
 function Row({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -90,7 +90,7 @@ type Tone = "active" | "failed" | "halted";
 /** Four steps; a step only counts as done once the chain says so. "halted" marks a step that was never reached. */
 function Lifecycle({ stage, tone }: { stage: number; tone: Tone }) {
   return (
-    <ol className="grid grid-cols-4 gap-2" aria-label="Intent progress">
+    <ol className="grid grid-cols-4 gap-2" aria-label="Order progress">
       {STEPS.map((label, i) => {
         const done = i < stage;
         const current = i === stage;
@@ -135,7 +135,7 @@ const SETTLER_ERRORS: Record<string, string> = {
     "The settler couldn't verify your wallet's signature. Smart-account (EIP-7702) wallets need ERC-1271 support for this. Nothing was sent.",
   OpenDeadlinePassed: "This quote expired before it was submitted. Nothing was sent; review and sign again.",
   InvalidFillDeadline: "This quote expired before it was submitted. Nothing was sent; review and sign again.",
-  NonceAlreadyUsed: "This intent was already submitted. Nothing new was sent.",
+  NonceAlreadyUsed: "This order was already placed. Nothing new was sent.",
   UnsupportedInputAsset: "The settler doesn't escrow this asset yet. Nothing was sent.",
   UnsupportedInputToken: "The settler doesn't escrow this token yet. Nothing was sent.",
   InvalidOutputAsset: "This order has no output asset. Nothing was sent.",
@@ -269,7 +269,7 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
         // escrows the token itself (the settler lists it); everything else escrows test USDC.
         const sellsLaunch = !buying && Boolean(traded);
         if (!sellsLaunch && !TESTNET_ESCROW_ASSETS.has(input.caip19)) {
-          setFlow({ kind: "error", message: "The testnet settler escrows USDC only. Buy with Base USDC to open this intent." });
+          setFlow({ kind: "error", message: "Orders on testnet pay in USDC only. Buy with Base USDC to place this order." });
           return;
         }
         const escrowed = crossOrigin
@@ -370,7 +370,7 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
       break;
     case "signing":
       stage = 1;
-      note = "Sign the intent in your wallet. Signing costs no gas.";
+      note = "Sign the order in your wallet. The signature itself costs no gas.";
       break;
     case "broadcasting":
       stage = 2;
@@ -396,36 +396,36 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
       } else if (escrowStatus === ESCROW_SETTLED) {
         stage = 4;
         note = delivered.data
-          ? `Settlement confirmed. A solver delivered ${
+          ? `Filled. Crux delivered ${
               buying
                 ? `${qtyFmt.format(Number(formatUnits(delivered.data.amount, order.asset?.decimals ?? 18)))} $${order.symbol}`
                 : `${usd.format(Number(formatUnits(delivered.data.amount, payAsset.decimals)))} test USDC`
-            } and the escrow was released.`
-          : "Settlement confirmed. A solver filled your intent and the escrow was released.";
-        if (cross) note += ` The solver was paid on ${originName} only after a Hyperlane proof of its fill on Base.`;
+            } at the batch price everyone paid.`
+          : "Filled at the batch price everyone paid.";
+        if (cross) note += ` Your USDC on ${originName} was released only after the fill on Base was confirmed there.`;
       } else if (escrowStatus === ESCROW_REFUNDED) {
         stage = 3;
         failed = true;
-        note = "No solver filled this intent in time. The escrow was refunded to you.";
+        note = "Not filled in time. Your funds were refunded to you.";
       } else if (cross && delivered.data) {
         stage = 3;
         working = true;
-        note = `Delivered on Base Sepolia: ${qtyFmt.format(Number(formatUnits(delivered.data.amount, order.asset?.decimals ?? 18)))} $${order.symbol}. The fill proof is crossing to ${originName} through Hyperlane (usually under a few minutes); then your escrow is released to the solver.`;
+        note = `Delivered on Base Sepolia: ${qtyFmt.format(Number(formatUnits(delivered.data.amount, order.asset?.decimals ?? 18)))} $${order.symbol}. Confirming the fill back on ${originName} (usually a few minutes); nothing more to do.`;
       } else {
         stage = 3;
         working = true;
-        note = `Submitted and escrowed${cross ? ` on ${originName}` : ""}. Waiting for a solver to fill it ${cross ? "on Base Sepolia " : ""}at the next ${BATCH_WINDOW_SECONDS}-second batch.`;
+        note = `Order placed${cross ? ` on ${originName}` : ""}. Crux fills it ${cross ? "on Base Sepolia " : ""}in the next ${BATCH_WINDOW_SECONDS}-second batch, where everyone pays the same price.`;
       }
       break;
   }
 
   const ctaLabel: Record<Flow["kind"], string> = {
-    idle: "Confirm & sign intent",
+    idle: "Confirm & sign order",
     error: "Try again",
     switching: `Switching to ${originChain.name}…`,
     approving: "Approving test USDC…",
     signing: "Awaiting signature…",
-    broadcasting: "Submitting intent…",
+    broadcasting: "Placing order…",
     broadcast: "",
     local: "",
   };
@@ -444,7 +444,7 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
   const finished = flow.kind === "broadcast" || flow.kind === "local";
 
   return (
-    <Modal open={open} onClose={close} locked={busy} title="Review intent" subtitle="ERC-7683 order, signed with EIP-712.">
+    <Modal open={open} onClose={close} locked={busy} title="Review order" subtitle="One signature. Everyone in the batch pays the same price.">
       <Lifecycle stage={stage} tone={failed ? "failed" : halted ? "halted" : "active"} />
       <p role="status" aria-live="polite" className={`mt-3 flex items-start gap-2 text-[12.5px] leading-snug ${failed ? "text-down" : "text-chrome/85"}`}>
         {working && <KineticLoader className="mt-0.5 shrink-0 text-signal" />}
@@ -469,17 +469,17 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
       <dl className="mt-3 divide-y divide-line">
         <Row
           label="Route"
-          value={`${origin} → solver → ${destination.name}`}
+          value={`${origin} → Crux → ${destination.name}`}
           hint={
             cross
-              ? `No bridge: the solver delivers on Base from its own capital and is repaid on ${originName} after a Hyperlane proof of the fill`
-              : "No bridge: the solver delivers from its own capital"
+              ? `No bridge: Crux delivers on Base and takes your USDC on ${originName} only once that fill is confirmed there`
+              : "Crux fills it from the pool"
           }
         />
         <Row label="Destination chain" value={`${destination.name} · ${destination.id}`} />
         <Row
           label="Fees"
-          value={order.asset ? "0.30% solver spread" : "0.00% solver fee"}
+          value={order.asset ? "0.30% Crux spread" : "0.00% Crux fee"}
           hint={
             !SETTLER_DEPLOYED
               ? "The signature itself is gasless"
@@ -532,7 +532,7 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
                   rel="noopener noreferrer"
                   className="group flex items-center justify-between gap-3 text-muted transition-colors hover:text-chrome"
                 >
-                  <span>Solver fill{cross ? " (Base)" : ""}</span>
+                  <span>Fill{cross ? " (Base)" : ""}</span>
                   <span className="inline-flex items-center gap-1.5 font-mono text-chrome/80">
                     {delivered.data.tx.slice(0, 10)}…{delivered.data.tx.slice(-6)} <ArrowUpRight className="h-3 w-3" />
                   </span>
@@ -545,7 +545,7 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
             {stage === 4 ? "Done" : "Close"}
           </button>
           {flow.kind === "broadcast" && stage === 3 && !failed && (
-            <p className="text-center text-[11.5px] text-dim">You can close this. My intents keeps tracking it, and refunds open if no solver fills it.</p>
+            <p className="text-center text-[11.5px] text-dim">You can close this. My orders keeps tracking it, and refunds open if it isn&apos;t filled.</p>
           )}
         </div>
       ) : (
@@ -565,7 +565,7 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
           <p className="mt-3 text-center text-[11.5px] text-dim">
             {SETTLER_DEPLOYED
               ? `Approves test USDC if needed, signs, then submits on ${originChain.name}. Testnet only, no real funds.`
-              : "Gasless EIP-712 signature. No funds move until a solver fills the batch."}
+              : "The signature costs no gas. No funds move until the order fills."}
           </p>
         </>
       )}

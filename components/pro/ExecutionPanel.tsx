@@ -405,7 +405,7 @@ function GraduatedDesk({ auction, symbol }: { auction: AuctionV2; symbol: string
   }
   if (!market.protected) {
     return (
-      <section aria-label="Trade via intent" className="p-4">
+      <section aria-label="Trade on Crux" className="p-4">
         <h2 className="mb-3 text-[14px] font-medium text-chrome">{t("ticket.title")}</h2>
         <TradeForm auction={auction} symbol={symbol} />
       </section>
@@ -419,7 +419,7 @@ function GraduatedDesk({ auction, symbol }: { auction: AuctionV2; symbol: string
         {(
           [
             ["batch", "Batch order"],
-            ["intent", "Via intent"],
+            ["intent", "Crux order"],
           ] as const
         ).map(([m, text]) => (
           <button
@@ -552,7 +552,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   const overBalance = input !== null && (side === "buy" ? usdcBalance !== null && input > usdcBalance : tokenBalance !== null && input > tokenBalance);
   const tooBig = risk !== null && risk.poolImpactPct > SOLVER_MAX_IMPACT_PCT;
   const blocked = !SETTLER_DEPLOYED
-    ? "Intents aren't live in this build"
+    ? "Crux orders aren't live in this build"
     : market.protected && side === "sell" && !viaAccount
       ? "Sell in the batch directly (Batch order)"
       : !market.reserves
@@ -560,7 +560,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
         ? "Reading the pool…"
         : "Pool unavailable"
       : !listed
-        ? "Not listed for intents yet"
+        ? "Not listed for Crux orders yet"
         : null;
   const oneClickReady = !viaAccount && side === "buy" && payFrom === "base" && oneClick.session !== null;
   const overCap = oneClickReady && input !== null && oneClick.remaining !== null && input > oneClick.remaining;
@@ -592,13 +592,13 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
           {
             label: t("ticket.youReceive"),
             value: side === "buy" ? `${fmtTokens(risk.out)} ${symbol}` : usd6(risk.out),
-            hint: "The solver's quote from the locked pool, alone in its batch.",
+            hint: "Crux's quote from the locked pool, if you were alone in the batch.",
           },
           {
             label: "Expected slippage",
             value: pct(risk.slippagePct),
             tone: risk.slippagePct > 5 ? "danger" : risk.slippagePct > 2 ? "caution" : "plain",
-            hint: `Versus the pool's mid price: ${risk.poolImpactPct.toFixed(2)}% pool impact (incl. Uniswap's 0.3% fee) plus the 0.3% solver spread.`,
+            hint: `Versus the pool's mid price: ${risk.poolImpactPct.toFixed(2)}% pool impact (incl. Uniswap's 0.3% fee) plus the 0.3% Crux spread.`,
           },
           {
             label: t("ticket.minReceived"),
@@ -609,7 +609,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
             label: t("ticket.liquidityImpact"),
             value: pct(risk.poolImpactPct),
             tone: risk.poolImpactPct > 5 ? "caution" : "plain",
-            hint: `How far this trade moves the locked pool's price. The solver skips anything over ${SOLVER_MAX_IMPACT_PCT}%.`,
+            hint: `How far this trade moves the locked pool's price. Crux skips anything over ${SOLVER_MAX_IMPACT_PCT}%.`,
           },
         ]
       : [];
@@ -827,9 +827,9 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
         <span>
           {side === "buy"
             ? viaSolana
-              ? "USDC on Solana devnet · delivered on Base · Hyperlane-proven"
+              ? "USDC on Solana devnet · settled from Solana in about 20 s"
               : fromOrigin
-                ? `${fromOrigin.name} test USDC · delivered on Base · Hyperlane-proven`
+                ? `${fromOrigin.name} test USDC · delivered on Base, no bridge`
                 : "Base Sepolia test USDC"
             : `Selling ${symbol}`}
         </span>
@@ -844,7 +844,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
         <TradeSettingsButton />
       </div>
 
-      {rows.length > 0 && <RiskPreview rows={rows} note={tooBig ? `The solver skips orders that move a pool more than ${SOLVER_MAX_IMPACT_PCT}% in one batch. Trade smaller.` : undefined} />}
+      {rows.length > 0 && <RiskPreview rows={rows} note={tooBig ? `Crux skips orders that move a pool more than ${SOLVER_MAX_IMPACT_PCT}% in one batch. Trade smaller.` : undefined} />}
       <ProtectionRow>{t("ticket.minEnforced")}</ProtectionRow>
 
       {side === "buy" && payFrom === "base" && !viaAccount && <OneClickBar oneClick={oneClick} />}
@@ -857,20 +857,20 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
 
       {market.protected ? (
         <p className="text-[11px] leading-snug text-dim">
-          Route: your intent → Crux solver, which joins the batch pool&apos;s next 60-second batch for you and delivers your share of it (less
+          Route: your order → Crux, which joins the batch pool&apos;s next 60-second batch for you (everyone in it pays the same price) and delivers your share (less
           the 0.3% spread) once it clears. Your signed minimum still holds; if the batch can&apos;t meet it, you&apos;re refunded after the
           deadline.
         </p>
       ) : (
       <p className="text-[11px] leading-snug text-dim">
-        Route: your intent → Crux solver → Uniswap V2 pool{" "}
+        Route: your order → Crux → Uniswap V2 pool{" "}
         <a href={`${TESTNET_EXPLORER}/address/${auction.pair}`} target="_blank" rel="noopener noreferrer" className="font-mono underline decoration-line-2">
           {short(auction.pair)}
         </a>
         {market.price !== null && <> at {fmtTokenPrice(market.price)}</>}.{" "}
         {fromOrigin
-          ? `Escrowed on ${fromOrigin.name}, filled on Base in the next batch, and released to the solver only on a Hyperlane proof of that fill; refundable 6 hours after its deadline if unproven.`
-          : "Filled in the next 10-second batch, or refundable after its deadline."}
+          ? `Held on ${fromOrigin.name}, filled on Base in the next batch at the price everyone pays, and released only once that fill is confirmed on ${fromOrigin.name}; refundable 6 hours after its deadline otherwise.`
+          : "Filled in the next 10-second batch, where everyone pays the same price, or refundable after its deadline."}
       </p>
       )}
 

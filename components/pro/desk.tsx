@@ -28,8 +28,8 @@ const TAG: Record<DeskTag, { label: string; title: string }> = {
   top: { label: "Top 10", title: "One of the ten largest holders" },
   pool: { label: "Pool", title: "The locked Uniswap V2 pool or the batch pool" },
   auction: { label: "Auction", title: "The launch factory: unclaimed sale tokens and creator vesting" },
-  solver: { label: "Solver", title: "Crux solver inventory used to fill intents" },
-  settler: { label: "Settler", title: "A Crux settler (intent escrow)" },
+  solver: { label: "Crux", title: "Crux's inventory, used to fill orders" },
+  settler: { label: "Settler", title: "A Crux settler: holds orders until they fill" },
   burn: { label: "Burned", title: "0x…dEaD: can never move" },
 };
 

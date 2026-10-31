@@ -278,7 +278,7 @@ export function TokenBar({
                 <Stat label={t("stat.liq")} hint="Both sides of the locked pool, in USDC">
                   {market.reserves ? usdSmall((Number(market.reserves.usdc) / 1e6) * 2) : "…"}
                 </Stat>
-                <Stat label={t("stat.vol24h")} hint="USDC traded through the locked pool in the last 24 hours, intent fills included">
+                <Stat label={t("stat.vol24h")} hint="USDC traded through the locked pool in the last 24 hours, Crux order fills included">
                   {volume24h !== null ? usdAmount(volume24h) : swaps.isError ? "—" : "…"}
                 </Stat>
                 <Stat label={t("stat.holders")} hint="Wallets holding the token, from its transfers (pools, the auction and Crux contracts left out)">

@@ -90,8 +90,8 @@ export function TopTraders({
         {traders && rows.length === 0 && <p className="px-3 py-6 text-center text-[12px] text-dim">{focus ? "This wallet has no priced trades." : "No priced trades yet."}</p>}
       </div>
       <p className="px-1 pt-1.5 text-[11px] text-dim">
-        Ranked by realized + unrealized PnL in test USDC, at the pool price · auction claims count as buys at the clearing price · ≈ intent sells priced at
-        the solver&apos;s fill · * some tokens moved without a price and are left out.
+        Ranked by realized + unrealized PnL in test USDC, at the pool price · auction claims count as buys at the clearing price · ≈ Crux-order sells priced at
+        Crux&apos;s fill · * some tokens moved without a price and are left out.
       </p>
     </div>
   );

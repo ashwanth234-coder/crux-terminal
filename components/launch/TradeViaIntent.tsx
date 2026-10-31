@@ -18,21 +18,21 @@ export function TradeViaIntent({ token, pair, symbol }: { token: Address; pair: 
   const listed = market.listedForBuys || market.listedForSells;
 
   return (
-    <section aria-label="Trade via intent" className="rounded-2xl border border-line bg-panel p-5 sm:p-6">
+    <section aria-label="Trade on Crux" className="rounded-2xl border border-line bg-panel p-5 sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-[15px] font-medium text-chrome">Trade via intent</h2>
+          <h2 className="text-[15px] font-medium text-chrome">Trade on Crux</h2>
           <p className="mt-1 text-[12px] text-muted">Base Sepolia testnet · test USDC only</p>
         </div>
         {market.price !== null && <span className="shrink-0 font-mono text-[12px] text-muted">{fmtTokenPrice(market.price)}</span>}
       </div>
       <p className="mt-3 text-[12.5px] leading-snug text-muted">
-        Sign one intent to buy or sell ${symbol}. A solver fills it from the locked pool at the next {BATCH_WINDOW_SECONDS}-second batch, where every
+        Sign one order to buy or sell ${symbol}. Crux fills it from the locked pool in the next {BATCH_WINDOW_SECONDS}-second batch, where every
         order clears at one price. If nobody fills it, your escrow is refunded.
       </p>
       {!market.loading && !listed && (
         <p className="mt-3 rounded-lg border border-line-2 px-3 py-2 text-[12px] text-muted">
-          ${symbol} isn&apos;t listed on the intent settlers yet. The settlers&apos; owner lists graduated launches; until then, intents for it can&apos;t open.
+          ${symbol} isn&apos;t listed for Crux orders yet. Graduated launches are listed automatically, usually within seconds; until then, orders for it can&apos;t open.
         </p>
       )}
       {open ? (
@@ -41,7 +41,7 @@ export function TradeViaIntent({ token, pair, symbol }: { token: Address; pair: 
         </div>
       ) : (
         <button type="button" onClick={() => setOpen(true)} className={buttonClass("outline", "md", "mt-4 w-full rounded-xl")} aria-expanded={false}>
-          Trade via intent <ArrowRight />
+          Trade on Crux <ArrowRight />
         </button>
       )}
     </section>

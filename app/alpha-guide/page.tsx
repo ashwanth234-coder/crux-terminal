@@ -4,11 +4,13 @@ import { Shell } from "@/components/launch/LaunchView";
 import { CopyValue } from "@/components/guide/CopyValue";
 import { LinkButton, ArrowUpRight } from "@/components/ui/Button";
 import { SETTLER_VERSION } from "@/lib/intents";
+import { LIVE_NAMES, ORIGIN_NAMES, SOON_LINE } from "@/lib/networks";
+import { SOLANA_KEPT_SOL, SOLANA_MIN_SOL, SOLANA_OPEN_SOL, SOLANA_RETURNED_SOL, solAmount } from "@/lib/solanaEscrow";
 
 export const metadata: Metadata = {
   title: "Alpha tester guide · Crux",
   description:
-    "How to test Crux on Base Sepolia: wallet setup, faucets, launching and bidding in a batch auction, trading graduated tokens via intents, refunds and the alpha's trust model.",
+    "How to test Crux on Base Sepolia: wallet setup, faucets, launching and bidding in a batch auction, trading graduated tokens with one signature, paying from other chains, refunds and the alpha's trust model.",
 };
 
 /** Set NEXT_PUBLIC_ALPHA_FEEDBACK_URL (Telegram, Discord or a form) to show a feedback button. */
@@ -21,7 +23,7 @@ const SECTIONS = [
   { id: "overview", title: "Overview" },
   { id: "setup", title: "Network & wallet" },
   { id: "auction", title: "Launch & bid" },
-  { id: "trading", title: "Trade via intents" },
+  { id: "trading", title: "Trade graduated tokens" },
   { id: "troubleshooting", title: "Troubleshooting & refunds" },
   { id: "trust", title: "Trust disclosures" },
   { id: "feedback", title: "Feedback" },
@@ -30,13 +32,13 @@ const SECTIONS = [
 /** The live testnet contracts (Base Sepolia unless a link says otherwise). */
 const CONTRACTS: { name: string; address: string; href?: string }[] = [
   { name: "CruxFactoryV7 (launches)", address: "0xeacB98371D5597c20A9ECDf6f09726817489722e" },
-  { name: "CruxSettlerV4 (intent escrow)", address: "0x399147a5960A120A3b8b89A33a30500a561145D9" },
+  { name: "CruxSettlerV4 (holds orders until they fill)", address: "0x399147a5960A120A3b8b89A33a30500a561145D9" },
   { name: "CruxDestinationSettlerV2 (fills)", address: "0x62e5ed6BC2f604fad76152045559805c11D1cdf4" },
   { name: "CruxLister (automatic listing)", address: "0xCC99DaBf30b73978be799957717a2f7600cb39BF" },
-  { name: "CruxFillProver (Hyperlane fill proofs)", address: "0x7cb1aDd4975CbF1a5a3FA4fd60F11b010E4b29e8" },
+  { name: "CruxFillProver (confirms cross-chain fills, via Hyperlane)", address: "0x7cb1aDd4975CbF1a5a3FA4fd60F11b010E4b29e8" },
   { name: "CruxAccountFactoryV2 (Crux accounts)", address: "0xf8962965f04e20B95dAdD931fDe00121906a97DC" },
   { name: "Admin Safe (2-of-3)", address: "0x49441cbA3cF9Db98d39Df4bDf8bF1a9D4Ea4fb6d" },
-  { name: "Solver + keeper wallet", address: "0x69E422d3Cca945a44210684b57F85f556212AD67" },
+  { name: "Crux filler + keeper wallet", address: "0x69E422d3Cca945a44210684b57F85f556212AD67" },
   {
     name: "crux_escrow (Pay from Solana, Solana devnet)",
     address: "51VZTKfmnS85fvJ1rEBCuVQveqHg2XeN44ZiHeeNa8m5",
@@ -118,7 +120,7 @@ export default function AlphaGuidePage() {
               <span className="block text-steel">Base Sepolia testnet.</span>
             </h1>
             <p className="mt-6 max-w-[40rem] text-[16px] leading-relaxed text-chrome/70">
-              Everything you need to launch a token, bid in a fair batch auction and trade graduated tokens through intents. Every
+              Everything you need to launch a token, bid in a fair batch auction and trade graduated tokens with one signature. Every
               token here is a test token with no value.
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
@@ -141,10 +143,14 @@ export default function AlphaGuidePage() {
               </li>
               <li>{b("Limit bids and caps.")} You can cap the price you&apos;ll pay, and each wallet&apos;s deposit is capped by the creator.</li>
               <li>
-                {b("Intent trading.")} After a launch graduates, you trade its token by signing an intent. A solver fills it from the
-                token&apos;s locked Uniswap V2 pool.
+                {b("One-signature trading.")} After a launch graduates, you trade its token by signing an order. Crux fills it from
+                the token&apos;s locked Uniswap V2 pool in a batch where everyone pays the same price.
               </li>
             </ul>
+            <p>
+              {b("Chains.")} Tokens, auctions and pools live on Base Sepolia. You can trade from {LIVE_NAMES} (testnets; Solana
+              devnet), and nothing has to be bridged. {SOON_LINE}. Auction bids pay from Base Sepolia for now.
+            </p>
             <p>Use it like you would a real product, try to break it, and tell us what confused you.</p>
           </Section>
 
@@ -166,7 +172,7 @@ export default function AlphaGuidePage() {
             </dl>
 
             <Callout title="You need both test ETH and test USDC">
-              {b("ETH")} pays gas for every approval and contract call (launching, bidding, claiming, submitting an intent).{" "}
+              {b("ETH")} pays gas for every approval and contract call (launching, bidding, claiming, placing an order).{" "}
               {b("USDC")} is what you bid and trade with. Without ETH nothing sends; without USDC there&apos;s nothing to bid.
             </Callout>
 
@@ -251,47 +257,58 @@ export default function AlphaGuidePage() {
             </p>
           </Section>
 
-          <Section id="trading" title="4. Workflow 2: trading via intents">
+          <Section id="trading" title="4. Workflow 2: trading graduated tokens">
             <Steps
               items={[
                 <>
-                  On the home page {b("Terminal")} card, pick a graduated token ($V3, $QC2 or a new one), or open a graduated
-                  launch&apos;s page and use {b("Trade via intent")}.
+                  Open {b("Terminal")} in the top navigation on a graduated token ($V3, $QC2 or a new one), or open a graduated
+                  launch&apos;s page and use {b("Trade on Crux")}.
                 </>,
                 <>
                   Choose Buy or Sell and enter a small amount (or tap {b("$0.01")} / {b("$0.05")}). Read the {b("Risk preview")}: what
                   you receive, the minimum signed into your order, the slippage and the cost of selling straight back.
                 </>,
                 <>
-                  Click {b("Sign trade intent")}: approve the exact amount, sign the order (an EIP-712 signature, which is free), then
-                  submit it. Approving and submitting each cost a little test ETH. Your funds go into the settler&apos;s escrow.
+                  Click {b("Sign order")}: approve the exact amount, sign the order (the signature itself is free), then submit it.
+                  Approving and submitting each cost a little test ETH. The settler holds your funds until the order fills.
                 </>,
                 <>
-                  Within about a minute, the solver&apos;s next batch swaps in the token&apos;s Uniswap V2 pool and delivers to your
-                  wallet; then the escrow settles. The screen shows {b("Settlement confirmed")}.
+                  Within about a minute, Crux&apos;s next batch swaps in the token&apos;s Uniswap V2 pool and delivers to your wallet;
+                  everyone in that batch pays the same price. The screen shows {b("Filled")}.
                 </>,
               ]}
             />
             <Callout tone="warn" title="Keep trades tiny: $0.01 to $0.05">
               Testnet pools hold only a few dollars ($V3 about $1.50, $QC2 about $3). A $0.02 buy already moves the price 1 to 2%.
-              Bigger orders get heavy slippage by design of an AMM, and the solver skips orders that would move a pool more than
+              Bigger orders get heavy slippage by design of an AMM, and Crux skips orders that would move a pool more than
               10% in one batch. Your order&apos;s minimum-received limit protects you: if it can&apos;t be met, nothing fills and
               you refund.
             </Callout>
             <p className="text-[14px] text-chrome/65">
               A token marked {b("not listed")} graduated moments ago: the keeper lists every graduation of a Crux factory
-              automatically, usually within seconds. Fees: a 0.30% solver spread plus Uniswap&apos;s 0.3% pool fee, both included in
+              automatically, usually within seconds. Fees: a 0.30% Crux spread plus Uniswap&apos;s 0.3% pool fee, both included in
               the quote.
             </p>
+            <Callout title="Paying from another chain">
+              In the order form, tap a source under {b("Buying power")}: {ORIGIN_NAMES}, or a {b("Crux account")}. {SOON_LINE}.
+              <br />
+              {b("From an EVM wallet")}, you approve (if needed) and submit on that chain, paying a little of its test gas token
+              (ETH, or tBNB on BNB Chain). Crux fills on Base; your USDC there is released only once the fill is confirmed back on
+              that chain. {b("From a Crux account")}: no gas and no pop-up.
+              <br />
+              {b("From Solana")}, the order is filled on Base in about 20 seconds. Your wallet needs {SOLANA_MIN_SOL} devnet SOL:
+              opening the order costs {solAmount(SOLANA_OPEN_SOL)} in fees and storage, {solAmount(SOLANA_RETURNED_SOL)} comes
+              back when it fills or is refunded, and {solAmount(SOLANA_KEPT_SOL)} stays with the escrow&apos;s records.
+            </Callout>
           </Section>
 
           <Section id="troubleshooting" title="5. Troubleshooting & refunds">
-            <p>{b("An intent didn't fill.")} Every intent has a 10-minute fill deadline. If no solver fills it:</p>
+            <p>{b("An order didn't fill.")} Every order has a 10-minute fill deadline. If it isn&apos;t filled:</p>
             <Steps
               items={[
                 <>
-                  Open the home page {b("Terminal")} card and scroll to {b("My intents")}. Your order shows a countdown:{" "}
-                  {b("Refund opens in…")}
+                  Open the token in {b("Terminal")} and choose {b("My orders")}. Past its deadline, your order reads{" "}
+                  {b("Not filled in time · refund available at …")}, with a countdown.
                 </>,
                 <>
                   {SETTLER_VERSION >= 3
@@ -302,6 +319,10 @@ export default function AlphaGuidePage() {
                 </>,
               ]}
             />
+            <p className="text-[14px] text-chrome/65">
+              Paid from another chain: the refund opens 6 hours after the deadline, on that chain. Orders paid from Solana are listed
+              under {b("Paid from Solana")} in My orders, in the browser you placed them from, with the same refund time and button.
+            </p>
             <p>
               {b("MetaMask says “Requested resource not available” or hangs.")} Its Base Sepolia RPC is congested. Settings → Networks
               → Base Sepolia → replace the RPC URL with:
@@ -323,12 +344,12 @@ export default function AlphaGuidePage() {
             <p>This alpha is deliberately simple. You should know exactly what you&apos;re trusting:</p>
             <ul className="divide-y divide-line rounded-xl border border-line bg-panel">
               {[
-                ["One solver.", "A single solver daemon run by the Crux team fills every intent. If it's down, intents don't fill and you refund after the deadline."],
-                ["Escrow pays only the proven filler.", "On Base, the settler releases your escrow only to the solver the destination contract recorded as delivering your exact order; nobody else, the team included, can redirect it. Unfilled orders refund to you after the deadline."],
-                ["Cross-chain orders settle on a Hyperlane proof.", "Paid from Ethereum, Arbitrum or BNB Chain testnets, or from Solana devnet: the escrow on that chain is released only when a Hyperlane message from the Crux fill prover on Base proves who filled the order. This trusts Hyperlane's validators (the default security module). With no proof, you refund 6 hours after the deadline."],
+                ["One filler.", "A single filler run by the Crux team fills every order. If it's down, orders don't fill and you refund after the deadline."],
+                ["Escrow pays only the proven filler.", "On Base, the settler releases your funds only to the filler the destination contract recorded as delivering your exact order; nobody else, the team included, can redirect it. Unfilled orders refund to you after the deadline."],
+                ["Cross-chain orders are confirmed back on the paying chain.", "Paid from Ethereum, Arbitrum or BNB Chain testnets, or from Solana devnet: your funds on that chain are released only when a Hyperlane message from the Crux fill prover on Base proves who filled the order. This trusts Hyperlane's validators (the default security module). With no proof, you refund 6 hours after the deadline."],
                 ["Crux accounts: withdrawals only to your wallet.", "An email or Google account can trade, but its funds can only be withdrawn to the wallet you bound. Changing that wallet waits 48 hours (a timelock), and your current wallet can cancel the change and sweep everything to itself."],
                 ["Standing orders run without you.", "Take profit, stop loss, trailing stop and buy-the-dip orders wait for their price with this page closed. Your signed floor is enforced on-chain, so an order can never fill below it; the keeper decides when to send it. Orders in one group (TP + SL) are one-cancels-the-other: when one fills, the other can't."],
-                ["Automatic listing, admin by a Safe.", "Graduated tokens are listed for intent trading by a permissionless lister. Admin settings (the fee treasury, new factories, session limits) need 2 of the 3 signers of the Crux Safe."],
+                ["Automatic listing, admin by a Safe.", "Graduated tokens are listed for Crux orders by a permissionless lister. Admin settings (the fee treasury, new factories, session limits) need 2 of the 3 signers of the Crux Safe."],
                 ["Unaudited contracts, testnet only.", "Nothing here has been audited. The next contract set (including settler V5) is frozen for an external audit that hasn't started yet. Never use a wallet that holds real funds, and never share a private key or seed phrase with anyone, including us."],
               ].map(([t, d]) => (
                 <li key={t} className="px-4 py-3.5 text-[14px] leading-relaxed text-chrome/75">
