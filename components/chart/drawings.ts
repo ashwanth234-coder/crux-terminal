@@ -27,7 +27,13 @@ export type DrawTool =
   | "fibext"
   | "fibtime"
   | "circle"
-  | "curve";
+  | "curve"
+  | "xline"
+  | "rayline"
+  | "crossline"
+  | "infoline"
+  | "regression"
+  | "ellipse";
 
 /** Chart patterns: one point per click, all kept in `path`, labelled in order. */
 export const PATTERN_LABELS: Partial<Record<DrawTool, string[]>> = {
@@ -78,6 +84,12 @@ export const TOOL_POINTS: Record<DrawTool, number> = {
   triangle: 3,
   fibext: 3,
   fibtime: 2,
+  xline: 2,
+  rayline: 2,
+  crossline: 1,
+  infoline: 2,
+  regression: 2,
+  ellipse: 2,
   circle: 2,
   curve: 3,
 };
@@ -109,6 +121,12 @@ export const TOOL_COLOR: Record<DrawTool, string> = {
   fibtime: "#7bdff2",
   circle: "#c792ea",
   curve: "#ffd166",
+  xline: "#4cc9f0",
+  rayline: "#4cc9f0",
+  crossline: "#8f939b",
+  infoline: "#f3f3f0",
+  regression: "#ff9d6e",
+  ellipse: "#90be6d",
 };
 
 /** Trend-based Fib extension levels, measured from C by the A→B move. */
@@ -363,7 +381,26 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
       }
       case "trend":
       case "arrow":
+      case "infoline":
         return b !== null && distToSegment(p, a, b) <= NEAR;
+      case "xline":
+      case "rayline": {
+        const seg = b ? this.extended(a, b, d.tool === "xline") : null;
+        return seg !== null && distToSegment(p, seg[0], seg[1]) <= NEAR;
+      }
+      case "crossline":
+        return Math.abs(p.y - a.y) <= NEAR || Math.abs(p.x - a.x) <= NEAR;
+      case "regression":
+        return (this.regressionLines(d) ?? []).some(([u, v]) => distToSegment(p, u, v) <= NEAR);
+      case "ellipse": {
+        if (!b) return false;
+        const rx = Math.abs(b.x - a.x) / 2;
+        const ry = Math.abs(b.y - a.y) / 2;
+        if (rx < 1 || ry < 1) return false;
+        const cx = (a.x + b.x) / 2;
+        const cy = (a.y + b.y) / 2;
+        return ((p.x - cx) / (rx + NEAR)) ** 2 + ((p.y - cy) / (ry + NEAR)) ** 2 <= 1;
+      }
       case "rect":
       case "ruler":
         return b !== null && inBox(p, a, b, 2);
@@ -463,6 +500,53 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
     return `${v >= 0 ? "+" : ""}${v.toFixed(Math.abs(v) >= 100 ? 0 : 2)}%`;
   }
 
+  /** The line through `a` and `b` carried to the pane's edges: both ways (an extended line) or past `b` (a ray). */
+  private extended(a: XY, b: XY, both: boolean): [XY, XY] {
+    const far = Math.max(this.width, this.height) * 4;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len;
+    const uy = dy / len;
+    const end = { x: b.x + ux * far, y: b.y + uy * far };
+    return [both ? { x: a.x - ux * far, y: a.y - uy * far } : a, end];
+  }
+
+  /**
+   * A regression channel's lines on screen: the least-squares line through the closes between `a` and `b`, and the
+   * same line two standard deviations of the closes' distance from it above and below. Null with fewer than 2 candles.
+   */
+  private regressionLines(d: Drawing): [XY, XY][] | null {
+    if (!d.b) return null;
+    const from = Math.min(d.a.time, d.b.time);
+    const to = Math.max(d.a.time, d.b.time);
+    const inside = this.candles.filter((c) => c.time >= from && c.time <= to);
+    const n = inside.length;
+    if (n < 2) return null;
+    let sx = 0;
+    let sy = 0;
+    let sxy = 0;
+    let sxx = 0;
+    inside.forEach((c, i) => {
+      sx += i;
+      sy += c.close;
+      sxy += i * c.close;
+      sxx += i * i;
+    });
+    const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx || 1);
+    const intercept = (sy - slope * sx) / n;
+    const dev = Math.sqrt(inside.reduce((acc, c, i) => acc + (c.close - (intercept + slope * i)) ** 2, 0) / n);
+    const t0 = inside[0].time;
+    const t1 = inside[n - 1].time;
+    const at = (offset: number): [XY, XY] | null => {
+      const u = this.xy({ time: t0, price: intercept + offset });
+      const v = this.xy({ time: t1, price: intercept + slope * (n - 1) + offset });
+      return u && v ? [u, v] : null;
+    };
+    const lines = [at(0), at(2 * dev), at(-2 * dev)];
+    return lines.every((l): l is [XY, XY] => l !== null) ? lines : null;
+  }
+
   private drawOne(ctx: CanvasRenderingContext2D, d: Drawing, draft: boolean) {
     ctx.globalAlpha = draft ? 0.7 : 1;
     ctx.setLineDash([]);
@@ -491,6 +575,19 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
       ctx.stroke();
       const t = new Date(Math.round(d.a.time) * 1000);
       this.label(ctx, `${t.toISOString().slice(5, 16).replace("T", " ")} UTC`, a.x, this.height - 12, color, "center");
+      return;
+    }
+    if (d.tool === "crossline") {
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(0, a.y);
+      ctx.lineTo(width, a.y);
+      ctx.moveTo(a.x, 0);
+      ctx.lineTo(a.x, this.height);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      this.dot(ctx, a.x, a.y, color);
+      this.label(ctx, this.fmt(d.a.price * this.k), width - 4, a.y, color, "right");
       return;
     }
     if (d.tool === "emoji") {
@@ -594,6 +691,79 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
         ctx.fillStyle = color;
         ctx.fillText(String(FIB_TIME[i]), x + 3, 12);
       });
+      return;
+    }
+
+    if (d.tool === "xline" || d.tool === "rayline") {
+      const [u, v] = this.extended(a, b, d.tool === "xline");
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(u.x, u.y);
+      ctx.lineTo(v.x, v.y);
+      ctx.stroke();
+      this.dot(ctx, a.x, a.y, color);
+      this.dot(ctx, b.x, b.y, color);
+      return;
+    }
+
+    if (d.tool === "infoline") {
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      this.dot(ctx, a.x, a.y, color);
+      this.dot(ctx, b.x, b.y, color);
+      // Always labelled: the move, the bars and the time it spans.
+      const bars = Math.round((d.b.time - d.a.time) / this.interval);
+      const secs = Math.abs(d.b.time - d.a.time);
+      const span = secs >= 86_400 ? `${(secs / 86_400).toFixed(1)}d` : secs >= 3_600 ? `${(secs / 3_600).toFixed(1)}h` : `${Math.round(secs / 60)}m`;
+      this.label(ctx, `${this.pct(d.a.price, d.b.price)} · ${bars} bars · ${span}`, b.x + 8, b.y, color);
+      return;
+    }
+
+    if (d.tool === "regression") {
+      const lines = this.regressionLines(d);
+      if (!lines) {
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        return;
+      }
+      const [mid, up, down] = lines;
+      ctx.fillStyle = `${color}14`;
+      ctx.beginPath();
+      ctx.moveTo(up[0].x, up[0].y);
+      ctx.lineTo(up[1].x, up[1].y);
+      ctx.lineTo(down[1].x, down[1].y);
+      ctx.lineTo(down[0].x, down[0].y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(mid[0].x, mid[0].y);
+      ctx.lineTo(mid[1].x, mid[1].y);
+      ctx.stroke();
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      for (const [u, v] of [up, down]) {
+        ctx.beginPath();
+        ctx.moveTo(u.x, u.y);
+        ctx.lineTo(v.x, v.y);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      return;
+    }
+
+    if (d.tool === "ellipse") {
+      ctx.fillStyle = `${color}1a`;
+      ctx.beginPath();
+      ctx.ellipse((a.x + b.x) / 2, (a.y + b.y) / 2, Math.abs(b.x - a.x) / 2, Math.abs(b.y - a.y) / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
       return;
     }
 

@@ -118,7 +118,7 @@ export function Shell({ mode, children }: { mode: LaunchModel["mode"] | null; ch
                 className="hidden 2xl:inline-flex"
               />
             )}
-            <TokenSearch className="hidden w-[200px] md:block" />
+            <TokenSearch className="hidden w-[200px] xl:block" />
             <LanguageSwitcher className="hidden 2xl:flex" />
             <ThemeToggle />
             <AccountButton />

@@ -164,3 +164,35 @@ test("volume profile: the busiest level is the point of control, the value area 
   const inVa = p.rows.slice(p.vaLo, p.vaHi + 1).reduce((t, r) => t + r.buy + r.sell, 0);
   assert.ok(inVa >= 0.7 * p.total);
 });
+
+test("round 2 studies: every study returns one finite value (or null) per candle", async () => {
+  const { STUDIES, EMPTY_CONTEXT, paramsOf } = await import("./indicators.ts");
+  const candles = Array.from({ length: 300 }, (_, i) => {
+    const close = 100 + 10 * Math.sin(i / 7) + i * 0.05;
+    return { time: i * 60, open: close - 0.5, high: close + 1 + (i % 3), low: close - 1 - (i % 2), close, volume: 1_000 + (i % 11) * 100, trades: 1 };
+  });
+  for (const s of STUDIES) {
+    if (s.special) continue;
+    for (const l of s.compute(candles, EMPTY_CONTEXT, paramsOf({ id: s.id }))) {
+      assert.equal(l.values.length, candles.length, `${s.id}/${l.key} length`);
+      for (const v of l.values) assert.ok(v === null || Number.isFinite(v), `${s.id}/${l.key} value ${v}`);
+    }
+  }
+});
+
+test("round 2 studies: known values", async () => {
+  const x = await import("./indicators.ts");
+  const flat = (closes: number[], volume = 5) => closes.map((c, i) => ({ time: i, open: c, high: c + 1, low: c - 1, close: c, volume, trades: 1 }));
+  const c = flat([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  // Constant volume: VWMA is the SMA.
+  assert.deepEqual(x.vwma(c, 3), x.sma(c, 3));
+  // A straight line regresses onto itself.
+  assert.ok(Math.abs(x.linreg(c, 5)[9]! - 10) < 1e-9);
+  // Wilder's smoothing starts at the SMA.
+  assert.equal(x.smma(c, 3)[2], 2);
+  // Stochastic stays within 0..100.
+  for (const v of x.stochastic(c, 3).k) assert.ok(v === null || (v >= 0 && v <= 100));
+  // Envelopes sit a fixed percentage around the SMA.
+  const e = x.envelope(c, 3, 10);
+  assert.ok(Math.abs(e.upper[9]! - 9 * 1.1) < 1e-9 && Math.abs(e.lower[9]! - 9 * 0.9) < 1e-9);
+});

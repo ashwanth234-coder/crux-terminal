@@ -382,6 +382,21 @@ export class ChartEngine {
     this.fit();
   }
 
+  /**
+   * Squeezes (factor above 1) or stretches (below 1) the price axis around `y`, pixels from the top of the pane, as
+   * scrolling the price axis does on a trading terminal. Turns autoscale off; the auto button or a double-click on the
+   * axis turns it back on.
+   */
+  zoomPrice(factor: number, y: number) {
+    const scale = this.chart.priceScale(this.side);
+    const range = scale.getVisibleRange();
+    if (!range) return;
+    const mid = (range.from + range.to) / 2;
+    const at = this.main.coordinateToPrice(y) ?? mid;
+    scale.applyOptions({ autoScale: false });
+    scale.setVisibleRange({ from: at - (at - range.from) * factor, to: at + (range.to - at) * factor });
+  }
+
   autoScale() {
     this.chart.priceScale(this.side).applyOptions({ autoScale: true });
   }

@@ -29,7 +29,7 @@ export function TerminalShell({ children }: { children: ReactNode }) {
           </nav>
         </div>
         <div className="flex items-center gap-3">
-          <TokenSearch className="hidden w-[200px] md:block" />
+          <TokenSearch className="hidden w-[200px] xl:block" />
           <StatusTag status="testnet" label="Base Sepolia" className="hidden 2xl:inline-flex" />
           <LanguageSwitcher className="hidden 2xl:flex" />
           <ThemeToggle />

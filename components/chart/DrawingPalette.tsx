@@ -65,6 +65,28 @@ export const TOOL_INFO: Record<DrawTool, { label: string; key?: string; icon: Re
   fibext: { label: "Trend-based Fib extension", icon: svg(<path d="m2 13 4-8 3 5M2.5 3.5h11M2.5 6h11M2.5 8.5h11" {...S} strokeWidth={1} />) },
   fibtime: { label: "Fib time zones", icon: svg(<path d="M2.5 2v12M4.5 2v12M6.5 2v12M9.5 2v12M14 2v12" {...S} strokeWidth={1} />) },
   circle: { label: "Circle", icon: svg(<circle cx="8" cy="8" r="5.5" {...S} />) },
+  ellipse: { label: "Ellipse", icon: svg(<ellipse cx="8" cy="8" rx="6.5" ry="4" {...S} />) },
+  xline: { label: "Extended line", icon: svg(<path d="m1 14 14-12" {...S} />) },
+  rayline: {
+    label: "Ray",
+    icon: svg(
+      <>
+        <path d="m3 12.5 12-10" {...S} />
+        <circle cx="3" cy="12.5" r="1.5" fill="currentColor" />
+      </>,
+    ),
+  },
+  crossline: { label: "Cross line", icon: svg(<path d="M8 1.5v13M1.5 8h13" {...S} strokeDasharray="2 1.5" />) },
+  infoline: {
+    label: "Info line (move, bars, time)",
+    icon: svg(
+      <>
+        <path d="m2.5 12.5 8-7" {...S} />
+        <path d="M10.5 3.5h4M10.5 6h3" {...S} strokeWidth={1} />
+      </>,
+    ),
+  },
+  regression: { label: "Regression channel", icon: svg(<path d="m2 11 12-6M2 14l12-6M2 8l12-6" {...S} strokeWidth={1} />) },
   curve: { label: "Curve", icon: svg(<path d="M2 12C4 3 12 3 14 12" {...S} />) },
   pitchfork: { label: "Pitchfork", icon: svg(<path d="M2 13 8 8M8 8l6-5M8 8l6 1M8 8l6-1M8 8 14 3M5 6.5l5 4" {...S} />) },
   gannfan: { label: "Gann fan", icon: svg(<path d="M2.5 13.5 14 2.5M2.5 13.5 14 6.5M2.5 13.5 14 10.5M2.5 13.5 10 2.5M2.5 13.5 6 2.5" {...S} strokeWidth={1} />) },
@@ -106,10 +128,10 @@ export const TOOL_KEYS: Record<string, DrawTool> = Object.fromEntries(
 export const STICKERS = ["🚀", "🔥", "💎", "🐋", "📈", "📉", "⚠️", "✅", "❌", "👀", "🎯", "💀"];
 
 const GROUPS: { id: string; label: string; tools: DrawTool[] }[] = [
-  { id: "lines", label: "Lines", tools: ["trend", "ray", "hline", "vline", "arrow", "channel"] },
+  { id: "lines", label: "Lines", tools: ["trend", "rayline", "xline", "infoline", "ray", "hline", "vline", "crossline", "arrow", "channel", "regression"] },
   { id: "fib", label: "Fib, Gann and positions", tools: ["fib", "fibext", "fibtime", "pitchfork", "gannfan", "long", "short"] },
   { id: "patterns", label: "Patterns", tools: ["xabcd", "abcd", "headshoulders", "elliott", "triangle"] },
-  { id: "shapes", label: "Shapes and notes", tools: ["rect", "circle", "curve", "text", "callout"] },
+  { id: "shapes", label: "Shapes and notes", tools: ["rect", "circle", "ellipse", "curve", "text", "callout"] },
 ];
 
 const CURSORS: { id: ChartSettings["cursor"]; label: string; icon: ReactNode }[] = [

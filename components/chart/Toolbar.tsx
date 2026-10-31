@@ -57,6 +57,7 @@ export function Toolbar({
   onReplay,
   symbolSlot,
   compareSlot,
+  templatesSlot,
   overlaysSlot,
   layoutSlot,
 }: {
@@ -83,6 +84,8 @@ export function Toolbar({
   /** The symbol button at the start of the row (SymbolSwitch). */
   symbolSlot?: ReactNode;
   compareSlot?: ReactNode;
+  /** Saved layouts (TemplatesButton). */
+  templatesSlot?: ReactNode;
   /** Which on-chain trades and levels the chart marks (OverlaysButton). */
   overlaysSlot?: ReactNode;
   /** The multi-chart layout picker. */
@@ -132,7 +135,7 @@ export function Toolbar({
   return (
     // One row, as on a trading terminal: it scrolls sideways on a narrow screen instead of wrapping (menus open fixed, so
     // the scroll never clips them).
-    <div className="flex h-10 shrink-0 items-center gap-0.5 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-line bg-panel px-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="relative flex h-10 shrink-0 items-center gap-0.5 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-line bg-panel px-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {symbolSlot && (
         <>
           {symbolSlot}
@@ -297,6 +300,7 @@ export function Toolbar({
         )}
       </Popover>
       {compareSlot}
+      {templatesSlot}
       {overlaysSlot}
       <Sep />
       <div role="radiogroup" aria-label="Show price or market cap" className="flex shrink-0 items-center gap-0.5 text-[11.5px]">

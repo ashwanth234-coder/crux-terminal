@@ -37,7 +37,7 @@ export function BottomBar({
 }) {
   const btn = (active: boolean) => `rounded-[3px] px-1.5 py-0.5 font-mono text-[11px] transition-colors ${active ? "text-signal" : "text-dim hover:text-chrome"}`;
   return (
-    <div className="flex h-8 shrink-0 items-center justify-between gap-2 overflow-x-auto whitespace-nowrap border-t border-line bg-panel px-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="relative flex h-8 shrink-0 items-center justify-between gap-2 overflow-x-auto whitespace-nowrap border-t border-line bg-panel px-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <div className="flex shrink-0 items-center gap-0.5" role="group" aria-label="Zoom to range">
         {RANGES.map((r) => (
           <button key={r.label} type="button" onClick={() => onRange(r.seconds)} className={btn(false)}>

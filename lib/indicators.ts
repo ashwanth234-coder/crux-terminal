@@ -553,6 +553,298 @@ export function volumeMa(candles: Candle[], n = 20): Series {
  * What the on-chain studies read besides the candles, each aligned with them: USDC bought and sold in each candle
  * (from the trades' sides) and the number of holders at each candle's close (from the token's transfers).
  */
+// ------------------------------------------------------------ round 2 studies
+
+const nulls = (n: number): Series => new Array<number | null>(n).fill(null);
+
+/** Volume-weighted moving average of closes; a window without volume has no value. */
+export function vwma(candles: Candle[], n = 20): Series {
+  const out = nulls(candles.length);
+  for (let i = n - 1; i < candles.length; i++) {
+    let pv = 0;
+    let v = 0;
+    for (let j = i - n + 1; j <= i; j++) {
+      pv += candles[j].close * candles[j].volume;
+      v += candles[j].volume;
+    }
+    out[i] = v > 0 ? pv / v : null;
+  }
+  return out;
+}
+
+/** Wilder's smoothed moving average (SMMA / RMA): an SMA to start, then (prev × (n − 1) + close) / n. */
+export function smma(candles: Candle[], n = 14): Series {
+  const out = nulls(candles.length);
+  let prev: number | null = null;
+  for (let i = 0; i < candles.length; i++) {
+    if (i < n - 1) continue;
+    if (prev === null) {
+      let sum = 0;
+      for (let j = i - n + 1; j <= i; j++) sum += candles[j].close;
+      prev = sum / n;
+    } else prev = (prev * (n - 1) + candles[i].close) / n;
+    out[i] = prev;
+  }
+  return out;
+}
+
+/** The end of a least-squares line through the last `n` closes (the linear regression curve). */
+export function linreg(candles: Candle[], n = 50): Series {
+  const out = nulls(candles.length);
+  const sx = (n * (n - 1)) / 2;
+  const sxx = ((n - 1) * n * (2 * n - 1)) / 6;
+  for (let i = n - 1; i < candles.length; i++) {
+    let sy = 0;
+    let sxy = 0;
+    for (let k = 0; k < n; k++) {
+      const y = candles[i - n + 1 + k].close;
+      sy += y;
+      sxy += k * y;
+    }
+    const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx || 1);
+    const intercept = (sy - slope * sx) / n;
+    out[i] = intercept + slope * (n - 1);
+  }
+  return out;
+}
+
+/** An SMA with bands a fixed percentage above and below it. */
+export function envelope(candles: Candle[], n = 20, pct = 10): { upper: Series; mid: Series; lower: Series } {
+  const mid = sma(candles, n);
+  return { mid, upper: mid.map((v) => (v === null ? null : v * (1 + pct / 100))), lower: mid.map((v) => (v === null ? null : v * (1 - pct / 100))) };
+}
+
+/** Population standard deviation of the last `n` values (nulls where the window isn't full or has a gap). */
+function stdevOf(values: Series, n: number): Series {
+  const out = nulls(values.length);
+  for (let i = n - 1; i < values.length; i++) {
+    let sum = 0;
+    let ok = true;
+    for (let j = i - n + 1; j <= i; j++) {
+      const v = values[j];
+      if (v === null) {
+        ok = false;
+        break;
+      }
+      sum += v;
+    }
+    if (!ok) continue;
+    const mean = sum / n;
+    let sq = 0;
+    for (let j = i - n + 1; j <= i; j++) sq += (values[j]! - mean) ** 2;
+    out[i] = Math.sqrt(sq / n);
+  }
+  return out;
+}
+
+export function stdev(candles: Candle[], n = 20): Series {
+  return stdevOf(closes(candles), n);
+}
+
+/** Volatility per bar: the standard deviation of log returns over `n` bars, in percent. */
+export function historicalVolatility(candles: Candle[], n = 20): Series {
+  const r: Series = candles.map((c, i) => (i === 0 || candles[i - 1].close <= 0 || c.close <= 0 ? null : Math.log(c.close / candles[i - 1].close)));
+  return stdevOf(r, n).map((v) => (v === null ? null : v * 100));
+}
+
+/** Where the close sits in the Bollinger Bands (0 = lower band, 1 = upper), and the bands' width relative to the middle. */
+export function bollingerExtras(candles: Candle[], n = 20, k = 2): { pctB: Series; width: Series } {
+  const b = bollinger(candles, n, k);
+  return {
+    pctB: candles.map((c, i) => {
+      const u = b.upper[i];
+      const l = b.lower[i];
+      return u === null || l === null || u === l ? null : (c.close - l) / (u - l);
+    }),
+    width: candles.map((_, i) => {
+      const u = b.upper[i];
+      const l = b.lower[i];
+      const m = b.mid[i];
+      return u === null || l === null || !m ? null : (u - l) / m;
+    }),
+  };
+}
+
+const highestOf = (c: Candle[], i: number, n: number) => Math.max(...c.slice(i - n + 1, i + 1).map((x) => x.high));
+const lowestOf = (c: Candle[], i: number, n: number) => Math.min(...c.slice(i - n + 1, i + 1).map((x) => x.low));
+
+/** Stochastic: %K = where the close sits in the last `n` bars' range (smoothed over `smooth`), %D = its SMA over `d`. */
+export function stochastic(candles: Candle[], n = 14, smooth = 1, d = 3): { k: Series; d: Series } {
+  const raw: Series = candles.map((c, i) => {
+    if (i < n - 1) return null;
+    const hi = highestOf(candles, i, n);
+    const lo = lowestOf(candles, i, n);
+    return hi === lo ? 50 : ((c.close - lo) / (hi - lo)) * 100;
+  });
+  const k = smooth > 1 ? smaGaps(raw, smooth) : raw;
+  return { k, d: smaGaps(k, d) };
+}
+
+/** Ultimate Oscillator: buying pressure over true range, blended across three windows (weights 4 : 2 : 1). */
+export function ultimate(candles: Candle[], a = 7, b = 14, c = 28): Series {
+  const bp: number[] = [];
+  const tr: number[] = [];
+  candles.forEach((x, i) => {
+    const prev = i === 0 ? x.close : candles[i - 1].close;
+    bp.push(x.close - Math.min(x.low, prev));
+    tr.push(Math.max(x.high, prev) - Math.min(x.low, prev));
+  });
+  const avg = (i: number, n: number) => {
+    let s1 = 0;
+    let s2 = 0;
+    for (let j = i - n + 1; j <= i; j++) {
+      s1 += bp[j];
+      s2 += tr[j];
+    }
+    return s2 === 0 ? 0 : s1 / s2;
+  };
+  const longest = Math.max(a, b, c);
+  return candles.map((_, i) => (i < longest ? null : (100 * (4 * avg(i, a) + 2 * avg(i, b) + avg(i, c))) / 7));
+}
+
+/** Chande Momentum Oscillator: (gains − losses) / (gains + losses) over `n` bars, −100 to 100. */
+export function cmo(candles: Candle[], n = 9): Series {
+  return candles.map((_, i) => {
+    if (i < n) return null;
+    let up = 0;
+    let down = 0;
+    for (let j = i - n + 1; j <= i; j++) {
+      const ch = candles[j].close - candles[j - 1].close;
+      if (ch > 0) up += ch;
+      else down -= ch;
+    }
+    return up + down === 0 ? 0 : (100 * (up - down)) / (up + down);
+  });
+}
+
+/** Detrended Price Oscillator: the close minus an SMA shifted back by half its length plus one. */
+export function dpo(candles: Candle[], n = 21): Series {
+  const m = sma(candles, n);
+  const shift = Math.floor(n / 2) + 1;
+  return candles.map((c, i) => {
+    const v = i - shift >= 0 ? m[i - shift] : null;
+    return v === null ? null : c.close - v;
+  });
+}
+
+/** Vortex: upward (VI+) and downward (VI−) movement over `n` bars, each relative to the true range. */
+export function vortex(candles: Candle[], n = 14): { plus: Series; minus: Series } {
+  const plus = nulls(candles.length);
+  const minus = nulls(candles.length);
+  for (let i = n; i < candles.length; i++) {
+    let vp = 0;
+    let vm = 0;
+    let tr = 0;
+    for (let j = i - n + 1; j <= i; j++) {
+      const c = candles[j];
+      const p = candles[j - 1];
+      vp += Math.abs(c.high - p.low);
+      vm += Math.abs(c.low - p.high);
+      tr += Math.max(c.high, p.close) - Math.min(c.low, p.close);
+    }
+    plus[i] = tr === 0 ? null : vp / tr;
+    minus[i] = tr === 0 ? null : vm / tr;
+  }
+  return { plus, minus };
+}
+
+/** Fisher Transform of the median price over `n` bars, and its trigger (the previous value). */
+export function fisher(candles: Candle[], n = 9): { fisher: Series; trigger: Series } {
+  const f = nulls(candles.length);
+  let value = 0;
+  let prev = 0;
+  for (let i = n - 1; i < candles.length; i++) {
+    const hl2 = (candles[i].high + candles[i].low) / 2;
+    const hi = highestOf(candles, i, n);
+    const lo = lowestOf(candles, i, n);
+    const x = hi === lo ? 0 : 0.66 * ((hl2 - lo) / (hi - lo) - 0.5) + 0.67 * value;
+    value = Math.max(-0.999, Math.min(0.999, x));
+    prev = 0.5 * Math.log((1 + value) / (1 - value)) + 0.5 * prev;
+    f[i] = prev;
+  }
+  return { fisher: f, trigger: f.map((_, i) => (i === 0 ? null : f[i - 1])) };
+}
+
+/** Balance of Power: (close − open) / (high − low), averaged over `n` bars. */
+export function balanceOfPower(candles: Candle[], n = 14): Series {
+  return smaGaps(
+    candles.map((c) => (c.high === c.low ? 0 : (c.close - c.open) / (c.high - c.low))),
+    n,
+  );
+}
+
+/** Coppock Curve: a WMA of the sum of a long and a short rate of change. */
+export function coppock(candles: Candle[], wma = 10, long = 14, short = 11): Series {
+  const a = roc(candles, long);
+  const b = roc(candles, short);
+  return wmaOf(
+    a.map((v, i) => (v === null || b[i] === null ? null : v + b[i]!)),
+    wma,
+  );
+}
+
+/** Choppiness Index: near 100 when price chops sideways, near 0 when it trends. */
+export function choppiness(candles: Candle[], n = 14): Series {
+  return candles.map((_, i) => {
+    if (i < n) return null;
+    let tr = 0;
+    for (let j = i - n + 1; j <= i; j++) tr += Math.max(candles[j].high, candles[j - 1].close) - Math.min(candles[j].low, candles[j - 1].close);
+    const range = highestOf(candles, i, n) - lowestOf(candles, i, n);
+    return range <= 0 || tr <= 0 ? null : (100 * Math.log10(tr / range)) / Math.log10(n);
+  });
+}
+
+/** Elder's Force Index: the price change times volume, smoothed with an EMA. */
+export function forceIndex(candles: Candle[], n = 13): Series {
+  return emaOf(
+    candles.map((c, i) => (i === 0 ? null : (c.close - candles[i - 1].close) * c.volume)),
+    n,
+  );
+}
+
+/** Bull Bear Power: how far the high and the low sit from an EMA, added together. */
+export function bullBearPower(candles: Candle[], n = 13): Series {
+  const e = ema(candles, n);
+  return candles.map((c, i) => (e[i] === null ? null : c.high - e[i]! + (c.low - e[i]!)));
+}
+
+/** Chaikin Oscillator: the fast EMA of accumulation/distribution minus its slow EMA. */
+export function chaikinOsc(candles: Candle[], fast = 3, slow = 10): Series {
+  const ad = accDist(candles);
+  const f = emaOf(ad, fast);
+  const s = emaOf(ad, slow);
+  return f.map((v, i) => (v === null || s[i] === null ? null : v - s[i]!));
+}
+
+/** Price Volume Trend: volume added in proportion to each bar's percentage change. */
+export function pvt(candles: Candle[]): Series {
+  let sum = 0;
+  return candles.map((c, i) => {
+    if (i > 0 && candles[i - 1].close > 0) sum += (c.volume * (c.close - candles[i - 1].close)) / candles[i - 1].close;
+    return sum;
+  });
+}
+
+/** Volume Oscillator: the fast volume EMA's distance from the slow one, in percent. */
+export function volumeOsc(candles: Candle[], fast = 5, slow = 10): Series {
+  const v = candles.map((c) => c.volume);
+  const f = emaOf(v, fast);
+  const s = emaOf(v, slow);
+  return f.map((x, i) => (x === null || !s[i] ? null : ((x - s[i]!) / s[i]!) * 100));
+}
+
+/** Ease of Movement: how far the midpoint moves per unit of volume, averaged over `n` bars (in millions of volume). */
+export function easeOfMovement(candles: Candle[], n = 14): Series {
+  return smaGaps(
+    candles.map((c, i) => {
+      if (i === 0 || c.volume <= 0 || c.high === c.low) return null;
+      const move = (c.high + c.low) / 2 - (candles[i - 1].high + candles[i - 1].low) / 2;
+      return move / (c.volume / 1_000_000 / (c.high - c.low));
+    }),
+    n,
+  );
+}
+
 export type StudyContext = { buyUsd: number[]; sellUsd: number[]; holders: Series };
 
 export const EMPTY_CONTEXT: StudyContext = { buyUsd: [], sellUsd: [], holders: [] };
@@ -621,6 +913,9 @@ export type StudyId =
   | "hma"
   | "dema"
   | "tema"
+  | "vwma"
+  | "smma"
+  | "linreg"
   | "alma"
   | "vwap"
   | "supertrend"
@@ -630,6 +925,11 @@ export type StudyId =
   | "bb"
   | "donchian"
   | "keltner"
+  | "envelope"
+  | "stdev"
+  | "hv"
+  | "bbpct"
+  | "bbw"
   | "rsi"
   | "stochrsi"
   | "macd"
@@ -643,11 +943,26 @@ export type StudyId =
   | "roc"
   | "mom"
   | "trix"
+  | "stoch"
+  | "uo"
+  | "cmo"
+  | "dpo"
+  | "vortex"
+  | "fisher"
+  | "bop"
+  | "coppock"
+  | "chop"
+  | "efi"
+  | "bbp"
   | "mfi"
   | "ad"
   | "cmf"
   | "volma"
   | "obv"
+  | "chaikinosc"
+  | "pvt"
+  | "vo"
+  | "eom"
   | "vprofile"
   | "netflow"
   | "buypressure"
@@ -710,6 +1025,9 @@ export const STUDIES: Study[] = [
   ma("hma", "Hull MA", 9, "#43aa8b", (c, n) => hma(c, n), "Fast moving average with little lag"),
   ma("dema", "Double EMA", 21, "#577590", (c, n) => dema(c, n)),
   ma("tema", "Triple EMA", 21, "#4d908e", (c, n) => tema(c, n)),
+  ma("vwma", "VWMA", 20, "#f9844a", (c, n) => vwma(c, n), "Moving average weighted by each bar's volume"),
+  ma("smma", "Smoothed MA", 14, "#9d8df1", (c, n) => smma(c, n), "Wilder's smoothing (RMA)"),
+  ma("linreg", "Linear Regression", 50, "#00b4d8", (c, n) => linreg(c, n), "The end of a least-squares line through the last bars"),
   {
     id: "alma",
     label: "Arnaud Legoux MA 9",
@@ -1080,6 +1398,238 @@ export const STUDIES: Study[] = [
         }),
       ),
     ],
+  },
+  {
+    id: "envelope",
+    label: "Envelopes (20, 10%)",
+    title: (p) => `Env ${p.length} ${p.pct}%`,
+    group: "Bands",
+    pane: "price",
+    priced: true,
+    params: [len(20), { key: "pct", label: "Percent", def: 10, min: 0.1, max: 100, step: 0.1 }],
+    compute: (c, _x, p) => {
+      const e = envelope(c, p.length, p.pct);
+      return [line("envUpper", "Upper", "#4cc9f0", e.upper), line("envMid", "Basis", "#8f939b", e.mid), line("envLower", "Lower", "#4cc9f0", e.lower)];
+    },
+  },
+  {
+    id: "stdev",
+    label: "Standard Deviation (20)",
+    title: (p) => `StdDev ${p.length}`,
+    group: "Bands",
+    pane: "pane",
+    priced: true,
+    params: [len(20)],
+    compute: (c, _x, p) => [line("stdev", "StdDev", "#f4a261", stdev(c, p.length))],
+  },
+  {
+    id: "hv",
+    label: "Historical Volatility (20)",
+    title: (p) => `HV ${p.length}`,
+    group: "Bands",
+    hint: "Spread of bar-to-bar returns, in percent per bar",
+    pane: "pane",
+    priced: false,
+    params: [len(20)],
+    compute: (c, _x, p) => [line("hv", "HV %", "#ef476f", historicalVolatility(c, p.length))],
+  },
+  {
+    id: "bbpct",
+    label: "Bollinger %B (20, 2)",
+    title: (p) => `%B ${p.length} ${p.mult}`,
+    group: "Bands",
+    hint: "Where the close sits in the bands: 0 the lower, 1 the upper",
+    pane: "pane",
+    priced: false,
+    params: [len(20), { key: "mult", label: "StdDev", def: 2, min: 0.1, max: 10, step: 0.1 }],
+    levels: () => [0, 1],
+    compute: (c, _x, p) => [line("bbpct", "%B", "#4cc9f0", bollingerExtras(c, p.length, p.mult).pctB)],
+  },
+  {
+    id: "bbw",
+    label: "Bollinger Bandwidth (20, 2)",
+    title: (p) => `BBW ${p.length} ${p.mult}`,
+    group: "Bands",
+    hint: "How wide the bands are: a squeeze often comes before a move",
+    pane: "pane",
+    priced: false,
+    params: [len(20), { key: "mult", label: "StdDev", def: 2, min: 0.1, max: 10, step: 0.1 }],
+    compute: (c, _x, p) => [line("bbw", "BBW", "#c792ea", bollingerExtras(c, p.length, p.mult).width)],
+  },
+  {
+    id: "stoch",
+    label: "Stochastic (14, 1, 3)",
+    title: (p) => `Stoch ${p.length} ${p.smooth} ${p.d}`,
+    group: "Oscillators",
+    pane: "pane",
+    priced: false,
+    params: [len(14), lvl("smooth", "%K smoothing", 1, 1, 50), lvl("d", "%D length", 3, 1, 50), lvl("upper", "Upper level", 80, 1, 100), lvl("lower", "Lower level", 20, 0, 99)],
+    levels: (p) => [p.lower, p.upper],
+    compute: (c, _x, p) => {
+      const x = stochastic(c, p.length, p.smooth, p.d);
+      return [line("stochK", "%K", "#4cc9f0", x.k), line("stochD", "%D", "#ff9d6e", x.d)];
+    },
+  },
+  {
+    id: "uo",
+    label: "Ultimate Oscillator (7, 14, 28)",
+    title: (p) => `UO ${p.a} ${p.b} ${p.c}`,
+    group: "Oscillators",
+    pane: "pane",
+    priced: false,
+    params: [lvl("a", "Fast", 7, 1, 100), lvl("b", "Middle", 14, 1, 200), lvl("c", "Slow", 28, 1, 400)],
+    levels: () => [30, 70],
+    compute: (c, _x, p) => [line("uo", "UO", "#c792ea", ultimate(c, p.a, p.b, p.c))],
+  },
+  {
+    id: "cmo",
+    label: "Chande Momentum (9)",
+    title: (p) => `CMO ${p.length}`,
+    group: "Oscillators",
+    pane: "pane",
+    priced: false,
+    params: [len(9)],
+    levels: () => [-50, 50],
+    compute: (c, _x, p) => [line("cmo", "CMO", "#90be6d", cmo(c, p.length))],
+  },
+  {
+    id: "dpo",
+    label: "Detrended Price (21)",
+    title: (p) => `DPO ${p.length}`,
+    group: "Oscillators",
+    hint: "Price with its trend taken out, to show its cycles",
+    pane: "pane",
+    priced: true,
+    params: [len(21)],
+    levels: () => [0],
+    compute: (c, _x, p) => [line("dpo", "DPO", "#f4a261", dpo(c, p.length))],
+  },
+  {
+    id: "vortex",
+    label: "Vortex (14)",
+    title: (p) => `VI ${p.length}`,
+    group: "Oscillators",
+    pane: "pane",
+    priced: false,
+    params: [len(14)],
+    levels: () => [1],
+    compute: (c, _x, p) => {
+      const x = vortex(c, p.length);
+      return [line("viPlus", "VI+", "#5cc08c", x.plus), line("viMinus", "VI−", "#e5484d", x.minus)];
+    },
+  },
+  {
+    id: "fisher",
+    label: "Fisher Transform (9)",
+    title: (p) => `Fisher ${p.length}`,
+    group: "Oscillators",
+    pane: "pane",
+    priced: false,
+    params: [len(9)],
+    levels: () => [-1.5, 1.5],
+    compute: (c, _x, p) => {
+      const x = fisher(c, p.length);
+      return [line("fisher", "Fisher", "#4cc9f0", x.fisher), line("fisherTrigger", "Trigger", "#ff9d6e", x.trigger)];
+    },
+  },
+  {
+    id: "bop",
+    label: "Balance of Power (14)",
+    title: (p) => `BoP ${p.length}`,
+    group: "Oscillators",
+    pane: "pane",
+    priced: false,
+    params: [len(14)],
+    levels: () => [0],
+    compute: (c, _x, p) => [bar("bop", "BoP", "#8f939b", balanceOfPower(c, p.length))],
+  },
+  {
+    id: "coppock",
+    label: "Coppock Curve (10, 14, 11)",
+    title: (p) => `Coppock ${p.length} ${p.long} ${p.short}`,
+    group: "Oscillators",
+    pane: "pane",
+    priced: false,
+    params: [len(10, "WMA length"), lvl("long", "Long ROC", 14, 1, 200), lvl("short", "Short ROC", 11, 1, 200)],
+    levels: () => [0],
+    compute: (c, _x, p) => [line("coppock", "Coppock", "#43aa8b", coppock(c, p.length, p.long, p.short))],
+  },
+  {
+    id: "chop",
+    label: "Choppiness Index (14)",
+    title: (p) => `CHOP ${p.length}`,
+    group: "Oscillators",
+    hint: "High when price chops sideways, low when it trends",
+    pane: "pane",
+    priced: false,
+    params: [len(14)],
+    levels: () => [38.2, 61.8],
+    compute: (c, _x, p) => [line("chop", "CHOP", "#ffd166", choppiness(c, p.length))],
+  },
+  {
+    id: "efi",
+    label: "Elder Force Index (13)",
+    title: (p) => `EFI ${p.length}`,
+    group: "Oscillators",
+    pane: "pane",
+    priced: true,
+    params: [len(13)],
+    levels: () => [0],
+    compute: (c, _x, p) => [line("efi", "EFI", "#ef476f", forceIndex(c, p.length))],
+  },
+  {
+    id: "bbp",
+    label: "Bull Bear Power (13)",
+    title: (p) => `BBP ${p.length}`,
+    group: "Oscillators",
+    pane: "pane",
+    priced: true,
+    params: [len(13)],
+    levels: () => [0],
+    compute: (c, _x, p) => [bar("bbp", "BBP", "#8f939b", bullBearPower(c, p.length))],
+  },
+  {
+    id: "chaikinosc",
+    label: "Chaikin Oscillator (3, 10)",
+    title: (p) => `Chaikin ${p.fast} ${p.slow}`,
+    group: "Volume",
+    pane: "pane",
+    priced: false,
+    params: [lvl("fast", "Fast", 3, 1, 100), lvl("slow", "Slow", 10, 1, 200)],
+    levels: () => [0],
+    compute: (c, _x, p) => [line("chaikinosc", "Chaikin", "#4cc9f0", chaikinOsc(c, p.fast, p.slow))],
+  },
+  {
+    id: "pvt",
+    label: "Price Volume Trend",
+    title: () => "PVT",
+    group: "Volume",
+    pane: "pane",
+    priced: false,
+    params: [],
+    compute: (c) => [line("pvt", "PVT", "#90be6d", pvt(c))],
+  },
+  {
+    id: "vo",
+    label: "Volume Oscillator (5, 10)",
+    title: (p) => `VO ${p.fast} ${p.slow}`,
+    group: "Volume",
+    pane: "pane",
+    priced: false,
+    params: [lvl("fast", "Fast", 5, 1, 100), lvl("slow", "Slow", 10, 1, 200)],
+    levels: () => [0],
+    compute: (c, _x, p) => [line("vo", "VO %", "#f4a261", volumeOsc(c, p.fast, p.slow))],
+  },
+  {
+    id: "eom",
+    label: "Ease of Movement (14)",
+    title: (p) => `EOM ${p.length}`,
+    group: "Volume",
+    pane: "pane",
+    priced: false,
+    params: [len(14)],
+    levels: () => [0],
+    compute: (c, _x, p) => [line("eom", "EOM", "#c792ea", easeOfMovement(c, p.length))],
   },
   {
     id: "holders",

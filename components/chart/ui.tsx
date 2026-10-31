@@ -35,7 +35,7 @@ export function Tool({
   );
 }
 
-export const Sep = () => <span className="mx-1 h-4 w-px bg-line" aria-hidden="true" />;
+export const Sep = () => <span className="mx-0.5 h-4 w-px shrink-0 bg-line" aria-hidden="true" />;
 
 /** A button with a popover that closes on outside click or Escape. */
 export function Popover({

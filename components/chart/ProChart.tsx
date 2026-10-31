@@ -28,6 +28,7 @@ import { DrawingPalette, TOOL_INFO, TOOL_KEYS } from "./DrawingPalette";
 import { PATTERN_LABELS, TOOL_POINTS, defaultStop, isPattern, type DrawPart, type DrawPoint, type DrawTool, type Drawing } from "./drawings";
 import { OverlaysButton } from "./OverlaysBar";
 import { SymbolSwitch } from "./SymbolSwitch";
+import { TemplatesButton } from "./Templates";
 import { DEFAULT_CONFIG, DEFAULT_SETTINGS, loadLayout, loadSettings, palette, saveSettings, type ChartSettings, type ScaleMode } from "./settings";
 import { SettingsModal } from "./SettingsModal";
 import { CompareButton, CompareFeed } from "./Compare";
@@ -534,6 +535,36 @@ export function ProChart({
     engine?.chart.applyOptions({ handleScroll: free, handleScale: free });
   }, [engine, tool, zoomMode]);
 
+  // The price axis, as on a trading terminal: drag it (the library's own) or scroll over it to squeeze or stretch
+  // prices; double-click it, or press auto, to fit them again. `autoOn` keeps the bottom bar's auto button in step.
+  const [autoOn, setAutoOn] = useState(true);
+  useEffect(() => {
+    const el = area.current;
+    if (!engine || !el || view !== "chart") return;
+    const onWheel = (e: globalThis.WheelEvent) => {
+      const r = el.getBoundingClientRect();
+      const x = e.clientX - r.left;
+      const axis = engine.axisWidth();
+      const onAxis = settings.scaleSide === "left" ? x < axis : x > r.width - axis;
+      if (!onAxis || e.deltaY === 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      engine.zoomPrice(Math.pow(1.0015, e.deltaY), e.clientY - r.top);
+      setAutoOn(false);
+    };
+    const sync = () => setTimeout(() => setAutoOn(engine.isAutoScale()), 0);
+    el.addEventListener("wheel", onWheel, { passive: false, capture: true });
+    el.addEventListener("pointerup", sync);
+    el.addEventListener("dblclick", sync);
+    el.addEventListener("touchend", sync);
+    return () => {
+      el.removeEventListener("wheel", onWheel, { capture: true });
+      el.removeEventListener("pointerup", sync);
+      el.removeEventListener("dblclick", sync);
+      el.removeEventListener("touchend", sync);
+    };
+  }, [engine, view, settings.scaleSide]);
+
   // Fit the view when the timeframe changes or the first candles arrive.
   const fitKey = `${interval}:${candles.length > 0}`;
   useEffect(() => {
@@ -893,6 +924,7 @@ export function ProChart({
         replaying={replay !== null}
         compareSlot={<CompareButton current={auction.pair} items={config.compare} onChange={setCompare} />}
         symbolSlot={<SymbolSwitch symbol={symbol} />}
+        templatesSlot={<TemplatesButton config={config} set={set} />}
         overlaysSlot={<OverlaysButton settings={settings} onChange={setSettings} counts={markCounts} />}
         layoutSlot={layoutSlot}
         onReplay={() => setReplay((r) => (r ? null : { index: null, playing: false, speed: 1 }))}
@@ -1120,8 +1152,11 @@ export function ProChart({
         onRange={onRange}
         scale={scale}
         setScale={setScale}
-        auto={engine?.isAutoScale() ?? true}
-        onAuto={() => engine?.autoScale()}
+        auto={autoOn}
+        onAuto={() => {
+          engine?.autoScale();
+          setAutoOn(true);
+        }}
         note={
           <>
             {external
