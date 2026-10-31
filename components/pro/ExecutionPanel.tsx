@@ -789,6 +789,13 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
             </a>
           </div>
         )
+      ) : crux.setup.needed ? (
+        <p className="-mt-0.5 rounded-lg border border-signal/40 bg-signal/5 px-3 py-2 text-[11.5px] leading-snug text-muted">
+          <span className="text-chrome">One step left:</span> create your Crux account (one account that trades and launches, address ending in 5afe).{" "}
+          <a href="/account" className="text-signal hover:underline">
+            Create it
+          </a>
+        </p>
       ) : (
         <p className="-mt-0.5 rounded-lg border border-line px-3 py-2 text-[11.5px] leading-snug text-muted">
           <span className="text-chrome">Trade from a Crux account:</span> deposit once from any chain, then trade with no gas or pop-ups.{" "}

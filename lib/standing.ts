@@ -1,5 +1,5 @@
 import { parseUnits, type Address, type Hex } from "viem";
-import { accountNonce, type AccountSigner } from "@/lib/account";
+import { accountFields, accountNonce, type AccountSigner } from "@/lib/account";
 import { TESTNET } from "@/lib/chains";
 import { CRUX_SOLVER } from "@/lib/intents";
 import { postRelay } from "@/lib/session";
@@ -86,7 +86,7 @@ export async function placeStanding(sign: AccountSigner, owner: Address, account
     expiry: BigInt(Math.floor(Date.now() / 1000) + o.lifetime),
   };
   const signature = await sign({ domain: domain(account), types: { StandingOrder: STANDING_TYPES.StandingOrder }, primaryType: "StandingOrder", message });
-  return postRelay("/v1/standing", { owner, order: message, signature, ...(o.trailBps !== undefined ? { trailBps: o.trailBps } : {}) });
+  return postRelay("/v1/standing", { owner, ...accountFields(account), order: message, signature, ...(o.trailBps !== undefined ? { trailBps: o.trailBps } : {}) });
 }
 
 export type StandingView = {
@@ -112,7 +112,7 @@ export type StandingView = {
 export async function listStanding(sign: AccountSigner, owner: Address, account: Address): Promise<StandingView[]> {
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
   const signature = await sign({ domain: domain(account), types: { ListStanding: STANDING_TYPES.ListStanding }, primaryType: "ListStanding", message: { owner, deadline } });
-  const data = await postRelay("/v1/standing/list", { owner, deadline: deadline.toString(), signature });
+  const data = await postRelay("/v1/standing/list", { owner, ...accountFields(account), deadline: deadline.toString(), signature });
   return (data.orders as StandingView[]) ?? [];
 }
 
@@ -121,6 +121,7 @@ export async function cancelStanding(sign: AccountSigner, owner: Address, accoun
   const message = { nonces, groups, nonce: accountNonce(), deadline: BigInt(Math.floor(Date.now() / 1000) + 120) };
   const signature = await sign({ domain: domain(account), types: { CancelStanding: STANDING_TYPES.CancelStanding }, primaryType: "CancelStanding", message });
   return postRelay("/v1/standing/cancel", {
+    ...accountFields(account),
     owner,
     nonces: nonces.map(String),
     groups,

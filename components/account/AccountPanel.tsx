@@ -39,7 +39,7 @@ function Card({ title, children, aside }: { title: string; children: ReactNode; 
   );
 }
 
-type Busy = null | "bind" | "change" | "cancel" | "finalize" | "withdraw" | "sweep" | "deposit";
+type Busy = null | "bind" | "change" | "cancel" | "finalize" | "withdraw" | "sweep" | "deposit" | "move" | "send" | "create";
 
 /** The logged-in trader's Crux account: deposit address, protection, withdrawal address and withdrawals. */
 export function AccountPanel() {
@@ -79,6 +79,20 @@ export function AccountPanel() {
     const b = balances.data?.[i]?.result;
     return typeof b === "bigint" && b > BigInt(0) ? [{ launch: l, balance: b }] : [];
   });
+  // What the older accounts (V2, V1) and the connected wallet still hold of each launch token: moved over by hand.
+  const elsewhere = [...a.legacy.map((l) => l.account), wallet ?? zeroAddress];
+  const otherBalances = useReadContracts({
+    contracts: elsewhere.flatMap((who) => tokens.map((l) => ({ chainId: TESTNET.id, address: l.v2!.token, abi: erc20Abi, functionName: "balanceOf" as const, args: [who] as const }))),
+    query: { enabled: a.loggedIn && tokens.length > 0, refetchInterval: 15_000 },
+  });
+  const heldBy = (k: number) =>
+    tokens.flatMap((l, i) => {
+      const b = otherBalances.data?.[k * tokens.length + i]?.result;
+      return typeof b === "bigint" && b > BigInt(0) ? [{ launch: l, balance: b }] : [];
+    });
+  const legacyHeld = a.legacy.map((l, k) => ({ ...l, tokens: heldBy(k) })).filter((l) => (l.usdc ?? BigInt(0)) > BigInt(0) || l.tokens.length > 0);
+  const walletTokens = wallet ? heldBy(a.legacy.length) : [];
+  const [withdrawTo, setWithdrawTo] = useState("");
 
   const run = async (kind: Busy, fn: () => Promise<unknown>, done: string) => {
     setBusy(kind);
@@ -89,6 +103,7 @@ export function AccountPanel() {
       setNotice(done);
       a.refresh();
       void balances.refetch();
+      void otherBalances.refetch();
     } catch (e) {
       setError((e as Error).message.split("\n")[0]);
     } finally {
@@ -110,6 +125,60 @@ export function AccountPanel() {
             Log in with email or Google
           </button>
         </div>
+      </Frame>
+    );
+  }
+
+  if (a.setup.needed) {
+    const typed = withdrawTo.trim() || a.setup.suggested || wallet || "";
+    const choice = isAddress(typed, { strict: false }) ? getAddress(typed) : null;
+    const bad = typed !== "" && (!choice || choice === a.owner);
+    return (
+      <Frame label={a.label} onLogout={() => void a.logout()}>
+        <section className="mx-auto max-w-[560px] rounded-xl border border-line p-6">
+          <h2 className="text-[17px] font-medium text-chrome">Create your Crux account</h2>
+          <p className="mt-2 text-[13.5px] leading-relaxed text-muted">
+            One account that trades, takes standing orders and launches tokens, with no gas and no pop-ups. Its address ends in{" "}
+            <span className="font-mono text-chrome">5afe</span>, like every token you launch from it.
+          </p>
+          <p className="mt-3 text-[13px] leading-relaxed text-muted">
+            Choose the wallet withdrawals go to. The account is created bound to it, and it is the only place funds can leave to. It is part of the
+            account&rsquo;s address, so use the same wallet on every device. Changing it later takes 48 hours.
+          </p>
+          <label htmlFor="v3-withdrawal" className="mt-5 block text-[12px] text-dim">Withdrawal wallet (Base)</label>
+          <input
+            id="v3-withdrawal"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="0x…"
+            value={typed}
+            onChange={(e) => setWithdrawTo(e.target.value.trim())}
+            className="mt-1.5 w-full rounded-lg border border-line bg-void/60 px-3 py-2.5 font-mono text-[13px] text-chrome outline-none focus:border-line-2"
+          />
+          <p className="mt-1.5 text-[11.5px] text-dim">
+            {bad
+              ? "That can't be a withdrawal wallet."
+              : a.setup.suggested && choice === a.setup.suggested
+                ? "The wallet your earlier Crux account withdraws to."
+                : choice && wallet && choice === getAddress(wallet)
+                  ? "Your connected wallet."
+                  : "Any wallet you control on Base."}
+          </p>
+          {!typed && (
+            <button type="button" onClick={openConnect} className={buttonClass("outline", "sm", "mt-3")}>
+              Connect a wallet to use it
+            </button>
+          )}
+          {error && <p role="status" className="mt-3 text-[12.5px] text-down">{error}</p>}
+          <button
+            type="button"
+            disabled={!choice || bad || busy !== null}
+            onClick={() => run("create", () => a.setup.create(choice!), "Your Crux account is ready. Deposit to it below.")}
+            className={buttonClass("primary", "md", "mt-5 w-full font-semibold")}
+          >
+            {busy === "create" ? "Finding your …5afe address…" : "Create my account"}
+          </button>
+        </section>
       </Frame>
     );
   }
@@ -197,37 +266,41 @@ export function AccountPanel() {
         )}
       </div>
 
-      {a.legacy && a.legacy.usdc !== null && a.legacy.usdc > BigInt(0) && (
-        <section className="rounded-xl border border-signal/50 bg-signal/[0.04] p-4 text-[13px]">
-          <h2 className="font-medium text-chrome">Your account was upgraded: move ${fmtUsdc(a.legacy.usdc)} over</h2>
+      {legacyHeld.map((l) => (
+        <section key={l.account} className="rounded-xl border border-signal/50 bg-signal/[0.04] p-4 text-[13px]">
+          <h2 className="font-medium text-chrome">Move what&rsquo;s left in your {l.label} account</h2>
           <p className="mt-1 text-muted">
-            Crux accounts now take standing orders (take profit, stop loss, buy the dip), so you have a new account address. Your previous
-            account {short(a.legacy.account)} still holds test USDC. Step 1 sends it to your bound wallet (no gas); step 2 is the deposit box
-            below.
+            Your earlier account {short(l.account)} still holds{" "}
+            {[(l.usdc ?? BigInt(0)) > BigInt(0) ? `$${fmtUsdc(l.usdc!)} test USDC` : null, ...l.tokens.map((h) => `${fmtTokens(h.balance)} $${h.launch.symbol ?? "token"}`)]
+              .filter(Boolean)
+              .join(", ")}
+            . Step 1 sends it to its withdrawal wallet (no gas). Step 2 deposits it here: USDC with the deposit box, tokens with
+            &ldquo;Send to your account&rdquo; below.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            {a.legacy.withdrawalAddress ? (
+            {l.withdrawalAddress ? (
               <button
                 type="button"
                 disabled={busy !== null || !a.sign || !a.owner}
                 onClick={() =>
                   run(
-                    "withdraw",
-                    () => withdrawFromAccount(a.sign!, a.owner!, a.legacy!.account, TESTNET_USDC, a.legacy!.usdc!),
-                    `Sent to ${short(a.legacy!.withdrawalAddress!)}. Now deposit it into this account below.`,
+                    "move",
+                    async () => {
+                      if ((l.usdc ?? BigInt(0)) > BigInt(0)) await withdrawFromAccount(a.sign!, a.owner!, l.account, TESTNET_USDC, l.usdc!);
+                      for (const h of l.tokens) await withdrawFromAccount(a.sign!, a.owner!, l.account, h.launch.v2!.token, h.balance);
+                    },
+                    `Sent to ${short(l.withdrawalAddress!)}. Now deposit it into this account below.`,
                   )
                 }
                 className={buttonClass("primary", "sm")}
               >
-                1. Withdraw ${fmtUsdc(a.legacy.usdc)} to {short(a.legacy.withdrawalAddress)}
+                {busy === "move" ? "Withdrawing…" : `1. Withdraw everything to ${short(l.withdrawalAddress)}`}
               </button>
             ) : wallet ? (
               <button
                 type="button"
                 disabled={busy !== null || !a.sign || !a.owner}
-                onClick={() =>
-                  run("bind", () => setWithdrawalAddress(a.sign!, a.owner!, a.legacy!.account, wallet), `The old account now withdraws only to ${short(wallet)}. Withdraw next.`)
-                }
+                onClick={() => run("bind", () => setWithdrawalAddress(a.sign!, a.owner!, l.account, wallet), `The old account now withdraws only to ${short(wallet)}. Withdraw next.`)}
                 className={buttonClass("primary", "sm")}
               >
                 Bind the old account to {short(wallet)} first
@@ -239,7 +312,7 @@ export function AccountPanel() {
             )}
           </div>
         </section>
-      )}
+      ))}
 
       {(error || notice) && (
         <p role="status" className={`rounded-lg border px-4 py-3 text-[13px] ${error ? "border-down/50 text-down" : "border-up/40 text-up"}`}>
@@ -300,6 +373,31 @@ export function AccountPanel() {
                   {overWallet ? "More than your wallet holds. " : ""}From {short(wallet)} on Base Sepolia
                   {walletUsdc.data !== undefined ? ` · wallet has $${fmtUsdc(walletUsdc.data)}` : ""}. Your wallet asks you to confirm one transfer.
                 </p>
+                {walletTokens.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {walletTokens.map((h) => (
+                      <button
+                        key={h.launch.v2!.token}
+                        type="button"
+                        disabled={busy !== null}
+                        onClick={() =>
+                          run(
+                            "send",
+                            async () => {
+                              if (chainId !== TESTNET.id) await switchChain({ chainId: TESTNET.id });
+                              const hash = await simulateThenWrite(config, wallet, { address: h.launch.v2!.token, abi: erc20Abi, functionName: "transfer", args: [account, h.balance], chainId: TESTNET.id });
+                              await waitForTransactionReceipt(config, { hash, chainId: TESTNET.id });
+                            },
+                            `Sent ${fmtTokens(h.balance)} $${h.launch.symbol ?? "token"} to your Crux account.`,
+                          )
+                        }
+                        className={buttonClass("outline", "sm")}
+                      >
+                        Send {fmtTokens(h.balance)} ${h.launch.symbol ?? "token"} to your account
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <CrossChainDeposit account={account} onOpened={a.refresh} />
               </>
             ) : (
@@ -310,8 +408,10 @@ export function AccountPanel() {
           </div>
           {!a.deployed && (
             <p className="mt-3 text-[11.5px] leading-relaxed text-dim">
-              The account contract is deployed for you, free, with your first trade or when you bind a withdrawal address. Deposits sent
-              before then are already yours.
+              {a.v3
+                ? "The account contract is deployed for you, free, with your first trade, standing order or launch, already bound to your withdrawal wallet."
+                : "The account contract is deployed for you, free, with your first trade or when you bind a withdrawal address."}{" "}
+              Deposits sent before then are already yours.
             </p>
           )}
           <a href={`${TESTNET_EXPLORER}/address/${account}`} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-[11.5px] text-dim underline decoration-line-2 hover:text-chrome">

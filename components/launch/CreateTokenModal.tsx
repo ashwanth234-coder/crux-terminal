@@ -25,7 +25,7 @@ import { useConnectModal } from "@/providers/Web3Provider";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { checkLaunchNow, useLaunchGuard } from "@/hooks/useLaunchGuard";
 import type { Conflict } from "@/lib/antiVamp";
-import { launchFromAccount } from "@/lib/account";
+import { launchFromAccount, launchFromAccountV8 } from "@/lib/account";
 import { imageDataUri } from "@/lib/tokenMeta";
 import { DisplayImageField } from "./DisplayImageField";
 import { endsIn5afe, mineTokenSalt } from "@/lib/tokenSalt";
@@ -184,8 +184,9 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
   // with the account as creator (no gas, nothing needed on Base). The wallet stays one tap away.
   const crux = useCruxAccount();
   const [launchAs, setLaunchAs] = useState<"account" | "wallet">("account");
-  // Gasless launches from a Crux account go through V7 (V8 can't name a Crux account as creator on testnet).
-  const canLaunchFromAccount = FACTORY_V7 !== null && crux.loggedIn && crux.launchAccount !== null;
+  // Gasless launches from a 5afe Crux account go through V8 (5afe token too); from an older account, through V7.
+  const accountOnV8 = crux.v3 !== null && LAUNCH_FACTORY?.version === 8;
+  const canLaunchFromAccount = (accountOnV8 || FACTORY_V7 !== null) && crux.loggedIn && crux.launchAccount !== null;
   const accountLaunch = canLaunchFromAccount && launchAs === "account";
   // V6 launches take the factory's batch-only window when created (owner-tunable); V5's is always 24 hours.
   const protectionWindow = useReadContract({
@@ -272,8 +273,37 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     router.push(`/launch/v7/${auctionId.toString()}`);
   };
 
+  /** The 5afe token salt for `creator` on CruxFactoryV8 (the wallet, or the Crux account of a gasless launch), checked. */
+  const mineFor = async (factory: Address, params: ReturnType<typeof launchParams>, creator: Address) => {
+    setPhase({ kind: "deploying", label: "Preparing your …5afe token address…" });
+    const unsalted = { ...params, salt: `0x${"0".repeat(64)}` as Hex };
+    const [deployer, initHash] = await Promise.all([
+      readContract(config, { address: factory, abi: factoryV8Abi, functionName: "tokenDeployer", chainId: TESTNET.id }),
+      readContract(config, { address: factory, abi: factoryV8Abi, functionName: "tokenInitCodeHash", args: [unsalted, creator], chainId: TESTNET.id }),
+    ]);
+    // Let the label paint before the (about a second of) hashing.
+    await sleep(30);
+    const { salt, token } = mineTokenSalt(deployer, initHash);
+    const salted = { ...params, salt };
+    const predicted = await readContract(config, { address: factory, abi: factoryV8Abi, functionName: "predictToken", args: [salted, creator], chainId: TESTNET.id });
+    if (getAddress(predicted) !== getAddress(token) || !endsIn5afe(predicted)) throw new Error("The token address didn't check out. Try again.");
+    return { salted, short5afe: `${predicted.slice(0, 6)}…${predicted.slice(-4)}` };
+  };
+
+  /** CruxFactoryV8, from the 5afe Crux account: a 5afe token, signed silently, submitted (and paid for) by the relay. */
+  const deployFromAccountV8 = async (factory: Address) => {
+    if (!crux.sign || !crux.launchAccount) throw new Error("Your login key is still being set up. Try again in a moment.");
+    const { salted, short5afe } = await mineFor(factory, launchParams(), crux.launchAccount);
+    setPhase({ kind: "deploying", label: `Launching $${form.symbol} at ${short5afe} on Base: no gas needed…` });
+    const auctionId = await launchFromAccountV8(crux.sign, crux.launchAccount, factory, salted, { instantUnlock: form.instantUnlock, antiSniper: form.antiSniper });
+    reset();
+    onClose();
+    router.push(`/launch/v8/${auctionId.toString()}`);
+  };
+
   /** CruxFactoryV2 and later: scheduled start, per-wallet cap, locked liquidity. */
   const deployV2 = async (factory: Address, version: 2 | 3 | 4 | 5 | 6 | 7 | 8) => {
+    if (accountLaunch && accountOnV8 && version >= 8) return deployFromAccountV8(factory);
     if (accountLaunch && FACTORY_V7) return deployFromAccount(FACTORY_V7);
     if (!isConnected || !address) {
       openConnect();
@@ -288,19 +318,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     const onPrompt = () => setPhase({ kind: "deploying", label: "Confirm the launch in your wallet…" });
     // V8 deploys the token at a 5afe address: mine the salt for this wallet against the factory's init-code hash.
     if (version >= 8) {
-      setPhase({ kind: "deploying", label: "Preparing your …5afe token address…" });
-      const unsalted = { ...params, salt: `0x${"0".repeat(64)}` as Hex };
-      const [deployer, initHash] = await Promise.all([
-        readContract(config, { address: factory, abi: factoryV8Abi, functionName: "tokenDeployer", chainId: TESTNET.id }),
-        readContract(config, { address: factory, abi: factoryV8Abi, functionName: "tokenInitCodeHash", args: [unsalted, address], chainId: TESTNET.id }),
-      ]);
-      // Let the label paint before the (about a second of) hashing.
-      await sleep(30);
-      const { salt, token } = mineTokenSalt(deployer, initHash);
-      const salted = { ...params, salt };
-      const predicted = await readContract(config, { address: factory, abi: factoryV8Abi, functionName: "predictToken", args: [salted, address], chainId: TESTNET.id });
-      if (getAddress(predicted) !== getAddress(token) || !endsIn5afe(predicted)) throw new Error("The token address didn't check out. Try again.");
-      const short5afe = `${predicted.slice(0, 6)}…${predicted.slice(-4)}`;
+      const { salted, short5afe } = await mineFor(factory, params, address);
       const v8hash = await simulateThenWrite(
         config,
         address,
@@ -873,7 +891,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                   <span className="text-chrome">Launching from your Crux account · no gas.</span> Signed with your login and launched on Base by
                   Crux, whatever chain your coins are on. Your Crux account is the creator, so the creator fee and your share land there,
                   withdrawable only to your bound address.
-                  {LAUNCH_FACTORY?.version === 8 && " Account launches get an ordinary token address; a wallet launch gets a …5afe one."}
+                  {accountOnV8 ? " The token gets a …5afe address, like your account." : LAUNCH_FACTORY?.version === 8 && " Account launches get an ordinary token address; a wallet launch gets a …5afe one."}
                 </p>
               ) : (
                 <p className="text-[11.5px] leading-relaxed text-dim">
