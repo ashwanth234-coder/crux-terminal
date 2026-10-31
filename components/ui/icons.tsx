@@ -1,46 +1,6 @@
-/** Simplified chain + ecosystem marks. Monochrome-friendly, sized by className. */
+/** Simplified ecosystem marks, sized by className. Chain marks for the landing page live in components/site/ChainMarks.tsx. */
 
 type IconProps = { className?: string };
-
-export function BaseIcon({ className = "h-4 w-4" }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
-      <circle cx="12" cy="12" r="11" fill="#2151F5" />
-      <path d="M12 19.2a7.2 7.2 0 1 0-7.15-8.1h9.5v1.8h-9.5A7.2 7.2 0 0 0 12 19.2Z" fill="#fff" />
-    </svg>
-  );
-}
-
-export function SolanaIcon({ className = "h-4 w-4" }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
-      <defs>
-        <linearGradient id="sol-g" x1="3" y1="20" x2="21" y2="4" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#9945FF" />
-          <stop offset="1" stopColor="#14F195" />
-        </linearGradient>
-      </defs>
-      <path d="M6.2 15.6h14.6l-3 3H3.2l3-3Zm0-11.2h14.6l-3 3H3.2l3-3Zm11.6 5.6H3.2l3 3h14.6l-3-3Z" fill="url(#sol-g)" />
-    </svg>
-  );
-}
-
-export function BscIcon({ className = "h-4 w-4" }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden="true" fill="#F3BA2F">
-      <path d="m12 3 2.6 2.6L9.2 11 6.6 8.4 12 3Zm4.4 4.4L19 10l-7 7-2.6-2.6 7-7ZM5 10l2.6 2.6L5 15.2 2.4 12.6 5 10Zm14 0 2.6 2.6L12 22l-2.6-2.6L19 10Z" transform="translate(0 -0.5)" />
-    </svg>
-  );
-}
-
-export function RobinhoodIcon({ className = "h-4 w-4" }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
-      <path d="M19.6 3.2c-5.6.4-10.4 3.6-12.6 9.4L5 20.8l2.4-.2 1.8-6.2c2.6-.2 5.4-1.6 7.2-4 1.6-2.2 2.6-4.6 3.2-7.2Z" fill="#CCFF00" />
-      <path d="M9.2 14.4c1.6-3.4 4.4-6.4 7.8-8.6" stroke="#08090b" strokeWidth="1" fill="none" />
-    </svg>
-  );
-}
 
 export function FarcasterIcon({ className = "h-5 w-5" }: IconProps) {
   return (
@@ -86,11 +46,3 @@ export function XIcon({ className = "h-4 w-4" }: IconProps) {
     </svg>
   );
 }
-
-export const CHAINS = [
-  { id: "base", name: "Base", Icon: BaseIcon },
-  { id: "solana", name: "Solana", Icon: SolanaIcon },
-  { id: "bsc", name: "BSC", Icon: BscIcon },
-  // No public RPC yet: balances there aren't read and nothing settles there.
-  { id: "robinhood", name: "Robinhood Chain", short: "Robinhood", Icon: RobinhoodIcon, planned: true },
-] as const;

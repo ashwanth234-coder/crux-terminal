@@ -4,7 +4,7 @@ import { base, baseSepolia, bsc } from "viem/chains";
 /**
  * Robinhood Chain mainnet (Arbitrum Orbit, ETH gas; its testnet is 46630, without Hyperlane). Canonical tokens from
  * docs.robinhood.com/chain/contracts, checked on-chain 2026-10-28: USDG (Paxos "Global Dollar", 6 decimals), Crux's
- * stablecoin here, and WETH. Balance reads against it fail soft, see hooks/useUnifiedBalance.ts.
+ * stablecoin here, and WETH. Balance reads against it fail soft.
  */
 export const robinhoodChain = defineChain({
   id: 4663,

@@ -1,21 +1,17 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import { erc20Abi, formatUnits, parseAbi, type Hex } from "viem";
 import { useConfig, useConnection, useReadContract, useSwitchChain } from "wagmi";
 import { waitForTransactionReceipt } from "wagmi/actions";
 import { buttonClass } from "@/components/ui/Button";
 import { KineticLoader } from "@/components/ui/Modal";
 import { cruxSettlerAbi } from "@/contracts/abis/erc7683";
-import { useMyIntents, type MyIntent } from "@/hooks/useMyIntents";
-import { useBatchClock } from "@/lib/batch";
+import type { MyIntent } from "@/hooks/useMyIntents";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import { LIVE_ORIGINS, originByKey } from "@/lib/crosschain";
-import { SETTLER, SETTLER_DEPLOYED, SETTLER_VERSION, TESTNET_USDC } from "@/lib/intents";
-import { StatusTag } from "@/components/ui/StatusTag";
+import { SETTLER, TESTNET_USDC } from "@/lib/intents";
 import { simulateThenWrite } from "@/lib/preflight";
-
-const noopSubscribe = () => () => {};
 
 // Block timestamps trail the wall clock by a few seconds; wait them out so the
 // refund call isn't estimated against a block still inside the grace period.
@@ -184,72 +180,5 @@ export function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: 
         )}
       </div>
     </li>
-  );
-}
-
-/**
- * The connected wallet's ERC-7683 orders on the Base Sepolia settler, with a
- * refund once an unfilled order's grace period has passed. Testnet only.
- */
-export function MyIntentsPanel() {
-  const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
-  const { isConnected } = useConnection();
-  const clock = useBatchClock();
-  const { enabled, intents, isLoading, error, refetch } = useMyIntents();
-
-  if (!hydrated || !SETTLER_DEPLOYED || !isConnected || !enabled) return null;
-
-  const openCount = intents.filter((i) => i.status === "open").length;
-
-  return (
-    <section aria-labelledby="my-intents-title" className="border-t border-line p-5">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <div className="flex items-center gap-2.5">
-          <h3 id="my-intents-title" className="text-[13px] text-chrome">
-            My intents
-          </h3>
-          <StatusTag status="testnet" label={["Base", ...LIVE_ORIGINS.map((o) => o.name.replace(" testnet", "").replace(" Sepolia", ""))].join(" + ") + " testnets"} />
-        </div>
-        <div className="flex items-center gap-3 text-[11px] text-dim">
-          {intents.length > 0 && (
-            <span>
-              <span className="font-mono tabular-nums text-muted">{openCount}</span> in escrow
-            </span>
-          )}
-          <button type="button" onClick={() => void refetch()} className={buttonClass("ghost", "sm", "h-7 px-2 text-[11px]")}>
-            Refresh
-          </button>
-        </div>
-      </div>
-      <p className="mt-1.5 max-w-[46rem] text-[11.5px] leading-relaxed text-muted">
-        Orders opened from this wallet escrow their input (test USDC, or the launch token you sell) until a solver fills
-        them. Testnet only: unfilled orders can be refunded{" "}
-        {SETTLER_VERSION >= 3 ? "as soon as their fill deadline passes (10 minutes)" : "1 hour after their fill deadline"}; orders paid from
-        another chain, 6 hours after it if no fill proof arrived.
-      </p>
-
-      {error && intents.length === 0 ? (
-        <p role="alert" className="mt-4 text-[12px] text-down">
-          Couldn&apos;t read the settler on Base Sepolia.{" "}
-          <button type="button" onClick={() => void refetch()} className="text-chrome underline decoration-line-2 underline-offset-2">
-            Retry
-          </button>
-        </p>
-      ) : isLoading ? (
-        <div className="mt-4 space-y-3" aria-label="Loading intents">
-          {[0, 1].map((i) => (
-            <span key={i} className="block h-9 rounded-md bg-line/70" />
-          ))}
-        </div>
-      ) : intents.length === 0 ? (
-        <p className="mt-4 text-[12px] text-dim">No intents opened from this wallet yet.</p>
-      ) : (
-        <ul className="mt-2 max-h-[18rem] divide-y divide-line overflow-y-auto">
-          {intents.map((intent) => (
-            <IntentRow key={intent.orderId} intent={intent} now={clock?.now ?? null} onRefunded={() => void refetch()} />
-          ))}
-        </ul>
-      )}
-    </section>
   );
 }
