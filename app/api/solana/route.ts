@@ -26,8 +26,19 @@ const ALLOWED = new Set([
   "getGenesisHash",
 ]);
 
-/** Devnet only: sending a signed transaction and following it. */
-const DEVNET_ALLOWED = new Set([...ALLOWED, "sendTransaction", "getSignatureStatuses", "getMinimumBalanceForRentExemption"]);
+/**
+ * Devnet only: sending a signed transaction and following it, and tracking Pay-from-Solana orders (several order
+ * accounts at once; a closed order's last transaction, to tell a fill from a refund).
+ */
+const DEVNET_ALLOWED = new Set([
+  ...ALLOWED,
+  "sendTransaction",
+  "getSignatureStatuses",
+  "getMinimumBalanceForRentExemption",
+  "getMultipleAccounts",
+  "getSignaturesForAddress",
+  "getTransaction",
+]);
 
 type RpcCall = { jsonrpc?: string; id?: unknown; method?: unknown };
 

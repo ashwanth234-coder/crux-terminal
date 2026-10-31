@@ -230,7 +230,7 @@ export function OneClickOrderStatus({ order, to = "your wallet" }: { order: OneC
   return (
     <p role="status" className={`text-[11.5px] leading-snug ${order.kind === "error" ? "text-down" : order.kind === "filled" ? "text-up" : "text-muted"}`}>
       {order.kind === "sending" && (to === "your wallet" ? "Signed in this browser · opening it on Base…" : "Signed · opening it on Base…")}
-      {order.kind === "open" && <>Order {link(order.orderId)} open · the solver fills it in the next 10-second batch…</>}
+      {order.kind === "open" && <>Order {link(order.orderId)} open · Crux fills it in the next 10-second batch…</>}
       {order.kind === "filled" && <>Filled · order {link(order.orderId)} delivered to {to}.</>}
       {order.kind === "refunded" && <>Order {link(order.orderId)} wasn&apos;t filled and was refunded to {to}.</>}
       {order.kind === "error" && order.message}

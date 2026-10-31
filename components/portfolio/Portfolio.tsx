@@ -262,8 +262,8 @@ export function Portfolio() {
             )}
 
             <p className="text-[11.5px] leading-relaxed text-dim">
-              {viaAccount ? "Account sells sign silently with your login (no gas) and pay back into the account. " : ""}Sells are trade intents: the Crux solver fills them in the next 10-second batch at no worse than your signed minimum, or
-              you&apos;re refunded after the deadline. ≈ entry priced at the solver&apos;s batch price · * part of the holding has no price (a
+              {viaAccount ? "Account sells sign silently with your login (no gas) and pay back into the account. " : ""}Sells are signed orders: Crux fills them in the next 10-second batch at no worse than your signed minimum, or
+              you&apos;re refunded after the deadline. ≈ entry priced at the batch price · * part of the holding has no price (a
               plain transfer or an allocation).
             </p>
           </>
@@ -340,10 +340,10 @@ function HoldingRow({
     return { ...r, input };
   };
   const sellReason = (input: bigint): { draft: OrderDraft | null; reason: string | null } => {
-    if (!SETTLER_DEPLOYED) return { draft: null, reason: "Intents aren't live in this build" };
+    if (!SETTLER_DEPLOYED) return { draft: null, reason: "Crux orders aren't live in this build" };
     if (market.protected && !sellsInWindow) return { draft: null, reason: "Batch-only window: sell in the batch on the token page" };
     if (!market.reserves) return { draft: null, reason: market.loading ? "Reading the pool…" : "Pool unavailable" };
-    if (!market.listedForSells) return { draft: null, reason: "Not listed for intents yet" };
+    if (!market.listedForSells) return { draft: null, reason: "Not listed for Crux orders yet" };
     const risk = input > BigInt(0) ? tradeRisk("sell", input, market.reserves) : null;
     if (!risk) return { draft: null, reason: "Too small to sell" };
     if (risk.poolImpactPct > SOLVER_MAX_IMPACT_PCT) return { draft: null, reason: `Moves the pool more than ${SOLVER_MAX_IMPACT_PCT}%: trade smaller on the token page` };
@@ -383,7 +383,7 @@ function HoldingRow({
             ? "Reading this wallet's transfers…"
             : entry === null
               ? "No priced acquisition in the last three days: tokens arrived by transfer or allocation"
-              : [mine.approxEntry && "Intent fills priced at the solver's batch price", mine.partialEntry && "Part of this holding has no price"].filter(Boolean).join(" · ") ||
+              : [mine.approxEntry && "Crux order fills priced at the batch price", mine.partialEntry && "Part of this holding has no price"].filter(Boolean).join(" · ") ||
                 "From this wallet's own priced buys"
         }
       >

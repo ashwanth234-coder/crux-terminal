@@ -127,7 +127,7 @@ export function Momentum({ auction, symbol }: { auction: AuctionV2; symbol: stri
             </span>
             <span
               className="text-dim"
-              title="Volume filled for signed intents by the Crux solver, in a batch at one price. Makers counts direct traders only: intent fills settle through the solver."
+              title="Volume from signed Crux orders, filled in a batch at one price. Makers counts direct traders only: Crux orders settle through Crux."
             >
               via Crux <span className="font-mono text-chrome">{share(flow.intentUsdc, flow.buyUsdc + flow.sellUsdc - flow.intentUsdc).toFixed(0)}%</span>
               {flow.intentTrades > 0 && <span className="font-mono"> · {flow.intentTrades}</span>}

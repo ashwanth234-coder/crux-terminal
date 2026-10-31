@@ -87,7 +87,7 @@ export function HoldersTable({
                         ? "Protocol address: no entry price"
                         : h.entry === null
                           ? "No priced acquisition: tokens arrived by transfer or allocation"
-                          : [h.approxEntry && "Intent fills priced at the solver's batch price", h.partialEntry && "Part of this holding has no price"].filter(Boolean).join(" · ") || "From this wallet's own priced buys"
+                          : [h.approxEntry && "Crux order fills priced at the batch price", h.partialEntry && "Part of this holding has no price"].filter(Boolean).join(" · ") || "From this wallet's own priced buys"
                     }
                   >
                     {system || h.entry === null ? "—" : `${h.approxEntry ? "≈" : ""}${fmtTokenPrice(h.entry)}${h.partialEntry ? "*" : ""}`}
@@ -105,7 +105,7 @@ export function HoldersTable({
                   <td
                     className={`${td} text-right font-mono ${pnlTone(system ? null : h.realized)}`}
                     title={
-                      [h.approxRealized && "Intent sells priced at the solver's pool sell", h.partialRealized && "Some tokens left unpriced (a transfer, or no sale price): not counted"]
+                      [h.approxRealized && "Crux order sells priced at Crux's pool sell", h.partialRealized && "Some tokens left unpriced (a transfer, or no sale price): not counted"]
                         .filter(Boolean)
                         .join(" · ") || "Sale proceeds less their average cost"
                     }
@@ -124,7 +124,7 @@ export function HoldersTable({
       </div>
       <p className="px-1 pt-1.5 text-[11px] text-dim">
         {holders ? `Top ${Math.min(SHOWN, all.length)} of ${all.length} holders` : "Holders"} · balances from Transfer events · PnL at the pool price · ≈ priced at
-        the solver&apos;s fill · * part of the holding or its sales has no price.
+        Crux&apos;s fill · * part of the holding or its sales has no price.
         {transfers.data?.truncated && " Only the last three days of transfers are read, so older holders may be missing."}
       </p>
     </div>

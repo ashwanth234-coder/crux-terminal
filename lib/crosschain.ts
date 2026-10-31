@@ -79,7 +79,7 @@ export const CROSS_CHAIN_ORIGINS: CrossChainOrigin[] = [
   },
   {
     key: "bsc",
-    name: "BSC testnet",
+    name: "BNB Chain testnet",
     chain: bscTestnet,
     explorer: "https://testnet.bscscan.com",
     // Deployed 2026-10-23 (crux-contracts broadcast/DeployCrossChainSettler.s.sol/97).

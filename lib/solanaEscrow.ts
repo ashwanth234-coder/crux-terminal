@@ -19,6 +19,22 @@ export const SOLANA_REFUND_GRACE_SECONDS = 6 * 3600;
 /** Where the solver can fill quickly: well inside the program's one-hour cap. */
 export const SOLANA_FILL_WINDOW_SECONDS = 600;
 
+/**
+ * What opening an order costs the user's wallet, in lamports, from the program's account sizes at Solana's rent rate
+ * (6,960 lamports per byte incl. the 128-byte header): the Order account (205 bytes) is closed back to the user on fill
+ * or refund; the order-id marker (8 bytes, never closed so an id can't be reused) and the escrow's USDC token account
+ * (165 bytes, not closed by the program) keep theirs.
+ */
+export const SOLANA_RENT = { order: 2_317_680, marker: 946_560, vault: 2_039_280 } as const;
+const FEE_LAMPORTS = 5_000;
+export const SOLANA_OPEN_SOL = (SOLANA_RENT.order + SOLANA_RENT.marker + SOLANA_RENT.vault + FEE_LAMPORTS) / 1e9;
+export const SOLANA_RETURNED_SOL = SOLANA_RENT.order / 1e9;
+export const SOLANA_KEPT_SOL = (SOLANA_RENT.marker + SOLANA_RENT.vault) / 1e9;
+/** The SOL a wallet needs before it can open an order: the cost above with headroom for a priority fee. */
+export const SOLANA_MIN_SOL = 0.006;
+/** "≈0.0053 SOL". */
+export const solAmount = (sol: number) => `≈${sol.toFixed(4)} SOL`;
+
 // Anchor discriminators, from crux_escrow's IDL.
 const OPEN_IX = [228, 220, 155, 71, 199, 189, 60, 45];
 const REFUND_IX = [2, 96, 183, 251, 63, 208, 46, 46];
