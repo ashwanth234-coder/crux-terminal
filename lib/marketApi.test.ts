@@ -84,3 +84,14 @@ test("candles ignore zero-price fills and sort by time", () => {
     ],
   );
 });
+
+test("fillGaps draws quiet periods flat at the last close, up to now, and leaves sub-minute intervals alone", async () => {
+  const { fillGaps } = await import("./candles.ts");
+  const c = (time: number, close: number) => ({ time, open: close, high: close, low: close, close, volume: 1, trades: 1 });
+  const filled = fillGaps([c(0, 1), c(180, 2)], 60, 300);
+  assert.deepEqual(filled.map((x) => [x.time, x.close, x.trades]), [[0, 1, 1], [60, 1, 0], [120, 1, 0], [180, 2, 1], [240, 2, 0], [300, 2, 0]]);
+  assert.equal(fillGaps([c(0, 1), c(30, 2)], 15, 300).length, 2);
+  const capped = fillGaps([c(0, 1)], 60, 60 * 100, 10);
+  assert.equal(capped.length, 10);
+  assert.equal(capped[0].close, 1);
+});

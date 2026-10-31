@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import { useId, useRef, useState } from "react";
 import { isAddress } from "viem";
 
-type Hit = { key: string; version: number; auctionId: number; token: string; pool: string | null; name: string; symbol: string; phase: string };
+export type Hit = { key: string; version: number; auctionId: number; token: string; pool: string | null; name: string; symbol: string; phase: string };
 
 /** Ticker / name matches first by how early they match, then newest first (the feed's own order). */
-function search(launches: Hit[], q: string): Hit[] {
+export function search(launches: Hit[], q: string): Hit[] {
   const s = q.trim().replace(/^\$/, "").toLowerCase();
   if (!s) return [];
   const scored = launches.flatMap((l) => {
@@ -21,7 +21,7 @@ function search(launches: Hit[], q: string): Hit[] {
   return scored.sort((a, b) => a.score - b.score).slice(0, 8).map((x) => x.l);
 }
 
-const PHASE: Record<string, string> = { graduated: "Trading", open: "Auction live", scheduled: "Scheduled", closed: "Settling", cancelled: "Cancelled" };
+export const PHASE: Record<string, string> = { graduated: "Trading", open: "Auction live", scheduled: "Scheduled", closed: "Settling", cancelled: "Cancelled" };
 
 /**
  * Top-bar token search: a ticker or name opens a dropdown of matching Crux launches; a full 0x contract address

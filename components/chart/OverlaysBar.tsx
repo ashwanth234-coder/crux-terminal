@@ -39,7 +39,7 @@ export function OverlaysButton({ settings, onChange, counts }: { settings: Chart
             <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" aria-hidden="true">
               <path d="M2 5.5 8 2.5l6 3-6 3-6-3Z M2 9l6 3 6-3 M2 12.5l6 3 6-3" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
             </svg>
-            <span className="hidden md:inline">Overlays</span>
+            <span className="hidden 2xl:inline">Overlays</span>
             {on > 0 && <span className="font-mono text-[10px] text-dim">{on}</span>}
           </span>
         </Tool>

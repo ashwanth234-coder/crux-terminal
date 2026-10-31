@@ -55,6 +55,7 @@ export function Toolbar({
   live,
   replaying,
   onReplay,
+  symbolSlot,
   compareSlot,
   overlaysSlot,
   layoutSlot,
@@ -79,6 +80,8 @@ export function Toolbar({
   replaying: boolean;
   onReplay: () => void;
   /** The compare button (it reads the launch list, so the chart provides it). */
+  /** The symbol button at the start of the row (SymbolSwitch). */
+  symbolSlot?: ReactNode;
   compareSlot?: ReactNode;
   /** Which on-chain trades and levels the chart marks (OverlaysButton). */
   overlaysSlot?: ReactNode;
@@ -130,6 +133,12 @@ export function Toolbar({
     // One row, as on a trading terminal: it scrolls sideways on a narrow screen instead of wrapping (menus open fixed, so
     // the scroll never clips them).
     <div className="flex h-10 shrink-0 items-center gap-0.5 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-line bg-panel px-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {symbolSlot && (
+        <>
+          {symbolSlot}
+          <Sep />
+        </>
+      )}
       <div role="radiogroup" aria-label="Timeframe" className="flex shrink-0 items-center gap-0.5">
         {[{ seconds: "auto" as const, label: "Auto" }, ...INTERVALS]
           .filter((i) => i.seconds === "auto" || pinned.includes(i.seconds) || config.interval === i.seconds)
@@ -318,15 +327,15 @@ export function Toolbar({
           <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" aria-hidden="true">
             <path d="M3 3v10M6 3.5v9l7-4.5-7-4.5Z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
           </svg>
-          <span className="hidden sm:inline">Replay</span>
+          <span className="hidden 2xl:inline">Replay</span>
         </span>
       </Tool>
 
       <div className="ml-auto flex shrink-0 items-center gap-0.5 pl-2">
         {live && (
-          <span className="mr-1 inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-up">
+          <span title="Live: updates as trades land" className="mr-1 inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-up">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-up" aria-hidden="true" />
-            Live
+            <span className="sr-only 2xl:not-sr-only">Live</span>
           </span>
         )}
         <Popover

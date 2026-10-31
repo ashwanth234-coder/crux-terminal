@@ -53,6 +53,32 @@ export function toCandles(fills: Fill[], interval: number, openPrice: number | n
 }
 
 /**
+ * Every period from the first candle to `until`, a period without trades drawn as a flat candle at the last close
+ * (no volume), as DEX charts draw a quiet market: the time axis stays true instead of jumping from trade to trade.
+ * Intervals under a minute are left as they are (one candle per traded period). At most `cap` candles, the latest.
+ */
+export function fillGaps(candles: Candle[], interval: number, until: number, cap = 20_000): Candle[] {
+  if (candles.length === 0 || interval < 60) return candles;
+  const end = Math.max(candles[candles.length - 1].time, Math.floor(until / interval) * interval);
+  const start = Math.max(candles[0].time, end - (cap - 1) * interval);
+  const out: Candle[] = [];
+  let i = 0;
+  let prev: Candle | null = null;
+  // Candles before the window only set the price it starts from.
+  while (i < candles.length && candles[i].time < start) prev = candles[i++];
+  for (let t = start; t <= end; t += interval) {
+    if (i < candles.length && candles[i].time === t) {
+      prev = candles[i++];
+      out.push(prev);
+    } else if (prev) {
+      const p = prev.close;
+      out.push({ time: t, open: p, high: p, low: p, close: p, volume: 0, trades: 0 });
+    }
+  }
+  return out;
+}
+
+/**
  * Heikin Ashi candles: close = the bar's average price, open = the midpoint of the previous HA bar, so runs of one
  * colour show a trend. Volume and trades carry over unchanged.
  */

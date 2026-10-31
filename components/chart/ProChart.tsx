@@ -14,7 +14,7 @@ import { barTime, markTrades, type MarkWho } from "@/lib/chartMarks";
 import { buildHolders } from "@/lib/holders";
 import { CRUX_SOLVER, PREVIOUS_SETTLERS, SETTLER } from "@/lib/intents";
 import { EMPTY_CONTEXT, computeInstance, flowByCandle, holdersByCandle, paramsOf, type StudyContext, type StudyId } from "@/lib/indicators";
-import { INTERVALS, autoInterval, toCandles, type Candle } from "@/lib/candles";
+import { INTERVALS, autoInterval, fillGaps, toCandles, type Candle } from "@/lib/candles";
 import { studyById } from "@/lib/indicators";
 import { fmtTokenPrice } from "@/lib/launchTrade";
 import { PRICE_DECIMALS, type AuctionV2 } from "@/lib/launchV2";
@@ -27,6 +27,7 @@ import { DrawingBar } from "./DrawingBar";
 import { DrawingPalette, TOOL_INFO, TOOL_KEYS } from "./DrawingPalette";
 import { PATTERN_LABELS, TOOL_POINTS, defaultStop, isPattern, type DrawPart, type DrawPoint, type DrawTool, type Drawing } from "./drawings";
 import { OverlaysButton } from "./OverlaysBar";
+import { SymbolSwitch } from "./SymbolSwitch";
 import { DEFAULT_CONFIG, DEFAULT_SETTINGS, loadLayout, loadSettings, palette, saveSettings, type ChartSettings, type ScaleMode } from "./settings";
 import { SettingsModal } from "./SettingsModal";
 import { CompareButton, CompareFeed } from "./Compare";
@@ -185,7 +186,9 @@ export function ProChart({
   const fills = useMemo(() => (swaps.data?.trades ?? []).map((t) => ({ time: t.time, price: t.price, usdc: t.usdc })), [swaps.data]);
   const first = fills.length ? Math.min(...fills.map((f) => f.time)) : auction.settledAt;
   const interval = config.interval === "auto" ? autoInterval(Math.min(first, auction.settledAt), now ?? auction.settledAt) : config.interval;
-  const allCandles = useMemo(() => toCandles(fills, interval, gradPrice > 0 ? gradPrice : null), [fills, interval, gradPrice]);
+  // Quiet periods drawn flat up to the current period (fillGaps), so the time axis is true however thin the trading.
+  const nowBucket = now === null ? 0 : Math.floor(now / interval) * interval;
+  const allCandles = useMemo(() => fillGaps(toCandles(fills, interval, gradPrice > 0 ? gradPrice : null), interval, nowBucket), [fills, interval, gradPrice, nowBucket]);
   // Bar replay: the chart as it stood at `index`, played forward a candle at a time. Off: every candle, live.
   const [replay, setReplay] = useState<{ index: number | null; playing: boolean; speed: number } | null>(null);
   const replayIndex = replay?.index ?? null;
@@ -889,6 +892,7 @@ export function ProChart({
         live={live && !replay}
         replaying={replay !== null}
         compareSlot={<CompareButton current={auction.pair} items={config.compare} onChange={setCompare} />}
+        symbolSlot={<SymbolSwitch symbol={symbol} />}
         overlaysSlot={<OverlaysButton settings={settings} onChange={setSettings} counts={markCounts} />}
         layoutSlot={layoutSlot}
         onReplay={() => setReplay((r) => (r ? null : { index: null, playing: false, speed: 1 }))}

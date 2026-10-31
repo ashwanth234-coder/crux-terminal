@@ -217,13 +217,16 @@ export function TokenBar({
 
   return (
     <div className="border-b border-line bg-void">
-      <div className="flex flex-wrap items-start gap-x-4 gap-y-3 px-4 py-3 sm:gap-x-6 sm:px-5">
-        <TokenAvatar token={auction.token} image={meta.image} symbol={ticker} size={52} />
+      {/* Desktop: one line, as a trading terminal's symbol bar (identity, price, stats); phones stack it. */}
+      <div className="flex flex-wrap items-start gap-x-4 gap-y-3 px-4 py-3 sm:gap-x-6 sm:px-5 lg:items-center lg:py-2">
+        <TokenAvatar token={auction.token} image={meta.image} symbol={ticker} size={40} />
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 lg:flex lg:flex-wrap lg:items-center lg:gap-x-6 lg:gap-y-1.5">
           {/* Identity */}
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-            <h1 className="font-display-md text-[24px] leading-none text-bright">{ticker}</h1>
+            <h1 className="font-display-md text-[24px] leading-none text-bright lg:text-[20px]" title={name ?? undefined}>
+              {ticker}
+            </h1>
             <button
               type="button"
               onClick={() => void copyCa()}
@@ -243,10 +246,10 @@ export function TokenBar({
             <VestingBadge days={vestDays} />
             <AntiSniperBadge seconds={antiSniper} />
           </div>
-          {name && <p className="mt-1 text-[12px] uppercase tracking-[0.12em] text-muted">{name}</p>}
+          {name && <p className="mt-1 text-[12px] uppercase tracking-[0.12em] text-muted lg:hidden">{name}</p>}
 
           {/* Price */}
-          <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 lg:mt-0">
             <span className="text-[10.5px] uppercase tracking-[0.14em] text-dim">{priceLabel}</span>
             <span className="font-mono text-[22px] leading-none text-bright">{price}</span>
             {change24h !== null && (
@@ -269,7 +272,7 @@ export function TokenBar({
           </div>
 
           {/* Stats strip */}
-          <div className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1">
+          <div className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1 lg:mt-0">
             <Stat label={t("stat.mcap")} hint="Price × total supply">
               {mcap}
             </Stat>
@@ -316,7 +319,7 @@ export function TokenBar({
           </div>
 
           {changes && (
-            <ul aria-label="Price change" className="mt-2 flex flex-wrap items-center gap-1.5">
+            <ul aria-label="Price change" className="mt-2 flex flex-wrap items-center gap-1.5 lg:mt-0">
               {changes.map((c) => {
                 const tone = c.pct === null || Math.abs(c.pct) < 0.005 ? "text-muted" : c.pct > 0 ? "text-up" : "text-down";
                 return (
