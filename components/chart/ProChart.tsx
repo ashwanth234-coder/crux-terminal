@@ -171,6 +171,8 @@ export function ProChart({
   const [hover, setHover] = useState<DrawPart | null>(null);
   const drag = useRef<{ orig: Drawing; part: DrawPart; x: number; y: number; moved: boolean; last: Drawing | null } | null>(null);
   const area = useRef<HTMLDivElement>(null);
+  // Where the last drawing point was clicked: a second click on the same spot doesn't finish a zero-size drawing.
+  const lastClick = useRef<{ x: number; y: number } | null>(null);
   // Bumped when the visible range moves, so the locked time line follows the candles.
   const [, setRangeTick] = useState(0);
 
@@ -190,7 +192,7 @@ export function ProChart({
   const gradPrice = Number(formatUnits(auction.clearingPrice, PRICE_DECIMALS));
   const fills = useMemo(() => (swaps.data?.trades ?? []).map((t) => ({ time: t.time, price: t.price, usdc: t.usdc })), [swaps.data]);
   const first = fills.length ? Math.min(...fills.map((f) => f.time)) : auction.settledAt;
-  const interval = config.interval === "auto" ? autoInterval(Math.min(first, auction.settledAt), now ?? auction.settledAt) : config.interval;
+  const interval = config.interval === "auto" ? autoInterval(Math.min(first, auction.settledAt), now ?? auction.settledAt, 200) : config.interval;
   // Quiet periods drawn flat up to the current period (fillGaps), so the time axis is true however thin the trading.
   const nowBucket = now === null ? 0 : Math.floor(now / interval) * interval;
   const allCandles = useMemo(() => fillGaps(toCandles(fills, interval, gradPrice > 0 ? gradPrice : null), interval, nowBucket), [fills, interval, gradPrice, nowBucket]);
@@ -697,6 +699,10 @@ export function ProChart({
     if (!tool || view !== "chart") return;
     const p = pointer(e);
     if (!p) return;
+    const at = local(e);
+    const prev = lastClick.current;
+    if (points.length > 0 && at && prev && Math.hypot(at.x - prev.x, at.y - prev.y) < 4) return;
+    lastClick.current = at;
     const all = [...points, p];
     if (all.length < TOOL_POINTS[tool]) {
       setPoints(all);

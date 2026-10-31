@@ -108,7 +108,9 @@ export class ChartEngine {
   /** Grid, background, crosshair, scales, time zone, volume, up / down colours. */
   applySettings(s: ChartSettings) {
     this.settings = s;
-    const grid = (on: boolean) => (s.grid && on ? this.theme.line : "transparent");
+    // Grid lines a step fainter than borders, as on a trading terminal: they guide the eye without boxing the candles in.
+    const faint = /^#[0-9a-f]{6}$/i.test(this.theme.line) ? `${this.theme.line}99` : this.theme.line;
+    const grid = (on: boolean) => (s.grid && on ? faint : "transparent");
     const bg = s.background === "black" ? "#000000" : s.background === "slate" ? "#131722" : this.theme.bg;
     const local = s.timezone === "local";
     const two = (n: number) => String(n).padStart(2, "0");
@@ -421,10 +423,12 @@ export class ChartEngine {
     const n = this.main.data().length;
     if (n === 0) return;
     const width = this.chart.timeScale().width() || 600;
-    // A thinly traded token (a few dozen bars) gets wider candles, so each one still reads as a candle.
-    const spacing = n < 40 ? 14 : 7;
-    const shown = Math.max(20, Math.floor(width / spacing));
-    this.chart.timeScale().setVisibleLogicalRange({ from: n - shown + 10, to: n - 1 + 10 });
+    // Bars at a normal width (7 px); when there are too few to fill the pane at that width, wider (up to 24 px) so they
+    // run from the left edge, and the grid's columns stay even instead of one wide empty column before the first bar.
+    // Eight bars of room before the first one, so its marks and labels aren't cut by the edge.
+    const spacing = n + 18 < width / 7 ? Math.min(24, width / (n + 18)) : 7;
+    const shown = width / spacing;
+    this.chart.timeScale().setVisibleLogicalRange({ from: n - 1 + 10 - shown, to: n - 1 + 10 });
   }
 
   /** Shows `from`..`to` (unix seconds); falls back to everything when there's no data there. */

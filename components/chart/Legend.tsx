@@ -57,7 +57,7 @@ export function Legend({
     v == null ? "…" : priced ? fmt(v * k) : Math.abs(v) >= 1_000 ? compact.format(v) : Number.isInteger(v) ? v : v.toFixed(Math.abs(v) >= 100 ? 0 : 1);
   return (
     <div className={`pointer-events-none absolute top-1.5 z-10 max-w-[calc(100%-6rem)] ${inset ? "left-12" : "left-2"} font-mono text-[11px] leading-snug`}>
-      <p className="flex flex-wrap items-baseline gap-x-2">
+      <p className="w-fit max-w-full rounded-[3px] bg-void/75 px-1 flex flex-wrap items-baseline gap-x-2">
         <span className="text-chrome/90">{title}</span>
         {show.ohlc && (
           <>
@@ -83,7 +83,7 @@ export function Legend({
           </span>
         )}
       </p>
-      <p className="flex items-center gap-1.5 text-muted">
+      <p className="w-fit max-w-full rounded-[3px] bg-void/75 px-1 flex items-center gap-1.5 text-muted">
         {show.volume && (
           <span>
             <span className="text-dim">Vol</span> ${candle.volume.toLocaleString("en-US", { maximumFractionDigits: 2 })}
@@ -102,7 +102,7 @@ export function Legend({
         )}
       </p>
       {compares.length > 0 && (
-        <p className="flex flex-wrap gap-x-2.5">
+        <p className="w-fit max-w-full rounded-[3px] bg-void/75 px-1 flex flex-wrap gap-x-2.5">
           {compares.map((c) => (
             <span key={c.key} className="group inline-flex items-center gap-1" style={{ color: c.color }}>
               vs {c.label}
@@ -116,7 +116,7 @@ export function Legend({
       {open &&
         show.studies &&
         studies.map((s) => (
-          <div key={s.id} className="group flex flex-wrap items-center gap-x-2">
+          <div key={s.id} className="w-fit max-w-full rounded-[3px] bg-void/75 px-1 group flex flex-wrap items-center gap-x-2">
             <button
               type="button"
               onClick={() => onSettings(s.id)}

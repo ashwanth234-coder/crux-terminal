@@ -135,7 +135,7 @@ export function Toolbar({
   return (
     // One row, as on a trading terminal: it scrolls sideways on a narrow screen instead of wrapping (menus open fixed, so
     // the scroll never clips them).
-    <div className="relative flex h-10 shrink-0 items-center gap-0.5 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-line bg-panel px-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="relative flex h-10 shrink-0 items-center gap-0.5 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-line bg-panel px-1.5 [&>*]:shrink-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {symbolSlot && (
         <>
           {symbolSlot}

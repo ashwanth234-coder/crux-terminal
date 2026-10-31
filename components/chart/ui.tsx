@@ -26,7 +26,7 @@ export function Tool({
       aria-label={label}
       aria-pressed={active}
       title={label}
-      className={`grid h-7 min-w-7 place-items-center rounded-[3px] px-1.5 font-mono text-[11px] transition-colors disabled:opacity-30 ${
+      className={`grid h-7 min-w-7 shrink-0 place-items-center rounded-[3px] px-1.5 font-mono text-[11px] transition-colors disabled:opacity-30 ${
         active ? "bg-panel-2 text-chrome ring-1 ring-inset ring-signal/60" : "text-dim hover:text-chrome"
       } ${className}`}
     >
