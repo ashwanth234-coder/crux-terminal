@@ -49,27 +49,43 @@ export function Popover({
   align?: "left" | "right";
   width?: string;
 }) {
+  // Where the panel opens, measured from the button: fixed to the viewport, so a toolbar that scrolls sideways (and
+  // clips its overflow) never clips the menu.
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const toggle = () => setOpen((o) => !o);
+  /** Places the panel under the button as it mounts (a ref callback, so no render reads the DOM). */
+  const place = (el: HTMLDivElement | null) => {
+    const r = ref.current?.getBoundingClientRect();
+    if (!el || !r) return;
+    el.style.top = `${r.bottom + 4}px`;
+    el.style.maxHeight = `calc(100svh - ${r.bottom + 12}px)`;
+    if (align === "left") el.style.left = `${Math.max(8, r.left)}px`;
+    else el.style.right = `${Math.max(8, window.innerWidth - r.right)}px`;
+  };
   useEffect(() => {
     if (!open) return;
+    const close = () => setOpen(false);
     const onDown = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+      if (!ref.current?.contains(e.target as Node)) close();
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", close);
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", close);
     };
   }, [open]);
   return (
-    <div ref={ref} className="relative">
-      {button(open, () => setOpen((o) => !o))}
+    <div ref={ref} className="relative shrink-0">
+      {button(open, toggle)}
       {open && (
         <div
-          className={`absolute top-full z-30 mt-1 ${align === "left" ? "left-0" : "right-0"} ${width} rounded-[5px] border border-line-2 bg-panel-2 p-1 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.9)]`}
+          ref={place}
+          className={`fixed z-50 ${width} max-w-[calc(100vw-16px)] overflow-y-auto rounded-[5px] border border-line-2 bg-panel-2 p-1 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.9)]`}
         >
           {children(() => setOpen(false))}
         </div>

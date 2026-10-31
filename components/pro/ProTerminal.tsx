@@ -65,8 +65,8 @@ export function ProTerminal({
       />
 
       {/* minmax(0,1fr) on phones: wide content (the tape's table scrolls sideways) must never widen the column. */}
-      <div className="grid flex-1 grid-cols-[minmax(0,1fr)] gap-px bg-line max-lg:pb-28 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] lg:grid-rows-[minmax(0,1fr)_minmax(220px,32%)]">
-        <section aria-label="Chart" className="min-h-[340px] bg-void p-3 lg:col-start-1 lg:row-start-1">
+      <div className="grid flex-1 grid-cols-[minmax(0,1fr)] gap-px bg-line max-lg:pb-28 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] lg:grid-rows-[minmax(0,1fr)_minmax(190px,28%)]">
+        <section aria-label="Chart" className="bg-void p-1.5 max-lg:h-[72svh] max-lg:min-h-[460px] lg:col-start-1 lg:row-start-1 lg:min-h-0">
           {mode === "auction" ? (
             <DemandCurve
               factory={factory}

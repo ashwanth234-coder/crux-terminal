@@ -68,14 +68,18 @@ export class ChartEngine {
         background: { type: lc.ColorType.Solid, color: theme.bg },
         textColor: theme.text,
         fontFamily: "JetBrains Mono, ui-monospace, monospace",
-        fontSize: 10,
+        fontSize: 11,
         // The library's attribution is given in the chart's footnote instead (its licence allows either).
         attributionLogo: false,
         panes: { separatorColor: theme.line, separatorHoverColor: `${theme.chrome}33` },
       },
-      rightPriceScale: { borderColor: theme.line, scaleMargins: { top: 0.12, bottom: 0.24 } },
-      timeScale: { borderColor: theme.line, timeVisible: true, rightOffset: 6 },
-      crosshair: { horzLine: { labelBackgroundColor: "#2a2d33" }, vertLine: { labelBackgroundColor: "#2a2d33" } },
+      rightPriceScale: { borderColor: theme.line, scaleMargins: { top: 0.1, bottom: 0.22 } },
+      // Candles keep a trading-terminal width (about 7 px) instead of stretching to fill the pane when there are few.
+      timeScale: { borderColor: theme.line, timeVisible: true, rightOffset: 10, barSpacing: 7, minBarSpacing: 0.5 },
+      crosshair: {
+        horzLine: { style: lc.LineStyle.Dashed, width: 1, labelBackgroundColor: "#2a2d33" },
+        vertLine: { style: lc.LineStyle.Dashed, width: 1, labelBackgroundColor: "#2a2d33" },
+      },
     });
     this.volume = this.chart.addSeries(lc.HistogramSeries, { priceScaleId: "", priceFormat: { type: "volume" }, lastValueVisible: false, priceLineVisible: false });
     this.volume.priceScale().applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
@@ -117,7 +121,7 @@ export class ChartEngine {
     this.chart.applyOptions({
       layout: { background: { type: this.lc.ColorType.Solid, color: bg } },
       grid: { vertLines: { color: grid(s.gridStyle !== "horz") }, horzLines: { color: grid(s.gridStyle !== "vert") } },
-      leftPriceScale: { visible: s.scaleSide === "left", borderColor: this.theme.line, scaleMargins: { top: 0.12, bottom: 0.24 } },
+      leftPriceScale: { visible: s.scaleSide === "left", borderColor: this.theme.line, scaleMargins: { top: 0.1, bottom: 0.22 } },
       rightPriceScale: { visible: s.scaleSide === "right" },
       localization: { timeFormatter: (ts: number) => `${fmtTime(ts)}${local ? "" : " UTC"}` },
       timeScale: {
@@ -375,7 +379,7 @@ export class ChartEngine {
   reset() {
     this.chart.priceScale(this.side).applyOptions({ autoScale: true });
     for (const p of this.chart.panes()) for (const s of p.getSeries()) s.priceScale().applyOptions({ autoScale: true });
-    this.chart.timeScale().fitContent();
+    this.fit();
   }
 
   autoScale() {
@@ -386,8 +390,26 @@ export class ChartEngine {
     return this.chart.priceScale(this.side).options().autoScale;
   }
 
+  /** Every bar in view (the bottom bar's All): fitted when they're too many for their normal width, else as fit(). */
+  showAll() {
+    const n = this.main.data().length;
+    if (n > Math.floor((this.chart.timeScale().width() || 600) / 7)) this.chart.timeScale().fitContent();
+    else this.fit();
+  }
+
+  /**
+   * The opening view: the latest bars at their normal width, newest at the right with room after it, as a trading
+   * terminal opens. With fewer bars than fit, they sit on the right and the rest of the pane stays empty instead of
+   * blowing each candle up to fill it.
+   */
   fit() {
-    this.chart.timeScale().fitContent();
+    const n = this.main.data().length;
+    if (n === 0) return;
+    const width = this.chart.timeScale().width() || 600;
+    // A thinly traded token (a few dozen bars) gets wider candles, so each one still reads as a candle.
+    const spacing = n < 40 ? 14 : 7;
+    const shown = Math.max(20, Math.floor(width / spacing));
+    this.chart.timeScale().setVisibleLogicalRange({ from: n - shown + 10, to: n - 1 + 10 });
   }
 
   /** Shows `from`..`to` (unix seconds); falls back to everything when there's no data there. */

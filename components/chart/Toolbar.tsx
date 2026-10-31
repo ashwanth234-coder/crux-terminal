@@ -56,6 +56,7 @@ export function Toolbar({
   replaying,
   onReplay,
   compareSlot,
+  overlaysSlot,
   layoutSlot,
 }: {
   config: ChartConfig;
@@ -79,6 +80,8 @@ export function Toolbar({
   onReplay: () => void;
   /** The compare button (it reads the launch list, so the chart provides it). */
   compareSlot?: ReactNode;
+  /** Which on-chain trades and levels the chart marks (OverlaysButton). */
+  overlaysSlot?: ReactNode;
   /** The multi-chart layout picker. */
   layoutSlot?: ReactNode;
 }) {
@@ -124,8 +127,10 @@ export function Toolbar({
     set((c) => ({ ...c, studies: c.studies.some((s) => s.id === id) ? c.studies.filter((s) => s.id !== id) : [...c.studies, { id }] }));
 
   return (
-    <div className="flex flex-wrap items-center gap-x-0.5 gap-y-1.5 pb-2">
-      <div role="radiogroup" aria-label="Timeframe" className="flex flex-wrap items-center gap-0.5">
+    // One row, as on a trading terminal: it scrolls sideways on a narrow screen instead of wrapping (menus open fixed, so
+    // the scroll never clips them).
+    <div className="flex h-10 shrink-0 items-center gap-0.5 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-line bg-panel px-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div role="radiogroup" aria-label="Timeframe" className="flex shrink-0 items-center gap-0.5">
         {[{ seconds: "auto" as const, label: "Auto" }, ...INTERVALS]
           .filter((i) => i.seconds === "auto" || pinned.includes(i.seconds) || config.interval === i.seconds)
           .map((i) => (
@@ -283,8 +288,9 @@ export function Toolbar({
         )}
       </Popover>
       {compareSlot}
+      {overlaysSlot}
       <Sep />
-      <div role="radiogroup" aria-label="Show price or market cap" className="flex items-center gap-0.5 text-[11.5px]">
+      <div role="radiogroup" aria-label="Show price or market cap" className="flex shrink-0 items-center gap-0.5 text-[11.5px]">
         {(["mcap", "price"] as Units[]).map((u) => (
           <button
             key={u}
@@ -316,7 +322,7 @@ export function Toolbar({
         </span>
       </Tool>
 
-      <div className="ml-auto flex items-center gap-0.5">
+      <div className="ml-auto flex shrink-0 items-center gap-0.5 pl-2">
         {live && (
           <span className="mr-1 inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-up">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-up" aria-hidden="true" />

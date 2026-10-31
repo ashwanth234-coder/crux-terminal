@@ -26,7 +26,7 @@ import { Legend } from "./Legend";
 import { DrawingBar } from "./DrawingBar";
 import { DrawingPalette, TOOL_INFO, TOOL_KEYS } from "./DrawingPalette";
 import { PATTERN_LABELS, TOOL_POINTS, defaultStop, isPattern, type DrawPart, type DrawPoint, type DrawTool, type Drawing } from "./drawings";
-import { OverlaysBar } from "./OverlaysBar";
+import { OverlaysButton } from "./OverlaysBar";
 import { DEFAULT_CONFIG, DEFAULT_SETTINGS, loadLayout, loadSettings, palette, saveSettings, type ChartSettings, type ScaleMode } from "./settings";
 import { SettingsModal } from "./SettingsModal";
 import { CompareButton, CompareFeed } from "./Compare";
@@ -583,7 +583,7 @@ export function ProChart({
   };
   const onRange = (seconds: number) => {
     if (!engine) return;
-    if (seconds === 0 || now === null) engine.fit();
+    if (seconds === 0 || now === null) engine.showAll();
     else engine.showRange(now - seconds, now);
   };
   const onContext = (e: MouseEvent<HTMLDivElement>) => {
@@ -869,7 +869,8 @@ export function ProChart({
   const live = swaps.data !== undefined && !swaps.isError;
 
   return (
-    <div ref={frame} tabIndex={-1} onKeyDown={onKey} className={`flex h-full min-h-[inherit] flex-col outline-none ${full ? "bg-void p-3" : ""}`}>
+    // A terminal frame, as on TradingView: one toolbar on top, the drawing rail on the left, the bottom bar under it all.
+    <div ref={frame} tabIndex={-1} onKeyDown={onKey} className={`flex h-full min-h-[inherit] flex-col overflow-hidden bg-void outline-none ${full ? "" : "rounded-[6px] border border-line"}`}>
       <Toolbar
         config={config}
         set={set}
@@ -888,15 +889,41 @@ export function ProChart({
         live={live && !replay}
         replaying={replay !== null}
         compareSlot={<CompareButton current={auction.pair} items={config.compare} onChange={setCompare} />}
+        overlaysSlot={<OverlaysButton settings={settings} onChange={setSettings} counts={markCounts} />}
         layoutSlot={layoutSlot}
         onReplay={() => setReplay((r) => (r ? null : { index: null, playing: false, speed: 1 }))}
       />
 
+      <div className="relative flex min-h-0 flex-1">
+      {view === "chart" && (
+        // The drawing tools' own column: they never cover the candles.
+        <div className={`relative z-20 shrink-0 border-r border-line bg-panel transition-[width] ${paletteOpen ? "w-11" : "w-3.5"}`}>
+          <DrawingPalette
+            open={paletteOpen}
+            setOpen={setPaletteOpen}
+            tool={tool}
+            setTool={pickTool}
+            count={config.drawings.length}
+            onClear={() => set((c) => ({ ...c, drawings: [] }))}
+            settings={settings}
+            onSettings={setSettings}
+            zoom={zoomMode}
+            onZoom={() => {
+              pickTool(null);
+              setZoomMode((z) => !z);
+            }}
+            sticker={sticker}
+            onSticker={setSticker}
+            hidden={drawHidden}
+            onHidden={() => setDrawHidden((h) => !h)}
+          />
+        </div>
+      )}
       <div
         ref={area}
         // On phones the chart grows by a pane's height for each indicator pane, so panes never squeeze the candles.
         style={{ "--chart-min": `${300 + 110 * computedStudies.filter((c) => c.study.pane === "pane").length}px` } as CSSProperties}
-        className={`relative min-h-[300px] flex-1 touch-none overflow-hidden rounded-t-[4px] border border-line max-lg:min-h-[var(--chart-min)] ${
+        className={`relative min-h-[300px] min-w-0 flex-1 touch-none overflow-hidden max-lg:min-h-[var(--chart-min)] ${
           tool || zoomMode ? "cursor-crosshair" : dragged ? "cursor-grabbing" : hover === "body" ? "cursor-move" : hover ? "cursor-grab" : ""
         }`}
         onContextMenu={onContext}
@@ -913,7 +940,7 @@ export function ProChart({
         <div ref={host} className={`absolute inset-0 ${view === "table" ? "invisible" : ""}`} aria-label={`${symbol} chart`} role="img" />
         {view === "chart" && (
           <Legend
-            inset={paletteOpen}
+            inset={false}
             title={`${name ?? symbol} · ${intervalLabel} · CRUX`}
             candle={shown}
             k={k}
@@ -934,27 +961,6 @@ export function ProChart({
         )}
         {view === "chart" && lockedX !== null && (
           <div className="pointer-events-none absolute bottom-7 top-0 z-[5] w-px border-l border-dashed border-[#4cc9f0]/70" style={{ left: lockedX }} aria-hidden="true" />
-        )}
-        {view === "chart" && (
-          <DrawingPalette
-            open={paletteOpen}
-            setOpen={setPaletteOpen}
-            tool={tool}
-            setTool={pickTool}
-            count={config.drawings.length}
-            onClear={() => set((c) => ({ ...c, drawings: [] }))}
-            settings={settings}
-            onSettings={setSettings}
-            zoom={zoomMode}
-            onZoom={() => {
-              pickTool(null);
-              setZoomMode((z) => !z);
-            }}
-            sticker={sticker}
-            onSticker={setSticker}
-            hidden={drawHidden}
-            onHidden={() => setDrawHidden((h) => !h)}
-          />
         )}
         {view === "chart" && !drawHidden && !tool && !dragged && selectedBar}
         {view === "chart" && editing && textEditor}
@@ -1053,8 +1059,9 @@ export function ProChart({
           <p className="absolute inset-x-0 top-1/2 px-6 text-center text-[12px] text-dim">{external ? "No swaps in this pool in the last few days." : `No trades since graduation. The pool opened at ${fmtTokenPrice(gradPrice)}.`}</p>
         )}
       </div>
+      </div>
       {replay && (
-        <div className="flex flex-wrap items-center gap-2 border-x border-b border-line bg-[#4cc9f0]/[0.06] px-2 py-1.5 text-[11.5px]" role="toolbar" aria-label="Bar replay">
+        <div className="flex flex-wrap items-center gap-2 border-t border-line bg-[#4cc9f0]/[0.06] px-2 py-1.5 text-[11.5px]" role="toolbar" aria-label="Bar replay">
           <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-[#4cc9f0]">Replay</span>
           {replay.index === null ? (
             <span className="text-muted">Click a candle to start from it.</span>
@@ -1104,17 +1111,23 @@ export function ProChart({
           </button>
         </div>
       )}
-      <BottomBar now={now} onRange={onRange} scale={scale} setScale={setScale} auto={engine?.isAutoScale() ?? true} onAuto={() => engine?.autoScale()} />
-      <OverlaysBar settings={settings} onChange={setSettings} counts={markCounts} />
-      <p className="px-1 pt-1.5 text-[11px] text-dim">
-        Every trade on the locked liquidity since graduation (batch fills during an anti-sniper window, then Uniswap V2 swaps), the 0.3% pool fee
-        included. {config.units === "mcap" ? "Market cap = price × total supply." : ""} Right-click the chart for more; Alt+R resets the view.
-        {swaps.data?.truncated && " Only the last three days are shown."} Charts by{" "}
-        <a href="https://www.tradingview.com/lightweight-charts/" target="_blank" rel="noopener noreferrer" className="underline decoration-line-2 hover:text-chrome">
-          TradingView Lightweight Charts™
-        </a>
-        .
-      </p>
+      <BottomBar
+        now={now}
+        onRange={onRange}
+        scale={scale}
+        setScale={setScale}
+        auto={engine?.isAutoScale() ?? true}
+        onAuto={() => engine?.autoScale()}
+        note={
+          <>
+            {external
+              ? "Every swap in this Uniswap pool, its fee included."
+              : "Every trade on the locked liquidity since graduation (batch fills during an anti-sniper window, then Uniswap V2 swaps), the 0.3% pool fee included."}{" "}
+            {config.units === "mcap" ? "Market cap = price × total supply." : ""} Right-click the chart for more; Alt+R resets the view.
+            {swaps.data?.truncated && " Only the last three days are shown."}
+          </>
+        }
+      />
       {config.compare.map((c) => (
         <CompareFeed key={c.pair} item={c} interval={interval} onCandles={onCompareCandles} />
       ))}
