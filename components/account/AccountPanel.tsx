@@ -341,10 +341,8 @@ export function AccountPanel() {
           <div className="mt-4 rounded-lg border border-signal/50 bg-signal/[0.05] px-4 py-3">
             <p className="text-[12.5px] font-semibold uppercase tracking-[0.12em] text-signal">Base network only</p>
             <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
-              Send test USDC to this address on <span className="text-chrome">Base Sepolia</span> only. The address is the same on every chain,
-              but only Base Sepolia trades: anything sent straight to it on another chain can only be withdrawn back to your bound address, once
-              the account is set up there. To move USDC from Arbitrum, Ethereum or BNB Chain, use <span className="text-chrome">Deposit from another
-              chain</span> below instead.
+              Send test USDC straight to this address on <span className="text-chrome">Base Sepolia</span> only: the account lives and trades
+              there. From another chain, use <span className="text-chrome">Deposit from another chain</span> below.
             </p>
           </div>
           <div className="mt-4 border-t border-line pt-4">
@@ -398,13 +396,13 @@ export function AccountPanel() {
                     ))}
                   </div>
                 )}
-                <CrossChainDeposit account={account} onOpened={a.refresh} />
               </>
             ) : (
               <button type="button" onClick={openConnect} className={buttonClass("outline", "sm", "mt-2")}>
                 Connect a wallet to deposit from it
               </button>
             )}
+            <CrossChainDeposit account={account} onOpened={a.refresh} />
           </div>
           {!a.deployed && (
             <p className="mt-3 text-[11.5px] leading-relaxed text-dim">

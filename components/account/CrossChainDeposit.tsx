@@ -6,6 +6,7 @@ import { useConfig, useConnection, useReadContract } from "wagmi";
 import { getConnection, signTypedData, simulateContract, switchChain, waitForTransactionReceipt, writeContract } from "wagmi/actions";
 import { buttonClass } from "@/components/ui/Button";
 import { useExactApproval } from "@/hooks/useExactApproval";
+import { useConnectModal } from "@/providers/Web3Provider";
 import { TESTNET } from "@/lib/chains";
 import { CROSS_CHAIN_ORIGINS, toUsdc6, type CrossChainOrigin } from "@/lib/crosschain";
 import { feeHeadroom } from "@/lib/fees";
@@ -57,6 +58,7 @@ export function CrossChainDeposit({ account, onOpened }: { account: Address; onO
   const config = useConfig();
   const { address: wallet } = useConnection();
   const approveExact = useExactApproval();
+  const { openConnect } = useConnectModal();
   const [key, setKey] = useState(ORIGINS[0]?.key);
   const [amount, setAmount] = useState("");
   const [step, setStep] = useState<Step>({ kind: "idle" });
@@ -71,7 +73,23 @@ export function CrossChainDeposit({ account, onOpened }: { account: Address; onO
     query: { enabled: Boolean(wallet && origin), refetchInterval: 20_000 },
   });
 
-  if (!origin || !wallet) return null;
+  if (!origin) return null;
+  // Before a wallet is connected: which chains it can come from, and the one step that unlocks it.
+  if (!wallet) {
+    return (
+      <div className="mt-4 border-t border-line pt-4">
+        <p className="text-[12px] text-dim">Deposit from another chain</p>
+        <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
+          Pay test USDC on {ORIGINS.map((o) => o.name).join(", ").replace(/, ([^,]*)$/, " or $1")} from your wallet and Crux delivers it here on
+          Base, no bridge.{" "}
+          <button type="button" onClick={openConnect} className="text-chrome underline decoration-line-2 underline-offset-2 hover:text-bright">
+            Connect a wallet
+          </button>{" "}
+          to start.
+        </p>
+      </div>
+    );
+  }
   const units = (() => {
     try {
       const v = amount ? parseUnits(amount, origin.decimals) : null;
