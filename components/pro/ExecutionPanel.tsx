@@ -34,6 +34,7 @@ import { SOLVER_MAX_IMPACT_PCT, bidRisk, tradeRisk } from "@/lib/risk";
 import { PAY_SOURCES } from "@/lib/tokens";
 import { useConnectModal } from "@/providers/Web3Provider";
 import { ORIGIN_NAMES, SOON_MAINNET, SOON_NETWORKS } from "@/lib/networks";
+import { SOLANA_OPEN_SOL, SOLANA_RETURNED_SOL, solAmount } from "@/lib/solanaEscrow";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const pct = (v: number) => `${v >= 0 ? "−" : "+"}${Math.abs(v).toFixed(2)}%`;
@@ -109,12 +110,12 @@ function BuyingPower({ active, onPick }: { active: PayFrom | "account"; onPick: 
             aria-pressed={active === s.key}
             title={
               s.key === "account"
-                ? "Pay from your Crux account (no gas, no popup)"
+                ? "Pay from your Crux account: no gas, no pop-up"
                 : s.key === "base"
-                  ? "Pay from your wallet on Base"
+                  ? "Pay from your wallet on Base: an approval if needed, then one transaction, paid in a little Base Sepolia ETH"
                   : s.key === "solana"
-                    ? "Pay with USDC on Solana devnet: escrowed there, filled on Base"
-                    : `Pay from your wallet on ${s.name}: escrowed there, filled on Base`
+                    ? `Pay with USDC on Solana devnet, filled on Base in about 20 s. Needs ${solAmount(SOLANA_OPEN_SOL)} for fees and storage; ${solAmount(SOLANA_RETURNED_SOL)} comes back when the order fills or is refunded`
+                    : `Pay from your wallet on ${s.name}, filled on Base: an approval if needed, then one transaction, paid in a little ${originByKey(s.key as Exclude<PayFrom, "base" | "solana">)?.chain.nativeCurrency.symbol ?? "test gas"} on ${s.name}`
             }
             className={`inline-flex h-6 items-center gap-1.5 rounded-[4px] border px-2 font-mono text-[10.5px] transition-colors ${
               active === s.key ? "border-signal text-signal" : "border-line-2 text-muted hover:text-chrome"

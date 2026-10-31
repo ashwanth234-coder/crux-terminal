@@ -2,20 +2,26 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Transaction, type TransactionInstruction } from "@solana/web3.js";
 import type { Address } from "viem";
 import { Modal, KineticLoader } from "@/components/ui/Modal";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
-import { solanaDevnet, useSolanaPayer, type SolanaPayer } from "@/hooks/useSolanaPayer";
+import { sendSolana, solanaDevnet, solanaErrorMessage, useSolanaPayer } from "@/hooks/useSolanaPayer";
 import { BATCH_WINDOW_SECONDS } from "@/lib/intents";
 import type { OrderDraft } from "@/lib/order";
+import { refundClock } from "@/lib/refundTime";
+import { rememberSolanaOrder, tokenFromCaip19, updateSolanaOrder } from "@/lib/solanaOrders";
 import {
+  SOLANA_KEPT_SOL,
+  SOLANA_MIN_SOL,
+  SOLANA_OPEN_SOL,
   SOLANA_REFUND_GRACE_SECONDS,
+  SOLANA_RETURNED_SOL,
   newSolanaOrder,
   openInstruction,
   orderAddress,
   orderProven,
   refundInstruction,
+  solAmount,
   type SolanaOrder,
 } from "@/lib/solanaEscrow";
 
@@ -44,29 +50,6 @@ type Flow =
 const explorer = (signature: string) => `https://explorer.solana.com/tx/${signature}?cluster=devnet`;
 const short = (s: string) => `${s.slice(0, 6)}…${s.slice(-4)}`;
 
-/** Signs with the payer, sends through devnet and waits for confirmation. */
-async function sendSigned(payer: SolanaPayer, ix: TransactionInstruction) {
-  const connection = solanaDevnet();
-  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
-  const tx = new Transaction({ feePayer: payer.publicKey, blockhash, lastValidBlockHeight }).add(ix);
-  const signed = await payer.sign(tx);
-  const signature = await connection.sendRawTransaction(signed, { preflightCommitment: "confirmed" });
-  // Poll the status rather than confirmTransaction, which needs a websocket and getBlockHeight: the relay serves neither.
-  for (let i = 0; i < 60; i++) {
-    const { value } = await connection.getSignatureStatus(signature);
-    if (value?.err) throw new Error(`Transaction failed: ${JSON.stringify(value.err)}`);
-    if (value?.confirmationStatus === "confirmed" || value?.confirmationStatus === "finalized") return signature;
-    await new Promise((r) => setTimeout(r, 1500));
-  }
-  throw new Error(`Not confirmed after 90 s; check it on Solana Explorer: ${signature}`);
-}
-
-function message(err: unknown) {
-  const e = err as { name?: string; message?: string };
-  if (e.name === "WalletSignTransactionError" || /reject|denied|cancel/i.test(e.message ?? "")) return "Request rejected in wallet.";
-  return e.message?.split("\n")[0] ?? "Something went wrong";
-}
-
 function Row({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="flex items-baseline justify-between gap-4 py-2.5">
@@ -94,8 +77,11 @@ export function SolanaIntentModal({ request, onClose }: { request: SolanaOrderRe
       const info = await solanaDevnet().getAccountInfo(orderAddress(placed!.fillHash), "confirmed");
       const state = info ? (orderProven(info.data) ? "proven" : "escrowed") : "closed";
       // Refunds open once the fill deadline plus the grace period has passed with no proof.
-      const refundable = state === "escrowed" && Date.now() / 1000 > placed!.fillDeadline + SOLANA_REFUND_GRACE_SECONDS;
-      return { state, refundable };
+      const now = Date.now() / 1000;
+      const refundable = state === "escrowed" && now > placed!.fillDeadline + SOLANA_REFUND_GRACE_SECONDS;
+      // Past the fill window with no fill: the refund time is what matters now.
+      const late = state === "escrowed" && now > placed!.fillDeadline;
+      return { state, refundable, late };
     },
   });
   const refundable = status.data?.refundable ?? false;
@@ -120,11 +106,21 @@ export function SolanaIntentModal({ request, onClose }: { request: SolanaOrderRe
         now: Math.floor(Date.now() / 1000),
       });
       setFlow({ kind: "sending" });
-      const signature = await sendSigned(payer, openInstruction(order, BATCH_WINDOW_SECONDS));
+      const signature = await sendSolana(payer, openInstruction(order, BATCH_WINDOW_SECONDS));
       setFlow({ kind: "open", order, signature });
+      // Remembered in this browser, so My orders can follow it (and offer the refund) after this closes.
+      rememberSolanaOrder({
+        fillHash: Buffer.from(order.fillHash).toString("hex"),
+        user: payer.publicKey.toBase58(),
+        token: tokenFromCaip19(request.tokenOut),
+        symbol: request.draft.symbol,
+        amount: order.amount.toString(),
+        fillDeadline: order.fillDeadline,
+        signature,
+      });
       void refetch();
     } catch (err) {
-      setFlow({ kind: "error", message: message(err) });
+      setFlow({ kind: "error", message: solanaErrorMessage(err) });
     }
   }
 
@@ -133,18 +129,20 @@ export function SolanaIntentModal({ request, onClose }: { request: SolanaOrderRe
     const order = flow.order;
     try {
       setFlow({ kind: "refunding", order, signature: flow.signature });
-      const signature = await sendSigned(payer, refundInstruction(order.user, order.fillHash));
+      const signature = await sendSolana(payer, refundInstruction(order.user, order.fillHash));
       setFlow({ kind: "refunded", order, signature });
+      updateSolanaOrder(order.user.toBase58(), Buffer.from(order.fillHash).toString("hex"), { outcome: "refunded", refundSignature: signature });
       void refetch();
     } catch (err) {
-      setFlow({ kind: "error", message: message(err) });
+      setFlow({ kind: "error", message: solanaErrorMessage(err) });
     }
   }
 
   if (!request) return null;
   const { draft } = request;
   const usd = (n: bigint) => `${(Number(n) / 1e6).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
-  const short_ = !payer ? null : usdc === null ? "Reading your USDC…" : usdc < request.amount ? `Not enough USDC on Solana devnet (you have ${usd(usdc)})` : sol !== null && sol < 0.01 ? "Add a little devnet SOL for fees and rent (about 0.01)" : null;
+  const short_ = !payer ? null : usdc === null ? "Reading your USDC…" : usdc < request.amount ? `Not enough USDC on Solana devnet (you have ${usd(usdc)})` : sol !== null && sol < SOLANA_MIN_SOL ? `Needs ${SOLANA_MIN_SOL} devnet SOL for fees and storage (you have ${sol.toFixed(4)})` : null;
+  const refundAt = placed ? placed.fillDeadline + SOLANA_REFUND_GRACE_SECONDS : null;
 
   const note =
     flow.kind === "signing"
@@ -164,6 +162,8 @@ export function SolanaIntentModal({ request, onClose }: { request: SolanaOrderRe
                     ? "Filled on Base Sepolia. The Hyperlane proof reached Solana; the escrow is settling."
                     : refundable
                       ? "No solver filled this order in time. Refund your USDC."
+                      : refundAt !== null && status.data?.late
+                        ? `Not filled in time. Your refund is available at ${refundClock(refundAt)}; My orders keeps the button for you.`
                       : "Escrowed on Solana. Waiting for the solver's fill on Base Sepolia (then a Hyperlane proof, about a minute)."
                 : `Pay with USDC on Solana devnet, receive $${draft.symbol} on Base Sepolia. Testnet only, no real funds.`;
 
@@ -193,6 +193,14 @@ export function SolanaIntentModal({ request, onClose }: { request: SolanaOrderRe
         <Row label="Paid from" value={payer ? `${payer.label} · ${short(payer.publicKey.toBase58())}` : "Not connected"} />
         <Row label="Delivered to" value={short(request.payee)} hint="Your address on Base Sepolia" />
         <Row label="Settlement" value="Hyperlane fill proof" hint="The escrow pays the solver only after Base proves the fill; otherwise you can refund 6 h after the deadline" />
+        <Row
+          label="Solana cost"
+          value={solAmount(SOLANA_OPEN_SOL)}
+          hint={`Network fee and storage. ${solAmount(SOLANA_RETURNED_SOL)} comes back when the order fills or is refunded; ${solAmount(SOLANA_KEPT_SOL)} stays with the escrow's records.`}
+        />
+        {refundAt !== null && flow.kind !== "refunded" && status.data?.state !== "closed" && (
+          <Row label="Refund available at" value={refundClock(refundAt)} hint="Only if no one fills it: 6 hours after the 10-minute fill window" />
+        )}
       </dl>
 
       {signature && (
@@ -219,7 +227,7 @@ export function SolanaIntentModal({ request, onClose }: { request: SolanaOrderRe
             {status.data?.state === "closed" || flow.kind === "refunded" ? "Done" : "Close"}
           </button>
           {flow.kind === "open" && status.data?.state !== "closed" && (
-            <p className="text-center text-[11.5px] text-dim">You can close this. The solver keeps working, and refunds open if no one fills it.</p>
+            <p className="text-center text-[11.5px] text-dim">You can close this. The order keeps working, and it stays in My orders with its refund if no one fills it.</p>
           )}
         </div>
       ) : (
@@ -234,7 +242,7 @@ export function SolanaIntentModal({ request, onClose }: { request: SolanaOrderRe
             {short_ ?? (busy ? "Confirming…" : "Pay from Solana")}
             {!busy && !short_ && <ArrowUpRight />}
           </button>
-          <p className="mt-3 text-center text-[11.5px] text-dim">One signature in {payer.label}. Opening the escrow uses about 0.005 SOL of rent; about half returns when the order completes.</p>
+          <p className="mt-3 text-center text-[11.5px] text-dim">One signature in {payer.label}, paid in USDC plus {solAmount(SOLANA_OPEN_SOL)} for fees and storage.</p>
         </>
       )}
     </Modal>

@@ -481,11 +481,9 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
           label="Fees"
           value={order.asset ? "0.30% solver spread" : "0.00% solver fee"}
           hint={
-            order.asset
-              ? "Included in the quote, with Uniswap's 0.3% pool fee · gas is a little test ETH"
-              : SETTLER_DEPLOYED
-                ? "Approval and submission cost a little test ETH gas"
-                : "The signature itself is gasless"
+            !SETTLER_DEPLOYED
+              ? "The signature itself is gasless"
+              : `${order.asset ? "Included in the quote, with Uniswap's 0.3% pool fee. " : ""}From your wallet: an approval if needed, then one transaction, paid in a little ${originChain.nativeCurrency.symbol} on ${originName}`
           }
         />
         <Row

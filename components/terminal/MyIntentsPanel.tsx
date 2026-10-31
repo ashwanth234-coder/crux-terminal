@@ -12,6 +12,7 @@ import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import { LIVE_ORIGINS, originByKey } from "@/lib/crosschain";
 import { SETTLER, TESTNET_USDC } from "@/lib/intents";
 import { simulateThenWrite } from "@/lib/preflight";
+import { countdown, refundClock } from "@/lib/refundTime";
 
 // Block timestamps trail the wall clock by a few seconds; wait them out so the
 // refund call isn't estimated against a block still inside the grace period.
@@ -21,14 +22,6 @@ const usdcFmt = new Intl.NumberFormat("en-US", { maximumFractionDigits: 6 });
 
 function shortId(id: Hex) {
   return `${id.slice(0, 6)}…${id.slice(-4)}`;
-}
-
-function countdown(seconds: number) {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return h > 0 ? `${h}h ${pad(m)}m` : `${pad(m)}:${pad(s)}`;
 }
 
 /** The settler's refund reverts, so the pre-flight check can name them. */
@@ -76,6 +69,8 @@ export function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: 
   const open = intent.status === "open";
   const left = open && intent.refundAt !== null && now !== null ? intent.refundAt + BLOCK_LAG_SECONDS - now : null;
   const refundable = left !== null && left <= 0;
+  // Past its fill deadline with no fill: say exactly when the refund opens.
+  const late = open && !refundable && now !== null && intent.fillDeadline !== null && now > intent.fillDeadline && intent.refundAt !== null;
 
   const reclaim = async () => {
     if (!address) return;
@@ -108,7 +103,13 @@ export function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: 
         : open
           ? {
               dot: "bg-signal",
-              label: refundable ? "Unfilled · refund open" : cross ? `In escrow on ${origin!.name} · awaiting fill + proof` : "In escrow · awaiting solver",
+              label: refundable
+                ? "Not filled in time · refund open"
+                : late
+                  ? `Not filled in time · refund available at ${refundClock(intent.refundAt! + BLOCK_LAG_SECONDS, now!)}`
+                  : cross
+                    ? `In escrow on ${origin!.name} · awaiting fill + proof`
+                    : "In escrow · awaiting solver",
               tone: "text-chrome/85",
             }
           : { dot: "bg-line-2", label: "Reading escrow…", tone: "text-dim" };

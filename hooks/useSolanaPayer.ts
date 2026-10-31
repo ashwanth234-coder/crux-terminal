@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useSignTransaction, useWallets } from "@privy-io/react-auth/solana";
-import { Connection, PublicKey, type Transaction } from "@solana/web3.js";
+import { Connection, PublicKey, Transaction, type TransactionInstruction } from "@solana/web3.js";
 import { useQuery } from "@tanstack/react-query";
 import { useSolanaConnectModal } from "@/providers/SolanaProvider";
 import { associatedTokenAddress } from "@/lib/solanaEscrow";
@@ -14,6 +14,30 @@ let devnet: Connection | null = null;
 export function solanaDevnet(): Connection {
   devnet ??= new Connection(process.env.NEXT_PUBLIC_SOLANA_DEVNET_RPC ?? `${window.location.origin}/api/solana?cluster=devnet`, "confirmed");
   return devnet;
+}
+
+/** Signs one instruction with the payer, sends it through devnet and waits for confirmation; returns the signature. */
+export async function sendSolana(payer: SolanaPayer, ix: TransactionInstruction): Promise<string> {
+  const connection = solanaDevnet();
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+  const tx = new Transaction({ feePayer: payer.publicKey, blockhash, lastValidBlockHeight }).add(ix);
+  const signed = await payer.sign(tx);
+  const signature = await connection.sendRawTransaction(signed, { preflightCommitment: "confirmed" });
+  // Poll the status rather than confirmTransaction, which needs a websocket and getBlockHeight: the relay serves neither.
+  for (let i = 0; i < 60; i++) {
+    const { value } = await connection.getSignatureStatus(signature);
+    if (value?.err) throw new Error(`Transaction failed: ${JSON.stringify(value.err)}`);
+    if (value?.confirmationStatus === "confirmed" || value?.confirmationStatus === "finalized") return signature;
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  throw new Error(`Not confirmed after 90 s; check it on Solana Explorer: ${signature}`);
+}
+
+/** A wallet rejection, or the first line of any other error. */
+export function solanaErrorMessage(err: unknown) {
+  const e = err as { name?: string; message?: string };
+  if (e.name === "WalletSignTransactionError" || /reject|denied|cancel/i.test(e.message ?? "")) return "Request rejected in wallet.";
+  return e.message?.split("\n")[0] ?? "Something went wrong";
 }
 
 export type SolanaPayer = {
