@@ -31,6 +31,7 @@ export const TERMINAL_HREF = "/terminal";
  */
 export const NAV_LINKS = [
   { label: "Discover", href: "/discover" },
+  { label: "Markets", href: "/markets" },
   { label: "Launch", href: null },
   { label: "Terminal", href: TERMINAL_HREF },
   { label: "Portfolio", href: "/portfolio" },

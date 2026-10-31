@@ -7,6 +7,7 @@ import { encodeFunctionData, erc20Abi, formatUnits, parseAbi, parseUnits, zeroAd
 import { useBalance, useConfig, useConnection, useReadContracts, useSwitchChain } from "wagmi";
 import { waitForTransactionReceipt } from "wagmi/actions";
 import { ChartGrid } from "@/components/chart/ChartGrid";
+import { AccountMarketPanel } from "@/components/pro/AccountMarketPanel";
 import { TerminalShell } from "@/components/pro/TerminalShell";
 import { TradeSettingsButton } from "@/components/pro/TradeSettingsButton";
 import { td, th, short } from "@/components/pro/desk";
@@ -28,7 +29,9 @@ import { fmtTokenPrice } from "@/lib/launchTrade";
 import type { AuctionV2 } from "@/lib/launchV2";
 import type { PoolTrade } from "@/lib/tradeDecode";
 import { logClient } from "@/lib/logs";
+import { marketOf } from "@/lib/markets";
 import { simulateThenWrite } from "@/lib/preflight";
+import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { useConnectModal } from "@/providers/Web3Provider";
 
 /**
@@ -133,6 +136,10 @@ function Missing({ token, title, children }: { token: Address; title: string; ch
 
 function ExternalTerminal({ pool, symbol, name, totalSupply }: { pool: ExternalPool; symbol: string; name: string | null; totalSupply: bigint }) {
   const now = useNow();
+  // A Crux market (lib/markets.ts) trades from the Crux account by default; any other token only from a wallet.
+  const market = marketOf(pool.token);
+  const crux = useCruxAccount();
+  const [useWallet, setUseWallet] = useState(false);
   // The chart and tape read the pool from a few days back; `auction` carries only what they use for a non-launch.
   const [since] = useState(() => Math.floor(Date.now() / 1000) - LOOKBACK_SECONDS);
   const auction = useMemo<AuctionV2>(
@@ -180,9 +187,13 @@ function ExternalTerminal({ pool, symbol, name, totalSupply }: { pool: ExternalP
           <span className="rounded-[3px] border border-line-2 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">Base Sepolia · {venueLabel(pool)}</span>
           <span
             className="rounded-[3px] border border-dashed border-line-2 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-dim"
-            title="Not launched on Crux: no fair auction, vesting or anti-sniper protection applies, and trades go straight to Uniswap."
+            title={
+              market
+                ? "Not launched on Crux, so no fair auction, vesting or anti-sniper protection applies. It is a Crux market: your Crux account trades it through the Crux solver."
+                : "Not launched on Crux: no fair auction, vesting or anti-sniper protection applies, and trades go straight to Uniswap."
+            }
           >
-            Not a Crux launch
+            {market ? "Crux market" : "Not a Crux launch"}
           </span>
         </div>
         <dl className="mt-3 flex flex-wrap items-baseline gap-x-6 gap-y-2 font-mono text-[12.5px]">
@@ -206,7 +217,12 @@ function ExternalTerminal({ pool, symbol, name, totalSupply }: { pool: ExternalP
           <ChartGrid auction={auction} symbol={`$${symbol}`} name={name} factory={zeroAddress} id="0" external />
         </section>
         <aside aria-label="Swap" className="bg-panel lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:overflow-y-auto">
-          <SwapPanel pool={pool} symbol={symbol} />
+          {market && crux.loggedIn && !useWallet ? <AccountMarketPanel market={market} onUseWallet={() => setUseWallet(true)} /> : <SwapPanel pool={pool} symbol={symbol} />}
+          {market && crux.loggedIn && useWallet && (
+            <button type="button" onClick={() => setUseWallet(false)} className="mx-4 mb-4 text-[11.5px] text-dim underline decoration-line-2 underline-offset-2 hover:text-chrome">
+              ← Trade from my Crux account
+            </button>
+          )}
         </aside>
         <section aria-label="Swaps" className="min-h-[260px] bg-void p-3 lg:col-start-1 lg:row-start-2 lg:overflow-y-auto">
           <SwapsTape trades={trades} now={now} symbol={symbol} decimals={pool.tokenDecimals} loading={swaps.isLoading} />

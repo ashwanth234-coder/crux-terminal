@@ -19,6 +19,7 @@ const en = {
   "lang.label": "Language",
 
   "nav.Discover": "Discover",
+  "nav.Markets": "Markets",
   "nav.Launch": "Launch",
   "nav.Terminal": "Terminal",
   "nav.Portfolio": "Portfolio",
@@ -88,6 +89,7 @@ type Dict = Record<Key, string>;
 const zh: Dict = {
   "lang.label": "语言",
   "nav.Discover": "发现",
+  "nav.Markets": "市场",
   "nav.Launch": "发射",
   "nav.Terminal": "交易终端",
   "nav.Portfolio": "资产",
@@ -147,6 +149,7 @@ const zh: Dict = {
 const es: Dict = {
   "lang.label": "Idioma",
   "nav.Discover": "Descubrir",
+  "nav.Markets": "Mercados",
   "nav.Launch": "Lanzar",
   "nav.Terminal": "Terminal",
   "nav.Portfolio": "Portafolio",
@@ -207,6 +210,7 @@ const es: Dict = {
 const ko: Dict = {
   "lang.label": "언어",
   "nav.Discover": "탐색",
+  "nav.Markets": "마켓",
   "nav.Launch": "런치",
   "nav.Terminal": "터미널",
   "nav.Portfolio": "포트폴리오",
@@ -267,6 +271,7 @@ const ko: Dict = {
 const ru: Dict = {
   "lang.label": "Язык",
   "nav.Discover": "Обзор",
+  "nav.Markets": "Рынки",
   "nav.Launch": "Запуск",
   "nav.Terminal": "Терминал",
   "nav.Portfolio": "Портфель",
