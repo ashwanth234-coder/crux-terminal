@@ -17,6 +17,8 @@ import { CRUX_SOLVER, PREVIOUS_SETTLERS, SETTLER } from "@/lib/intents";
 import { EMPTY_CONTEXT, computeInstance, flowByCandle, holdersByCandle, paramsOf, poolByCandle, top10ByCandle, type StudyContext, type StudyId } from "@/lib/indicators";
 import { INTERVALS, autoInterval, fillGaps, toCandles, type Candle, type Fill } from "@/lib/candles";
 import { useThrottled } from "@/hooks/useThrottled";
+import { useFeedCandles } from "@/hooks/useFeed";
+import type { FeedCandle } from "@/lib/feed";
 
 /**
  * How many of the newest candles the chart holds: 20,000–25,000 from 1-minute candles up (two weeks of them), and
@@ -207,19 +209,26 @@ export function ProChart({
   const gradPrice = Number(formatUnits(auction.clearingPrice, PRICE_DECIMALS));
   // At most four redraws a second however fast trades land: a hot launch's blocks would otherwise redraw it 5–10 times.
   const swapData = useThrottled(swaps.data, 250);
+  // The shared feed's candles (crux-solver feedhub.ts): made once on the server for every viewer and kept current by
+  // its frames, so the page neither reads the chain nor buckets trades. A pool it doesn't serve (another DEX's), or
+  // while it's down, falls back to bucketing the trades here.
+  const feed = useFeedCandles(external ? null : auction.pair, config.interval);
+  const feedLive = feed.usable;
+  const feedCandles = useThrottled(feedLive ? feed.candles : null, 250);
   // Oldest first (the scan is newest first), so the candles needn't sort.
   const fills = useMemo(() => {
-    const trades = swapData?.trades ?? [];
+    const trades = feedLive ? [] : (swapData?.trades ?? []);
     const out: Fill[] = new Array(trades.length);
     for (let i = 0; i < trades.length; i++) {
       const t = trades[trades.length - 1 - i];
       out[i] = { time: t.time, price: t.price, usdc: t.usdc };
     }
     return out;
-  }, [swapData]);
+  }, [swapData, feedLive]);
   // A loop, not Math.min(...): spreading a long history's times overflows the call stack.
   const first = fills.length ? fills.reduce((m, f) => (f.time < m ? f.time : m), fills[0].time) : auction.settledAt;
-  const interval = config.interval === "auto" ? autoInterval(Math.min(first, auction.settledAt), now ?? auction.settledAt, 200) : config.interval;
+  const interval =
+    config.interval !== "auto" ? config.interval : feedLive ? feed.interval! : autoInterval(Math.min(first, auction.settledAt), now ?? auction.settledAt, 200);
   // Quiet periods drawn flat up to the current period (fillGaps), so the time axis is true however thin the trading.
   const nowBucket = now === null ? 0 : Math.floor(now / interval) * interval;
   // The newest candles only (as fillGaps caps quiet periods): a day of 1-second candles is 86,400, more than any screen
@@ -229,6 +238,18 @@ export function ProChart({
     const { max, step: stepCandles } = windowOf(interval);
     const step = stepCandles * interval;
     const from = Math.floor((nowBucket - (max - 1) * interval) / step) * step;
+    if (feedCandles) {
+      let cut = 0;
+      while (cut < feedCandles.length && feedCandles[cut].time < from) cut++;
+      const kept: Candle[] = cut > 0 ? feedCandles.slice(cut) : [...feedCandles];
+      // The very first candle opens at the auction's clearing price, as the chart's own bucketing does.
+      const firstBucket = feed.firstTime !== null ? Math.floor(feed.firstTime / interval) * interval : null;
+      if (kept.length && kept[0].time === firstBucket && gradPrice > 0) {
+        const c = kept[0];
+        kept[0] = { ...c, open: gradPrice, high: Math.max(c.high, gradPrice), low: Math.min(c.low, gradPrice) };
+      }
+      return fillGaps(kept, interval, nowBucket, max + stepCandles);
+    }
     let lo = 0;
     let hi = fills.length;
     while (lo < hi) {
@@ -238,7 +259,7 @@ export function ProChart({
     }
     const open = lo > 0 && fills[lo - 1].price > 0 ? fills[lo - 1].price : gradPrice > 0 ? gradPrice : null;
     return fillGaps(toCandles(lo > 0 ? fills.slice(lo) : fills, interval, open), interval, nowBucket, max + stepCandles);
-  }, [fills, interval, gradPrice, nowBucket]);
+  }, [fills, feedCandles, feed.firstTime, interval, gradPrice, nowBucket]);
   // Bar replay: the chart as it stood at `index`, played forward a candle at a time. Off: every candle, live.
   const [replay, setReplay] = useState<{ index: number | null; playing: boolean; speed: number } | null>(null);
   const replayIndex = replay?.index ?? null;
@@ -265,9 +286,10 @@ export function ProChart({
     if (config.studies.length === 0) return EMPTY_CONTEXT;
     const times = candles.map((c) => c.time);
     const shown = (id: StudyId) => config.studies.some((s) => s.id === id && !s.hidden);
-    // Buy and sell flow walks every trade: only for the studies that draw it.
-    const flow =
-      shown("netflow") || shown("buypressure")
+    // Buy and sell flow: the feed's candles carry it; otherwise it walks every trade, so only for the studies that draw it.
+    const flow = feedCandles
+      ? { buyUsd: candles.map((c) => (c as Partial<FeedCandle>).bought ?? 0), sellUsd: candles.map((c) => (c as Partial<FeedCandle>).sold ?? 0) }
+      : shown("netflow") || shown("buypressure")
         ? flowByCandle(
             times,
             interval,
@@ -296,7 +318,7 @@ export function ProChart({
       holders: shown("holders") ? holdersByCandle(times, interval, moves, exclude) : [],
       top10: shown("top10") ? top10ByCandle(times, interval, moves, exclude, auction.totalSupply) : [],
     };
-  }, [config.studies, candles, interval, swapData, transfers.data, auction.pair, auction.totalSupply, factory, market.batchPool, market.reserves]);
+  }, [config.studies, candles, interval, swapData, feedCandles, transfers.data, auction.pair, auction.totalSupply, factory, market.batchPool, market.reserves]);
   // Every study the trader added, with their settings; hidden ones keep their place in the legend but aren't drawn.
   const computedStudies = useMemo(
     () =>
@@ -1106,7 +1128,15 @@ export function ProChart({
           setOverAxis(null);
         }}
       >
-        <div ref={host} className={`absolute inset-0 ${view === "table" ? "invisible" : ""}`} aria-label={`${symbol} chart`} role="img" />
+        <div
+          ref={host}
+          className={`absolute inset-0 ${view === "table" ? "invisible" : ""}`}
+          aria-label={`${symbol} chart`}
+          role="img"
+          // The shared feed's state (live, reconnecting, …; "unavailable": this page reads the chain) and the newest close.
+          data-feed={feed.status}
+          data-close={candles.at(-1)?.close}
+        />
         {view === "chart" && (
           <Legend
             inset={false}

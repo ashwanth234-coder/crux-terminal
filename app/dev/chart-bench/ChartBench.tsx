@@ -63,16 +63,20 @@ declare global {
 
 /**
  * Query string: trades (history size, default 5,000), hours (span, default 24), rate (trades a second streamed in,
- * default 0), seed. window.__bench reports frame times and long tasks for the load test.
+ * default 0), seed. window.__bench reports frame times and long tasks for the load test. feed (a ws:// address): no
+ * seeded trades; the chart takes everything from that shared feed (crux-solver feed-sim-server.ts in e2e/feed.spec).
  */
 export function ChartBench() {
   const qc = useQueryClient();
   const [ready, setReady] = useState(false);
   const [auction, setAuction] = useState<AuctionV2 | null>(null);
+  const [feedMode, setFeedMode] = useState(false);
 
   useEffect(() => {
     const q = new URLSearchParams(location.search);
-    const n = Math.max(0, Number(q.get("trades") ?? 5_000));
+    const feedUrl = q.get("feed");
+    if (feedUrl) window.__CRUX_FEED_URL = feedUrl;
+    const n = feedUrl ? 0 : Math.max(0, Number(q.get("trades") ?? 5_000));
     const hours = Math.max(0.01, Number(q.get("hours") ?? 24));
     const rate = Math.max(0, Number(q.get("rate") ?? 0));
     const now = Math.floor(Date.now() / 1000);
@@ -167,6 +171,7 @@ export function ChartBench() {
       totalDeposits: BigInt(10_000e6),
       clearingPrice: BigInt(Math.round(open * 1e9)) * BigInt(10) ** BigInt(PRICE_DECIMALS - 9),
     });
+    setFeedMode(Boolean(feedUrl));
     setReady(true);
     return () => {
       cancelAnimationFrame(raf);
@@ -179,7 +184,7 @@ export function ChartBench() {
   return (
     <main className="flex h-svh flex-col bg-void p-1.5">
       {ready && auction ? (
-        <ChartGrid auction={auction} symbol="$BENCH" name="Chart bench" factory={"0x0000000000000000000000000000000000000000"} id="0" external />
+        <ChartGrid auction={auction} symbol="$BENCH" name="Chart bench" factory={"0x0000000000000000000000000000000000000000"} id="0" external={!feedMode} />
       ) : (
         <p className="p-4 text-[12px] text-dim">Seeding trades…</p>
       )}
