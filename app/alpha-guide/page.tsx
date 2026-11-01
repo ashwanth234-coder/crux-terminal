@@ -38,7 +38,8 @@ const CONTRACTS: { name: string; address: string; href?: string }[] = [
   { name: "CruxFillProver (confirms cross-chain fills, via Hyperlane)", address: "0x7cb1aDd4975CbF1a5a3FA4fd60F11b010E4b29e8" },
   { name: "CruxAccountFactoryV2 (Crux accounts)", address: "0xf8962965f04e20B95dAdD931fDe00121906a97DC" },
   { name: "Admin Safe (2-of-3)", address: "0x49441cbA3cF9Db98d39Df4bDf8bF1a9D4Ea4fb6d" },
-  { name: "Crux filler + keeper wallet", address: "0x69E422d3Cca945a44210684b57F85f556212AD67" },
+  { name: "Crux filler + keeper wallet", address: "0xDEbbE137f2AB252e28d1070F687010C0909d0492" },
+  { name: "Earlier filler + keeper wallet (retired 2026-11-01)", address: "0x69E422d3Cca945a44210684b57F85f556212AD67" },
   {
     name: "crux_escrow (Pay from Solana, Solana devnet)",
     address: "51VZTKfmnS85fvJ1rEBCuVQveqHg2XeN44ZiHeeNa8m5",
