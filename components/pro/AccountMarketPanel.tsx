@@ -7,7 +7,7 @@ import { useReadContract } from "wagmi";
 import { buttonClass } from "@/components/ui/Button";
 import { KineticLoader } from "@/components/ui/Modal";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
-import { useTradeSettings } from "@/hooks/useTradeSettings";
+import { slippageFor, useTradeSettings } from "@/hooks/useTradeSettings";
 import { tradeFromAccount } from "@/lib/account";
 import { TESTNET } from "@/lib/chains";
 import { TESTNET_USDC } from "@/lib/intents";
@@ -25,8 +25,10 @@ const num = (v: bigint, d: number) => Number(formatUnits(v, d)).toLocaleString("
 export function AccountMarketPanel({ market, onUseWallet }: { market: CuratedMarket; onUseWallet: () => void }) {
   const uid = useId();
   const crux = useCruxAccount();
-  const { slippageBps } = useTradeSettings();
+  const settings = useTradeSettings();
   const [side, setSide] = useState<Side>("buy");
+  // Buys and sells each have their own slippage (the ticket's gear).
+  const slippageBps = slippageFor(settings, side);
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,10 +99,10 @@ export function AccountMarketPanel({ market, onUseWallet }: { market: CuratedMar
   return (
     <div className="flex flex-col gap-4 p-4">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-signal/40 bg-signal/5 px-3 py-2 text-[11.5px]">
-        <span className="text-chrome">Crux account</span>
-        <span className="text-dim">· no gas, no pop-up · filled by Crux</span>
+        <span className="text-chrome">CRUX Account</span>
+        <span className="text-dim">— Instant • 0 Gas · filled by Crux</span>
         <button type="button" onClick={onUseWallet} className="ml-auto text-dim hover:text-chrome">
-          Swap from a wallet instead
+          Or pay directly from external wallet ▾
         </button>
       </div>
       <div role="tablist" aria-label="Side" className="grid grid-cols-2 gap-1 rounded-lg border border-line p-1">
