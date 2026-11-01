@@ -25,6 +25,58 @@ export type Formatter = (v: number) => string;
 
 const t = (c: Candle) => c.time as UTCTimestamp;
 
+/** One point of a series as handed to lightweight-charts: a time and its values (or none, a gap). */
+type Point = { time: Time; [field: string]: unknown };
+
+/**
+ * What a series was last given, as plain numbers: each bar's time and `width` values (NaN for a gap). Comparing
+ * these is cheap; the points themselves are only built for the bars actually sent.
+ */
+type Snapshot = { times: number[]; values: number[]; width: number };
+
+const sameNum = (a: number, b: number) => a === b || (a !== a && b !== b);
+
+/**
+ * Hands `next` to `series`, sending only the newest bar and any after it when nothing older changed (a live trade):
+ * the library redraws one bar instead of re-reading 20,000. Anything else (another timeframe, units, an older bar
+ * that changed) is a full setData. `point(i)` builds bar i (null: none, before a study's first value). Older bars
+ * trimmed off the front stay in the series, harmlessly.
+ */
+function syncSeries(series: ISeriesApi<SeriesType>, prev: Snapshot | undefined, next: Snapshot, point: (i: number) => Point | null): Snapshot {
+  const { times, values, width } = next;
+  const n = times.length;
+  if (prev && prev.width === width && prev.times.length > 0 && n > 0) {
+    const last = prev.times.length - 1;
+    let j = n - 1;
+    while (j >= 0 && j >= n - 64 && times[j] > prev.times[last]) j--;
+    const offset = j - last;
+    if (j >= 0 && times[j] === prev.times[last] && offset <= 0) {
+      let unchanged = true;
+      for (let i = Math.max(0, -offset); i < last && unchanged; i++) {
+        unchanged = prev.times[i] === times[i + offset];
+        for (let w = 0; w < width && unchanged; w++) unchanged = sameNum(prev.values[i * width + w], values[(i + offset) * width + w]);
+      }
+      if (unchanged) {
+        for (let i = j; i < n; i++) {
+          const before = i - offset;
+          let same = before <= last;
+          for (let w = 0; w < width && same; w++) same = sameNum(prev.values[before * width + w], values[i * width + w]);
+          const pt = same ? null : point(i);
+          if (pt) series.update(pt as never);
+        }
+        return next;
+      }
+    }
+  }
+  const data: Point[] = [];
+  for (let i = 0; i < n; i++) {
+    const pt = point(i);
+    if (pt) data.push(pt);
+  }
+  series.setData(data as never);
+  return next;
+}
+
 /** Axis labels for unitless studies: RSI's 0–100 to one place, flows and counts compact. */
 const unitless = (v: number) => (Math.abs(v) >= 1_000 ? new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(v) : v.toFixed(Math.abs(v) >= 100 ? 0 : 1));
 
@@ -43,6 +95,13 @@ export class ChartEngine {
   /** Helper series some styles draw with (HLC area's high and low lines), replaced with the style. */
   private extras: ISeriesApi<SeriesType>[] = [];
   private studySeries: ISeriesApi<SeriesType>[] = [];
+  /** What each series was last given (main, volume, the style's helpers, each study line), so updates send only changes. */
+  private mainData: Snapshot | undefined;
+  private volumeData: Snapshot | undefined;
+  private extrasData: Snapshot[] = [];
+  private studyData: Snapshot[] = [];
+  /** The studies' shape (which lines, panes, colours, units) when their series were built: same shape, same series. */
+  private studyShape = "";
   /** Other tokens' closes, on the main price scale (which the chart switches to % while comparing). */
   private compareSeries: ISeriesApi<SeriesType>[] = [];
   private paneLines: IPriceLine[] = [];
@@ -223,6 +282,8 @@ export class ChartEngine {
     this.chart.removeSeries(this.main);
     for (const s of this.extras) this.chart.removeSeries(s);
     this.extras = [];
+    this.mainData = undefined;
+    this.extrasData = [];
     this.type = type;
     this.main = this.addMain(type);
     this.markers = this.lc.createSeriesMarkers(this.main, this.markerData);
@@ -239,32 +300,51 @@ export class ChartEngine {
   /** Candles (in USDC per token) shown in the chosen units: `k` multiplies prices (total supply for market cap). */
   setData(candles: Candle[], k: number, format: Formatter, minMove: number) {
     const { up, down } = palette(this.settings);
-    const priceFormat = { type: "custom" as const, formatter: format, minMove };
+    // A price or market cap is never below zero: the axis leaves the room under the candles (where volume sits) unlabelled.
+    const priceFormat = { type: "custom" as const, formatter: (v: number) => (v < 0 ? "" : format(v)), minMove };
     this.main.applyOptions({ priceFormat });
-    const ohlc = (cs: Candle[]) => cs.map((c) => ({ time: t(c), open: c.open * k, high: c.high * k, low: c.low * k, close: c.close * k }));
-    if (this.type === "candles" || this.type === "hollow" || this.type === "bars" || this.type === "hlc") {
-      (this.main as ISeriesApi<"Candlestick">).setData(ohlc(candles));
-    } else if (this.type === "heikin") {
-      (this.main as ISeriesApi<"Candlestick">).setData(ohlc(heikinAshi(candles)));
+    const times = candles.map((c) => c.time);
+    const dir = (c: Candle) => (c.close >= c.open ? 1 : 0);
+    const flat = (width: number, f: (c: Candle, out: number[]) => void, cs: Candle[] = candles): Snapshot => {
+      const values: number[] = [];
+      for (const c of cs) f(c, values);
+      return { times, values, width };
+    };
+    if (this.type === "candles" || this.type === "hollow" || this.type === "bars" || this.type === "hlc" || this.type === "heikin") {
+      const cs = this.type === "heikin" ? heikinAshi(candles) : candles;
+      const snap = flat(4, (c, o) => o.push(c.open * k, c.high * k, c.low * k, c.close * k), cs);
+      this.mainData = syncSeries(this.main, this.mainData, snap, (i) => ({ time: t(cs[i]), open: snap.values[i * 4], high: snap.values[i * 4 + 1], low: snap.values[i * 4 + 2], close: snap.values[i * 4 + 3] }));
     } else if (this.type === "highlow") {
       // One bar from low to high, coloured by the candle's direction.
-      (this.main as ISeriesApi<"Candlestick">).setData(
-        candles.map((c) => ({ time: t(c), open: c.low * k, high: c.high * k, low: c.low * k, close: c.high * k, color: c.close >= c.open ? up : down })),
-      );
+      const snap = flat(3, (c, o) => o.push(c.low * k, c.high * k, dir(c)));
+      this.mainData = syncSeries(this.main, this.mainData, snap, (i) => {
+        const c = candles[i];
+        return { time: t(c), open: c.low * k, high: c.high * k, low: c.low * k, close: c.high * k, color: dir(c) ? up : down };
+      });
     } else if (this.type === "columns") {
-      (this.main as ISeriesApi<"Histogram">).setData(candles.map((c) => ({ time: t(c), value: c.close * k, color: `${c.close >= c.open ? up : down}cc` })));
+      const snap = flat(2, (c, o) => o.push(c.close * k, dir(c)));
+      this.mainData = syncSeries(this.main, this.mainData, snap, (i) => ({ time: t(candles[i]), value: candles[i].close * k, color: `${dir(candles[i]) ? up : down}cc` }));
     } else {
       if (this.type === "hlcarea" && this.extras.length === 2) {
-        this.extras[0].setData(candles.map((c) => ({ time: t(c), value: c.high * k })));
-        this.extras[1].setData(candles.map((c) => ({ time: t(c), value: c.low * k })));
+        const sides: [(c: Candle) => number, number][] = [
+          [(c) => c.high * k, 0],
+          [(c) => c.low * k, 1],
+        ];
+        for (const [value, i] of sides) {
+          this.extrasData[i] = syncSeries(this.extras[i], this.extrasData[i], flat(1, (c, o) => o.push(value(c))), (n) => ({ time: t(candles[n]), value: value(candles[n]) }));
+        }
         for (const s of this.extras) s.applyOptions({ priceFormat });
       }
       if (this.type === "baseline" && candles.length) {
         (this.main as ISeriesApi<"Baseline">).applyOptions({ baseValue: { type: "price", price: candles[0].open * k } });
       }
-      (this.main as ISeriesApi<"Line">).setData(candles.map((c) => ({ time: t(c), value: c.close * k })));
+      this.mainData = syncSeries(this.main, this.mainData, flat(1, (c, o) => o.push(c.close * k)), (i) => ({ time: t(candles[i]), value: candles[i].close * k }));
     }
-    this.volume.setData(candles.map((c) => ({ time: t(c), value: c.volume, color: `${c.close >= c.open ? up : down}55` })));
+    this.volumeData = syncSeries(this.volume, this.volumeData, flat(2, (c, o) => o.push(c.volume, dir(c))), (i) => ({
+      time: t(candles[i]),
+      value: candles[i].volume,
+      color: `${dir(candles[i]) ? up : down}55`,
+    }));
   }
 
   /**
@@ -278,8 +358,43 @@ export class ChartEngine {
     format: Formatter,
     minMove: number,
   ) {
+    const { up, down } = palette(this.settings);
+    const shape = JSON.stringify([
+      k,
+      this.side,
+      up,
+      down,
+      computed.map(({ study, lines, levels, widths }) => [study.id, study.pane, study.priced, levels, widths, lines.map((l) => [l.key, l.kind, l.color])]),
+    ]);
+    const times = candles.map((c) => c.time);
+    // A line's values as numbers (NaN for a gap), and how to build its point at candle i.
+    const sourceOf = (line: StudyLine, scale: number) => {
+      const values = line.values.map((v) => (v === null ? NaN : (v as number) * scale));
+      const firstValue = line.values.findIndex((v) => v !== null);
+      const point = (i: number): Point | null => {
+        if (i < firstValue || firstValue < 0) return null;
+        const value = values[i];
+        if (value !== value) return { time: times[i] as Time };
+        return line.kind === "histogram" ? { time: times[i] as Time, value, color: value >= 0 ? `${up}88` : `${down}88` } : { time: times[i] as Time, value };
+      };
+      return { snap: { times, values, width: 1 }, point };
+    };
+    if (shape === this.studyShape && this.studySeries.length === this.studyData.length) {
+      let n = 0;
+      for (const { study, lines } of computed) {
+        if (study.special) continue;
+        for (const line of lines) {
+          const { snap, point } = sourceOf(line, study.priced ? k : 1);
+          this.studyData[n] = syncSeries(this.studySeries[n], this.studyData[n], snap, point);
+          n++;
+        }
+      }
+      return;
+    }
+    this.studyShape = shape;
     for (const s of this.studySeries) this.chart.removeSeries(s);
     this.studySeries = [];
+    this.studyData = [];
     this.paneLines = [];
     while (this.chart.panes().length > 1) this.chart.removePane(this.chart.panes().length - 1);
 
@@ -291,10 +406,7 @@ export class ChartEngine {
       const fmt = study.priced ? { type: "custom" as const, formatter: format, minMove } : { type: "custom" as const, formatter: unitless, minMove: 0.01 };
       let first: ISeriesApi<SeriesType> | null = null;
       for (const line of lines) {
-        const firstValue = line.values.findIndex((v) => v !== null);
-        const data: ({ time: Time } | { time: Time; value: number })[] = candles.flatMap((c, i) =>
-          i < firstValue || firstValue < 0 ? [] : line.values[i] === null ? [{ time: t(c) as Time }] : [{ time: t(c) as Time, value: (line.values[i] as number) * scale }],
-        );
+        const { snap, point } = sourceOf(line, scale);
         const opts = {
           color: line.color,
           priceLineVisible: false,
@@ -307,14 +419,8 @@ export class ChartEngine {
           line.kind === "histogram"
             ? this.chart.addSeries(this.lc.HistogramSeries, opts, pane)
             : this.chart.addSeries(this.lc.LineSeries, { ...opts, lineWidth: (widths?.[line.key] ?? 1) as 1 | 2 | 3 | 4 }, pane);
-        if (line.kind === "histogram") {
-          (series as ISeriesApi<"Histogram">).setData(
-            data.map((d) => ("value" in d ? { ...d, color: d.value >= 0 ? `${palette(this.settings).up}88` : `${palette(this.settings).down}88` } : d)),
-          );
-        } else {
-          series.setData(data);
-        }
         this.studySeries.push(series);
+        this.studyData.push(syncSeries(series, undefined, snap, point));
         first ??= series;
       }
       for (const level of levels) {

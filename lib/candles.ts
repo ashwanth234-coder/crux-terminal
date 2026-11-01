@@ -31,7 +31,9 @@ export function autoInterval(firstTime: number, now: number, maxCandles = 120): 
  * the auction's clearing price), so the first candle opens there.
  */
 export function toCandles(fills: Fill[], interval: number, openPrice: number | null = null): Candle[] {
-  const sorted = [...fills].filter((f) => f.price > 0).sort((a, b) => a.time - b.time);
+  const sorted = fills.filter((f) => f.price > 0);
+  // Already in time order (the chart passes them so): skip the sort, the costliest step on a long history.
+  if (sorted.some((f, i) => i > 0 && f.time < sorted[i - 1].time)) sorted.sort((a, b) => a.time - b.time);
   const out: Candle[] = [];
   let prevClose = openPrice;
   for (const f of sorted) {

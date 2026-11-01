@@ -38,6 +38,8 @@ export function useTokenTransfers(token: Address, factory: Address, auctionId: b
     return watchLogsOf([token], () => void qc.refetchQueries({ queryKey: ["token-transfers", token] }));
   }, [enabled, token, qc]);
   return useQuery({
+    // Many thousands of transfers: no deep compare of every one on each poll (lib/logs keeps the array when unchanged).
+    structuralSharing: false,
     queryKey,
     queryFn: ({ client }) =>
       tracked(pollId, () =>

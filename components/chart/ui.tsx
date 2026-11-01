@@ -60,8 +60,10 @@ export function Popover({
     if (!el || !r) return;
     el.style.top = `${r.bottom + 4}px`;
     el.style.maxHeight = `calc(100svh - ${r.bottom + 12}px)`;
-    if (align === "left") el.style.left = `${Math.max(8, r.left)}px`;
-    else el.style.right = `${Math.max(8, window.innerWidth - r.right)}px`;
+    // Never wider than the screen, and pulled back inside it (a phone's toolbar buttons sit near the right edge).
+    el.style.maxWidth = "calc(100vw - 16px)";
+    if (align === "left") el.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 8 - el.offsetWidth))}px`;
+    else el.style.right = `${Math.max(8, Math.min(window.innerWidth - r.right, window.innerWidth - 8 - el.offsetWidth))}px`;
   };
   useEffect(() => {
     if (!open) return;

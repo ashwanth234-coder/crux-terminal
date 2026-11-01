@@ -15,7 +15,16 @@ import { barTime, markTrades, type MarkWho } from "@/lib/chartMarks";
 import { buildHolders } from "@/lib/holders";
 import { CRUX_SOLVER, PREVIOUS_SETTLERS, SETTLER } from "@/lib/intents";
 import { EMPTY_CONTEXT, computeInstance, flowByCandle, holdersByCandle, paramsOf, poolByCandle, top10ByCandle, type StudyContext, type StudyId } from "@/lib/indicators";
-import { INTERVALS, autoInterval, fillGaps, toCandles, type Candle } from "@/lib/candles";
+import { INTERVALS, autoInterval, fillGaps, toCandles, type Candle, type Fill } from "@/lib/candles";
+import { useThrottled } from "@/hooks/useThrottled";
+
+/**
+ * How many of the newest candles the chart holds: 20,000–25,000 from 1-minute candles up (two weeks of them), and
+ * 5,000–6,250 of seconds (83 minutes of 1-second candles), where a busy launch fills every one and each indicator
+ * costs a redraw per trade. The start moves in steps, not candle by candle: indicators start from the first candle,
+ * so every shift would change all their values and redraw them in full on each trade.
+ */
+const windowOf = (interval: number) => (interval < 60 ? { max: 5_000, step: 1_250 } : { max: 20_000, step: 5_000 });
 import { studyById } from "@/lib/indicators";
 import { fmtTokenPrice } from "@/lib/launchTrade";
 import { PRICE_DECIMALS, type AuctionV2 } from "@/lib/launchV2";
@@ -196,12 +205,40 @@ export function ProChart({
   const supply = Number(auction.totalSupply) / 1e18;
   const k = config.units === "mcap" ? supply : 1;
   const gradPrice = Number(formatUnits(auction.clearingPrice, PRICE_DECIMALS));
-  const fills = useMemo(() => (swaps.data?.trades ?? []).map((t) => ({ time: t.time, price: t.price, usdc: t.usdc })), [swaps.data]);
-  const first = fills.length ? Math.min(...fills.map((f) => f.time)) : auction.settledAt;
+  // At most four redraws a second however fast trades land: a hot launch's blocks would otherwise redraw it 5–10 times.
+  const swapData = useThrottled(swaps.data, 250);
+  // Oldest first (the scan is newest first), so the candles needn't sort.
+  const fills = useMemo(() => {
+    const trades = swapData?.trades ?? [];
+    const out: Fill[] = new Array(trades.length);
+    for (let i = 0; i < trades.length; i++) {
+      const t = trades[trades.length - 1 - i];
+      out[i] = { time: t.time, price: t.price, usdc: t.usdc };
+    }
+    return out;
+  }, [swapData]);
+  // A loop, not Math.min(...): spreading a long history's times overflows the call stack.
+  const first = fills.length ? fills.reduce((m, f) => (f.time < m ? f.time : m), fills[0].time) : auction.settledAt;
   const interval = config.interval === "auto" ? autoInterval(Math.min(first, auction.settledAt), now ?? auction.settledAt, 200) : config.interval;
   // Quiet periods drawn flat up to the current period (fillGaps), so the time axis is true however thin the trading.
   const nowBucket = now === null ? 0 : Math.floor(now / interval) * interval;
-  const allCandles = useMemo(() => fillGaps(toCandles(fills, interval, gradPrice > 0 ? gradPrice : null), interval, nowBucket), [fills, interval, gradPrice, nowBucket]);
+  // The newest candles only (as fillGaps caps quiet periods): a day of 1-second candles is 86,400, more than any screen
+  // shows and slow to redraw on every trade. Older history is a larger timeframe away.
+  const allCandles = useMemo(() => {
+    // Only the trades inside those candles (fills are oldest first): the one before them gives the first candle's open.
+    const { max, step: stepCandles } = windowOf(interval);
+    const step = stepCandles * interval;
+    const from = Math.floor((nowBucket - (max - 1) * interval) / step) * step;
+    let lo = 0;
+    let hi = fills.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (fills[mid].time < from) lo = mid + 1;
+      else hi = mid;
+    }
+    const open = lo > 0 && fills[lo - 1].price > 0 ? fills[lo - 1].price : gradPrice > 0 ? gradPrice : null;
+    return fillGaps(toCandles(lo > 0 ? fills.slice(lo) : fills, interval, open), interval, nowBucket, max + stepCandles);
+  }, [fills, interval, gradPrice, nowBucket]);
   // Bar replay: the chart as it stood at `index`, played forward a candle at a time. Off: every candle, live.
   const [replay, setReplay] = useState<{ index: number | null; playing: boolean; speed: number } | null>(null);
   const replayIndex = replay?.index ?? null;
@@ -227,19 +264,23 @@ export function ProChart({
   const studyCtx = useMemo<StudyContext>(() => {
     if (config.studies.length === 0) return EMPTY_CONTEXT;
     const times = candles.map((c) => c.time);
-    const flow = flowByCandle(
-      times,
-      interval,
-      (swaps.data?.trades ?? []).map((t) => ({ time: t.time, side: t.side, usd: Number(t.usdc) / 1e6 })),
-    );
     const shown = (id: StudyId) => config.studies.some((s) => s.id === id && !s.hidden);
+    // Buy and sell flow walks every trade: only for the studies that draw it.
+    const flow =
+      shown("netflow") || shown("buypressure")
+        ? flowByCandle(
+            times,
+            interval,
+            (swapData?.trades ?? []).map((t) => ({ time: t.time, side: t.side, usd: Number(t.usdc) / 1e6 })),
+          )
+        : { buyUsd: [], sellUsd: [] };
     const poolUsd =
       shown("liquidity") && market.reserves
         ? poolByCandle(
             times,
             interval,
             Number(market.reserves.usdc) / 1e6,
-            (swaps.data?.trades ?? []).map((t) => ({ time: t.time, side: t.side, usd: Number(t.usdc) / 1e6 })),
+            (swapData?.trades ?? []).map((t) => ({ time: t.time, side: t.side, usd: Number(t.usdc) / 1e6 })),
           )
         : [];
     if ((!shown("holders") && !shown("top10")) || !transfers.data) return { ...flow, holders: [], poolUsd };
@@ -255,7 +296,7 @@ export function ProChart({
       holders: shown("holders") ? holdersByCandle(times, interval, moves, exclude) : [],
       top10: shown("top10") ? top10ByCandle(times, interval, moves, exclude, auction.totalSupply) : [],
     };
-  }, [config.studies, candles, interval, swaps.data, transfers.data, auction.pair, auction.totalSupply, factory, market.batchPool, market.reserves]);
+  }, [config.studies, candles, interval, swapData, transfers.data, auction.pair, auction.totalSupply, factory, market.batchPool, market.reserves]);
   // Every study the trader added, with their settings; hidden ones keep their place in the legend but aren't drawn.
   const computedStudies = useMemo(
     () =>
@@ -276,8 +317,8 @@ export function ProChart({
 
   const me = useMemo(() => [wallet, crux.account].filter((a): a is Address => Boolean(a)).map((a) => getAddress(a)), [wallet, crux.account]);
   const holders = useMemo(() => {
-    if (!transfers.data || !swaps.data) return [];
-    return buildHolders(transfers.data.items, swaps.data.trades, {
+    if (!transfers.data || !swapData) return [];
+    return buildHolders(transfers.data.items, swapData.trades, {
       totalSupply: auction.totalSupply,
       clearingPrice: gradPrice,
       creator: auction.creator,
@@ -288,7 +329,7 @@ export function ProChart({
       me: me[0],
       batchPool: market.batchPool,
     });
-  }, [transfers.data, swaps.data, auction, gradPrice, factory, me, market.batchPool]);
+  }, [transfers.data, swapData, auction, gradPrice, factory, me, market.batchPool]);
   /** Your average entry and balance across your wallet and your Crux account. */
   const mine = useMemo(() => {
     const rows = holders.filter((h) => me.includes(getAddress(h.address)));

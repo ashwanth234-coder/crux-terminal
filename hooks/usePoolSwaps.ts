@@ -10,7 +10,13 @@ import { loadHistory } from "@/lib/history";
 
 export type { PoolTrade };
 
-const newestFirst = (scan: LogScan<PoolTrade>) => ({ trades: [...scan.items].reverse(), truncated: scan.truncated });
+// Built once per items array (a poll with nothing new keeps the array), so the chart's work keys off real changes.
+const views = new WeakMap<PoolTrade[], { trades: PoolTrade[]; truncated: boolean }>();
+const newestFirst = (scan: LogScan<PoolTrade>) => {
+  let v = views.get(scan.items);
+  if (!v || v.truncated !== scan.truncated) views.set(scan.items, (v = { trades: [...scan.items].reverse(), truncated: scan.truncated }));
+  return v;
+};
 
 /**
  * Every trade on a graduated launch since graduation, newest first: swaps on its locked Uniswap V2 pool, and for a
@@ -48,6 +54,8 @@ export function usePoolSwaps(pair: Address, settledAt: number, enabled: boolean,
         }),
       ),
     select: newestFirst,
+    // A busy pool holds 100k+ trades: comparing them all deeply on every poll cost more than drawing the chart.
+    structuralSharing: false,
     enabled: enabled && pair !== zeroAddress,
     // Every 3 s while the page is in view (Base makes a block every 0.2 s); each poll reads only the new blocks.
     refetchInterval: () => pollInterval(pollId, 3_000),

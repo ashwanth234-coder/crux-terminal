@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test lib/*.test.ts"
+    "test": "node --test lib/*.test.ts",
+    "test:e2e": "playwright test --project=desktop --project=phone",
+    "test:load": "playwright test --project=load"
   },
   "dependencies": {
     "@coinbase/wallet-sdk": "^4.4.0",
@@ -31,6 +33,7 @@
     "wagmi": "^3.7.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.56.1",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

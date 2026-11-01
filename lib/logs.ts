@@ -143,11 +143,18 @@ export async function scanLogs<T extends Positioned>(
     const from = margin > prev.floor ? margin : prev.floor;
     // Polls pause while the tab is hidden; after a gap wider than the window, read the window afresh.
     if (head - from < prev.windowBlocks) {
-      const fresh = await readRanges(from, head, read);
-      // The re-read blocks replace what was there; a log that moved deeper than the margin is kept once.
+      const fresh = (await readRanges(from, head, read)).sort(byPosition);
+      // Items are oldest first: those below `from` are a prefix, the re-read blocks replace the rest.
+      let cut = prev.items.length;
+      while (cut > 0 && prev.items[cut - 1].blockNumber >= from) cut--;
+      const tail = prev.items.slice(cut);
+      // Nothing new: keep the same items array, so a chart over a long history doesn't redo its work on every poll.
+      if (fresh.length === tail.length && fresh.every((f, i) => logKey(f) === logKey(tail[i]))) return { ...prev, scannedTo: head };
+      // A log that moved deeper than the margin is kept once (only items sharing a re-read transaction can repeat).
+      const freshTx = new Set(fresh.map((f) => f.txHash));
       const seen = new Set(fresh.map(logKey));
-      const kept = prev.items.filter((i) => i.blockNumber < from && !seen.has(logKey(i)));
-      return { ...prev, items: [...kept, ...fresh].sort(byPosition), scannedTo: head };
+      const kept = prev.items.slice(0, cut).filter((i) => !freshTx.has(i.txHash) || !seen.has(logKey(i)));
+      return { ...prev, items: [...kept, ...fresh], scannedTo: head };
     }
   }
 
