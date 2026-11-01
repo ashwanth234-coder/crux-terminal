@@ -2,7 +2,7 @@ import { getAddress, parseUnits, type Address } from "viem";
 import { buildLedger, topTraders } from "@/lib/holders";
 import { loadHistory } from "@/lib/history";
 import {
-  CRUX_SOLVER,
+  CRUX_SOLVERS,
   DESTINATION_SETTLER,
   FACTORY_V2,
   FACTORY_V3,
@@ -81,7 +81,7 @@ async function tradersOf(p: PairInfo, l: FeedLaunch) {
     creator: l.creator,
     factory,
     pair: getAddress(p.id),
-    solver: CRUX_SOLVER,
+    solver: CRUX_SOLVERS,
     destinationSettler: DESTINATION_SETTLER,
     me: undefined,
     batchPool: p.batchPool,

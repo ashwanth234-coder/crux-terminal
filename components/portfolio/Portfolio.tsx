@@ -17,7 +17,7 @@ import { usePoolSwaps } from "@/hooks/usePoolSwaps";
 import { useTokenTransfers } from "@/hooks/useTokenTransfers";
 import { TESTNET } from "@/lib/chains";
 import { buildHolders } from "@/lib/holders";
-import { CRUX_SOLVER, FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7, FACTORY_V8, SETTLER_DEPLOYED, TESTNET_USDC, batchFactory } from "@/lib/intents";
+import { CRUX_SOLVERS, FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7, FACTORY_V8, SETTLER_DEPLOYED, TESTNET_USDC, batchFactory } from "@/lib/intents";
 import { fmtTokens, fmtUsdc } from "@/lib/launch";
 import { fmtTokenPrice, launchCaip19 } from "@/lib/launchTrade";
 import { PRICE_DECIMALS, type AuctionV2, type BatchVersion } from "@/lib/launchV2";
@@ -314,7 +314,7 @@ function HoldingRow({
       creator: auction.creator,
       factory,
       pair: auction.pair,
-      solver: CRUX_SOLVER,
+      solver: CRUX_SOLVERS,
       destinationSettler: DESTINATION_SETTLER,
       me,
       batchPool: market.batchPool,

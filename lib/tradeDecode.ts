@@ -35,12 +35,16 @@ export type Positioned = { txHash: Hex; blockNumber: bigint; logIndex: number };
 export const priceOf = (usdc: bigint, tokens: bigint, tokenDecimals: number) =>
   tokens > BigInt(0) ? Number(usdc) / 1e6 / (Number(tokens) / 10 ** tokenDecimals) : 0;
 
+/** The Crux solver's wallet, or its wallets: the current one and any it replaced (a rotated key). */
+export type Solvers = Address | readonly Address[];
+const isSolver = (a: Address, solver: Solvers) => (typeof solver === "string" ? [solver] : solver).some((s) => getAddress(s) === getAddress(a));
+
 /** A Uniswap V2 Swap on a token / USDC pair, as a trade. `solver` marks the Crux solver's intent fills. */
 export function swapToTrade(
   args: { amount0In: bigint; amount1In: bigint; amount0Out: bigint; amount1Out: bigint; to: Address },
   usdcIs0: boolean,
   tokenDecimals: number,
-  solver: Address,
+  solver: Solvers,
   at: Positioned,
 ): Omit<PoolTrade, "time"> {
   const usdcIn = usdcIs0 ? args.amount0In : args.amount1In;
@@ -56,7 +60,7 @@ export function swapToTrade(
     tokens,
     price: priceOf(usdc, tokens, tokenDecimals),
     to: args.to,
-    viaIntent: getAddress(args.to) === getAddress(solver),
+    viaIntent: isSolver(args.to, solver),
     venue: "uniswap-v2",
     ...at,
   };
@@ -66,7 +70,7 @@ export function swapToTrade(
 export function fillToTrade(
   args: { batch: bigint; owner: Address; isBuy: boolean; amountIn: bigint; amountOut: bigint },
   tokenDecimals: number,
-  solver: Address,
+  solver: Solvers,
   at: Positioned,
 ): Omit<PoolTrade, "time"> {
   const usdc = args.isBuy ? args.amountIn : args.amountOut;
@@ -77,7 +81,7 @@ export function fillToTrade(
     tokens,
     price: priceOf(usdc, tokens, tokenDecimals),
     to: args.owner,
-    viaIntent: getAddress(args.owner) === getAddress(solver),
+    viaIntent: isSolver(args.owner, solver),
     venue: "batch-pool",
     batch: Number(args.batch),
     ...at,

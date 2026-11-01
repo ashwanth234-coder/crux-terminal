@@ -1,6 +1,6 @@
 import { getAddress, parseAbi, parseAbiItem, zeroAddress, type Address } from "viem";
 import { batchPoolAbi, guardianAbi } from "@/lib/batchPool";
-import { CRUX_SOLVER, TESTNET_USDC } from "@/lib/intents";
+import { CRUX_SOLVERS, TESTNET_USDC } from "@/lib/intents";
 import { logClient, type ReadLogs } from "@/lib/logs";
 import { fillToTrade, swapToTrade, type PoolTrade } from "@/lib/tradeDecode";
 import { externalPoolOf, externalTradeReader } from "@/lib/externalPools";
@@ -72,7 +72,7 @@ export function poolTradeReader(pair: Address, tokenDecimals = 18): ReadLogs<Poo
           fillToTrade(
             { batch: l.args.batch!, owner: l.args.owner!, isBuy: l.args.isBuy!, amountIn: l.args.amountIn!, amountOut: l.args.amountOut! },
             tokenDecimals,
-            CRUX_SOLVER,
+            CRUX_SOLVERS,
             { txHash: l.transactionHash, blockNumber: l.blockNumber, logIndex: l.logIndex },
           ),
         )
@@ -88,7 +88,7 @@ export function poolTradeReader(pair: Address, tokenDecimals = 18): ReadLogs<Poo
         },
         usdcIs0,
         tokenDecimals,
-        CRUX_SOLVER,
+        CRUX_SOLVERS,
         { txHash: l.transactionHash, blockNumber: l.blockNumber, logIndex: l.logIndex },
       ),
     );

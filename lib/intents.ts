@@ -107,6 +107,10 @@ export const FACTORY_V3 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V3);
 
 /** The Crux solver's wallet: fills intents (and swaps in launch pools to do it). NEXT_PUBLIC_CRUX_SOLVER overrides. */
 export const CRUX_SOLVER: Address = envAddress(process.env.NEXT_PUBLIC_CRUX_SOLVER) ?? "0x69E422d3Cca945a44210684b57F85f556212AD67";
+/** Solver wallets Crux used before a key rotation: their fills still read as Crux intent fills on charts and holders. */
+const RETIRED_SOLVERS: Address[] = ["0x69E422d3Cca945a44210684b57F85f556212AD67"];
+/** The current solver wallet first, then the retired ones. */
+export const CRUX_SOLVERS: readonly Address[] = [CRUX_SOLVER, ...RETIRED_SOLVERS.filter((a) => a.toLowerCase() !== CRUX_SOLVER.toLowerCase())];
 
 /** CruxFactoryV4 (V3 + the creator's choice of 30-day vesting or an instant unlock), once deployed. */
 const FACTORY_V4_ADDRESS: Address | null = "0x91f65efc87792798dfba69ee191fb4e3a8500d91";

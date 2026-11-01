@@ -13,7 +13,7 @@ import { useStandingOrders } from "@/hooks/useStandingOrders";
 import { useCreatorVestingDays } from "@/hooks/useCreatorVesting";
 import { barTime, markTrades, type MarkWho } from "@/lib/chartMarks";
 import { buildHolders } from "@/lib/holders";
-import { CRUX_SOLVER, PREVIOUS_SETTLERS, SETTLER } from "@/lib/intents";
+import { CRUX_SOLVERS, PREVIOUS_SETTLERS, SETTLER } from "@/lib/intents";
 import { EMPTY_CONTEXT, computeInstance, flowByCandle, holdersByCandle, paramsOf, poolByCandle, top10ByCandle, type StudyContext, type StudyId } from "@/lib/indicators";
 import { INTERVALS, autoInterval, fillGaps, toCandles, type Candle, type Fill } from "@/lib/candles";
 import { useThrottled } from "@/hooks/useThrottled";
@@ -307,7 +307,7 @@ export function ProChart({
         : [];
     if ((!shown("holders") && !shown("top10")) || !transfers.data) return { ...flow, holders: [], poolUsd };
     const exclude = new Set(
-      [auction.pair, factory, CRUX_SOLVER, DESTINATION_SETTLER, SETTLER, ...PREVIOUS_SETTLERS.map((p) => p.address), market.batchPool ?? "", "0x000000000000000000000000000000000000dEaD", "0x0000000000000000000000000000000000000000"]
+      [auction.pair, factory, ...CRUX_SOLVERS, DESTINATION_SETTLER, SETTLER, ...PREVIOUS_SETTLERS.map((p) => p.address), market.batchPool ?? "", "0x000000000000000000000000000000000000dEaD", "0x0000000000000000000000000000000000000000"]
         .filter(Boolean)
         .map((a) => a.toLowerCase()),
     );
@@ -350,7 +350,7 @@ export function ProChart({
       creator: auction.creator,
       factory,
       pair: auction.pair,
-      solver: CRUX_SOLVER,
+      solver: CRUX_SOLVERS,
       destinationSettler: DESTINATION_SETTLER,
       me: me[0],
       batchPool: market.batchPool,
@@ -374,7 +374,7 @@ export function ProChart({
     return markTrades(
       transfers.data.items,
       {
-        sources: [...venues, CRUX_SOLVER],
+        sources: [...venues, ...CRUX_SOLVERS],
         sinks: [...venues, SETTLER, ...PREVIOUS_SETTLERS.map((p) => p.address)],
         me,
         dev: auction.creator,

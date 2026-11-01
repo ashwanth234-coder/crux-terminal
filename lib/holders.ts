@@ -43,7 +43,8 @@ export type HolderContext = {
   creator: Address;
   factory: Address;
   pair: Address;
-  solver: Address;
+  /** The Crux solver's wallet, or its wallets after a key rotation (each is tagged and priced as the solver). */
+  solver: Address | readonly Address[];
   destinationSettler: Address;
   me: Address | undefined;
   /** V5 / V6: the launch's batch pool, which pays out its anti-sniper batch fills. */
@@ -102,10 +103,11 @@ export function buildLedger(transfers: TokenTransfer[], swapsNewestFirst: PoolTr
   const solverSellAt = (block: bigint) => oldestFirst.find((s) => s.viaIntent && s.side === "sell" && s.blockNumber >= block)?.price ?? null;
   const settlers = new Set((ctx.settlers ?? []).map(key));
 
+  const solvers = (typeof ctx.solver === "string" ? [ctx.solver] : [...ctx.solver]).map(key);
   const system: Record<string, HolderTag> = {
     [key(ctx.pair)]: "pool",
     [key(ctx.factory)]: "auction",
-    [key(ctx.solver)]: "solver",
+    ...Object.fromEntries(solvers.map((s) => [s, "solver" as const])),
     [key(ctx.destinationSettler)]: "settler",
     [key(DEAD)]: "burn",
     ...(ctx.batchPool ? { [key(ctx.batchPool)]: "pool" as const } : {}),
@@ -191,7 +193,7 @@ export function buildLedger(transfers: TokenTransfer[], swapsNewestFirst: PoolTr
       price = swapByTx.get(t.txHash)?.price ?? null;
     } else if (ctx.batchPool && fromKey === key(ctx.batchPool)) {
       price = batchFill.get(`${t.txHash}:${key(t.to)}`)?.price ?? null;
-    } else if (fromKey === key(ctx.solver) || fromKey === key(ctx.destinationSettler)) {
+    } else if (solvers.includes(fromKey) || fromKey === key(ctx.destinationSettler)) {
       price = solverPriceAt(t.blockNumber);
       if (price !== null) r.approx = true;
     }
