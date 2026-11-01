@@ -36,6 +36,8 @@ export type SolanaOrderRequest = {
   tokenOut: string;
   /** Where the solver delivers on Base. */
   payee: Address;
+  /** A deposit: Base test USDC into the CRUX Account (tokenOut is test USDC; the draft's qty is the USDC expected). */
+  deposit?: boolean;
 };
 
 type Flow =
@@ -140,7 +142,7 @@ export function SolanaIntentModal({ request, onClose, onPlaced }: { request: Sol
   }
 
   if (!request) return null;
-  const { draft } = request;
+  const { draft, deposit } = request;
   const usd = (n: bigint) => `${(Number(n) / 1e6).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
   const short_ = !payer ? null : usdc === null ? "Reading your USDC…" : usdc < request.amount ? `Not enough USDC on Solana devnet (you have ${usd(usdc)})` : sol !== null && sol < SOLANA_MIN_SOL ? `Needs ${SOLANA_MIN_SOL} devnet SOL for fees and storage (you have ${sol.toFixed(4)})` : null;
   const refundAt = placed ? placed.fillDeadline + SOLANA_REFUND_GRACE_SECONDS : null;
@@ -158,7 +160,9 @@ export function SolanaIntentModal({ request, onClose, onPlaced }: { request: Sol
               ? flow.message
               : flow.kind === "open"
                 ? status.data?.state === "closed"
-                  ? `Done: $${draft.symbol} delivered to ${short(request.payee)} on Base Sepolia, settled from Solana.`
+                  ? deposit
+                    ? `Done: test USDC paid into your Crux account ${short(request.payee)} on Base Sepolia, settled from Solana.`
+                    : `Done: $${draft.symbol} delivered to ${short(request.payee)} on Base Sepolia, settled from Solana.`
                   : status.data?.state === "proven"
                     ? "Filled on Base Sepolia. Confirming on Solana; nothing more to do."
                     : refundable
@@ -166,10 +170,18 @@ export function SolanaIntentModal({ request, onClose, onPlaced }: { request: Sol
                       : refundAt !== null && status.data?.late
                         ? `Not filled in time. Your refund is available at ${refundClock(refundAt)}; My orders keeps the button for you.`
                       : "USDC held on Solana. Crux fills it on Base Sepolia, usually in about 20 s; Solana confirms shortly after."
-                : `Pay with USDC on Solana devnet, receive $${draft.symbol} on Base Sepolia. Testnet only, no real funds.`;
+                : deposit
+                  ? "Pay test USDC on Solana devnet; Crux pays it into your Crux account on Base Sepolia, less 0.3%. Testnet only, no real funds."
+                  : `Pay with USDC on Solana devnet, receive $${draft.symbol} on Base Sepolia. Testnet only, no real funds.`;
 
   return (
-    <Modal open onClose={close} locked={busy} title="Review order" subtitle="Pay from Solana, receive on Base. Settled from Solana in about 20 s.">
+    <Modal
+      open
+      onClose={close}
+      locked={busy}
+      title={deposit ? "Review deposit" : "Review order"}
+      subtitle={deposit ? "From Solana into your Crux account on Base. Settled from Solana in about 20 s." : "Pay from Solana, receive on Base. Settled from Solana in about 20 s."}
+    >
       <p role="status" aria-live="polite" className={`flex items-start gap-2 text-[12.5px] leading-snug ${flow.kind === "error" ? "text-down" : "text-chrome/85"}`}>
         {(busy || (flow.kind === "open" && status.data?.state !== "closed" && !refundable)) && <KineticLoader className="mt-0.5 shrink-0 text-signal" />}
         <span>{note}</span>
@@ -184,7 +196,7 @@ export function SolanaIntentModal({ request, onClose, onPlaced }: { request: Sol
         <div className="min-[420px]:text-right">
           <p className="text-[12px] text-muted">You receive (expected)</p>
           <p className="mt-1.5 font-mono text-[18px] text-chrome">
-            {draft.qty.toLocaleString("en-US", { maximumFractionDigits: 4 })} ${draft.symbol}
+            {deposit ? `${draft.qty.toLocaleString("en-US", { maximumFractionDigits: 2 })} USDC` : `${draft.qty.toLocaleString("en-US", { maximumFractionDigits: 4 })} $${draft.symbol}`}
           </p>
           <p className="mt-0.5 text-[12px] text-muted">on Base Sepolia</p>
         </div>
@@ -192,7 +204,7 @@ export function SolanaIntentModal({ request, onClose, onPlaced }: { request: Sol
 
       <dl className="mt-3 divide-y divide-line">
         <Row label="Paid from" value={payer ? `${payer.label} · ${short(payer.publicKey.toBase58())}` : "Not connected"} />
-        <Row label="Delivered to" value={short(request.payee)} hint="Your address on Base Sepolia" />
+        <Row label="Delivered to" value={short(request.payee)} hint={deposit ? "Your Crux account on Base Sepolia" : "Your address on Base Sepolia"} />
         <Row label="Settlement" value="Settled from Solana" hint="Your USDC is released only once the fill on Base is confirmed on Solana; otherwise you can refund it 6 h after the deadline" />
         <Row
           label="Solana cost"
@@ -240,7 +252,7 @@ export function SolanaIntentModal({ request, onClose, onPlaced }: { request: Sol
             className={buttonClass("primary", "md", "mt-5 w-full rounded-xl font-semibold disabled:opacity-100")}
           >
             {busy && <KineticLoader />}
-            {short_ ?? (busy ? "Confirming…" : "Pay from Solana")}
+            {short_ ?? (busy ? "Confirming…" : deposit ? "Deposit from Solana" : "Pay from Solana")}
             {!busy && !short_ && <ArrowUpRight />}
           </button>
           <p className="mt-3 text-center text-[11.5px] text-dim">One signature in {payer.label}, paid in USDC plus {solAmount(SOLANA_OPEN_SOL)} for fees and storage.</p>
