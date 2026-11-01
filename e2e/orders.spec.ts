@@ -50,7 +50,18 @@ test.describe("fair-launch opening", () => {
     await expect.poll(() => page.evaluate(() => window.__benchOrders!.length)).toBe(1);
     const order = await page.evaluate(() => window.__benchOrders![0]);
     expect(order).toEqual({ kind: "deposit", amount: String(25e6), maxPrice: (PROJECTED * BigInt(10)).toString() });
-    await expect(panel.getByText(/You're in: \$25\.00 at the fair-launch price/)).toBeVisible();
+    await expect(panel.getByText(/Locked in the opening batch: \$25\.00 committed/)).toBeVisible();
+  });
+
+  test("the opening pot shows what's committed, how many buyers, the implied market cap and the countdown", async ({ page }) => {
+    await open(page, "open");
+    const pot = page.getByRole("group", { name: "Opening pot" });
+    await expect(pot).toBeVisible();
+    // The bench's auction: $6,000 from 3 buyers toward a $10,000 target, about 3 minutes left.
+    await expect(pot.getByLabel("$6,000.00 committed")).toBeVisible();
+    await expect(pot.getByText("3", { exact: true })).toBeVisible();
+    await expect(pot.getByText(/\$4,000(\.00)? more/)).toBeVisible();
+    await expect(pot.getByText(/opens in/)).toBeVisible();
   });
 
   test("⚙️ Advanced: a buyer's own max price replaces the automatic one", async ({ page }) => {

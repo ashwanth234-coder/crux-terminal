@@ -80,7 +80,7 @@ export function useLaunchV2(factory: Address, id: bigint, version: BatchVersion 
     ...fac,
     functionName: "findClearingPrice",
     args: [id],
-    query: { enabled: Boolean(auction && live && auction.bidderCount > 0), refetchInterval: live ? 12_000 : false },
+    query: { enabled: Boolean(auction && live && auction.bidderCount > 0), refetchInterval: live ? POLL_MS : false },
   });
 
   const mine = useReadContracts({

@@ -7,7 +7,7 @@ import { chainGlyph, type ChainKey } from "./ChainMarks";
 /**
  * The close's centrepiece: nine liquid-chrome strands in a glass capsule, loose and rippling on the left, converging
  * into one orange core on the right, beside Enter Crux: many routes, one execution. Five strands start at a chain's mark
- * (Ethereum, Arbitrum, BNB Chain, Solana, and Robinhood Chain dimmed as Soon (Mainnet)) and the core is Base. The strands bend towards the
+ * (Ethereum, Arbitrum, BNB Chain, Solana, and Robinhood Chain dimmed as Mainnet ready) and the core is Base. The strands bend towards the
  * pointer like liquid metal, and the chrome bands shimmer as they move; entering or tapping the capsule sends an orange
  * pulse down every strand into the core, which flares. With no pointer they drift slowly. prefers-reduced-motion
  * draws them once, still. The capsule is black glass in both themes. SVG paths rebuilt per frame (9 x 97 points), only while on screen.
@@ -266,7 +266,7 @@ export function ConvergeRibbon({ className = "" }: { className?: string }) {
         ])}
         </g>
 
-        {/* The chains the routes leave from; Robinhood Chain is dimmed until it is live (Soon (Mainnet)) */}
+        {/* The chains the routes leave from; Robinhood Chain is dimmed until it is live (Mainnet ready) */}
         {ROUTES.map(([, key]) => {
           const c = NETWORKS.find((x) => x.key === key)!;
           return (

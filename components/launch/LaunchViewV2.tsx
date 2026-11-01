@@ -374,7 +374,7 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
           if (!parsed || parsed <= BigInt(0) || overBalance || overCap || !limitPrice || limitError) return;
           void run(
             (s) => model.deposit(parsed!, limitPrice, s),
-            `You're in: $${fmtUsdc(parsed!)} at the fair-launch price (up to $${priceUsd(limitPrice!)} per token; refunded in full if it opens higher).`,
+            `✅ Locked in the opening batch: $${fmtUsdc(parsed!)} committed at the fair open price, up to $${priceUsd(limitPrice!)} a token (refunded in full if it opens higher).`,
           ).then((ok) => {
             if (!ok) return;
             setAmount("");

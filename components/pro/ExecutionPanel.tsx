@@ -316,7 +316,7 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
       }
       const hash = await model.deposit(parsed, cap, setBusy);
       setDone({
-        text: `You're in: $${fmtUsdc(parsed)} at the fair-launch price (up to $${priceUsd(cap)} per token; refunded in full if it opens higher).`,
+        text: `✅ Locked in the opening batch: $${fmtUsdc(parsed)} committed at the fair open price, up to $${priceUsd(cap)} a token (refunded in full if it opens higher).`,
         hash,
       });
       setAmount("");
@@ -542,6 +542,85 @@ function Status({ busy, error, done }: { busy: Busy; error: string | null; done:
     );
   }
   return null;
+}
+
+/**
+ * Moves a shown number toward its latest value over about a second, so the pot climbs between reads instead of
+ * jumping. Reduced motion: it jumps.
+ */
+function useCountUp(target: number) {
+  const reduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const [shown, setShown] = useState(target);
+  const from = useRef(target);
+  useEffect(() => {
+    if (reduced) return;
+    const start = performance.now();
+    const begin = from.current;
+    let frame = 0;
+    const step = (t: number) => {
+      const k = Math.min(1, (t - start) / 900);
+      const v = begin + (target - begin) * (1 - (1 - k) ** 3);
+      from.current = v;
+      setShown(v);
+      if (k < 1) frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [target, reduced]);
+  return reduced ? target : shown;
+}
+
+const potFmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+const wholeUsd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+const capFmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 2 });
+
+/**
+ * The opening as it builds: the countdown, the pot (test USDC committed), how many buyers, and the market cap it
+ * implies at today's projected clearing price. Read every 4 s; the numbers count up between reads.
+ */
+function OpeningPot({ model, auction }: { model: LaunchV2Model; auction: AuctionV2 }) {
+  const now = useNow();
+  const left = Math.max(0, auction.startTime + auction.batchWindow - now);
+  const pot = Number(formatUnits(auction.totalDeposits, USDC_DECIMALS));
+  const target = Number(formatUnits(auction.graduationTarget, USDC_DECIMALS));
+  const price = Number(formatUnits(model.indicativePrice ?? auction.floorPrice, PRICE_DECIMALS));
+  const cap = price * Number(formatUnits(auction.totalSupply, LAUNCH_DECIMALS));
+  const shownPot = useCountUp(pot);
+  const shownCap = useCountUp(cap);
+  const filled = target > 0 ? Math.min(100, (pot / target) * 100) : 0;
+  return (
+    <div className="mb-3 rounded-lg border border-line bg-void/60 p-3" role="group" aria-label="Opening pot">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[11px] uppercase tracking-[0.14em] text-dim">Opening pot</span>
+        <span className="font-mono text-[12px] text-signal" aria-live="off">
+          {left > 0 ? `opens in ${formatRemaining(left)}` : "opening…"}
+        </span>
+      </div>
+      <p className="mt-1 font-mono text-[24px] leading-none text-chrome" aria-label={`${potFmt.format(pot)} committed`}>
+        {potFmt.format(shownPot)}
+      </p>
+      <div className="mt-2 h-1 overflow-hidden rounded-full bg-line" aria-hidden="true">
+        <div className="h-full rounded-full bg-signal transition-[width] duration-700" style={{ width: `${filled}%` }} />
+      </div>
+      <dl className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
+        <div>
+          <dt className="text-dim">Buyers</dt>
+          <dd className="font-mono text-[13px] text-chrome">{auction.bidderCount}</dd>
+        </div>
+        <div>
+          <dt className="text-dim">Implied mcap</dt>
+          <dd className="font-mono text-[13px] text-chrome" title={model.indicativePrice === null ? "At the floor price: the opening price is set when the countdown ends" : "At the price the opening would clear at now"}>
+            {model.indicativePrice === null ? "≥ " : ""}
+            {capFmt.format(shownCap)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-dim">To open</dt>
+          <dd className="whitespace-nowrap font-mono text-[13px] text-chrome">{pot >= target ? "met ✓" : `${wholeUsd.format(Math.ceil(Math.max(0, target - pot)))} more`}</dd>
+        </div>
+      </dl>
+    </div>
+  );
 }
 
 // ------------------------------------------------------------------ graduated: the batch-only window (V5, V6)
@@ -1149,6 +1228,7 @@ export function ExecutionPanel({
     return (
       <section aria-label="Fair launch" className="p-4">
         <h2 className="mb-3 text-[14px] font-medium text-chrome">Fair launch</h2>
+        <OpeningPot model={model} auction={auction} />
         <BidForm factory={factory} id={id} model={model} auction={auction} version={version} symbol={symbol} />
       </section>
     );

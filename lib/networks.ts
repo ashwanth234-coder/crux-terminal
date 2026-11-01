@@ -1,6 +1,6 @@
 /**
  * The chains Crux names to users, in one place: every page, tooltip and modal that lists chains reads this, so the list
- * and the "Soon (Mainnet)" badge never drift apart. `live` means it works today on testnet; Robinhood Chain is
+ * and the "Mainnet ready" badge never drift apart. `live` means it works today on testnet; Robinhood Chain is
  * mainnet-only and arrives after the audit. Everything settles on Base.
  */
 export type NetworkKey = "base" | "arbitrum" | "ethereum" | "bnb" | "solana" | "robinhood";
@@ -16,7 +16,7 @@ export type Network = {
   color: string;
 };
 
-export const SOON_MAINNET = "Soon (Mainnet)";
+export const SOON_MAINNET = "Mainnet ready";
 
 export const NETWORKS: Network[] = [
   { key: "base", name: "Base", network: "Base Sepolia (testnet). Tokens, auctions and pools live here.", live: true, color: "#0052ff" },
@@ -24,7 +24,13 @@ export const NETWORKS: Network[] = [
   { key: "ethereum", name: "Ethereum", network: "Ethereum Sepolia (testnet)", live: true, color: "#627eea" },
   { key: "bnb", name: "BNB Chain", network: "BNB Chain testnet", live: true, color: "#f0b90b" },
   { key: "solana", name: "Solana", network: "Solana devnet (USDC)", live: true, color: "#14f195" },
-  { key: "robinhood", name: "Robinhood Chain", network: `${SOON_MAINNET}: mainnet-only, after the audit`, live: false, color: "#ccff00" },
+  {
+    key: "robinhood",
+    name: "Robinhood Chain",
+    network: `${SOON_MAINNET}: not on testnet. Crux settles cross-chain through Hyperlane, which runs on Robinhood Chain mainnet (4663) but not its testnet, so it turns on with Crux's mainnet launch, after the audit.`,
+    live: false,
+    color: "#ccff00",
+  },
 ];
 
 export const LIVE_NETWORKS = NETWORKS.filter((n) => n.live);
@@ -39,5 +45,5 @@ export const LIVE_NAMES = listNames(LIVE_NETWORKS.map((n) => n.name));
 /** The live chains you can pay from besides Base: "Arbitrum, Ethereum, BNB Chain and Solana". */
 export const ORIGIN_NAMES = listNames(LIVE_NETWORKS.filter((n) => n.key !== "base").map((n) => n.name));
 
-/** "Robinhood Chain: Soon (Mainnet)". */
+/** "Robinhood Chain: Mainnet ready". */
 export const SOON_LINE = SOON_NETWORKS.map((n) => `${n.name}: ${SOON_MAINNET}`).join(" · ");

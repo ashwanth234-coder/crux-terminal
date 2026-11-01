@@ -57,8 +57,8 @@ type Form = {
 
 /** The fair-launch choice on the form: how long the opening stays open (the first trading minutes are protected too). */
 const FAIR_LAUNCH_CHOICES = [
-  { seconds: 60, title: "60s Fast Launch", note: "A one-minute opening. For a launch your community is already waiting for." },
-  { seconds: 300, title: "5m Fair Launch", note: "Recommended. Five minutes for buyers to find it; everyone still pays one price." },
+  { seconds: 60, title: "60s Fair Launch", note: "Recommended. One minute, one price for everyone, then trading opens. Long enough for buys from every chain to land." },
+  { seconds: 300, title: "5m Fair Launch", note: "Five minutes for buyers to find it, for a launch you'll announce as it opens. Everyone still pays one price." },
 ] as const;
 
 const INITIAL: Form = {
@@ -77,7 +77,7 @@ const INITIAL: Form = {
   antiSniper: true,
   startsIn: "10",
   walletCap: "5",
-  window: "300",
+  window: "60",
 };
 
 const SIM_STEPS = [
