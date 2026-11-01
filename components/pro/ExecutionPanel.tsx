@@ -29,7 +29,7 @@ import { useOrderRequests, type ChartOrderKind, type ChartOrderRequest } from "@
 import { slippageFor, useTradeSettings } from "@/hooks/useTradeSettings";
 import { USDC_DECIMALS, fmtTokens, fmtUsdc, formatRemaining, launchError, type TxStep } from "@/lib/launch";
 import { fmtTokenPrice, launchCaip19 } from "@/lib/launchTrade";
-import { PRICE_DECIMALS, V3_TICK_STEP_PERCENT, parsePriceUsd, priceUsd, usesTicks, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
+import { PRICE_DECIMALS, V3_TICK_STEP_PERCENT, fmtUsdcExact, graduationNeeds, parsePriceUsd, priceUsd, usesTicks, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
 import { cancelStanding, placeStanding, standingFloor, type StandingView } from "@/lib/standing";
 import { useStandingOrders } from "@/hooks/useStandingOrders";
 import { minReceived, sourceAsset, type OrderDraft, type Side } from "@/lib/order";
@@ -171,7 +171,24 @@ const AT_OPEN_GRACE_SECONDS = 2 * 3_600;
 const LAUNCH_DECIMALS = 18;
 const unixNow = () => Math.floor(Date.now() / 1000);
 
-function BidForm({ factory, id, model, auction, version, symbol }: { factory: Address; id: string; model: LaunchV2Model; auction: AuctionV2; version: BatchVersion; symbol: string }) {
+function BidForm({
+  factory,
+  id,
+  model,
+  auction,
+  version,
+  symbol,
+  scheduled = false,
+}: {
+  factory: Address;
+  id: string;
+  model: LaunchV2Model;
+  auction: AuctionV2;
+  version: BatchVersion;
+  symbol: string;
+  /** Before the opening starts: only the account's buy at open can be placed (the auction takes deposits from then). */
+  scheduled?: boolean;
+}) {
   const uid = useId();
   const [amount, setAmount] = useState("");
   // ⚙️ Advanced: the manual max price and the full preview, for those who want them.
@@ -187,7 +204,7 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
   const trade = useTradeSettings();
   const hasAccount = crux.loggedIn && crux.account !== null;
   const [payWith, setPayWith] = useState<"account" | "wallet">("account");
-  const viaAccount = hasAccount && payWith === "account";
+  const viaAccount = hasAccount && (scheduled || payWith === "account");
 
   const parsed = parse(amount, USDC_DECIMALS);
   const rawLimit = limitOn ? parsePriceUsd(limit) : null;
@@ -359,9 +376,11 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
               key={k}
               type="button"
               role="radio"
-              aria-checked={payWith === k}
+              aria-checked={(viaAccount ? "account" : "wallet") === k}
+              disabled={scheduled && k === "wallet"}
+              title={scheduled && k === "wallet" ? "A wallet pays into the opening once its countdown starts" : undefined}
               onClick={() => setPayWith(k)}
-              className={`h-7 flex-1 rounded-[4px] border transition-colors ${payWith === k ? "border-signal text-signal" : "border-line-2 text-muted hover:text-chrome"}`}
+              className={`h-7 flex-1 rounded-[4px] border transition-colors disabled:opacity-40 ${(viaAccount ? "account" : "wallet") === k ? "border-signal text-signal" : "border-line-2 text-muted hover:text-chrome"}`}
             >
               {k === "account" ? "CRUX Account" : "Wallet"}
             </button>
@@ -582,7 +601,10 @@ function OpeningPot({ model, auction }: { model: LaunchV2Model; auction: Auction
   const now = useNow();
   const left = Math.max(0, auction.startTime + auction.batchWindow - now);
   const pot = Number(formatUnits(auction.totalDeposits, USDC_DECIMALS));
-  const target = Number(formatUnits(auction.graduationTarget, USDC_DECIMALS));
+  // What deposits must total (the floor price rounds up: a $2 target over 600M tokens needs $2.000001).
+  const needs = graduationNeeds(auction);
+  const short = needs > auction.totalDeposits ? needs - auction.totalDeposits : BigInt(0);
+  const target = Number(formatUnits(needs, USDC_DECIMALS));
   const price = Number(formatUnits(model.indicativePrice ?? auction.floorPrice, PRICE_DECIMALS));
   const cap = price * Number(formatUnits(auction.totalSupply, LAUNCH_DECIMALS));
   const shownPot = useCountUp(pot);
@@ -616,7 +638,7 @@ function OpeningPot({ model, auction }: { model: LaunchV2Model; auction: Auction
         </div>
         <div>
           <dt className="text-dim">To open</dt>
-          <dd className="whitespace-nowrap font-mono text-[13px] text-chrome">{pot >= target ? "met ✓" : `${wholeUsd.format(Math.ceil(Math.max(0, target - pot)))} more`}</dd>
+          <dd className="whitespace-nowrap font-mono text-[13px] text-chrome">{short === BigInt(0) ? "met ✓" : short < BigInt(10_000) ? `$${fmtUsdcExact(short)} more` : `${wholeUsd.format(Math.ceil(Number(formatUnits(short, USDC_DECIMALS))))} more`}</dd>
         </div>
       </dl>
     </div>
@@ -1223,7 +1245,20 @@ export function ExecutionPanel({
   fallback: ReactNode;
 }) {
   const symbol = model.symbol ? `$${model.symbol}` : "tokens";
+  const crux = useCruxAccount();
 
+  // Before the opening: the account can already queue its buy at open (wallets pay in once the countdown starts).
+  if (phase === "scheduled" && crux.loggedIn && crux.account) {
+    return (
+      <div className="p-3">
+        {fallback}
+        <section aria-label="Buy at open" className="mt-3 px-1">
+          <h2 className="mb-3 text-[14px] font-medium text-chrome">Buy at open</h2>
+          <BidForm factory={factory} id={id} model={model} auction={auction} version={version} symbol={symbol} scheduled />
+        </section>
+      </div>
+    );
+  }
   if (phase === "open") {
     return (
       <section aria-label="Fair launch" className="p-4">

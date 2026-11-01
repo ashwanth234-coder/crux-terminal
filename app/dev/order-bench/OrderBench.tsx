@@ -23,7 +23,8 @@ declare global {
 }
 
 /**
- * Query string: scenario = open (the fair-launch opening: a stand-in auction model that records deposits), trade (a
+ * Query string: scenario = open (the fair-launch opening: a stand-in auction model that records deposits), scheduled
+ * (the same launch two minutes before its opening, when only the account's buy at open can be placed), trade (a
  * trading token), protected (its first, batch-only minutes) or account (the account panel, for deposits). The CRUX
  * Account and the market come from window.__cruxTest (lib/testOverrides), set by the test.
  */
@@ -38,23 +39,24 @@ export function OrderBench() {
     window.__benchOrders = [];
   }, []);
   if (!scenario) return null;
+  const opening = scenario === "open" || scenario === "scheduled";
 
   const auction: AuctionV2 = {
     token: BENCH_TOKEN,
     creator: "0x00000000000000000000000000000000000c4a29",
-    startTime: now - 120,
+    startTime: scenario === "scheduled" ? now + 120 : now - 120,
     batchWindow: 300,
-    status: scenario === "open" ? 0 : 1,
+    status: opening ? 0 : 1,
     bidderCount: 3,
-    settledAt: scenario === "open" ? 0 : now - 60,
-    pair: scenario === "open" ? "0x0000000000000000000000000000000000000000" : PAIR,
+    settledAt: opening ? 0 : now - 60,
+    pair: opening ? "0x0000000000000000000000000000000000000000" : PAIR,
     totalSupply: SUPPLY,
     saleSupply: SUPPLY / BigInt(2),
     graduationTarget: BigInt(10_000e6),
     floorPrice: FLOOR,
     maxAllocationPerWallet: SUPPLY,
     totalDeposits: BigInt(6_000e6),
-    clearingPrice: scenario === "open" ? BigInt(0) : PROJECTED,
+    clearingPrice: opening ? BigInt(0) : PROJECTED,
   };
   const model: LaunchV2Model = {
     version: 7,
@@ -82,14 +84,14 @@ export function OrderBench() {
     claim: async () => undefined,
     claimVesting: async () => undefined,
   };
-  const phase: PhaseV2 = scenario === "open" ? "open" : "graduated";
+  const phase: PhaseV2 = scenario === "open" ? "open" : scenario === "scheduled" ? "scheduled" : "graduated";
 
   // The account panel is a whole page (its own header and layout); the order panel sits in a terminal-width column.
   if (scenario === "account") return <AccountPanel />;
   return (
     <main className="mx-auto max-w-[420px] bg-void p-4">
       <div className="rounded-xl border border-line bg-panel">
-        <ExecutionPanel factory={FACTORY} id="0" model={model} auction={auction} phase={phase} version={7} fallback={null} />
+        <ExecutionPanel factory={FACTORY} id="0" model={model} auction={auction} phase={phase} version={7} fallback={<p className="p-1 text-[12.5px] text-muted">Deposits open in 2 minutes.</p>} />
       </div>
     </main>
   );

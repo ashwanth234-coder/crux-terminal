@@ -98,6 +98,24 @@ test.describe("fair-launch opening from the CRUX Account", () => {
     await expect(panel.getByText(/Queued: \$25\.00 from your CRUX Account/)).toBeVisible();
   });
 
+  test("before the opening starts, the account can already queue its buy at open; the wallet waits for the countdown", async ({ page }) => {
+    const posted = await open(page, "scheduled", { account: true });
+    const section = page.getByRole("region", { name: "Buy at open" });
+    await expect(page.getByText("Deposits open in 2 minutes.")).toBeVisible();
+    await expect(section.getByRole("radio", { name: "Wallet" })).toBeDisabled();
+    await section.getByLabel("Amount in USDC").fill("10");
+    await section.getByRole("button", { name: /^Buy at open · CRUX Account/ }).first().click();
+    await expect.poll(() => posted.filter((p) => p.path === "/v1/standing").length).toBe(1);
+    const { order } = posted.find((p) => p.path === "/v1/standing")!.body as { order: Record<string, string | number> };
+    expect(String(order.amountIn)).toBe(String(10e6));
+  });
+
+  test("before the opening starts, a visitor without an account sees only when deposits open", async ({ page }) => {
+    await open(page, "scheduled");
+    await expect(page.getByText("Deposits open in 2 minutes.")).toBeVisible();
+    await expect(page.getByRole("region", { name: "Buy at open" })).toHaveCount(0);
+  });
+
   test("the wallet is one tap away and pays into the opening auction as before", async ({ page }) => {
     await open(page, "open", { account: true });
     const panel = page.getByRole("region", { name: "Fair launch" });

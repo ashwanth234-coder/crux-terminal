@@ -10,7 +10,7 @@ import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { cruxBatchFactoryAbi, cruxFactoryAbi, factoryV4Abi, factoryV6Abi, factoryV8Abi } from "@/contracts/abis/batchAuction";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import { BATCH_WINDOW_SECONDS, FACTORY, FACTORY_V7, LAUNCH_FACTORY } from "@/lib/intents";
-import { V2_FEE, V2_MIN_LEAD_SECONDS, V2_SPLIT, V2_WINDOWS, buyersNeeded, windowLabel } from "@/lib/launchV2";
+import { PRICE_DENOMINATOR, V2_FEE, V2_MIN_LEAD_SECONDS, V2_SPLIT, V2_WINDOWS, buyersNeeded, fmtUsdcExact, graduationNeeds, maxDepositV3, windowLabel } from "@/lib/launchV2";
 import { launchError, previewHref } from "@/lib/launch";
 import { simulateThenWrite } from "@/lib/preflight";
 import { VestingBadge } from "@/components/ui/VestingBadge";
@@ -116,16 +116,43 @@ function validate(f: Form) {
   return errors;
 }
 
+/**
+ * What the launch really takes, from the form as the factory will compute it: it rounds the floor price up (never
+ * selling under the target), so deposits must total a little more than the target unless it divides evenly by the
+ * sale ($2 over 600M tokens needs $2.000001), and a wallet's deposit cap rounds up the same way.
+ */
+function exactRaise(supply: string, target: string, walletCap: string) {
+  const tokens = BigInt(digits(supply) || "0");
+  const graduationTarget = BigInt(digits(target) || "0") * BigInt(1_000_000);
+  if (tokens === BigInt(0) || graduationTarget === BigInt(0)) return null;
+  const saleSupply = (tokens * BigInt(10) ** BigInt(18) * BigInt(V2_SPLIT.saleBps)) / BigInt(10_000);
+  const floorPrice = (graduationTarget * PRICE_DENOMINATOR + saleSupply - BigInt(1)) / saleSupply;
+  const needs = graduationNeeds({ saleSupply, floorPrice, graduationTarget });
+  const cap = Number(walletCap);
+  const capBps = Number.isFinite(cap) ? BigInt(Math.round(cap * 100)) : BigInt(0);
+  const perWallet = capBps > BigInt(0) ? maxDepositV3({ maxAllocationPerWallet: (saleSupply * capBps) / BigInt(10_000), floorPrice }) : BigInt(0);
+  const buyers = perWallet > BigInt(0) ? Number((needs + perWallet - BigInt(1)) / perWallet) : null;
+  return { graduationTarget, needs, perWallet, buyers };
+}
+
+/** The target's hint: what deposits must total, when the floor price's rounding puts it above the target. */
+function targetHint(supply: string, target: string, base: string) {
+  const r = exactRaise(supply, target, "100");
+  return r && r.needs > r.graduationTarget ? `${base}. Deposits must total $${fmtUsdcExact(r.needs)}: the floor price rounds up.` : base;
+}
+
 /** How many wallets a cap needs before the sale can fill (and so graduate). */
-function capHint(walletCap: string, target: string) {
+function capHint(walletCap: string, target: string, supply: string) {
   const cap = Number(walletCap);
   if (!Number.isFinite(cap) || cap < 0.1 || cap > 100) return "Share of the sale one wallet can receive; the excess is refunded";
   const n = buyersNeeded(cap);
   if (LAUNCH_FACTORY && LAUNCH_FACTORY.version >= 3) {
-    // V3 enforces the cap as a deposit limit: the cap's worth of tokens at the floor price, i.e. cap% of the target.
-    const usd = (Number(digits(target)) * cap) / 100;
-    const each = `Each wallet can deposit up to $${usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    return n === 1 ? `${each}; one wallet can fill the whole sale` : `${each}; needs at least ${n} buyers to fill the sale and graduate`;
+    // V3 enforces the cap as a deposit limit: the cap's worth of tokens at the floor price, rounded up. The sale needs
+    // the exact total (graduationNeeds), so the count of buyers is worked out in base units, not percent.
+    const r = exactRaise(supply, target, walletCap);
+    if (!r || r.buyers === null) return "Share of the sale one wallet can receive; the excess is refunded";
+    const each = `Each wallet can deposit up to $${fmtUsdcExact(r.perWallet)}`;
+    return r.buyers === 1 ? `${each}; one wallet can fill the whole sale` : `${each}; needs at least ${r.buyers} buyers to fill the sale and graduate`;
   }
   return n === 1
     ? "One wallet can fill the whole sale; anything over the cap is refunded"
@@ -652,7 +679,12 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                 onChange={(e) => set("supply", withCommas(e.target.value))}
               />
             </Field>
-            <Field id={id("target")} label="Graduation target" error={showErr("target")} hint={FACTORY ? "Test USDC the auction must raise to graduate" : "USDC the auction must raise to graduate"}>
+            <Field
+              id={id("target")}
+              label="Graduation target"
+              error={showErr("target")}
+              hint={targetHint(form.supply, form.target, FACTORY ? "Test USDC the auction must raise to graduate" : "USDC the auction must raise to graduate")}
+            >
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-[14px] text-dim">$</span>
                 <input
@@ -694,7 +726,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                 id={id("walletCap")}
                 label="Max allocation per wallet"
                 error={showErr("walletCap")}
-                hint={capHint(form.walletCap, form.target)}
+                hint={capHint(form.walletCap, form.target, form.supply)}
               >
                 <div className="relative">
                   <input
