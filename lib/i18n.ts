@@ -47,7 +47,7 @@ const en = {
 
   "badge.vested": "{days}D vested",
   "badge.instantUnlock": "Instant unlock",
-  "badge.antiSniper": "Anti-sniper {window}",
+  "badge.antiSniper": "Fair launch {window}",
   "badge.unprotected": "Unprotected",
 
   "auction.clearingPrice": "Batch clearing price",

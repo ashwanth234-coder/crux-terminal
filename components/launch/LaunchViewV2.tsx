@@ -220,7 +220,7 @@ function ViewV2({ model, auction, id }: { model: LaunchV2Model; auction: Auction
 
           <div className="mt-8">
             <div className="flex items-baseline justify-between gap-4">
-              <p className="text-[12px] text-muted">Bids vs graduation target</p>
+              <p className="text-[12px] text-muted">Raised vs target</p>
               <p className="font-mono text-[12px] text-muted">{(raised * 100).toFixed(1)}%</p>
             </div>
             <p className="mt-2 font-mono text-[22px] text-chrome">
@@ -290,6 +290,7 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
   const [amount, setAmount] = useState("");
   const [limitOn, setLimitOn] = useState(false);
   const [limit, setLimit] = useState("");
+  const [advanced, setAdvanced] = useState(false);
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ text: string; hash?: Hex } | null>(null);
@@ -300,7 +301,12 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
   } catch {
     parsed = null;
   }
-  const limitPrice = limitOn ? parsePriceUsd(limit) : NO_LIMIT;
+  // Nobody has to price the launch: without a manual limit the order carries a ceiling of 10x today's projected price
+  // (or the floor, if higher). It pays the one opening price everyone pays; the ceiling only stops a frenzy from
+  // charging far more.
+  const basis = model.indicativePrice !== null && model.indicativePrice > auction.floorPrice ? model.indicativePrice : auction.floorPrice;
+  const autoCap = basis * BigInt(10);
+  const limitPrice = limitOn ? parsePriceUsd(limit) : autoCap;
   const limitError =
     limitOn && limit && (!limitPrice || limitPrice < auction.floorPrice) ? `Set at least the floor, $${priceUsd(auction.floorPrice)} per token.` : null;
   const overBalance = parsed !== null && model.usdcBalance !== null && parsed > model.usdcBalance;
@@ -332,7 +338,7 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
   if (!model.account) {
     body = (
       <>
-        <p className="text-[13px] text-muted">Connect a wallet on Base Sepolia to bid, settle or claim.</p>
+        <p className="text-[13px] text-muted">Connect a wallet on Base Sepolia to buy, settle or claim.</p>
         <button type="button" onClick={model.connect} className={buttonClass("primary", "md", "mt-5 w-full rounded-xl font-semibold")}>
           Connect wallet
         </button>
@@ -356,8 +362,8 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
     body = (
       <p className="text-[13px] leading-relaxed text-muted">
         Deposits open at{" "}
-        <span className="text-chrome">{new Date(auction.startTime * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</span>. Every
-        bid placed in the window clears at the same price.
+        <span className="text-chrome">{new Date(auction.startTime * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</span>. Everyone
+        who buys before the countdown ends pays the same opening price.
       </p>
     );
   } else if (phase === "open") {
@@ -368,7 +374,7 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
           if (!parsed || parsed <= BigInt(0) || overBalance || overCap || !limitPrice || limitError) return;
           void run(
             (s) => model.deposit(parsed!, limitPrice, s),
-            `Bid placed: $${fmtUsdc(parsed!)} ${limitOn ? `up to $${limit} per token` : "at any clearing price"}.`,
+            `You're in: $${fmtUsdc(parsed!)} at the fair-launch price (up to $${priceUsd(limitPrice!)} per token; refunded in full if it opens higher).`,
           ).then((ok) => {
             if (!ok) return;
             setAmount("");
@@ -378,7 +384,7 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
         }}
       >
         <label htmlFor={`${uid}-amt`} className="text-[12.5px] text-muted">
-          Amount
+          Amount in USDC
         </label>
         <div className="mt-2 flex items-center gap-2 rounded-xl border border-line px-3 py-2.5 focus-within:border-line-2">
           <span className="font-mono text-dim">$</span>
@@ -396,7 +402,7 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
             disabled={!maxBid}
             onClick={() => maxBid && setAmount(formatUnits(maxBid, USDC_DECIMALS))}
             className="shrink-0 rounded-md border border-line-2 px-2 py-1 text-[11.5px] text-chrome transition-colors hover:border-chrome/50 disabled:opacity-40"
-            aria-label={maxBid ? `Bid the maximum, $${fmtUsdc(maxBid)}` : "Bid the maximum"}
+            aria-label={maxBid ? `Use the maximum, $${fmtUsdc(maxBid)}` : "Use the maximum"}
           >
             Max
           </button>
@@ -414,17 +420,30 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
           </p>
         )}
 
-        {/* Advanced: a limit price */}
+        {/* ⚙️ Advanced: the max price, automatic unless set here */}
         <button
           type="button"
-          aria-expanded={limitOn}
-          onClick={() => setLimitOn((v) => !v)}
-          className="mt-5 flex w-full items-center justify-between rounded-lg border border-line px-3 py-2.5 text-left text-[13px] text-chrome transition-colors hover:border-line-2"
+          aria-expanded={advanced}
+          onClick={() => setAdvanced((v) => !v)}
+          className="mt-4 text-[12px] text-dim transition-colors hover:text-chrome"
         >
-          <span>Limit price {limitOn ? "" : <span className="text-muted">· off, accept any clearing price</span>}</span>
-          <span className={`h-4 w-7 rounded-full border transition-colors ${limitOn ? "border-signal/60 bg-signal" : "border-line-2 bg-line"}`} aria-hidden="true" />
+          <span aria-hidden="true">⚙️</span> Advanced {advanced ? "▴" : "▾"}
         </button>
-        {limitOn && (
+        {advanced && (
+          <button
+            type="button"
+            aria-expanded={limitOn}
+            onClick={() => setLimitOn((v) => !v)}
+            className="mt-2 flex w-full items-center justify-between rounded-lg border border-line px-3 py-2.5 text-left text-[13px] text-chrome transition-colors hover:border-line-2"
+          >
+            <span>
+              Set my own max price{" "}
+              {limitOn ? "" : <span className="text-muted">· automatic, ${priceUsd(autoCap)} per token (10x today&apos;s projected price)</span>}
+            </span>
+            <span className={`h-4 w-7 rounded-full border transition-colors ${limitOn ? "border-signal/60 bg-signal" : "border-line-2 bg-line"}`} aria-hidden="true" />
+          </button>
+        )}
+        {advanced && limitOn && (
           <div className="mt-3">
             <label htmlFor={`${uid}-lim`} className="text-[12.5px] text-muted">
               Max price per token
@@ -443,7 +462,7 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
             </div>
             <p className={`mt-1.5 text-[11.5px] ${limitError ? "text-down" : "text-dim"}`}>
               {limitError ??
-                `If the batch clears above your limit, your whole bid is refunded. Floor $${priceUsd(auction.floorPrice)}.${
+                `If the opening price lands above your max, you're refunded in full. Floor $${priceUsd(auction.floorPrice)}.${
                   usesTicks(model.version) ? ` Limits round down to the nearest ${V3_TICK_STEP_PERCENT}% price step.` : ""
                 }`}
             </p>
@@ -452,11 +471,11 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
 
         {model.myBid.quote > BigInt(0) && (
           <p className="mt-4 text-[12px] text-muted">
-            Your bid: <span className="font-mono text-chrome">${fmtUsdc(model.myBid.quote)}</span>
+            You&apos;re in for <span className="font-mono text-chrome">${fmtUsdc(model.myBid.quote)}</span>
             {model.myBid.maxPrice === NO_LIMIT || (model.topTickPrice !== null && model.myBid.maxPrice >= model.topTickPrice)
               ? " at any price"
               : ` up to $${priceUsd(model.myBid.maxPrice)} per token`}
-            . Adding to it replaces the limit.
+            . Adding more replaces the max price.
           </p>
         )}
 
@@ -465,7 +484,7 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
           disabled={!parsed || overBalance || overCap || Boolean(limitError) || (limitOn && !limitPrice)}
           className={buttonClass("primary", "md", "mt-5 w-full rounded-xl font-semibold")}
         >
-          {overBalance ? "Not enough test USDC" : overCap ? "Over this wallet's cap" : needsApproval ? "Approve & bid" : "Place bid"} <ArrowUpRight />
+          {overBalance ? "Not enough test USDC" : overCap ? "Over this wallet's cap" : needsApproval ? "Approve & buy (Fair Launch)" : "Buy (Fair Launch)"} <ArrowUpRight />
         </button>
       </form>
     );
@@ -477,7 +496,7 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
           the creator&apos;s {V2_FEE.creatorShareBps / 100}% share of the {V2_FEE.feeBps / 100}% fee.
         </p>
         <button type="button" onClick={() => void run(model.settle, "Settled.")} className={buttonClass("primary", "md", "mt-5 w-full rounded-xl font-semibold")}>
-          Settle batch auction <ArrowUpRight />
+          Settle the fair launch <ArrowUpRight />
         </button>
       </>
     );
@@ -512,7 +531,7 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
 
   return (
     <section aria-label="Your position" className="rounded-2xl border border-line bg-panel p-5 sm:p-6">
-      <h2 className="text-[15px] font-medium text-chrome">{phase === "open" || phase === "scheduled" ? "Bid" : phase === "closed" ? "Settle" : "Claim"}</h2>
+      <h2 className="text-[15px] font-medium text-chrome">{phase === "open" || phase === "scheduled" ? "Fair launch" : phase === "closed" ? "Settle" : "Claim"}</h2>
       <p className="mt-1 text-[12px] text-muted">Base Sepolia testnet · test USDC only</p>
       <div className="mt-5">{body}</div>
       {model.account && (phase === "open" || phase === "closed" || phase === "graduated" || phase === "cancelled") && (

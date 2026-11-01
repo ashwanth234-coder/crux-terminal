@@ -62,7 +62,7 @@ function Row({ label, value, hint }: { label: string; value: string; hint?: stri
   );
 }
 
-export function SolanaIntentModal({ request, onClose }: { request: SolanaOrderRequest | null; onClose: () => void }) {
+export function SolanaIntentModal({ request, onClose, onPlaced }: { request: SolanaOrderRequest | null; onClose: () => void; onPlaced?: () => void }) {
   const { payer, connect, usdc, sol, refetch } = useSolanaPayer();
   const [flow, setFlow] = useState<Flow>({ kind: "idle" });
   const placed = flow.kind === "open" || flow.kind === "refunding" || flow.kind === "refunded" ? flow.order : null;
@@ -108,6 +108,7 @@ export function SolanaIntentModal({ request, onClose }: { request: SolanaOrderRe
       setFlow({ kind: "sending" });
       const signature = await sendSolana(payer, openInstruction(order, BATCH_WINDOW_SECONDS));
       setFlow({ kind: "open", order, signature });
+      onPlaced?.();
       // Remembered in this browser, so My orders can follow it (and offer the refund) after this closes.
       rememberSolanaOrder({
         fillHash: Buffer.from(order.fillHash).toString("hex"),

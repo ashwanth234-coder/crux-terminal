@@ -126,7 +126,7 @@ export function LaunchCard({ launch, phase, now }: { launch: LaunchSummary; phas
       </div>
 
       <span className="mt-auto inline-flex items-center gap-1.5 pt-5 text-[12.5px] text-chrome/75 transition-colors group-hover:text-chrome">
-        {phase === "open" ? "Bid" : phase === "closed" ? "Settle" : "View auction"} <ArrowUpRight />
+        {phase === "open" ? "Buy (Fair Launch)" : phase === "closed" ? "Settle" : "View launch"} <ArrowUpRight />
       </span>
     </Link>
   );

@@ -305,7 +305,7 @@ export function LiveTape({
                         {ago(now, b.time)}
                       </a>
                     </td>
-                    <td className={`${td} text-chrome/90`}>{b.topUp ? "Top-up" : "Bid"}</td>
+                    <td className={`${td} text-chrome/90`}>{b.topUp ? "Top-up" : "Buy"}</td>
                     <td className={`${td} text-right font-mono text-chrome/90`}>{usd(b.quoteAdded)}</td>
                     <td className={`${td} text-right font-mono text-muted`}>{usd(b.totalQuote)}</td>
                     <td className={`${td} text-right font-mono text-muted`}>{b.maxPrice >= noLimitAbove ? "Any" : `$${priceUsd(b.maxPrice)}`}</td>

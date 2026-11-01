@@ -35,7 +35,7 @@ export function AntiSniperBadge({ seconds, className = "" }: { seconds: number |
     <span
       title={
         on
-          ? `Anti-sniper: for the first ${shortWindow(seconds)} of trading after graduation, every trade clears in a 60-second batch at one price, so a bot at second 0 pays what a person at second 59 pays. Enforced by the contract.`
+          ? `Fair-launch protection: for the first ${shortWindow(seconds)} of trading, every trade clears in a 60-second batch at one price, so a bot at second 0 pays what a person at second 59 pays. Enforced by the contract.`
           : "Unprotected launch: trading opens on Uniswap the moment the auction graduates, so a bot can buy in the very next transaction, ahead of everyone else."
       }
       className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[3px] border px-1.5 py-[3px] font-mono text-[9.5px] uppercase leading-none tracking-[0.16em] ${

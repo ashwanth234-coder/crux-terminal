@@ -29,7 +29,7 @@ import { useOrderRequests, type ChartOrderKind, type ChartOrderRequest } from "@
 import { slippageFor, useTradeSettings } from "@/hooks/useTradeSettings";
 import { USDC_DECIMALS, fmtTokens, fmtUsdc, formatRemaining, launchError, type TxStep } from "@/lib/launch";
 import { fmtTokenPrice, launchCaip19 } from "@/lib/launchTrade";
-import { NO_LIMIT, V3_TICK_STEP_PERCENT, parsePriceUsd, priceUsd, usesTicks, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
+import { V3_TICK_STEP_PERCENT, parsePriceUsd, priceUsd, usesTicks, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
 import { minReceived, sourceAsset, type OrderDraft, type Side } from "@/lib/order";
 import { placeOneClick } from "@/lib/session";
 import { SOLVER_MAX_IMPACT_PCT, bidRisk, tradeRisk } from "@/lib/risk";
@@ -161,9 +161,14 @@ type Busy = TxStep | null;
 
 // ------------------------------------------------------------------ auction
 
+/** The automatic max price of a fair-launch buy: this many times today's projected price (or the floor, if higher). */
+const AUTO_CAP_MULTIPLE = BigInt(10);
+
 function BidForm({ factory, id, model, auction, version, symbol }: { factory: Address; id: string; model: LaunchV2Model; auction: AuctionV2; version: BatchVersion; symbol: string }) {
   const uid = useId();
   const [amount, setAmount] = useState("");
+  // ⚙️ Advanced: the manual max price and the full preview, for those who want them.
+  const [advanced, setAdvanced] = useState(false);
   const [limitOn, setLimitOn] = useState(false);
   const [limit, setLimit] = useState("");
   const [busy, setBusy] = useState<Busy>(null);
@@ -183,6 +188,10 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
     query: { enabled: usesTicks(version) && rawLimit !== null && !limitTooLow },
   });
   const effectiveLimit = !limitOn || !rawLimit || limitTooLow ? null : usesTicks(version) ? (tick.data?.[1] ?? null) : rawLimit;
+  // Nobody has to price the launch: without a manual limit the order carries a ceiling of 10x today's projected price.
+  // It still pays the one clearing price everyone pays; the ceiling only stops a frenzy from charging far more.
+  const basis = model.indicativePrice !== null && model.indicativePrice > auction.floorPrice ? model.indicativePrice : auction.floorPrice;
+  const autoCap = basis * AUTO_CAP_MULTIPLE;
 
   const capLeft = model.maxDeposit !== null ? (model.maxDeposit > model.myBid.quote ? model.maxDeposit - model.myBid.quote : BigInt(0)) : null;
   const balance = model.usdcBalance;
@@ -194,7 +203,7 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
   const risk = parsed
     ? bidRisk({
         quote: parsed,
-        limit: effectiveLimit,
+        limit: effectiveLimit ?? autoCap,
         projected: model.indicativePrice,
         floor: auction.floorPrice,
         saleSupply: auction.saleSupply,
@@ -218,7 +227,7 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
           tone: risk.worstPrice ? "plain" : "caution",
           hint: risk.worstPrice
             ? `${usesTicks(version) ? `Your limit, rounded down to its ${V3_TICK_STEP_PERCENT}% step. ` : ""}If the batch clears above it, your whole bid is refunded.`
-            : "No limit: you accept whatever price the batch clears at. Set a limit to cap it.",
+            : "No limit: you accept whatever price the opening clears at. Set a limit to cap it.",
         },
         {
           label: "Minimum received",
@@ -230,21 +239,25 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
           label: "Exit liquidity",
           value: risk.exit ? `${usd6(risk.exit.usdcBack)} (${pct(risk.exit.lossPct)})` : "—",
           tone: risk.exit && risk.exit.lossPct > 25 ? "danger" : risk.exit && risk.exit.lossPct > 5 ? "caution" : "plain",
-          hint: `Selling everything this bid buys into the new pool right at graduation${risk.basis === "floor" ? " (at the floor price)" : ""}. The pool starts with half the raise.`,
+          hint: `Selling everything this buys into the new pool right at the open${risk.basis === "floor" ? " (at the floor price)" : ""}. The pool starts with half the raise.`,
         },
       ]
     : [];
 
   const disabled = !parsed || overBalance || overCap || limitTooLow || (limitOn && !effectiveLimit) || busy !== null;
-  const label = overBalance ? "Not enough test USDC" : overCap ? "Over this wallet's cap" : needsApproval ? "Approve & submit batch bid" : "Submit batch bid";
+  const label = overBalance ? "Not enough test USDC" : overCap ? "Over this wallet's cap" : needsApproval ? "Approve & buy (Fair Launch)" : "Buy (Fair Launch)";
 
   const submit = async () => {
     if (disabled || !parsed) return;
     setError(null);
     setDone(null);
     try {
-      const hash = await model.deposit(parsed, limitOn && rawLimit ? rawLimit : NO_LIMIT, setBusy);
-      setDone({ text: `Bid placed: $${fmtUsdc(parsed)} ${limitOn ? `up to $${limit} per token` : "at any clearing price"}.`, hash });
+      const cap = limitOn && rawLimit ? rawLimit : autoCap;
+      const hash = await model.deposit(parsed, cap, setBusy);
+      setDone({
+        text: `You're in: $${fmtUsdc(parsed)} at the fair-launch price (up to $${priceUsd(cap)} per token; refunded in full if it opens higher).`,
+        hash,
+      });
       setAmount("");
       setLimit("");
       setLimitOn(false);
@@ -271,7 +284,7 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
   if (!model.account) {
     return (
       <button type="button" onClick={model.connect} className={buttonClass("primary", "md", "w-full rounded-xl font-semibold")}>
-        Connect wallet to bid
+        Connect wallet to buy
       </button>
     );
   }
@@ -282,60 +295,83 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
         <span>Paying with: Base Sepolia test USDC</span>
         <span className="font-mono text-chrome/80">{balance !== null ? `$${fmtUsdc(balance)}` : "…"}</span>
       </div>
-      <p className="-mt-2 text-[11px] text-dim">Bids come from your wallet on Base Sepolia for now: Crux accounts can&apos;t bid in auctions yet (that needs an account contract update, after the audit). Once the token trades, your Crux account, or a wallet on {ORIGIN_NAMES}, can buy it.</p>
+      <p className="-mt-2 text-[11px] text-dim">
+        The opening takes payment from your wallet for now. Your CRUX Account (no gas, no pop-ups) joins from the first
+        trading batches, a minute after the open; or pay from a wallet on {ORIGIN_NAMES} then.
+      </p>
 
-      <label htmlFor={`${uid}-amt`} className="sr-only">
-        Bid amount
+      <label htmlFor={`${uid}-amt`} className="-mb-2 text-[11px] text-muted">
+        Amount in USDC
       </label>
       <AmountField id={`${uid}-amt`} value={amount} onChange={setAmount} unit="USDC" />
       <Presets items={presets} onPick={pick} />
       {capLeft !== null && (
         <p className={`-mt-1.5 text-[11px] ${overCap ? "text-down" : "text-dim"}`}>
-          {model.myBid.quote > BigInt(0) ? `You've bid $${fmtUsdc(model.myBid.quote)}; ` : ""}this wallet can add up to ${fmtUsdc(capLeft)}.
+          {model.myBid.quote > BigInt(0) ? `You're in for $${fmtUsdc(model.myBid.quote)}; ` : ""}this wallet can add up to ${fmtUsdc(capLeft)}.
         </p>
       )}
 
+      {risk?.tokensAtProjected != null && (
+        <p className="-mt-1 text-[11.5px] text-muted">
+          If it opened now: <span className="font-mono text-chrome">{fmtTokens(risk.tokensAtProjected)} {symbol}</span>
+        </p>
+      )}
       <button
         type="button"
-        aria-expanded={limitOn}
-        onClick={() => setLimitOn((v) => !v)}
-        className="flex items-center justify-between rounded-lg border border-line px-3 py-2 text-left text-[12.5px] text-chrome transition-colors hover:border-line-2"
+        aria-expanded={advanced}
+        onClick={() => setAdvanced((v) => !v)}
+        className="-mt-1 self-start text-[11.5px] text-dim transition-colors hover:text-chrome"
       >
-        <span>
-          Limit price <span className="text-muted">(maxPricePerToken){limitOn ? "" : " · off"}</span>
-        </span>
-        <span className={`h-4 w-7 rounded-full border transition-colors ${limitOn ? "border-signal/60 bg-signal" : "border-line-2 bg-line"}`} aria-hidden="true" />
+        <span aria-hidden="true">⚙️</span> Advanced {advanced ? "▴" : "▾"}
       </button>
-      {limitOn && (
-        <div>
-          <label htmlFor={`${uid}-lim`} className="sr-only">
-            Max price per token
-          </label>
-          <div className="flex items-center gap-2 rounded-lg border border-line bg-void/60 px-3 py-2 focus-within:border-line-2">
-            <span className="font-mono text-dim">$</span>
-            <input
-              id={`${uid}-lim`}
-              inputMode="decimal"
-              autoComplete="off"
-              placeholder={priceUsd(auction.floorPrice * BigInt(2))}
-              value={limit}
-              onChange={(e) => setLimit(e.target.value.replace(/[^0-9.]/g, ""))}
-              className="w-full min-w-0 bg-transparent font-mono text-[15px] text-chrome outline-none placeholder:text-dim"
-            />
-            <span className="shrink-0 text-[11.5px] text-muted">per token</span>
-          </div>
-          <p className={`mt-1 text-[11px] ${limitTooLow ? "text-down" : "text-dim"}`}>
-            {limitTooLow
-              ? `Set at least the floor, $${priceUsd(auction.floorPrice)}.`
-              : effectiveLimit && usesTicks(version) && rawLimit && effectiveLimit < rawLimit
-                ? `Rounds down to $${priceUsd(effectiveLimit)} (the ${V3_TICK_STEP_PERCENT}% step at or below your limit).`
-                : `Floor $${priceUsd(auction.floorPrice)}.`}
+      {advanced && (
+        <div className="flex flex-col gap-3 rounded-lg border border-line p-3">
+          <p className="text-[11px] leading-snug text-dim">
+            Max price: {limitOn ? "yours, below" : `automatic, $${priceUsd(autoCap)} per token (10x today's projected price)`}. If the
+            opening price lands above it, you&apos;re refunded in full.
           </p>
+          <button
+            type="button"
+            aria-expanded={limitOn}
+            onClick={() => setLimitOn((v) => !v)}
+            className="flex items-center justify-between rounded-lg border border-line px-3 py-2 text-left text-[12.5px] text-chrome transition-colors hover:border-line-2"
+          >
+            <span>
+              Set my own max price <span className="text-muted">{limitOn ? "" : " · off (auto)"}</span>
+            </span>
+            <span className={`h-4 w-7 rounded-full border transition-colors ${limitOn ? "border-signal/60 bg-signal" : "border-line-2 bg-line"}`} aria-hidden="true" />
+          </button>
+          {limitOn && (
+            <div>
+              <label htmlFor={`${uid}-lim`} className="sr-only">
+                Max price per token
+              </label>
+              <div className="flex items-center gap-2 rounded-lg border border-line bg-void/60 px-3 py-2 focus-within:border-line-2">
+                <span className="font-mono text-dim">$</span>
+                <input
+                  id={`${uid}-lim`}
+                  inputMode="decimal"
+                  autoComplete="off"
+                  placeholder={priceUsd(auction.floorPrice * BigInt(2))}
+                  value={limit}
+                  onChange={(e) => setLimit(e.target.value.replace(/[^0-9.]/g, ""))}
+                  className="w-full min-w-0 bg-transparent font-mono text-[15px] text-chrome outline-none placeholder:text-dim"
+                />
+                <span className="shrink-0 text-[11.5px] text-muted">per token</span>
+              </div>
+              <p className={`mt-1 text-[11px] ${limitTooLow ? "text-down" : "text-dim"}`}>
+                {limitTooLow
+                  ? `Set at least the floor, $${priceUsd(auction.floorPrice)}.`
+                  : effectiveLimit && usesTicks(version) && rawLimit && effectiveLimit < rawLimit
+                    ? `Rounds down to $${priceUsd(effectiveLimit)} (the ${V3_TICK_STEP_PERCENT}% step at or below your limit).`
+                    : `Floor $${priceUsd(auction.floorPrice)}.`}
+              </p>
+            </div>
+          )}
+          {rows.length > 0 && <RiskPreview rows={rows} />}
         </div>
       )}
-
-      {rows.length > 0 && <RiskPreview rows={rows} />}
-      <ProtectionRow>No front-running inside the batch: every filled bid pays the same price, whenever it arrived.</ProtectionRow>
+      <ProtectionRow>Fair-launch protection: everyone who buys before the countdown ends pays the same opening price. Bots get no first-block edge.</ProtectionRow>
 
       <button type="button" disabled={disabled} onClick={() => void submit()} className={buttonClass("buy", "md", "w-full rounded-xl font-semibold max-lg:hidden")}>
         {label} <ArrowUpRight />
@@ -349,12 +385,12 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
             <AmountField id={`${uid}-dock`} value={amount} onChange={setAmount} unit="USDC" compact />
           </div>
           <button type="button" disabled={disabled} onClick={() => void submit()} className={buttonClass("buy", "md", "shrink-0 rounded-xl px-4 font-semibold")}>
-            {busy ? "…" : overCap ? "Over cap" : "Bid"}
+            {busy ? "…" : overCap ? "Over cap" : "Buy"}
           </button>
         </div>
         {risk?.exit && (
           <p className="mt-1.5 truncate text-[11px] text-dim">
-            Worst price {risk.worstPrice ? `$${priceUsd(risk.worstPrice)}` : "any"} · exit at graduation {pct(risk.exit.lossPct)}
+            Max price {risk.worstPrice ? `$${priceUsd(risk.worstPrice)}` : "auto"} · if you sold at the open {pct(risk.exit.lossPct)}
           </p>
         )}
       </MobileDock>
@@ -404,14 +440,14 @@ function Status({ busy, error, done }: { busy: Busy; error: string | null; done:
 function GraduatedDesk({ auction, symbol }: { auction: AuctionV2; symbol: string }) {
   const t = useT();
   const market = useLaunchMarket(auction.token, auction.pair);
-  const [mode, setMode] = useState<"batch" | "intent">("batch");
+  const [mode, setMode] = useState<"batch" | "intent">("intent");
   const now = useNow();
   if (market.protected && market.protectedUntil !== null && now >= market.protectedUntil) {
     return (
       <section aria-label="Moving to Uniswap" className="p-4">
         <h2 className="text-[14px] font-medium text-chrome">Moving to Uniswap</h2>
         <p role="status" className="mt-1.5 text-[11.5px] leading-snug text-muted">
-          The batch-only window has closed. The keeper is clearing the last batch and moving the liquidity into the
+          The fair-launch window has closed. The keeper is clearing the last batch and moving the liquidity into the
           Uniswap pool with the LP burned, usually within seconds. Trading reopens here when it lands.
         </p>
       </section>
@@ -426,29 +462,19 @@ function GraduatedDesk({ auction, symbol }: { auction: AuctionV2; symbol: string
     );
   }
   return (
-    <section aria-label="Batch trading" className="p-4">
-      <h2 className="text-[14px] font-medium text-chrome">Batch trading</h2>
+    <section aria-label="Fair launch" className="p-4">
+      <h2 className="text-[14px] font-medium text-chrome">Fair launch</h2>
       <ProtectionNote market={market} />
-      <div role="tablist" aria-label="How to trade" className="mb-3 mt-3 grid grid-cols-2 rounded-lg bg-void/60 p-1">
-        {(
-          [
-            ["batch", "Batch order"],
-            ["intent", "Crux order"],
-          ] as const
-        ).map(([m, text]) => (
-          <button
-            key={m}
-            role="tab"
-            type="button"
-            aria-selected={mode === m}
-            onClick={() => setMode(m)}
-            className={`h-8 rounded-md text-[12.5px] transition-colors ${mode === m ? "bg-panel-2 text-chrome ring-1 ring-inset ring-signal/60" : "text-muted hover:text-chrome"}`}
-          >
-            {text}
-          </button>
-        ))}
-      </div>
+      <div className="mt-3" />
       {mode === "batch" ? <BatchOrderForm market={market} symbol={symbol} /> : <TradeForm auction={auction} symbol={symbol} />}
+      <button
+        type="button"
+        aria-expanded={mode === "batch"}
+        onClick={() => setMode((m) => (m === "batch" ? "intent" : "batch"))}
+        className="mt-3 text-[11.5px] text-dim transition-colors hover:text-chrome"
+      >
+        <span aria-hidden="true">⚙️</span> {mode === "batch" ? "Back to the simple buy" : "Advanced: join the batch straight from a wallet, or sell into it"}
+      </button>
     </section>
   );
 }
@@ -503,6 +529,14 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   // back into the account. Logged in, it's the default; the connected wallet stays one tap away.
   const crux = useCruxAccount();
   const [from, setFrom] = useState<"account" | "wallet">("account");
+  const [externalOpen, setExternalOpen] = useState(false);
+  /** After a buy from an external wallet, the next trade starts from the CRUX Account again. */
+  const backToAccount = useCallback(() => {
+    if (crux.loggedIn && crux.account) {
+      setFrom("account");
+      setExternalOpen(false);
+    }
+  }, [crux.loggedIn, crux.account]);
   const viaAccount = crux.loggedIn && crux.account !== null && from === "account";
   const accountTokens = useReadContract({
     address: market.token,
@@ -515,10 +549,10 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   // A buy can pay from any live cross-chain origin; its USDC balance is shown and compared in 6-decimal units.
   const fromOrigin = side === "buy" && payFrom !== "base" && payFrom !== "solana" && !viaAccount ? originByKey(payFrom) : null;
   // Pay from Solana: USDC on devnet, escrowed by crux_escrow and filled here on Base (SolanaIntentModal). Delivered to
-  // the connected Base wallet, else the Crux account.
+  // the CRUX Account, else the connected Base wallet.
   const viaSolana = side === "buy" && payFrom === "solana" && !viaAccount;
   const solana = useSolanaPayer();
-  const solanaPayee = address ?? crux.account ?? null;
+  const solanaPayee = crux.account ?? address ?? null;
   const [solanaRequest, setSolanaRequest] = useState<SolanaOrderRequest | null>(null);
   /** Solana payer and Base recipient both set: the ticket then validates like any other. */
   const solanaReady = viaSolana && solana.payer !== null && solanaPayee !== null;
@@ -576,7 +610,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   const blocked = !SETTLER_DEPLOYED
     ? "Crux orders aren't live in this build"
     : market.protected && side === "sell" && !viaAccount
-      ? "Sell in the batch directly (Batch order)"
+      ? "Sell into the batch under ⚙️ Advanced"
       : !market.reserves
       ? market.loading
         ? "Reading the pool…"
@@ -596,8 +630,10 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
         ? t("ticket.tooLarge")
         : overCap
           ? "Over your one-click cap"
-          : viaAccount
-            ? `${side === "buy" ? "Buy" : "Sell"} now · Crux account`
+          : market.protected && side === "buy" && (viaAccount || oneClickReady)
+            ? "Buy (Fair Launch)"
+            : viaAccount
+            ? `${side === "buy" ? "Buy" : "Sell"} now · CRUX Account`
             : viaSolana
               ? !solana.payer
                 ? t("ticket.connectSolana")
@@ -655,6 +691,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
       setOneClickOrder({ kind: "open", orderId });
       setAmount("");
       void oneClick.refresh();
+      backToAccount();
     } catch (e) {
       setOneClickOrder({ kind: "error", message: (e as Error).message.split("\n")[0] });
     }
@@ -804,46 +841,60 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
         {side === "buy" ? "USDC to spend" : `${symbol} to sell`}
       </label>
       <AmountField id={`${uid}-amt`} value={amount} onChange={setAmount} unit={side === "buy" ? "USDC" : symbol} />
-      {/* The Crux account is the default way to trade; a wallet is the secondary path. */}
+      {/* Account-first: the CRUX Account is the default; external wallets (any chain) are one tap away. */}
       {crux.loggedIn && crux.account ? (
-        viaAccount && (
-          <div className="-mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-signal/40 bg-signal/5 px-3 py-2 text-[11.5px]">
-            <span className="text-chrome">Crux account</span>
-            <span className="font-mono text-chrome/85">{crux.usdc !== null ? `$${fmtUsdc(crux.usdc)}` : "…"}</span>
-            <span className="text-dim">· no gas, no pop-up</span>
-            <a href="/account" className={`ml-auto ${crux.withdrawalAddress ? "text-dim" : "text-down"} hover:text-chrome`}>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={viaAccount}
+          onClick={() => {
+            setFrom("account");
+            setExternalOpen(false);
+            setAmount("");
+          }}
+          className={`-mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border px-3 py-2 text-left text-[11.5px] transition-colors ${
+            viaAccount ? "border-signal/60 bg-signal/5" : "border-line hover:border-line-2"
+          }`}
+        >
+          <span className="text-chrome">CRUX Account</span>
+          <span className="font-mono text-chrome/85">({crux.usdc !== null ? `$${fmtUsdc(crux.usdc)}` : "…"})</span>
+          <span className="text-dim">— Instant • 0 Gas</span>
+          {viaAccount && (
+            <a href="/account" onClick={(e) => e.stopPropagation()} className={`ml-auto ${crux.withdrawalAddress ? "text-dim" : "text-down"} hover:text-chrome`}>
               {crux.withdrawalAddress ? "Deposit / withdraw" : "Not protected yet"}
             </a>
-          </div>
-        )
+          )}
+        </button>
       ) : crux.setup.needed ? (
         <p className="-mt-0.5 rounded-lg border border-signal/40 bg-signal/5 px-3 py-2 text-[11.5px] leading-snug text-muted">
-          <span className="text-chrome">One step left:</span> create your Crux account (one account that trades and launches, address ending in 5afe).{" "}
+          <span className="text-chrome">One step left:</span> create your CRUX Account (one account that trades and launches, address ending in 5afe).{" "}
           <a href="/account" className="text-signal hover:underline">
             Create it
           </a>
         </p>
       ) : (
         <p className="-mt-0.5 rounded-lg border border-line px-3 py-2 text-[11.5px] leading-snug text-muted">
-          <span className="text-chrome">Trade from a Crux account:</span> deposit once from any chain, then trade with no gas or pop-ups.{" "}
+          <span className="text-chrome">CRUX Account:</span> deposit once from any chain, then trade instantly with 0 gas and no pop-ups.{" "}
           <button type="button" onClick={crux.login} className="text-signal hover:underline">
             Log in
           </button>
         </p>
       )}
-      {crux.loggedIn && crux.account && (
-        <button
-          type="button"
-          onClick={() => {
-            setFrom(viaAccount ? "wallet" : "account");
-            setAmount("");
-          }}
-          className="-mt-1 self-start text-[11px] text-dim underline decoration-line-2 underline-offset-2 transition-colors hover:text-chrome"
-        >
-          {viaAccount ? "Pay from a wallet instead" : "← Back to Crux account"}
-        </button>
-      )}
-      {side === "buy" && !viaAccount && (
+      <button
+        type="button"
+        aria-expanded={!viaAccount && (externalOpen || !(crux.loggedIn && crux.account))}
+        onClick={() => {
+          if (viaAccount) {
+            setFrom("wallet");
+            setExternalOpen(true);
+          } else setExternalOpen((v) => !v);
+          setAmount("");
+        }}
+        className="-mt-1 self-start text-[11px] text-dim transition-colors hover:text-chrome"
+      >
+        {side === "buy" ? "Or pay directly from external wallet" : "Or sell from an external wallet"} {!viaAccount && (externalOpen || !(crux.loggedIn && crux.account)) ? "▴" : "▾"}
+      </button>
+      {side === "buy" && !viaAccount && (externalOpen || !(crux.loggedIn && crux.account)) && (
         <PayFromPicker
           active={payFrom}
           onPick={(k) => {
@@ -889,9 +940,9 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
 
       {market.protected ? (
         <p className="text-[11px] leading-snug text-dim">
-          Route: your order → Crux, which joins the batch pool&apos;s next 60-second batch for you (everyone in it pays the same price) and delivers your share (less
-          the 0.3% spread) once it clears. Your signed minimum still holds; if the batch can&apos;t meet it, you&apos;re refunded after the
-          deadline.
+          Fair-launch protection: your order joins the next 60-second batch, where everyone pays the same price and bots get no
+          first-block edge. Your share (less the 0.3% spread) lands {viaAccount ? "in your CRUX Account" : "in your wallet"} when it
+          clears. Your signed minimum still holds; if the batch can&apos;t meet it, you&apos;re refunded after the deadline.
         </p>
       ) : (
       <p className="text-[11px] leading-snug text-dim">
@@ -939,9 +990,10 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
       </>
       )}
 
-      <IntentModal order={order} open={order !== null} onClose={() => setOrder(null)} />
+      <IntentModal order={order} open={order !== null} onClose={() => setOrder(null)} onPlaced={backToAccount} />
       <SolanaIntentModal
         request={solanaRequest}
+        onPlaced={backToAccount}
         onClose={() => {
           setSolanaRequest(null);
           setAmount("");
@@ -979,8 +1031,8 @@ export function ExecutionPanel({
 
   if (phase === "open") {
     return (
-      <section aria-label="Batch bid" className="p-4">
-        <h2 className="mb-3 text-[14px] font-medium text-chrome">Batch bid</h2>
+      <section aria-label="Fair launch" className="p-4">
+        <h2 className="mb-3 text-[14px] font-medium text-chrome">Fair launch</h2>
         <BidForm factory={factory} id={id} model={model} auction={auction} version={version} symbol={symbol} />
       </section>
     );

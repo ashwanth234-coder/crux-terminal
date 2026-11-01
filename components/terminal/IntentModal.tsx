@@ -155,7 +155,7 @@ function errorMessage(err: unknown) {
   return e.shortMessage ?? e.message?.split("\n")[0] ?? "Something went wrong";
 }
 
-export function IntentModal({ order, open, onClose }: { order: OrderDraft | null; open: boolean; onClose: () => void }) {
+export function IntentModal({ order, open, onClose, onPlaced }: { order: OrderDraft | null; open: boolean; onClose: () => void; onPlaced?: () => void }) {
   const config = useConfig();
   const { address, chainId, chain } = useConnection();
   const { mutateAsync: signTypedData } = useSignTypedData();
@@ -179,6 +179,14 @@ export function IntentModal({ order, open, onClose }: { order: OrderDraft | null
   // After openFor lands: the order id from its Open event, then its escrow until it settles or refunds.
   const opened = receipt.data?.status === "success" ? parseEventLogs({ abi: originSettlerAbi, eventName: "Open", logs: receipt.data.logs })[0] : undefined;
   const orderId = opened?.args.orderId;
+  // Told once the order is open on-chain (the ticket then resets to the CRUX Account for the next trade).
+  const placedRef = useRef(onPlaced);
+  useEffect(() => {
+    placedRef.current = onPlaced;
+  });
+  useEffect(() => {
+    if (orderId) placedRef.current?.();
+  }, [orderId]);
   const escrow = useReadContract({
     address: originSettler,
     abi: cruxSettlerAbi,

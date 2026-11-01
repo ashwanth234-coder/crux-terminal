@@ -55,6 +55,12 @@ type Form = {
   window: string;
 };
 
+/** The fair-launch choice on the form: how long the opening stays open (the first trading minutes are protected too). */
+const FAIR_LAUNCH_CHOICES = [
+  { seconds: 60, title: "60s Fast Launch", note: "A one-minute opening. For a launch your community is already waiting for." },
+  { seconds: 300, title: "5m Fair Launch", note: "Recommended. Five minutes for buyers to find it; everyone still pays one price." },
+] as const;
+
 const INITIAL: Form = {
   name: "",
   symbol: "",
@@ -184,6 +190,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
   const { openConnect } = useConnectModal();
 
   const [form, setForm] = useState<Form>(INITIAL);
+  const [protectionAdvanced, setProtectionAdvanced] = useState(false);
   // Logged in with a Crux account and launching on V7: the launch is signed by the login key and submitted by the relay,
   // with the account as creator (no gas, nothing needed on Base). The wallet stays one tap away.
   const crux = useCruxAccount();
@@ -705,11 +712,50 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             </div>
           )}
 
-          {/* V2: every launch is a uniform-price batch; the creator picks how long it stays open */}
+          {/* One concept for buyers: fair-launch protection. The creator picks how long the opening stays open. */}
           {LAUNCH_FACTORY && (
             <fieldset className="rounded-xl border border-line p-4">
-              <legend className="px-1 text-[13px] text-chrome">Batch window</legend>
-              <div role="radiogroup" aria-label="Batch window" className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <legend className="px-1 text-[13px] text-chrome">Fair-launch protection</legend>
+              <div role="radiogroup" aria-label="Fair-launch protection" className="mt-1 grid gap-2 sm:grid-cols-2">
+                {FAIR_LAUNCH_CHOICES.map((c) => {
+                  const active = form.window === String(c.seconds) && (LAUNCH_FACTORY!.version < 6 || form.antiSniper);
+                  return (
+                    <button
+                      key={c.seconds}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => {
+                        set("window", String(c.seconds));
+                        set("antiSniper", true);
+                      }}
+                      className={`rounded-lg border p-3 text-left transition-colors ${active ? "border-signal/70 bg-panel-2" : "border-line hover:border-line-2"}`}
+                    >
+                      <span className={`block text-[13px] ${active ? "text-chrome" : "text-muted"}`}>{c.title}</span>
+                      <span className="mt-1.5 block text-[11.5px] leading-snug text-dim">{c.note}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-3 text-[11.5px] leading-snug text-dim">
+                Everyone who buys before the countdown ends pays the same opening price, and the first trading minutes clear the same
+                way, so bots get no first-block edge. Enforced by the contract.
+              </p>
+              <button
+                type="button"
+                aria-expanded={protectionAdvanced}
+                onClick={() => setProtectionAdvanced((v) => !v)}
+                className="mt-2 text-[11.5px] text-dim transition-colors hover:text-chrome"
+              >
+                <span aria-hidden="true">⚙️</span> Advanced {protectionAdvanced ? "▴" : "▾"}
+              </button>
+            </fieldset>
+          )}
+
+          {LAUNCH_FACTORY && protectionAdvanced && (
+            <fieldset className="rounded-xl border border-line p-4">
+              <legend className="px-1 text-[13px] text-chrome">Opening length</legend>
+              <div role="radiogroup" aria-label="Opening length" className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {V2_WINDOWS.map((w) => {
                   const active = form.window === String(w.seconds);
                   return (
@@ -729,7 +775,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                 })}
               </div>
               <p className="mt-3 text-[11.5px] leading-snug text-dim">
-                Every bid in the window clears at one price, whatever its length. Longer windows give buyers time to find the launch.
+                Every buy in the opening clears at one price, whatever its length. Longer openings give buyers time to find the launch.
               </p>
             </fieldset>
           )}
@@ -761,14 +807,14 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                   );
                 })}
               </div>
-              <p className="mt-3 text-[11.5px] leading-snug text-dim">Fixed on-chain at launch: it can&apos;t be changed later, and buyers see it before they bid.</p>
+              <p className="mt-3 text-[11.5px] leading-snug text-dim">Fixed on-chain at launch: it can&apos;t be changed later, and buyers see it before they buy.</p>
             </fieldset>
           )}
 
-          {LAUNCH_FACTORY && LAUNCH_FACTORY.version >= 6 && (
+          {LAUNCH_FACTORY && LAUNCH_FACTORY.version >= 6 && protectionAdvanced && (
             <fieldset className="rounded-xl border border-line p-4">
-              <legend className="px-1 text-[13px] text-chrome">Anti-sniper launch</legend>
-              <div role="radiogroup" aria-label="Anti-sniper launch" className="mt-1 grid gap-2 sm:grid-cols-2">
+              <legend className="px-1 text-[13px] text-chrome">Protected first trading minutes</legend>
+              <div role="radiogroup" aria-label="Protected first trading minutes" className="mt-1 grid gap-2 sm:grid-cols-2">
                 {[
                   {
                     on: true,
@@ -796,7 +842,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                   );
                 })}
               </div>
-              <p className="mt-3 text-[11.5px] leading-snug text-dim">Fixed on-chain at launch: it can&apos;t be changed later, and buyers see it before they bid.</p>
+              <p className="mt-3 text-[11.5px] leading-snug text-dim">Fixed on-chain at launch: it can&apos;t be changed later, and buyers see it before they buy.</p>
             </fieldset>
           )}
 
