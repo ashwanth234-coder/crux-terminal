@@ -399,9 +399,9 @@ export function StandingOrderForm({
           <ul className="mt-1 divide-y divide-line rounded-lg border border-line">
             {open.slice(0, 12).map((o) => (
               <li key={o.id} className="flex items-center gap-2 px-2.5 py-1.5 text-[11.5px]">
-                <span className={o.side === "buy" ? "text-up" : "text-down"}>{o.kind}</span>
+                <span className={o.side === "buy" ? "text-up" : "text-down"}>{o.atOpen ? "buy at open" : o.kind}</span>
                 <span className="font-mono text-muted">
-                  {o.kind === "trailing stop" ? `${(o.trailBps ?? 0) / 100}% trail` : fmtTokenPrice(o.triggerUsd)}
+                  {o.kind === "trailing stop" ? `${(o.trailBps ?? 0) / 100}% trail` : `${o.atOpen ? "up to " : ""}${fmtTokenPrice(o.triggerUsd)}`}
                 </span>
                 <span className={`ml-auto rounded-[3px] border px-1 font-mono text-[9.5px] uppercase ${o.status === "open" ? "border-signal/50 text-signal" : "border-line text-dim"}`} title={o.note ?? undefined}>
                   {o.status}

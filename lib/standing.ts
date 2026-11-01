@@ -99,6 +99,8 @@ export type StandingView = {
   triggerUsd: number;
   trailBps: number | null;
   peak: number | null;
+  /** A buy at open: queued while the launch's opening auction ran, sent once it trades. */
+  atOpen?: boolean;
   group: Hex | null;
   nonce: string;
   expiry: number;

@@ -30,7 +30,8 @@ import { slippageFor, useTradeSettings } from "@/hooks/useTradeSettings";
 import { USDC_DECIMALS, fmtTokens, fmtUsdc, formatRemaining, launchError, type TxStep } from "@/lib/launch";
 import { fmtTokenPrice, launchCaip19 } from "@/lib/launchTrade";
 import { PRICE_DECIMALS, V3_TICK_STEP_PERCENT, parsePriceUsd, priceUsd, usesTicks, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
-import { placeStanding, standingFloor } from "@/lib/standing";
+import { cancelStanding, placeStanding, standingFloor, type StandingView } from "@/lib/standing";
+import { useStandingOrders } from "@/hooks/useStandingOrders";
 import { minReceived, sourceAsset, type OrderDraft, type Side } from "@/lib/order";
 import { placeOneClick } from "@/lib/session";
 import { SOLVER_MAX_IMPACT_PCT, bidRisk, tradeRisk } from "@/lib/risk";
@@ -285,8 +286,21 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
       lifetime: Math.max(0, opensAt - unixNow()) + AT_OPEN_GRACE_SECONDS,
     });
     setDone({
-      text: `Queued: $${fmtUsdc(quote)} from your CRUX Account buys ${symbol} in the first 60-second batches after the open, at the batch price, up to $${priceUsd(cap)} per token. Cancel it under Orders until then.`,
+      text: `Queued: $${fmtUsdc(quote)} from your CRUX Account buys ${symbol} in the first 60-second batches after the open, at the batch price, up to $${priceUsd(cap)} per token. You can cancel it below until then.`,
     });
+    standing.refresh();
+  };
+  // This launch's buys at open from the account: queued, sent, or ended, each cancellable while it waits.
+  const standing = useStandingOrders();
+  const queued = (standing.orders ?? []).filter((o) => o.atOpen && o.token.toLowerCase() === auction.token.toLowerCase());
+  const cancelQueued = async (o: StandingView) => {
+    if (!crux.sign || !crux.owner || !crux.account) return;
+    try {
+      await cancelStanding(crux.sign, crux.owner, crux.account, [BigInt(o.nonce)], []);
+      standing.refresh();
+    } catch (err) {
+      setError(launchError(err));
+    }
   };
 
   const submit = async () => {
@@ -446,6 +460,7 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
         <SubmitKey />
       </button>
       <Status busy={busy} error={error} done={done} />
+      {hasAccount && queued.length > 0 && <QueuedAtOpen orders={queued} onCancel={(o) => void cancelQueued(o)} />}
 
       <MobileDock>
         <div className="flex items-center gap-2">
@@ -462,6 +477,39 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
           </p>
         )}
       </MobileDock>
+    </div>
+  );
+}
+
+const QUEUED_STATUS: Record<StandingView["status"], string> = {
+  open: "waiting for the open",
+  submitted: "sent to the batch",
+  cancelled: "cancelled",
+  expired: "expired",
+  failed: "not sent",
+};
+
+/** The account's buys at open on this launch: what each will spend, its max price, where it stands. */
+function QueuedAtOpen({ orders, onCancel }: { orders: StandingView[]; onCancel: (o: StandingView) => void }) {
+  return (
+    <div>
+      <p className="text-[11px] text-dim">Your buys at open</p>
+      <ul className="mt-1 divide-y divide-line rounded-lg border border-line">
+        {orders.slice(0, 6).map((o) => (
+          <li key={o.id} className="flex items-center gap-2 px-2.5 py-1.5 text-[11.5px]">
+            <span className="font-mono text-chrome">${fmtUsdc(BigInt(o.amountIn))}</span>
+            <span className="font-mono text-muted">up to {fmtTokenPrice(o.triggerUsd)}</span>
+            <span className={`ml-auto text-[10.5px] ${o.status === "open" ? "text-signal" : "text-dim"}`} title={o.note ?? undefined}>
+              {QUEUED_STATUS[o.status]}
+            </span>
+            {o.status === "open" && (
+              <button type="button" onClick={() => onCancel(o)} aria-label="Cancel this buy at open" className="text-dim hover:text-down">
+                ✕
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
