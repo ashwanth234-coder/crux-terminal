@@ -51,18 +51,33 @@ const ORIGINS = CROSS_CHAIN_ORIGINS.filter((o): o is Origin => o.depositSettler 
 /** Solana devnet: USDC escrowed by crux_escrow, the account as payee and Base test USDC as the output (SolanaIntentModal). */
 const SOLANA = "solana";
 const SOLANA_NAME = "Solana devnet";
-const CHOICES: { key: string; name: string }[] = [...ORIGINS, { key: SOLANA, name: SOLANA_NAME }];
+/** Base Sepolia: a plain USDC transfer from the wallet to the account (the account lives there), no fee. */
+const BASE = "base";
+const BASE_NAME = "Base Sepolia";
+const CHOICES: { key: string; name: string }[] = [{ key: BASE, name: BASE_NAME }, ...ORIGINS, { key: SOLANA, name: SOLANA_NAME }];
+const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
 type Step = { kind: "idle" } | { kind: "busy"; label: string } | { kind: "opened"; origin: Origin; hash: `0x${string}` } | { kind: "error"; message: string };
 
 /**
- * Deposit test USDC from another chain into the Crux account on Base: the wallet escrows it on Arbitrum Sepolia,
+ * Every way into the Crux account, in one box: pick the chain, enter the amount, Deposit. From Base Sepolia it's one
+ * USDC transfer from the wallet (the panel's `base.deposit`), and the account's address is there to send to directly.
+ * From another chain the wallet escrows test USDC on Arbitrum Sepolia,
  * Ethereum Sepolia or BSC testnet in CruxCrossChainSettlerV2, naming the account as recipient; the Crux solver pays
  * Base test USDC into the account (1:1 less its 0.3% spread) and is repaid there once a Hyperlane proof of that payment
  * lands. Unfilled, the wallet can refund 6 hours after the deadline. From Solana devnet the same deposit is a crux_escrow
  * order paying Base test USDC to the account, signed in a Solana wallet.
  */
-export function CrossChainDeposit({ account, onOpened }: { account: Address; onOpened: () => void }) {
+export function CrossChainDeposit({
+  account,
+  onOpened,
+  base,
+}: {
+  account: Address;
+  onOpened: () => void;
+  /** Base Sepolia: the connected wallet's test USDC, and the transfer into the account (resolves once it lands). */
+  base: { balance: bigint | undefined; busy: boolean; deposit: (units: bigint) => Promise<void> };
+}) {
   const config = useConfig();
   const { address: wallet } = useConnection();
   const approveExact = useExactApproval();
@@ -70,8 +85,10 @@ export function CrossChainDeposit({ account, onOpened }: { account: Address; onO
   const [key, setKey] = useState(CHOICES[0]?.key);
   const [amount, setAmount] = useState("");
   const [step, setStep] = useState<Step>({ kind: "idle" });
+  const [copied, setCopied] = useState(false);
   const origin = ORIGINS.find((o) => o.key === key) ?? null;
   const fromSolana = key === SOLANA;
+  const fromBase = key === BASE;
   const solana = useSolanaPayer();
   const [solanaRequest, setSolanaRequest] = useState<SolanaOrderRequest | null>(null);
 
@@ -84,27 +101,8 @@ export function CrossChainDeposit({ account, onOpened }: { account: Address; onO
     query: { enabled: Boolean(wallet && origin), refetchInterval: 20_000 },
   });
 
-  if (!origin && !fromSolana) return null;
-  // Before a wallet is connected: which chains it can come from, and the one step that unlocks it.
-  if (!wallet && !fromSolana) {
-    return (
-      <div className="mt-4 border-t border-line pt-4">
-        <p className="text-[12px] text-dim">Deposit from another chain</p>
-        <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
-          Pay test USDC on {ORIGINS.map((o) => o.name).join(", ").replace(/, ([^,]*)$/, " or $1")} from your wallet and Crux delivers it here on
-          Base, no bridge.{" "}
-          <button type="button" onClick={openConnect} className="text-chrome underline decoration-line-2 underline-offset-2 hover:text-bright">
-            Connect a wallet
-          </button>{" "}
-          to start, or{" "}
-          <button type="button" onClick={() => setKey(SOLANA)} className="text-chrome underline decoration-line-2 underline-offset-2 hover:text-bright">
-            deposit from {SOLANA_NAME}
-          </button>
-          .
-        </p>
-      </div>
-    );
-  }
+  // An EVM chain needs the wallet connected; Solana connects its own wallet in the review step.
+  const needsWallet = !wallet && !fromSolana;
   const decimals = origin ? origin.decimals : 6;
   const units = (() => {
     try {
@@ -114,9 +112,9 @@ export function CrossChainDeposit({ account, onOpened }: { account: Address; onO
       return null;
     }
   })();
-  const held = fromSolana ? (solana.usdc ?? undefined) : originBalance.data;
+  const held = fromBase ? base.balance : fromSolana ? (solana.usdc ?? undefined) : originBalance.data;
   const over = units !== null && held !== undefined && units > held;
-  const busy = step.kind === "busy";
+  const busy = step.kind === "busy" || (fromBase && base.busy);
 
   /** Solana: the review modal connects the wallet if needed, checks USDC and SOL, and escrows the order. */
   const depositFromSolana = (units: bigint) => {
@@ -135,6 +133,11 @@ export function CrossChainDeposit({ account, onOpened }: { account: Address; onO
   const deposit = async () => {
     if (!units) return;
     if (fromSolana) return depositFromSolana(units);
+    if (fromBase) {
+      await base.deposit(units);
+      setAmount("");
+      return;
+    }
     const o = origin;
     if (!o || !wallet) return;
     try {
@@ -202,8 +205,8 @@ export function CrossChainDeposit({ account, onOpened }: { account: Address; onO
   };
 
   return (
-    <div className="mt-4 border-t border-line pt-4">
-      <p className="text-[12px] text-dim">Deposit from another chain</p>
+    <div>
+      <p className="text-[12px] text-dim">Deposit test USDC from</p>
       <div role="radiogroup" aria-label="Deposit from" className="mt-2 flex flex-wrap gap-1.5 text-[11.5px]">
         {CHOICES.map((o) => (
           <button
@@ -222,12 +225,17 @@ export function CrossChainDeposit({ account, onOpened }: { account: Address; onO
           </button>
         ))}
       </div>
+      {needsWallet ? (
+        <button type="button" onClick={openConnect} className={buttonClass("outline", "sm", "mt-2")}>
+          Connect a wallet to deposit from {fromBase ? BASE_NAME : origin?.name}
+        </button>
+      ) : (
       <div className="mt-2 flex items-center gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-line bg-void/60 px-3 py-2 focus-within:border-line-2">
           <span className="font-mono text-dim">$</span>
-          <label htmlFor="xchain-deposit" className="sr-only">Test USDC to deposit from {origin?.name ?? SOLANA_NAME}</label>
+          <label htmlFor="deposit-amount" className="sr-only">Test USDC to deposit from {fromBase ? BASE_NAME : (origin?.name ?? SOLANA_NAME)}</label>
           <input
-            id="xchain-deposit"
+            id="deposit-amount"
             inputMode="decimal"
             autoComplete="off"
             placeholder="0.00"
@@ -240,7 +248,16 @@ export function CrossChainDeposit({ account, onOpened }: { account: Address; onO
           {busy ? "Depositing…" : "Deposit"}
         </button>
       </div>
-      {origin ? (
+      )}
+      {fromBase ? (
+        wallet && (
+          <p className="mt-1.5 text-[11.5px] leading-relaxed text-dim">
+            {over ? "More than your wallet holds. " : ""}From {short(wallet)} on Base Sepolia
+            {base.balance !== undefined ? ` · wallet has $${Number(formatUnits(base.balance, 6)).toFixed(2)}` : ""}. Arrives at once, no fee: your
+            wallet asks you to confirm one transfer.
+          </p>
+        )
+      ) : origin ? (
         <p className="mt-1.5 text-[11.5px] leading-relaxed text-dim">
           {over ? "More than your wallet holds there. " : ""}
           Wallet on {origin.name}: {originBalance.data !== undefined ? `$${Number(formatUnits(originBalance.data, origin.decimals)).toFixed(2)}` : "…"} test USDC (free at{" "}
@@ -267,6 +284,27 @@ export function CrossChainDeposit({ account, onOpened }: { account: Address; onO
           ). Crux pays it into your account on Base within a minute or two; your balance above updates by itself. If it isn&apos;t
           filled, you can refund it on {step.origin.name} 6 hours after its deadline.
         </p>
+      )}
+      {fromBase && (
+        <div className="mt-3 rounded-lg border border-line px-3 py-2.5">
+          <p className="text-[11.5px] text-dim">Or send test USDC on Base Sepolia straight to your account</p>
+          <div className="mt-1.5 flex items-center gap-2">
+            <code className="min-w-0 flex-1 break-all font-mono text-[12px] text-chrome">{account}</code>
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard?.writeText(account).then(() => {
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1500);
+                });
+              }}
+              className={buttonClass("outline", "sm", "shrink-0")}
+            >
+              {copied ? "Copied" : "Copy"}
+            </button>
+          </div>
+          <p className="mt-1.5 text-[11px] leading-snug text-signal">Base Sepolia only: USDC sent to this address on any other chain doesn&apos;t reach your account. Use the chain picker above instead.</p>
+        </div>
       )}
       <SolanaIntentModal
         request={solanaRequest}

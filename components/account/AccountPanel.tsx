@@ -56,8 +56,6 @@ export function AccountPanel() {
   const [to, setTo] = useState("");
   const [changing, setChanging] = useState(false);
   const [amount, setAmount] = useState("");
-  const [copied, setCopied] = useState(false);
-  const [depositAmount, setDepositAmount] = useState("");
   // The connected wallet's test USDC, for depositing straight from it (no token import in the wallet needed).
   const walletUsdc = useReadContract({
     chainId: TESTNET.id,
@@ -205,18 +203,8 @@ export function AccountPanel() {
   })();
   const overBalance = units !== null && a.usdc !== null && units > a.usdc;
   const isBoundWallet = Boolean(wallet && bound && getAddress(wallet) === bound);
-  const depositUnits = (() => {
-    try {
-      const v = depositAmount ? parseUnits(depositAmount, 6) : null;
-      return v !== null && v > BigInt(0) ? v : null;
-    } catch {
-      return null;
-    }
-  })();
-  const overWallet = depositUnits !== null && walletUsdc.data !== undefined && depositUnits > walletUsdc.data;
-
-  /** One ordinary USDC transfer from the connected wallet to the account (the wallet asks to confirm it). */
-  const deposit = () =>
+  /** Base Sepolia: one USDC transfer from the connected wallet into the account (the deposit box's Base choice). */
+  const deposit = (units: bigint) =>
     run(
       "deposit",
       async () => {
@@ -225,14 +213,13 @@ export function AccountPanel() {
           address: TESTNET_USDC,
           abi: erc20Abi,
           functionName: "transfer",
-          args: [account, depositUnits!],
+          args: [account, units],
           chainId: TESTNET.id,
         });
         await waitForTransactionReceipt(config, { hash, chainId: TESTNET.id });
-        setDepositAmount("");
         void walletUsdc.refetch();
       },
-      `Deposited $${fmtUsdc(depositUnits ?? BigInt(0))} test USDC from your wallet.`,
+      `Deposited $${fmtUsdc(units)} test USDC from your wallet.`,
     );
 
   const sweep = () =>
@@ -322,57 +309,13 @@ export function AccountPanel() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card title="Deposit" aside={<span className="font-mono text-[13px] text-chrome">{a.usdc !== null ? `$${fmtUsdc(a.usdc)}` : "…"} test USDC</span>}>
-          <p className="text-[12px] text-dim">Your Crux account address</p>
-          <div className="mt-1.5 flex items-center gap-2">
-            <code className="min-w-0 flex-1 break-all rounded-lg border border-line bg-void/60 px-3 py-2.5 font-mono text-[12.5px] text-chrome">{account}</code>
-            <button
-              type="button"
-              onClick={() => {
-                void navigator.clipboard?.writeText(account).then(() => {
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 1500);
-                });
-              }}
-              className={buttonClass("outline", "sm", "shrink-0")}
-            >
-              {copied ? "Copied" : "Copy"}
-            </button>
-          </div>
-          <div className="mt-4 rounded-lg border border-signal/50 bg-signal/[0.05] px-4 py-3">
-            <p className="text-[12.5px] font-semibold uppercase tracking-[0.12em] text-signal">Base network only</p>
-            <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
-              Send test USDC straight to this address on <span className="text-chrome">Base Sepolia</span> only: the account lives and trades
-              there. From another chain, use <span className="text-chrome">Deposit from another chain</span> below.
-            </p>
-          </div>
-          <div className="mt-4 border-t border-line pt-4">
-            <p className="text-[12px] text-dim">Deposit from your wallet</p>
-            {wallet ? (
+          {/* One box for every chain: Base Sepolia (a transfer, or the address to send to) and the cross-chain ones. */}
+          <CrossChainDeposit account={account} onOpened={a.refresh} base={{ balance: walletUsdc.data, busy: busy === "deposit", deposit }} />
+          <div>
+            {wallet && (
               <>
-                <div className="mt-2 flex items-center gap-2">
-                  <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-line bg-void/60 px-3 py-2 focus-within:border-line-2">
-                    <span className="font-mono text-dim">$</span>
-                    <label htmlFor="deposit-amount" className="sr-only">Test USDC to deposit</label>
-                    <input
-                      id="deposit-amount"
-                      inputMode="decimal"
-                      autoComplete="off"
-                      placeholder="0.00"
-                      value={depositAmount}
-                      onChange={(e) => setDepositAmount(e.target.value.replace(/[^0-9.]/g, ""))}
-                      className="w-full min-w-0 bg-transparent font-mono text-[15px] text-chrome outline-none placeholder:text-dim"
-                    />
-                  </div>
-                  <button type="button" disabled={!depositUnits || overWallet || busy !== null} onClick={deposit} className={buttonClass("primary", "sm", "shrink-0 font-semibold")}>
-                    {busy === "deposit" ? "Depositing…" : "Deposit"}
-                  </button>
-                </div>
-                <p className="mt-1.5 text-[11.5px] text-dim">
-                  {overWallet ? "More than your wallet holds. " : ""}From {short(wallet)} on Base Sepolia
-                  {walletUsdc.data !== undefined ? ` · wallet has $${fmtUsdc(walletUsdc.data)}` : ""}. Your wallet asks you to confirm one transfer.
-                </p>
                 {walletTokens.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4">
                     {walletTokens.map((h) => (
                       <button
                         key={h.launch.v2!.token}
@@ -397,12 +340,7 @@ export function AccountPanel() {
                   </div>
                 )}
               </>
-            ) : (
-              <button type="button" onClick={openConnect} className={buttonClass("outline", "sm", "mt-2")}>
-                Connect a wallet to deposit from it
-              </button>
             )}
-            <CrossChainDeposit account={account} onOpened={a.refresh} />
           </div>
           {!a.deployed && (
             <p className="mt-3 text-[11.5px] leading-relaxed text-dim">
