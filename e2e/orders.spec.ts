@@ -70,6 +70,33 @@ test.describe("fair-launch opening", () => {
   });
 });
 
+test.describe("fair-launch opening from the CRUX Account", () => {
+  test("the account queues a buy at open: a standing buy whose trigger is the automatic max price", async ({ page }) => {
+    const posted = await open(page, "open", { account: true });
+    const panel = page.getByRole("region", { name: "Fair launch" });
+    await expect(panel.getByRole("radio", { name: "CRUX Account" })).toHaveAttribute("aria-checked", "true");
+    await panel.getByLabel("Amount in USDC").fill("25");
+    await panel.getByRole("button", { name: /^Buy at open · CRUX Account/ }).first().click();
+    await expect.poll(() => posted.filter((p) => p.path === "/v1/standing").length).toBe(1);
+    const { order } = posted.find((p) => p.path === "/v1/standing")!.body as { order: Record<string, string | number> };
+    expect(Number(order.kind)).toBe(1);
+    expect(String(order.amountIn)).toBe(String(25e6));
+    // 10x projected, from the factory's 24-decimal price units to the order's 18.
+    expect(Number(order.triggerPrice) / Number((PROJECTED * BigInt(10)) / BigInt(10) ** BigInt(6))).toBeCloseTo(1, 6);
+    expect(await page.evaluate(() => window.__benchOrders!.length)).toBe(0);
+    await expect(panel.getByText(/Queued: \$25\.00 from your CRUX Account/)).toBeVisible();
+  });
+
+  test("the wallet is one tap away and pays into the opening auction as before", async ({ page }) => {
+    await open(page, "open", { account: true });
+    const panel = page.getByRole("region", { name: "Fair launch" });
+    await panel.getByRole("radio", { name: "Wallet" }).click();
+    await panel.getByLabel("Amount in USDC").fill("25");
+    await panel.getByRole("button", { name: /^Buy \(Fair Launch\)/ }).first().click();
+    await expect.poll(() => page.evaluate(() => window.__benchOrders!.length)).toBe(1);
+  });
+});
+
 test.describe("trading from the CRUX Account", () => {
   test("the CRUX Account is the default; external wallets are one tap away and back", async ({ page }) => {
     await open(page, "trade", { account: true });

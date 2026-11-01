@@ -29,7 +29,8 @@ import { useOrderRequests, type ChartOrderKind, type ChartOrderRequest } from "@
 import { slippageFor, useTradeSettings } from "@/hooks/useTradeSettings";
 import { USDC_DECIMALS, fmtTokens, fmtUsdc, formatRemaining, launchError, type TxStep } from "@/lib/launch";
 import { fmtTokenPrice, launchCaip19 } from "@/lib/launchTrade";
-import { V3_TICK_STEP_PERCENT, parsePriceUsd, priceUsd, usesTicks, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
+import { PRICE_DECIMALS, V3_TICK_STEP_PERCENT, parsePriceUsd, priceUsd, usesTicks, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
+import { placeStanding, standingFloor } from "@/lib/standing";
 import { minReceived, sourceAsset, type OrderDraft, type Side } from "@/lib/order";
 import { placeOneClick } from "@/lib/session";
 import { SOLVER_MAX_IMPACT_PCT, bidRisk, tradeRisk } from "@/lib/risk";
@@ -163,6 +164,11 @@ type Busy = TxStep | null;
 
 /** The automatic max price of a fair-launch buy: this many times today's projected price (or the floor, if higher). */
 const AUTO_CAP_MULTIPLE = BigInt(10);
+/** A buy at open waits this long past the opening for the launch to trade, then expires unspent. */
+const AT_OPEN_GRACE_SECONDS = 2 * 3_600;
+/** Crux launch tokens (CruxToken) have 18 decimals. */
+const LAUNCH_DECIMALS = 18;
+const unixNow = () => Math.floor(Date.now() / 1000);
 
 function BidForm({ factory, id, model, auction, version, symbol }: { factory: Address; id: string; model: LaunchV2Model; auction: AuctionV2; version: BatchVersion; symbol: string }) {
   const uid = useId();
@@ -174,6 +180,13 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ text: string; hash?: Hex } | null>(null);
+  // Account first: a logged-in CRUX Account queues a buy at open (the opening auction itself takes wallets only), filled
+  // in the first 60-second batches after the open at the batch price, up to the same max price. No gas, no pop-ups.
+  const crux = useCruxAccount();
+  const trade = useTradeSettings();
+  const hasAccount = crux.loggedIn && crux.account !== null;
+  const [payWith, setPayWith] = useState<"account" | "wallet">("account");
+  const viaAccount = hasAccount && payWith === "account";
 
   const parsed = parse(amount, USDC_DECIMALS);
   const rawLimit = limitOn ? parsePriceUsd(limit) : null;
@@ -193,12 +206,13 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
   const basis = model.indicativePrice !== null && model.indicativePrice > auction.floorPrice ? model.indicativePrice : auction.floorPrice;
   const autoCap = basis * AUTO_CAP_MULTIPLE;
 
-  const capLeft = model.maxDeposit !== null ? (model.maxDeposit > model.myBid.quote ? model.maxDeposit - model.myBid.quote : BigInt(0)) : null;
-  const balance = model.usdcBalance;
+  // The wallet cap is the auction's; an account's buy at open joins the trading batches, which have none.
+  const capLeft = viaAccount ? null : model.maxDeposit !== null ? (model.maxDeposit > model.myBid.quote ? model.maxDeposit - model.myBid.quote : BigInt(0)) : null;
+  const balance = viaAccount ? crux.usdc : model.usdcBalance;
   const maxBid = balance === null ? null : capLeft !== null && capLeft < balance ? capLeft : balance;
   const overBalance = parsed !== null && balance !== null && parsed > balance;
   const overCap = parsed !== null && capLeft !== null && parsed > capLeft;
-  const needsApproval = parsed !== null && model.allowance !== null && parsed > model.allowance;
+  const needsApproval = !viaAccount && parsed !== null && model.allowance !== null && parsed > model.allowance;
 
   const risk = parsed
     ? bidRisk({
@@ -245,7 +259,35 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
     : [];
 
   const disabled = !parsed || overBalance || overCap || limitTooLow || (limitOn && !effectiveLimit) || busy !== null;
-  const label = overBalance ? "Not enough test USDC" : overCap ? "Over this wallet's cap" : needsApproval ? "Approve & buy (Fair Launch)" : "Buy (Fair Launch)";
+  const label = overBalance
+    ? `Not enough test USDC${viaAccount ? " in your account" : ""}`
+    : overCap
+      ? "Over this wallet's cap"
+      : viaAccount
+        ? "Buy at open · CRUX Account"
+        : needsApproval
+          ? "Approve & buy (Fair Launch)"
+          : "Buy (Fair Launch)";
+
+  /** The account's buy at open: a buy-the-dip standing order whose trigger is the max price, kept by the Crux keeper. */
+  const queueAtOpen = async (quote: bigint, cap: bigint) => {
+    if (!crux.sign || !crux.owner || !crux.account) return;
+    const capUsd = Number(formatUnits(cap, PRICE_DECIMALS));
+    const opensAt = auction.startTime + auction.batchWindow;
+    setBusy({ label: "Signing your buy at open…" });
+    await placeStanding(crux.sign, crux.owner, crux.account, {
+      kind: "dip",
+      tokenIn: TESTNET_USDC,
+      amountIn: quote,
+      tokenOut: launchCaip19(auction.token),
+      minAmountOut: standingFloor("buy", quote, capUsd, LAUNCH_DECIMALS, slippageFor(trade, "buy")),
+      triggerUsd: capUsd,
+      lifetime: Math.max(0, opensAt - unixNow()) + AT_OPEN_GRACE_SECONDS,
+    });
+    setDone({
+      text: `Queued: $${fmtUsdc(quote)} from your CRUX Account buys ${symbol} in the first 60-second batches after the open, at the batch price, up to $${priceUsd(cap)} per token. Cancel it under Orders until then.`,
+    });
+  };
 
   const submit = async () => {
     if (disabled || !parsed) return;
@@ -253,6 +295,11 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
     setDone(null);
     try {
       const cap = limitOn && rawLimit ? rawLimit : autoCap;
+      if (viaAccount) {
+        await queueAtOpen(parsed, cap);
+        setAmount("");
+        return;
+      }
       const hash = await model.deposit(parsed, cap, setBusy);
       setDone({
         text: `You're in: $${fmtUsdc(parsed)} at the fair-launch price (up to $${priceUsd(cap)} per token; refunded in full if it opens higher).`,
@@ -278,10 +325,10 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
   ];
   useExecutionHotkeys({
     presets: presets.map((p) => () => p.value && pick(p.value)),
-    onSubmit: () => (model.account ? void submit() : model.connect()),
+    onSubmit: () => (viaAccount || model.account ? void submit() : model.connect()),
   });
 
-  if (!model.account) {
+  if (!viaAccount && !model.account) {
     return (
       <button type="button" onClick={model.connect} className={buttonClass("primary", "md", "w-full rounded-xl font-semibold")}>
         Connect wallet to buy
@@ -291,13 +338,30 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
 
   return (
     <div className="flex flex-col gap-3">
+      {hasAccount && (
+        <div role="radiogroup" aria-label="Pay from" className="flex gap-1 text-[11.5px]">
+          {(["account", "wallet"] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              role="radio"
+              aria-checked={payWith === k}
+              onClick={() => setPayWith(k)}
+              className={`h-7 flex-1 rounded-[4px] border transition-colors ${payWith === k ? "border-signal text-signal" : "border-line-2 text-muted hover:text-chrome"}`}
+            >
+              {k === "account" ? "CRUX Account" : "Wallet"}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="flex items-baseline justify-between text-[11.5px] text-muted">
-        <span>Paying with: Base Sepolia test USDC</span>
+        <span>Paying with: {viaAccount ? "your CRUX Account's test USDC" : "Base Sepolia test USDC"}</span>
         <span className="font-mono text-chrome/80">{balance !== null ? `$${fmtUsdc(balance)}` : "…"}</span>
       </div>
       <p className="-mt-2 text-[11px] text-dim">
-        The opening takes payment from your wallet for now. Your CRUX Account (no gas, no pop-ups) joins from the first
-        trading batches, a minute after the open; or pay from a wallet on {ORIGIN_NAMES} then.
+        {viaAccount
+          ? "Buy at open: your CRUX Account buys in the first 60-second batches after the open, at the batch price everyone in it pays, never above your max price. No gas, no pop-ups; unspent, it expires 2 hours after the open."
+          : `The opening auction takes payment from a wallet on Base. A CRUX Account (no gas, no pop-ups) can queue a buy at open instead; or pay from a wallet on ${ORIGIN_NAMES} once trading starts.`}
       </p>
 
       <label htmlFor={`${uid}-amt`} className="-mb-2 text-[11px] text-muted">
@@ -371,7 +435,11 @@ function BidForm({ factory, id, model, auction, version, symbol }: { factory: Ad
           {rows.length > 0 && <RiskPreview rows={rows} />}
         </div>
       )}
-      <ProtectionRow>Fair-launch protection: everyone who buys before the countdown ends pays the same opening price. Bots get no first-block edge.</ProtectionRow>
+      <ProtectionRow>
+        {viaAccount
+          ? "Fair-launch protection: the first trades after the open clear in 60-second batches at one price each. Bots get no first-block edge."
+          : "Fair-launch protection: everyone who buys before the countdown ends pays the same opening price. Bots get no first-block edge."}
+      </ProtectionRow>
 
       <button type="button" disabled={disabled} onClick={() => void submit()} className={buttonClass("buy", "md", "w-full rounded-xl font-semibold max-lg:hidden")}>
         {label} <ArrowUpRight />
