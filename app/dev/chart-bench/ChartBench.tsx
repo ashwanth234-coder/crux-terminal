@@ -53,6 +53,8 @@ declare global {
   interface Window {
     __bench?: {
       trades(): number;
+      /** The token's transfer list (the holder list's source), as the page holds it. */
+      transfers(): number;
       append(n: number): void;
       stream(perSecond: number): void;
       reset(): void;
@@ -88,6 +90,8 @@ export function ChartBench() {
     const key = ["pool-swaps", PAIR];
     const scan = (list: PoolTrade[]): LogScan<PoolTrade> => ({ items: list, floor: BigInt(0), scannedTo: SCANNED_TO, truncated: false, windowBlocks: SCANNED_TO });
     qc.setQueryData(key, scan(items));
+    // An empty transfer list read up to "now", so the page doesn't scan the chain for this made-up token.
+    qc.setQueryData(["token-transfers", TOKEN], { items: [], floor: BigInt(0), scannedTo: SCANNED_TO, truncated: false, windowBlocks: SCANNED_TO });
 
     const stats: Stats = { frames: [], longTasks: [] };
     let last = performance.now();
@@ -128,6 +132,7 @@ export function ChartBench() {
     const pct = (sorted: number[], p: number) => (sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] : 0);
     window.__bench = {
       trades: () => qc.getQueryData<LogScan<PoolTrade>>(key)?.items.length ?? 0,
+      transfers: () => qc.getQueryData<LogScan<PoolTrade>>(["token-transfers", TOKEN])?.items.length ?? 0,
       append,
       stream,
       reset: () => {

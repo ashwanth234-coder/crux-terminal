@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
-import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { zeroAddress, type Address } from "viem";
-import { feedSocket, type FeedFrame, type FeedStatus, type FeedTrade } from "@/lib/feed";
-import { pollInterval, scanLogs, tracked, type LogScan } from "@/lib/logs";
+import type { FeedFrame, FeedTrade } from "@/lib/feed";
+import { mergeIntoScan, pollInterval, scanLogs, tracked, type LogScan } from "@/lib/logs";
+import { useFeedJoin } from "@/hooks/useFeed";
 import { poolTradeReader, readBatchPool, type PoolTrade } from "@/lib/poolTrades";
 import { watchLogsOf } from "@/lib/stream";
 import { loadHistory } from "@/lib/history";
@@ -19,93 +20,9 @@ const newestFirst = (scan: LogScan<PoolTrade>) => {
   return v;
 };
 
-const keyOf = (t: { txHash: string; logIndex: number }) => `${t.txHash}:${t.logIndex}`;
 const fromFeed = (t: FeedTrade): PoolTrade => ({ ...t, usdc: BigInt(t.usdc), tokens: BigInt(t.tokens), blockNumber: BigInt(t.blockNumber) });
-
-/** Adds feed trades to a scan and drops a reorg's removed ones. Returns the scan itself when nothing changed. */
-function merge(scan: LogScan<PoolTrade>, trades: FeedTrade[], removed: string[] = []): LogScan<PoolTrade> {
-  const gone = new Set(removed);
-  let items = gone.size ? scan.items.filter((t) => !gone.has(keyOf(t))) : scan.items;
-  const incoming = trades.map(fromFeed);
-  // Held trades from the oldest incoming block on (items are oldest first): the only ones an incoming trade can repeat.
-  const oldest = incoming.reduce((m, t) => (t.blockNumber < m ? t.blockNumber : m), incoming[0]?.blockNumber ?? BigInt(0));
-  let from = items.length;
-  while (from > 0 && items[from - 1].blockNumber >= oldest) from--;
-  const have = new Set(items.slice(from).map(keyOf));
-  const fresh = incoming.filter((t) => !have.has(keyOf(t)));
-  if (fresh.length === 0 && items === scan.items) return scan;
-  if (fresh.length) {
-    const last = items.at(-1);
-    items = [...items, ...fresh];
-    const ordered = (a: PoolTrade, b: PoolTrade) => (a.blockNumber === b.blockNumber ? a.logIndex - b.logIndex : a.blockNumber < b.blockNumber ? -1 : 1);
-    if (last && fresh.some((t) => ordered(t, last) < 0)) items.sort(ordered);
-  }
-  return { ...scan, items };
-}
-
-/**
- * One feed subscription per pool, however many components read its trades: each frame's new trades are added to the
- * pool's trade list, a reorg's dropped ones removed, and a gap (a long disconnect) reloads it. Frames that arrive
- * before the list's first read wait for it.
- */
-const feeds = new Map<string, { refs: number; stop: () => void }>();
-const statuses = new Map<string, FeedStatus>();
-const listeners = new Map<string, Set<() => void>>();
+/** Feed frames that arrived before a pool's trade list was first read (they're added once it is). */
 const waiting = new Map<string, FeedFrame[]>();
-
-function setStatus(k: string, s: FeedStatus) {
-  statuses.set(k, s);
-  listeners.get(k)?.forEach((l) => l());
-}
-
-function onFrame(qc: QueryClient, pair: Address, f: FeedFrame) {
-  const key = ["pool-swaps", pair];
-  const scan = qc.getQueryData<LogScan<PoolTrade>>(key);
-  if (!scan) {
-    waiting.set(pair.toLowerCase(), [...(waiting.get(pair.toLowerCase()) ?? []), f]);
-    return;
-  }
-  if (f.gap) void qc.refetchQueries({ queryKey: key });
-  const next = merge(scan, f.trades, f.removed);
-  if (next !== scan) qc.setQueryData(key, next);
-}
-
-function joinFeed(qc: QueryClient, pair: Address): () => void {
-  const k = pair.toLowerCase();
-  let entry = feeds.get(k);
-  if (!entry) {
-    const stop = feedSocket().subscribe({
-      pair,
-      // Daily candles, the lightest subscription: it's here for the trades.
-      interval: 86_400,
-      since: () => Math.floor(Date.now() / 1000) - 86_400,
-      onFrame: (f) => onFrame(qc, pair, f),
-      onStatus: (s) => setStatus(k, s),
-    });
-    feeds.set(k, (entry = { refs: 0, stop }));
-  }
-  entry.refs++;
-  return () => {
-    if (--entry.refs > 0) return;
-    entry.stop();
-    feeds.delete(k);
-    statuses.delete(k);
-    waiting.delete(k);
-  };
-}
-
-function useFeedStatus(pair: Address): FeedStatus {
-  const k = pair.toLowerCase();
-  return useSyncExternalStore(
-    (l) => {
-      if (!listeners.has(k)) listeners.set(k, new Set());
-      listeners.get(k)!.add(l);
-      return () => listeners.get(k)?.delete(l);
-    },
-    () => statuses.get(k) ?? "connecting",
-    () => "connecting" as FeedStatus,
-  );
-}
 
 /**
  * Every trade on a graduated launch since graduation, newest first: swaps on its locked Uniswap V2 pool, and for a
@@ -119,8 +36,18 @@ export function usePoolSwaps(pair: Address, settledAt: number, enabled: boolean,
   const pollId = queryKey.join(":");
   const qc = useQueryClient();
   const on = enabled && pair !== zeroAddress;
-  useEffect(() => (on ? joinFeed(qc, pair) : undefined), [on, pair, qc]);
-  const live = useFeedStatus(pair) === "live";
+  // New trades from the shared feed go straight into the list; a reorg's are dropped; a gap reloads it.
+  const live =
+    useFeedJoin(on ? pair : null, (f) => {
+      const scan = qc.getQueryData<LogScan<PoolTrade>>(queryKey);
+      if (!scan) {
+        waiting.set(pair.toLowerCase(), [...(waiting.get(pair.toLowerCase()) ?? []), f]);
+        return;
+      }
+      if (f.gap) void qc.refetchQueries({ queryKey });
+      const next = mergeIntoScan(scan, f.trades.map(fromFeed), f.removed);
+      if (next !== scan) qc.setQueryData(queryKey, next);
+    }) === "live";
   // Without the feed: a swap on the pair (or a batch-pool fill) refetches at once; the poll below is the fallback.
   useEffect(() => {
     if (!on || live) return;
@@ -150,7 +77,7 @@ export function usePoolSwaps(pair: Address, settledAt: number, enabled: boolean,
       // Feed frames that came in while this first read ran.
       const held = waiting.get(pair.toLowerCase()) ?? [];
       waiting.delete(pair.toLowerCase());
-      return held.reduce((s, f) => merge(s, f.trades, f.removed), scan);
+      return held.reduce((s, f) => mergeIntoScan(s, f.trades.map(fromFeed), f.removed), scan);
     },
     select: newestFirst,
     // A busy pool holds 100k+ trades: comparing them all deeply on every poll cost more than drawing the chart.

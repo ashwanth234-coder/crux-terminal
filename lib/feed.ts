@@ -25,6 +25,18 @@ export type FeedTrade = {
   time: number;
 };
 
+/** A token transfer (or its auction's claim) as the feed sends it (hooks/useTokenTransfers TokenTransfer as JSON). */
+export type FeedTransfer = {
+  kind: "transfer" | "claim";
+  from: Address;
+  to: Address;
+  value: string;
+  txHash: `0x${string}`;
+  blockNumber: string;
+  logIndex: number;
+  time: number;
+};
+
 type Row = [number, number, number, number, number, number, number, number, number];
 const toCandle = (r: Row): FeedCandle => ({ time: r[0], open: r[1], high: r[2], low: r[3], close: r[4], volume: r[5], trades: r[6], bought: r[7], sold: r[8] });
 
@@ -37,6 +49,9 @@ export type FeedFrame = {
   trades: FeedTrade[];
   /** A reorg's dropped trades, as lib/logs keys (txHash:logIndex). */
   removed: string[];
+  /** The token's new transfers and claims, and a reorg's dropped ones (keys). */
+  transfers: FeedTransfer[];
+  removedTransfers: string[];
   interval: number;
   firstTime: number | null;
   /** Trades were missed (a long disconnect): reload the trade list. */
@@ -127,7 +142,7 @@ class FeedSocket {
   }
 
   private onMessage(raw: string) {
-    let m: { t: string; id?: string; from?: number; candles?: Row[]; trades?: FeedTrade[]; removed?: string[]; interval?: number; firstTime?: number | null; gap?: boolean; error?: string };
+    let m: { t: string; id?: string; from?: number; candles?: Row[]; trades?: FeedTrade[]; removed?: string[]; transfers?: FeedTransfer[]; removedTransfers?: string[]; interval?: number; firstTime?: number | null; gap?: boolean; error?: string };
     try {
       m = JSON.parse(raw);
     } catch {
@@ -149,6 +164,8 @@ class FeedSocket {
       candles: (m.candles ?? []).map(toCandle),
       trades: m.trades ?? [],
       removed: m.removed ?? [],
+      transfers: m.transfers ?? [],
+      removedTransfers: m.removedTransfers ?? [],
       interval: m.interval ?? (typeof sub.interval === "number" ? sub.interval : 0),
       firstTime: m.firstTime ?? null,
       gap: Boolean(m.gap),
@@ -170,3 +187,49 @@ export function applyFrame(candles: FeedCandle[], f: FeedFrame): FeedCandle[] {
   while (cut > 0 && candles[cut - 1].time >= f.from) cut--;
   return cut === candles.length && f.candles.length === 0 ? candles : [...candles.slice(0, cut), ...f.candles];
 }
+
+/**
+ * One subscription per address (a pool, or its token) however many readers on the page: each frame goes to every
+ * reader, and its status (live, reconnecting, …) can be watched. The candles it carries are daily (the lightest):
+ * readers here want its trades and transfers.
+ */
+const joins = new Map<string, { handlers: Set<(f: FeedFrame) => void>; stop: () => void }>();
+const statuses = new Map<string, FeedStatus>();
+const watchers = new Map<string, Set<() => void>>();
+
+export function joinFeed(address: Address, onFrame: (f: FeedFrame) => void): () => void {
+  const k = address.toLowerCase();
+  let j = joins.get(k);
+  if (!j) {
+    const handlers = new Set<(f: FeedFrame) => void>();
+    const stop = feedSocket().subscribe({
+      pair: address,
+      interval: 86_400,
+      // A reconnect asks for the last day's trades and transfers; readers skip the ones they hold.
+      since: () => Math.floor(Date.now() / 1000) - 86_400,
+      onFrame: (f) => handlers.forEach((h) => h(f)),
+      onStatus: (s) => {
+        statuses.set(k, s);
+        watchers.get(k)?.forEach((w) => w());
+      },
+    });
+    joins.set(k, (j = { handlers, stop }));
+  }
+  const entry = j;
+  entry.handlers.add(onFrame);
+  return () => {
+    entry.handlers.delete(onFrame);
+    if (entry.handlers.size > 0) return;
+    entry.stop();
+    joins.delete(k);
+    statuses.delete(k);
+  };
+}
+
+export function watchFeedStatus(address: Address, onChange: () => void): () => void {
+  const k = address.toLowerCase();
+  if (!watchers.has(k)) watchers.set(k, new Set());
+  watchers.get(k)!.add(onChange);
+  return () => watchers.get(k)?.delete(onChange);
+}
+export const feedStatusOf = (address: Address): FeedStatus => statuses.get(address.toLowerCase()) ?? "connecting";

@@ -29,6 +29,8 @@ test("the chart follows the shared feed through new blocks, a gap, a reorg and a
   await expect(chart).toHaveAttribute("data-feed", "live", { timeout: 30_000 });
   await closeOf(chart).toBeCloseTo(1, 5);
   const trades = () => expect.poll(() => page.evaluate(() => window.__bench!.trades()), { timeout: 10_000 });
+  // Each swap moves the token once: the holder list's transfers follow the feed too.
+  const transfers = () => expect.poll(() => page.evaluate(() => window.__bench!.transfers()), { timeout: 10_000 });
   await trades().toBe(1);
 
   // New blocks: the next trade arrives as a tick.
@@ -43,6 +45,7 @@ test("the chart follows the shared feed through new blocks, a gap, a reorg and a
   await sim(request, "step");
   await closeOf(chart).toBeCloseTo(1.1, 5);
   await trades().toBe(3);
+  await transfers().toBe(3);
 
   // A one-block reorg: the trade at 1.5 is replaced by one at 0.9; the chart and the trade list follow.
   await block(request, [{ side: "buy", usdc: 10, price: 1.5 }]);
@@ -53,6 +56,7 @@ test("the chart follows the shared feed through new blocks, a gap, a reorg and a
   await sim(request, "step");
   await closeOf(chart).toBeCloseTo(0.9, 5);
   await trades().toBe(4);
+  await transfers().toBe(4);
 
   // A drawing, then the socket drops while a trade lands: the page reconnects, backfills, and keeps the drawing.
   const box = (await chart.boundingBox())!;
@@ -70,5 +74,6 @@ test("the chart follows the shared feed through new blocks, a gap, a reorg and a
   await expect(chart).toHaveAttribute("data-feed", "live", { timeout: 15_000 });
   await closeOf(chart).toBeCloseTo(1.3, 5);
   await trades().toBe(5);
+  await transfers().toBe(5);
   await expect(page.getByRole("button", { name: "Remove 1 drawing" })).toBeEnabled();
 });

@@ -1,3 +1,4 @@
+import { cachedReads } from "./readCache";
 import { createPublicClient, fallback, http, type Hex } from "viem";
 import { baseSepolia } from "viem/chains";
 
@@ -7,11 +8,11 @@ const LOGS_RPCS = [process.env.NEXT_PUBLIC_BASE_SEPOLIA_LOGS_RPC, "https://base-
 );
 
 /** Base Sepolia client for wide log scans (the terminal's tape and demand curve). */
-export const logClient = createPublicClient({ chain: baseSepolia, transport: fallback(LOGS_RPCS.map((u) => http(u, { timeout: 15_000 }))) });
+export const logClient = createPublicClient({ chain: baseSepolia, transport: cachedReads(fallback(LOGS_RPCS.map((u) => http(u, { timeout: 15_000 })))) });
 /** The same RPCs with JSON-RPC batching, for dating many blocks at once. */
 const blockClient = createPublicClient({
   chain: baseSepolia,
-  transport: fallback(LOGS_RPCS.map((u) => http(u, { timeout: 15_000, batch: { batchSize: 50 } }))),
+  transport: cachedReads(fallback(LOGS_RPCS.map((u) => http(u, { timeout: 15_000, batch: { batchSize: 50 } })))),
 });
 
 /*
@@ -187,4 +188,26 @@ export async function tracked<T>(id: string, read: () => Promise<T>): Promise<T>
 export function pollInterval(id: string, every: number | false, base = 6_000): number | false {
   const n = failures.get(id) ?? 0;
   return n === 0 ? every : Math.min((every || base) * 2 ** n, MAX_BACKOFF_MS);
+}
+
+/**
+ * Adds items that arrived another way (the shared feed) to a scan and drops a reorg's removed ones (by logKey).
+ * Returns the scan itself when nothing changed. `scannedTo` stays: a poll that resumes re-reads from there.
+ */
+export function mergeIntoScan<T extends Positioned>(scan: LogScan<T>, incoming: T[], removed: string[] = []): LogScan<T> {
+  const gone = new Set(removed);
+  let items = gone.size ? scan.items.filter((t) => !gone.has(logKey(t))) : scan.items;
+  // Held items from the oldest incoming block on (items are oldest first): the only ones an incoming item can repeat.
+  const oldest = incoming.reduce((m, t) => (t.blockNumber < m ? t.blockNumber : m), incoming[0]?.blockNumber ?? BigInt(0));
+  let from = items.length;
+  while (from > 0 && items[from - 1].blockNumber >= oldest) from--;
+  const have = new Set(items.slice(from).map(logKey));
+  const fresh = incoming.filter((t) => !have.has(logKey(t)));
+  if (fresh.length === 0 && items === scan.items) return scan;
+  if (fresh.length) {
+    const last = items.at(-1);
+    items = [...items, ...fresh];
+    if (last && fresh.some((t) => byPosition(t, last) < 0)) items.sort(byPosition);
+  }
+  return { ...scan, items };
 }

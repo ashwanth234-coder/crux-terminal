@@ -19,7 +19,8 @@ import { simulateThenWrite } from "@/lib/preflight";
  */
 
 export const PERMIT2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3" as Address;
-export const RELAY_URL = (process.env.NEXT_PUBLIC_CRUX_RELAY ?? "https://api.cruxprotocol.xyz").replace(/\/$/, "");
+import { RELAY_URL } from "@/lib/readCache";
+export { RELAY_URL };
 /** Longest a session lasts (the settler's MAX_SESSION_DURATION). */
 export const SESSION_SECONDS = 24 * 3600;
 /** Largest cap the settler allows for test USDC (its sessionCapLimit), in whole USDC. */

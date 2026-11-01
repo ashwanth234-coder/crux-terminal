@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Address } from "viem";
-import { applyFrame, feedSocket, type FeedCandle, type FeedFrame, type FeedStatus } from "@/lib/feed";
+import { applyFrame, feedSocket, feedStatusOf, joinFeed, watchFeedStatus, type FeedCandle, type FeedFrame, type FeedStatus } from "@/lib/feed";
 
 /** How long a chart keeps showing the feed's candles while its socket reconnects, before it reads the chain itself. */
 export const FEED_GRACE_MS = 20_000;
@@ -48,23 +48,20 @@ export function useFeedCandles(pair: Address | null, interval: number | "auto") 
   return { candles: s?.candles ?? null, interval: s?.interval || null, firstTime: s?.firstTime ?? null, status, usable };
 }
 
-/** A pool's trades from the shared feed: `onFrame` gets every frame (new trades, a reorg's removals, a gap). */
-export function useFeedTrades(pair: Address | null, onFrame: (f: FeedFrame) => void): FeedStatus {
-  const [status, setStatus] = useState<{ pair: Address | null; s: FeedStatus } | null>(null);
+/**
+ * Joins the page's one feed subscription for `address` (a pool or its token) while mounted: `onFrame` gets every
+ * frame. Returns the subscription's status ("live" means the page needn't read the chain for it).
+ */
+export function useFeedJoin(address: Address | null, onFrame: (f: FeedFrame) => void): FeedStatus {
   const handler = useRef(onFrame);
   useEffect(() => {
     handler.current = onFrame;
   });
-  useEffect(() => {
-    if (!pair) return;
-    // Daily candles: the cheapest subscription, here only for its trades.
-    return feedSocket().subscribe({
-      pair,
-      interval: 86_400,
-      since: () => Math.floor(Date.now() / 1000) - 86_400,
-      onFrame: (f) => handler.current(f),
-      onStatus: (s) => setStatus({ pair, s }),
-    });
-  }, [pair]);
-  return pair && status?.pair === pair ? status.s : "unavailable";
+  useEffect(() => (address ? joinFeed(address, (f) => handler.current(f)) : undefined), [address]);
+  const status = useSyncExternalStore(
+    (l) => (address ? watchFeedStatus(address, l) : () => {}),
+    () => (address ? feedStatusOf(address) : "unavailable"),
+    () => "connecting" as FeedStatus,
+  );
+  return status;
 }

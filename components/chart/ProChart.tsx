@@ -338,9 +338,13 @@ export function ProChart({
   // ------------------------------------------------------- overlays
 
   const me = useMemo(() => [wallet, crux.account].filter((a): a is Address => Boolean(a)).map((a) => getAddress(a)), [wallet, crux.account]);
+  // Who holds what (for the trade marks and your average entry) walks every trade and transfer: a busy launch's 100k
+  // trades cost ~100 ms, so it's refreshed every few seconds, not on every redraw.
+  const slowTrades = useThrottled(swapData, 3_000);
+  const slowTransfers = useThrottled(transfers.data, 3_000);
   const holders = useMemo(() => {
-    if (!transfers.data || !swapData) return [];
-    return buildHolders(transfers.data.items, swapData.trades, {
+    if (!slowTransfers || !slowTrades) return [];
+    return buildHolders(slowTransfers.items, slowTrades.trades, {
       totalSupply: auction.totalSupply,
       clearingPrice: gradPrice,
       creator: auction.creator,
@@ -351,7 +355,7 @@ export function ProChart({
       me: me[0],
       batchPool: market.batchPool,
     });
-  }, [transfers.data, swapData, auction, gradPrice, factory, me, market.batchPool]);
+  }, [slowTransfers, slowTrades, auction, gradPrice, factory, me, market.batchPool]);
   /** Your average entry and balance across your wallet and your Crux account. */
   const mine = useMemo(() => {
     const rows = holders.filter((h) => me.includes(getAddress(h.address)));
