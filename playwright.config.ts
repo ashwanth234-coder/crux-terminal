@@ -25,7 +25,8 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [
-    { name: "desktop", use: { ...devices["Desktop Chrome"], channel: "chrome", viewport: { width: 1440, height: 900 } }, testIgnore: /(load|phone|feed)\.spec/ },
+    { name: "desktop", use: { ...devices["Desktop Chrome"], channel: "chrome", viewport: { width: 1440, height: 900 } }, testIgnore: /(load|phone|feed|orders)\.spec/ },
+    { name: "orders", use: { ...devices["Desktop Chrome"], channel: "chrome", viewport: { width: 1280, height: 900 } }, testMatch: /orders\.spec/ },
     { name: "phone", use: { ...devices["Pixel 7"], channel: "chrome" }, testMatch: /phone\.spec/ },
     { name: "load", use: { ...devices["Desktop Chrome"], channel: "chrome", viewport: { width: 1440, height: 900 } }, testMatch: /load\.spec/ },
     { name: "feed", use: { ...devices["Desktop Chrome"], channel: "chrome", viewport: { width: 1440, height: 900 } }, testMatch: /feed\.spec/ },

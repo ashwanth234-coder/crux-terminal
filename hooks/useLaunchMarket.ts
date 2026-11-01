@@ -1,5 +1,6 @@
 "use client";
 
+import { testOverride } from "@/lib/testOverrides";
 import { erc20Abi, getAddress, keccak256, parseAbi, toHex, zeroAddress, type Address } from "viem";
 import { useConnection, useReadContracts } from "wagmi";
 import { batchPoolAbi, guardianAbi } from "@/lib/batchPool";
@@ -95,6 +96,26 @@ export function useLaunchMarket(token: Address, pair: Address): LaunchMarket {
   }
   const listed = (r: { result?: Address } | undefined) => SETTLER_DEPLOYED && Boolean(r?.result) && getAddress(r!.result!) === getAddress(token);
 
+  // The browser tests' stand-in market (lib/testOverrides; test build only).
+  const fake = testOverride("market")?.[token.toLowerCase()];
+  if (fake) {
+    return {
+      token,
+      pair,
+      caip19,
+      decimals: fake.decimals,
+      reserves: fake.reserves,
+      price: midPrice(fake.reserves, fake.decimals),
+      listedForBuys: fake.listed,
+      listedForSells: fake.listed,
+      tokenBalance: null,
+      loading: false,
+      batchPool: null,
+      protected: Boolean(fake.protected),
+      seededAt: null,
+      protectedUntil: fake.protectedUntil ?? null,
+    };
+  }
   return {
     token,
     pair,

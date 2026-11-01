@@ -17,6 +17,8 @@ import {
 } from "@/lib/account";
 import { TESTNET } from "@/lib/chains";
 import { TESTNET_USDC } from "@/lib/intents";
+import { testOverride } from "@/lib/testOverrides";
+import { privateKeyToAccount } from "viem/accounts";
 
 /** eth_signTypedData_v4 JSON: bigints as decimal strings, nested structs included. */
 const plain = (v: unknown): unknown =>
@@ -192,6 +194,33 @@ export function useCruxAccount(): CruxAccountState {
   }, [code, state, usdc]);
 
   const label = user?.email?.address ?? (user?.google?.email ? user.google.email : null);
+
+  // The browser tests' stand-in account (lib/testOverrides; test build only): logged in, deployed, bound, funded.
+  const fake = testOverride("account");
+  if (fake) {
+    const key = privateKeyToAccount(fake.ownerKey);
+    return {
+      ready: true,
+      loggedIn: true,
+      label: "test@crux.test",
+      login: () => {},
+      logout: async () => {},
+      owner: key.address,
+      account: fake.account,
+      deployed: true,
+      withdrawalAddress: fake.withdrawalAddress,
+      pendingWithdrawalAddress: null,
+      withdrawalChangeEta: null,
+      usdc: fake.usdc,
+      v2: true,
+      v3: { account: fake.account, withdrawalAddress: fake.withdrawalAddress, nonce: BigInt(0) },
+      setup: { needed: false, suggested: null, create: async () => {} },
+      legacy: [],
+      launchAccount: fake.account,
+      sign: (t) => key.signTypedData(t as never),
+      refresh: () => {},
+    };
+  }
 
   return {
     ready,
