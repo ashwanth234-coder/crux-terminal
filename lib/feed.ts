@@ -60,9 +60,13 @@ export type FeedFrame = {
 
 export type FeedStatus = "connecting" | "live" | "reconnecting" | "unavailable";
 
+/** What a subscription receives: the chart wants candles, the trade list trades, the holder list transfers. */
+export type FeedWant = "candles" | "trades" | "transfers";
+
 type Sub = {
   pair: Address;
   interval: number | "auto";
+  want: FeedWant[];
   /** The newest candle time this subscriber holds, for a reconnect's backfill. */
   since: () => number | undefined;
   onFrame: (f: FeedFrame) => void;
@@ -75,6 +79,21 @@ declare global {
     __CRUX_FEED_URL?: string;
   }
 }
+
+type Message = {
+  t: string;
+  id?: string;
+  from?: number;
+  candles?: Row[];
+  trades?: FeedTrade[];
+  removed?: string[];
+  transfers?: FeedTransfer[];
+  removedTransfers?: string[];
+  interval?: number;
+  firstTime?: number | null;
+  gap?: boolean;
+  error?: string;
+};
 
 const feedUrl = () => window.__CRUX_FEED_URL ?? `${RELAY_URL.replace(/^http/, "ws")}/v1/feed`;
 
@@ -106,7 +125,9 @@ class FeedSocket {
 
   private send(id: string, sub: Sub, resume: boolean) {
     const since = resume ? sub.since() : undefined;
-    this.ws?.send(JSON.stringify({ t: "sub", id, pair: sub.pair, interval: sub.interval, ...(since !== undefined ? { since } : {}) }));
+    // v: 2: the server batches this page's frames into one message per flush and sends each subscription only what
+    // it wants (a hot launch's cost is one socket write per page per frame).
+    this.ws?.send(JSON.stringify({ t: "sub", id, pair: sub.pair, interval: sub.interval, v: 2, want: sub.want, ...(since !== undefined ? { since } : {}) }));
   }
 
   private connect() {
@@ -142,12 +163,17 @@ class FeedSocket {
   }
 
   private onMessage(raw: string) {
-    let m: { t: string; id?: string; from?: number; candles?: Row[]; trades?: FeedTrade[]; removed?: string[]; transfers?: FeedTransfer[]; removedTransfers?: string[]; interval?: number; firstTime?: number | null; gap?: boolean; error?: string };
+    let m: Message & { frames?: Message[] };
     try {
       m = JSON.parse(raw);
     } catch {
       return;
     }
+    if (m.t === "batch") for (const f of m.frames ?? []) this.onFrame(f);
+    else this.onFrame(m);
+  }
+
+  private onFrame(m: Message) {
     const sub = m.id ? this.subs.get(m.id) : undefined;
     if (!sub || !m.id) return;
     if (m.t === "error") {
@@ -189,22 +215,25 @@ export function applyFrame(candles: FeedCandle[], f: FeedFrame): FeedCandle[] {
 }
 
 /**
- * One subscription per address (a pool, or its token) however many readers on the page: each frame goes to every
- * reader, and its status (live, reconnecting, …) can be watched. The candles it carries are daily (the lightest):
- * readers here want its trades and transfers.
+ * One subscription per address (a pool, or its token) and kind of data however many readers on the page: each frame
+ * goes to every reader, and its status (live, reconnecting, …) can be watched. `want`: the trade list joins a pool for
+ * its trades, the holder list its token for transfers.
  */
 const joins = new Map<string, { handlers: Set<(f: FeedFrame) => void>; stop: () => void }>();
 const statuses = new Map<string, FeedStatus>();
 const watchers = new Map<string, Set<() => void>>();
 
-export function joinFeed(address: Address, onFrame: (f: FeedFrame) => void): () => void {
-  const k = address.toLowerCase();
+const joinKey = (address: Address, want: FeedWant) => `${address.toLowerCase()}:${want}`;
+
+export function joinFeed(address: Address, want: FeedWant, onFrame: (f: FeedFrame) => void): () => void {
+  const k = joinKey(address, want);
   let j = joins.get(k);
   if (!j) {
     const handlers = new Set<(f: FeedFrame) => void>();
     const stop = feedSocket().subscribe({
       pair: address,
       interval: 86_400,
+      want: [want],
       // A reconnect asks for the last day's trades and transfers; readers skip the ones they hold.
       since: () => Math.floor(Date.now() / 1000) - 86_400,
       onFrame: (f) => handlers.forEach((h) => h(f)),
@@ -226,10 +255,10 @@ export function joinFeed(address: Address, onFrame: (f: FeedFrame) => void): () 
   };
 }
 
-export function watchFeedStatus(address: Address, onChange: () => void): () => void {
-  const k = address.toLowerCase();
+export function watchFeedStatus(address: Address, want: FeedWant, onChange: () => void): () => void {
+  const k = joinKey(address, want);
   if (!watchers.has(k)) watchers.set(k, new Set());
   watchers.get(k)!.add(onChange);
   return () => watchers.get(k)?.delete(onChange);
 }
-export const feedStatusOf = (address: Address): FeedStatus => statuses.get(address.toLowerCase()) ?? "connecting";
+export const feedStatusOf = (address: Address, want: FeedWant): FeedStatus => statuses.get(joinKey(address, want)) ?? "connecting";

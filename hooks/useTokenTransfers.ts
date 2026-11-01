@@ -41,7 +41,7 @@ export function useTokenTransfers(token: Address, factory: Address, auctionId: b
   const qc = useQueryClient();
   const on = enabled && token !== zeroAddress;
   const live =
-    useFeedJoin(on ? token : null, (f) => {
+    useFeedJoin(on ? token : null, "transfers", (f) => {
       if (f.transfers.length === 0 && f.removedTransfers.length === 0 && !f.gap) return;
       const scan = qc.getQueryData<LogScan<TokenTransfer>>(queryKey);
       if (!scan) {

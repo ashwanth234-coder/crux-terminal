@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Address } from "viem";
-import { applyFrame, feedSocket, feedStatusOf, joinFeed, watchFeedStatus, type FeedCandle, type FeedFrame, type FeedStatus } from "@/lib/feed";
+import { applyFrame, feedSocket, feedStatusOf, joinFeed, watchFeedStatus, type FeedCandle, type FeedFrame, type FeedStatus, type FeedWant } from "@/lib/feed";
 
 /** How long a chart keeps showing the feed's candles while its socket reconnects, before it reads the chain itself. */
 export const FEED_GRACE_MS = 20_000;
@@ -23,6 +23,7 @@ export function useFeedCandles(pair: Address | null, interval: number | "auto") 
     return feedSocket().subscribe({
       pair,
       interval,
+      want: ["candles"],
       since: () => held.current.at(-1)?.time,
       onFrame: (f: FeedFrame) => {
         held.current = applyFrame(held.current, f);
@@ -52,15 +53,15 @@ export function useFeedCandles(pair: Address | null, interval: number | "auto") 
  * Joins the page's one feed subscription for `address` (a pool or its token) while mounted: `onFrame` gets every
  * frame. Returns the subscription's status ("live" means the page needn't read the chain for it).
  */
-export function useFeedJoin(address: Address | null, onFrame: (f: FeedFrame) => void): FeedStatus {
+export function useFeedJoin(address: Address | null, want: FeedWant, onFrame: (f: FeedFrame) => void): FeedStatus {
   const handler = useRef(onFrame);
   useEffect(() => {
     handler.current = onFrame;
   });
-  useEffect(() => (address ? joinFeed(address, (f) => handler.current(f)) : undefined), [address]);
+  useEffect(() => (address ? joinFeed(address, want, (f) => handler.current(f)) : undefined), [address, want]);
   const status = useSyncExternalStore(
-    (l) => (address ? watchFeedStatus(address, l) : () => {}),
-    () => (address ? feedStatusOf(address) : "unavailable"),
+    (l) => (address ? watchFeedStatus(address, want, l) : () => {}),
+    () => (address ? feedStatusOf(address, want) : "unavailable"),
     () => "connecting" as FeedStatus,
   );
   return status;

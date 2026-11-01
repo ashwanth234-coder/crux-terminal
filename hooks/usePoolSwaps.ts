@@ -38,7 +38,7 @@ export function usePoolSwaps(pair: Address, settledAt: number, enabled: boolean,
   const on = enabled && pair !== zeroAddress;
   // New trades from the shared feed go straight into the list; a reorg's are dropped; a gap reloads it.
   const live =
-    useFeedJoin(on ? pair : null, (f) => {
+    useFeedJoin(on ? pair : null, "trades", (f) => {
       const scan = qc.getQueryData<LogScan<PoolTrade>>(queryKey);
       if (!scan) {
         waiting.set(pair.toLowerCase(), [...(waiting.get(pair.toLowerCase()) ?? []), f]);
