@@ -7,13 +7,13 @@ export function FinalCta() {
     <section aria-labelledby="close-title" className="border-t border-line">
       <div className="mx-auto flex max-w-[1440px] flex-col gap-8 px-4 py-20 sm:px-8 lg:flex-row lg:items-center lg:gap-12 lg:px-12 lg:py-28">
         <h2 id="close-title" className="shrink-0 font-display text-[clamp(2.1rem,4vw,3.4rem)] text-bright">
-          Launch with precision.
+          Your account. Every chain.
           <br />
-          Trade with clarity.
+          Fair from the first second.
         </h2>
         <ConvergeRibbon className="h-[120px] w-full min-w-0 lg:h-[168px] lg:flex-1" />
         <div className="shrink-0">
-          <EnterCrux />
+          <EnterCrux href="/account" label="Create your account" />
         </div>
       </div>
     </section>

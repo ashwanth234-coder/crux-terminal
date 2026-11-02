@@ -1,5 +1,6 @@
 import { Header } from "@/components/site/Header";
 import { Hero } from "@/components/site/Hero";
+import { Pillars } from "@/components/site/Pillars";
 import { Discover } from "@/components/site/Discover";
 import { HowItWorks } from "@/components/site/HowItWorks";
 import { FinalCta } from "@/components/site/FinalCta";
@@ -11,6 +12,7 @@ export default function Home() {
       <Header />
       <main>
         <Hero />
+        <Pillars />
         <Discover />
         <HowItWorks />
         <FinalCta />

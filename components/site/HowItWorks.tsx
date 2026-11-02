@@ -1,42 +1,50 @@
 import { Chapter } from "./Chapter";
-import { ORIGIN_NAMES, SOON_LINE } from "@/lib/networks";
 
-// Each one is live on Base Sepolia today; nothing planned is listed here.
-const MECHANISMS = [
+// A launch, start to finish. Each step is live on Base Sepolia today.
+const STEPS = [
   {
-    name: "Fair launch",
-    body: "Bids gather in one window and clear together at one uniform price, so arriving first inside the window buys nothing.",
-    fact: "One clearing price",
+    name: "Launch",
+    body: "Pick a size and you're live, gas-free from your CRUX Account. The creator's share vests over 30 days.",
+    fact: "Gas-free",
   },
   {
-    name: "One-signature orders",
-    body: "Sign what you want, not how to get it. Crux fills your order in a batch where everyone pays the same price, and your funds move only when it fills.",
-    fact: "Everyone pays the same price",
+    name: "A one-minute fair opening",
+    body: "Everyone who buys in the opening pays the same price, and the first trading minute clears the same way. Bots get no head start.",
+    fact: "One price",
   },
   {
-    name: "Any chain in",
-    body: `Pay with test USDC on ${ORIGIN_NAMES}. Crux fills on Base; no bridge, no network switch. ${SOON_LINE}.`,
-    fact: "Five networks",
-  },
-  {
-    name: "Locked liquidity",
-    body: "Graduation seeds one canonical pool on Base with its LP burned. Every venue reads from it instead of splitting it.",
+    name: "It trades everywhere",
+    body: "Half the raise seeds a pool on Base with its LP burned, buyable from any chain through Crux. If the opening doesn't fill, everyone is refunded.",
     fact: "LP burned",
   },
 ];
 
+/** Promises every launch keeps, enforced on-chain (vesting by the Crux launch form). */
+const TRUST = ["Creator vested 30 days", "LP burned", "One price at open", "Refund if it doesn't fill", "Withdrawals only to your wallet"];
+
 export function HowItWorks() {
   return (
-    <Chapter id="protocol" title="How Crux works." intro="Four mechanisms, each running on Base Sepolia today and source-verified on Basescan.">
-      <dl className="border-t border-line">
-        {MECHANISMS.map((m) => (
-          <div key={m.name} className="grid gap-2 border-b border-line py-7 md:grid-cols-12 md:items-baseline md:gap-6">
-            <dt className="text-[17px] font-medium text-chrome md:col-span-3">{m.name}</dt>
-            <dd className="max-w-xl text-[14.5px] leading-relaxed text-muted md:col-span-6">{m.body}</dd>
-            <dd className="font-mono text-[11px] uppercase tracking-[0.16em] text-dim md:col-span-3 md:text-right">{m.fact}</dd>
-          </div>
+    <Chapter id="protocol" title="How a launch works." intro="Three steps, each running on Base Sepolia today and source-verified on Basescan.">
+      <ol className="border-t border-line">
+        {STEPS.map((s, i) => (
+          <li key={s.name} className="grid gap-2 border-b border-line py-7 md:grid-cols-12 md:items-baseline md:gap-6">
+            <span className="flex items-baseline gap-3 text-[17px] font-medium text-chrome md:col-span-3">
+              <span className="font-mono text-[11px] text-signal">{String(i + 1).padStart(2, "0")}</span>
+              {s.name}
+            </span>
+            <p className="max-w-xl text-[14.5px] leading-relaxed text-muted md:col-span-6">{s.body}</p>
+            <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-dim md:col-span-3 md:text-right">{s.fact}</span>
+          </li>
         ))}
-      </dl>
+      </ol>
+      <ul aria-label="What every launch guarantees" className="mt-10 flex flex-wrap gap-2">
+        {TRUST.map((t) => (
+          <li key={t} className="inline-flex items-center gap-2 rounded-[4px] border border-line-2 px-3 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-chrome/80">
+            <span className="h-1.5 w-1.5 rounded-full bg-up" aria-hidden="true" />
+            {t}
+          </li>
+        ))}
+      </ul>
     </Chapter>
   );
 }

@@ -18,20 +18,20 @@ const jetbrains = JetBrains_Mono({
 });
 
 const DIRECTION_CONTRACT = `<!--
-THESIS: Markets without borders. A stark, high-contrast execution terminal, proven with real testnet data.
+THESIS: One account. Every chain. A stark, high-contrast execution terminal, proven with real testnet data.
 OWN-WORLD: Dark: pure black #000000 ground, #0A0A0A / #111111 elevated panels, pure white type. Light: pure white ground, black type. Electric Orange #FF5500 for primary actions (black text on orange, both themes), active states and critical figures, with a soft orange glow (0 0 15px rgba(255,85,0,0.4)) on primary buttons and focused inputs; green buy, red sell for direction only; Archivo for display and UI, JetBrains Mono for numbers; hairlines.
-STORY: Discover real launches, how it works (fair launch, one-signature orders, locked liquidity), enter.
-FIRST VIEWPORT: Markets / without / borders. painted with the first frame, one supporting line, one ENTER CRUX link; right, the static CRUX emblem in liquid chrome inside a glass disc, with an orange core.
+STORY: One CRUX Account (fund from anywhere, trade and launch in one place, every chain), real launches, how a launch works (launch, one-minute fair opening, trades everywhere) with its guarantees, create your account.
+FIRST VIEWPORT: One account. / Every chain. painted with the first frame, one supporting line, CREATE YOUR ACCOUNT and Browse launches; right, the CRUX mark (the X with a diamond core) lit orange inside a glass lens.
 -->`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "Crux — Markets without borders.",
+  title: "Crux — One account. Every chain.",
   description:
-    "Crux is a home-chain-first launch protocol with an omnichain execution layer: fair uniform-price batch launches, liquidity locked forever on graduation, and one-signature access from other networks. Testnet on Base Sepolia.",
+    "One CRUX Account, funded from Base, Arbitrum, Ethereum, BNB Chain or Solana, to launch and trade with no gas and no bridges. Fair one-price launch openings, liquidity locked forever. Testnet on Base Sepolia.",
   openGraph: {
-    title: "Crux — Markets without borders.",
-    description: "Fair batch launches on the home chain. Liquidity locked forever. Trade from the chain you're on.",
+    title: "Crux — One account. Every chain.",
+    description: "Deposit from any chain. Launch and trade from one account. Fair from the first second.",
     type: "website",
   },
   twitter: { card: "summary_large_image" },

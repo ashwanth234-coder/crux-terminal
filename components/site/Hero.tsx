@@ -3,6 +3,7 @@ import { CruxEmblem } from "./CruxEmblem";
 import { ChainStrip } from "./ChainStrip";
 import { EnterCrux } from "./EnterCrux";
 
+/** The promise in one line: one CRUX Account, funded from every chain, that launches and trades. */
 export function Hero() {
   return (
     <section id="top" className="relative flex min-h-[100svh] flex-col overflow-hidden pt-16">
@@ -10,15 +11,18 @@ export function Hero() {
         <div className="relative z-10 min-w-0 md:col-span-7">
           {/* Painted with the first frame: the headline is the LCP and is never held back by an animation. */}
           <h1 className="font-display text-[clamp(2.9rem,9.5vw,4.5rem)] text-bright md:text-[6vw] xl:text-[min(6vw,6rem)]">
-            Markets
+            One account.
             <br />
-            without borders.
+            Every chain.
           </h1>
-          <p className="mt-6 max-w-md text-[16px] leading-relaxed text-muted md:mt-8 md:text-[18px]">Launch and trade from the chain you&rsquo;re on. Everything settles on Base.</p>
+          <p className="mt-6 max-w-lg text-[16px] leading-relaxed text-muted md:mt-8 md:text-[18px]">
+            Deposit from Base, Arbitrum, Ethereum, BNB Chain or Solana. Launch and trade from one account: no gas, no bridges, no
+            wallet pop-ups.
+          </p>
           <div className="mt-9 flex flex-wrap items-center gap-x-8 gap-y-4 md:mt-12">
-            <EnterCrux />
+            <EnterCrux href="/account" label="Create your account" />
             <Link href="/launches" className="text-[14px] font-medium text-muted transition-colors hover:text-chrome">
-              View launches
+              Browse launches
             </Link>
           </div>
           <ChainStrip className="mt-12 md:mt-16" />

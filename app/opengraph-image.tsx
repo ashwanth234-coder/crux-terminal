@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 import { CRUX_MARK_PATH } from "@/components/site/Logo";
 
-export const alt = "Crux — Markets without borders. Testnet on Base Sepolia.";
+export const alt = "Crux — One account. Every chain. Testnet on Base Sepolia.";
 export const size = { width: 1200, height: 800 };
 export const contentType = "image/png";
 
@@ -29,12 +29,11 @@ export default function OpengraphImage() {
           </svg>
         </div>
         <div style={{ display: "flex", flexDirection: "column", fontSize: 116, fontWeight: 400, lineHeight: 0.95, letterSpacing: -2 }}>
-          <div>MARKETS</div>
-          <div style={{ color: "#ff5500" }}>WITHOUT</div>
-          <div>BORDERS.</div>
+          <div>ONE ACCOUNT.</div>
+          <div style={{ color: "#ff5500" }}>EVERY CHAIN.</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid #292B2F", paddingTop: 28 }}>
-          <div style={{ fontSize: 24, color: "#A7ADB5" }}>Global markets. One execution layer.</div>
+          <div style={{ fontSize: 24, color: "#A7ADB5" }}>Deposit from any chain. Launch and trade from one account.</div>
           <div style={{ fontSize: 18, letterSpacing: 5, color: "#A7ADB5" }}>BASE SEPOLIA TESTNET</div>
         </div>
       </div>
