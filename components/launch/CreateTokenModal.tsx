@@ -62,15 +62,24 @@ const FAIR_LAUNCH_CHOICES = [
 ] as const;
 
 /**
- * What a creator picks instead of numbers: how many people they expect in the opening. Each sets the graduation target
- * and the per-wallet cap, so the sale needs about that many buyers to fill; Custom shows the fields. The targets are
- * multiples of $3, which the sale of a 1B supply (600M tokens) divides evenly: no rounding is added on top.
+ * What a creator picks instead of numbers: how many people they expect in the opening. Each sets the graduation target,
+ * the per-wallet cap (so the sale needs about that many buyers to fill) and how long the opening runs (more buyers need
+ * more time, cross-chain ones about a minute to land); Custom shows the fields. The targets are multiples of $3, which
+ * the sale of a 1B supply (600M tokens) divides evenly: no rounding is added on top.
+ *
+ * Alpha: Small is the default with a 100% cap, so a solo tester's one wallet can graduate it (a CRUX Account's buy at
+ * open doesn't count toward the target). Before mainnet: Small back to about 50%, and Community the default, so a real
+ * launch never defaults to one wallet buying the whole sale.
  */
 const LAUNCH_SIZES = [
-  { key: "small", title: "Small", who: "A few friends", target: "3", walletCap: "34" },
-  { key: "community", title: "Community", who: "Your group chat or followers", target: "30", walletCap: "10" },
-  { key: "wide", title: "Wide", who: "A big audience, each buying a little", target: "90", walletCap: "2" },
+  { key: "small", title: "Small", who: "Just you or a few friends", target: "3", walletCap: "100", window: "60" },
+  { key: "community", title: "Community", who: "Your group chat or followers", target: "30", walletCap: "10", window: "300" },
+  { key: "wide", title: "Wide", who: "A big audience, each buying a little", target: "90", walletCap: "2", window: "600" },
 ] as const;
+const DEFAULT_SIZE = LAUNCH_SIZES[0];
+
+/** "60s open", "5m open", "10m open". */
+const openFor = (seconds: number) => (seconds < 120 ? `${seconds}s open` : seconds < 3_600 ? `${seconds / 60}m open` : `${seconds / 3_600}h open`);
 type LaunchSize = (typeof LAUNCH_SIZES)[number]["key"] | "custom";
 const DEFAULT_SUPPLY = "1,000,000,000";
 
@@ -87,13 +96,13 @@ const INITIAL: Form = {
   telegram: "",
   github: "",
   supply: DEFAULT_SUPPLY,
-  target: LAUNCH_FACTORY ? "30" : FACTORY ? "10" : "50,000",
+  target: LAUNCH_FACTORY ? DEFAULT_SIZE.target : FACTORY ? "10" : "50,000",
   batchAuction: true,
   instantUnlock: false,
   antiSniper: true,
   startsIn: "10",
-  walletCap: "10",
-  window: "60",
+  walletCap: LAUNCH_FACTORY ? DEFAULT_SIZE.walletCap : "5",
+  window: LAUNCH_FACTORY ? DEFAULT_SIZE.window : "60",
 };
 
 const SIM_STEPS = [
@@ -230,7 +239,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
   const [form, setForm] = useState<Form>(INITIAL);
   const [protectionAdvanced, setProtectionAdvanced] = useState(false);
   // One choice instead of numbers (target and cap); Custom shows the fields.
-  const [size, setSize] = useState<LaunchSize>(LAUNCH_FACTORY ? "community" : "custom");
+  const [size, setSize] = useState<LaunchSize>(LAUNCH_FACTORY ? DEFAULT_SIZE.key : "custom");
   const custom = !LAUNCH_FACTORY || size === "custom";
   // Logged in with a Crux account and launching on V7: the launch is signed by the login key and submitted by the relay,
   // with the account as creator (no gas, nothing needed on Base). The wallet stays one tap away.
@@ -685,11 +694,12 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             <fieldset className="rounded-xl border border-line p-4">
               <legend className="px-1 text-[13px] text-chrome">Launch size</legend>
               <p className="text-[11.5px] leading-snug text-dim">
-                How many people do you expect in the opening? It sets how much it raises and how much each wallet can buy. If it
-                doesn&apos;t raise that, everyone is refunded.
+                How many people do you expect in the opening? It sets how much it raises, how much each wallet can buy and how long
+                the opening runs. If it doesn&apos;t raise that, everyone is refunded. Everyone in the opening pays one price, and the
+                first trading minute clears the same way, so bots get no first-block edge.
               </p>
               <div role="radiogroup" aria-label="Launch size" className="mt-3 grid gap-2 sm:grid-cols-4">
-                {[...LAUNCH_SIZES, { key: "custom" as const, title: "Custom", who: "Set the numbers yourself", target: "", walletCap: "" }].map((s) => {
+                {[...LAUNCH_SIZES, { key: "custom" as const, title: "Custom", who: "Set the numbers yourself", target: "", walletCap: "", window: "" }].map((s) => {
                   const active = size === s.key;
                   const r = s.key === "custom" ? null : exactRaise(DEFAULT_SUPPLY, s.target, s.walletCap);
                   return (
@@ -704,6 +714,8 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                           set("supply", DEFAULT_SUPPLY);
                           set("target", s.target);
                           set("walletCap", s.walletCap);
+                          set("window", s.window);
+                          set("antiSniper", true);
                         }
                       }}
                       className={`rounded-lg border p-3 text-left transition-colors ${active ? "border-signal/70 bg-panel-2" : "border-line hover:border-line-2"}`}
@@ -714,9 +726,10 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                         <span className="mt-2 block font-mono text-[11px] leading-snug text-chrome/80">
                           raises {cents(r.graduationTarget)}
                           <br />
-                          {r.buyers}+ buyers · up to {cents(r.perWallet)} each
+                          {r.buyers}+ buyer{r.buyers === 1 ? "" : "s"} · up to {cents(r.perWallet)} each
                         </span>
                       )}
+                      {s.window && <span className="mt-1.5 block text-[11px] text-dim">{openFor(Number(s.window))}</span>}
                     </button>
                   );
                 })}
@@ -805,8 +818,8 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             </div>
           )}
 
-          {/* One concept for buyers: fair-launch protection. The creator picks how long the opening stays open. */}
-          {LAUNCH_FACTORY && (
+          {/* Custom only: how long the opening stays open (the launch sizes set it otherwise). */}
+          {LAUNCH_FACTORY && custom && (
             <fieldset className="rounded-xl border border-line p-4">
               <legend className="px-1 text-[13px] text-chrome">Fair-launch protection</legend>
               <div role="radiogroup" aria-label="Fair-launch protection" className="mt-1 grid gap-2 sm:grid-cols-2">
@@ -845,7 +858,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             </fieldset>
           )}
 
-          {LAUNCH_FACTORY && protectionAdvanced && (
+          {LAUNCH_FACTORY && custom && protectionAdvanced && (
             <fieldset className="rounded-xl border border-line p-4">
               <legend className="px-1 text-[13px] text-chrome">Opening length</legend>
               <div role="radiogroup" aria-label="Opening length" className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-4">

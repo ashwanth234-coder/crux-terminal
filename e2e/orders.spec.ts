@@ -240,3 +240,25 @@ test.describe("deposit", () => {
     expect(args[1]).toBe(BigInt(15e6));
   });
 });
+
+test.describe("launch form", () => {
+  test("launch size: Small is the default and graduates with one wallet; each size sets its opening length", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: /^launch$/i }).first().click();
+    const sizes = page.getByRole("radiogroup", { name: "Launch size" });
+    await expect(sizes).toBeVisible({ timeout: 20_000 });
+    const small = sizes.getByRole("radio").filter({ hasText: "Small" });
+    await expect(small).toHaveAttribute("aria-checked", "true");
+    await expect(small).toContainText("raises $3.00");
+    await expect(small).toContainText("1+ buyer · up to $3.00 each");
+    await expect(small).toContainText("60s open");
+    await expect(sizes.getByRole("radio").filter({ hasText: "Community" })).toContainText("5m open");
+    await expect(sizes.getByRole("radio").filter({ hasText: "Wide" })).toContainText("10m open");
+    // The raw fields and the opening length appear only for Custom.
+    await expect(page.getByLabel("Graduation target")).toHaveCount(0);
+    await expect(page.getByRole("radiogroup", { name: "Fair-launch protection" })).toHaveCount(0);
+    await sizes.getByRole("radio").filter({ hasText: "Custom" }).click();
+    await expect(page.getByLabel("Graduation target")).toHaveValue("3");
+    await expect(page.getByRole("radiogroup", { name: "Fair-launch protection" })).toBeVisible();
+  });
+});
