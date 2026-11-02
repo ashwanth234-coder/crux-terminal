@@ -171,7 +171,7 @@ export function SolanaIntentModal({ request, onClose, onPlaced }: { request: Sol
                         ? `Not filled in time. Your refund is available at ${refundClock(refundAt)}; My orders keeps the button for you.`
                       : "USDC held on Solana. Crux fills it on Base Sepolia, usually in about 20 s; Solana confirms shortly after."
                 : deposit
-                  ? "Pay test USDC on Solana devnet; Crux pays it into your Crux account on Base Sepolia, less 0.3%. Testnet only, no real funds."
+                  ? "Pay test USDC on Solana devnet; Crux pays it into your Crux account on Base Sepolia, no fee. Testnet only, no real funds."
                   : `Pay with USDC on Solana devnet, receive $${draft.symbol} on Base Sepolia. Testnet only, no real funds.`;
 
   return (

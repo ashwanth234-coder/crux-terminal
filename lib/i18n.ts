@@ -46,7 +46,7 @@ const en = {
   "stat.bids": "Bids",
   "stat.pair": "Base Sepolia · USDC pair",
 
-  "badge.vested": "{days}D vested",
+  "badge.vested": "Creator vested {days}D",
   "badge.instantUnlock": "Instant unlock",
   "badge.antiSniper": "Fair launch {window}",
   "badge.unprotected": "Unprotected",

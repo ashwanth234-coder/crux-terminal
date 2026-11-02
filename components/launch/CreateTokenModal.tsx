@@ -886,35 +886,20 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             </fieldset>
           )}
 
+          {/* Every launch from Crux vests the creator's allocation: the contract still offers an instant unlock, but 49% of the
+              raise released on day one is the easiest exit there is, so this form never sets it (instantUnlock stays false).
+              A launch made on the contract directly with an instant unlock still shows the red badge, read from chain. */}
           {LAUNCH_FACTORY && LAUNCH_FACTORY.version >= 4 && (
-            <fieldset className="rounded-xl border border-line p-4">
-              <legend className="px-1 text-[13px] text-chrome">Creator vesting</legend>
-              <div role="radiogroup" aria-label="Creator vesting" className="mt-1 grid gap-2 sm:grid-cols-2">
-                {[
-                  { instant: false, title: "30-day vesting", note: "Recommended. Your 10% and share of the raise unlock linearly. Earns a trust badge." },
-                  { instant: true, title: "Instant unlock", note: "Everything is released at graduation. Shown to buyers with a warning badge." },
-                ].map((o) => {
-                  const active = form.instantUnlock === o.instant;
-                  return (
-                    <button
-                      key={o.title}
-                      type="button"
-                      role="radio"
-                      aria-checked={active}
-                      onClick={() => set("instantUnlock", o.instant)}
-                      className={`rounded-lg border p-3 text-left transition-colors ${active ? "border-signal/70 bg-panel-2" : "border-line hover:border-line-2"}`}
-                    >
-                      <span className="flex items-center justify-between gap-2">
-                        <span className={`text-[13px] ${active ? "text-chrome" : "text-muted"}`}>{o.title}</span>
-                        <VestingBadge days={o.instant ? 0 : 30} />
-                      </span>
-                      <span className="mt-1.5 block text-[11.5px] leading-snug text-dim">{o.note}</span>
-                    </button>
-                  );
-                })}
+            <div className="flex items-start justify-between gap-3 rounded-xl border border-up/30 bg-up/[0.04] p-4">
+              <div>
+                <p className="text-[13px] text-chrome">🛡️ Creator allocation vested 30 days</p>
+                <p className="mt-1.5 text-[11.5px] leading-snug text-dim">
+                  Your 10% of the supply and your share of the raise unlock linearly over 30 days from graduation. Every launch on
+                  Crux vests, and buyers see it as a trust badge. Fixed on-chain at launch.
+                </p>
               </div>
-              <p className="mt-3 text-[11.5px] leading-snug text-dim">Fixed on-chain at launch: it can&apos;t be changed later, and buyers see it before they buy.</p>
-            </fieldset>
+              <VestingBadge days={30} />
+            </div>
           )}
 
           {LAUNCH_FACTORY && LAUNCH_FACTORY.version >= 6 && protectionAdvanced && (

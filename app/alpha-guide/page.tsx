@@ -223,7 +223,7 @@ export default function AlphaGuidePage() {
                 </>,
                 <>
                   From Base Sepolia it&apos;s one transfer, with no fee, and arrives at once. From another chain your wallet escrows the
-                  USDC there and Crux pays it into your account on Base in about a minute, less 0.3%. You need a little of that
+                  USDC there and Crux pays it into your account on Base in about a minute, also with no fee. You need a little of that
                   chain&apos;s gas token (Solana: about {SOLANA_MIN_SOL} devnet SOL).
                 </>,
                 <>
@@ -295,8 +295,8 @@ export default function AlphaGuidePage() {
             <p className="text-[14px] text-chrome/65">
               On graduation, 30% of supply and half the raise seed a Uniswap V2 pool whose LP tokens go to 0x…dEaD, locked forever.
               Creators receive 70% of the 1% protocol fee at once; their share of the raise and their 10% of supply vest over 30 days,
-              unless the creator chose an instant unlock at launch. Every launch shows which with a badge: {b("30D vested")} or a red{" "}
-              {b("Instant unlock")}.
+              on every launch made on Crux ({b("🛡️ Creator vested 30D")}). The contract itself still allows an instant unlock, so a
+              launch made on it directly could skip vesting: that shows as a red {b("Instant unlock")} badge, read from the chain.
             </p>
           </Section>
 

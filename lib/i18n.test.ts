@@ -17,7 +17,7 @@ test("every language has every key, non-empty, with the same placeholders as Eng
 });
 
 test("fills placeholders and keeps unknown ones", () => {
-  assert.equal(translate("en", "badge.vested", { days: 30 }), "30D vested");
+  assert.equal(translate("en", "badge.vested", { days: 30 }), "Creator vested 30D");
   assert.equal(translate("zh", "badge.antiSniper", { window: "60s" }), "防狙击 60s");
   assert.equal(translate("en", "vault.protected"), "Protected · withdrawals only to {address}");
 });

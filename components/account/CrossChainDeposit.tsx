@@ -16,8 +16,11 @@ import { TESTNET_USDC, orderNonce } from "@/lib/intents";
 import { launchCaip19 } from "@/lib/launchTrade";
 import { PAY_SOURCES } from "@/lib/tokens";
 
-/** The solver's spread on deposits (crux-solver SPREAD_BPS): a deposit pays 1:1 less this, and the order signs exactly that. */
-const DEPOSIT_SPREAD_BPS = BigInt(30);
+/**
+ * The solver's spread on deposits (crux-solver DEPOSIT_SPREAD_BPS): none, so a deposit pays 1:1 and the order signs the
+ * full amount. Trades keep the 0.3% spread. Must not be lower than the solver's, or it skips the deposit.
+ */
+const DEPOSIT_SPREAD_BPS = BigInt(0);
 
 /** CruxCrossChainSettlerV2: the order names a recipient, so the deposit lands in the Crux account, not the wallet. */
 const ORDER_DATA_TYPE_V2 = keccak256(
@@ -64,7 +67,7 @@ type Step = { kind: "idle" } | { kind: "busy"; label: string } | { kind: "opened
  * USDC transfer from the wallet (the panel's `base.deposit`), and the account's address is there to send to directly.
  * From another chain the wallet escrows test USDC on Arbitrum Sepolia,
  * Ethereum Sepolia or BSC testnet in CruxCrossChainSettlerV2, naming the account as recipient; the Crux solver pays
- * Base test USDC into the account (1:1 less its 0.3% spread) and is repaid there once a Hyperlane proof of that payment
+ * Base test USDC into the account 1:1, with no fee, and is repaid there once a Hyperlane proof of that payment
  * lands. Unfilled, the wallet can refund 6 hours after the deadline. From Solana devnet the same deposit is a crux_escrow
  * order paying Base test USDC to the account, signed in a Solana wallet.
  */
@@ -261,7 +264,7 @@ export function CrossChainDeposit({
         <p className="mt-1.5 text-[11.5px] leading-relaxed text-dim">
           {over ? "More than your wallet holds there. " : ""}
           Wallet on {origin.name}: {originBalance.data !== undefined ? `$${Number(formatUnits(originBalance.data, origin.decimals)).toFixed(2)}` : "…"} test USDC (free at{" "}
-          {origin.faucet}). Arrives in your Crux account on Base in about a minute, less 0.3%. Needs a little {origin.chain.nativeCurrency.symbol} there for
+          {origin.faucet}). Arrives in your Crux account on Base in about a minute, no fee. Needs a little {origin.chain.nativeCurrency.symbol} there for
           gas.
         </p>
       ) : (
@@ -270,7 +273,7 @@ export function CrossChainDeposit({
           {solana.payer
             ? `Solana wallet: ${solana.usdc !== null ? `$${Number(formatUnits(solana.usdc, 6)).toFixed(2)}` : "…"} devnet USDC (free at faucet.circle.com). `
             : "Connect a Solana wallet in the next step. Devnet USDC is free at faucet.circle.com. "}
-          Arrives in your Crux account on Base in about a minute, less 0.3%. Needs a little devnet SOL for fees.
+          Arrives in your Crux account on Base in about a minute, no fee. Needs a little devnet SOL for network fees.
         </p>
       )}
       {step.kind === "busy" && <p role="status" className="mt-1.5 text-[12px] text-muted">{step.label}</p>}
