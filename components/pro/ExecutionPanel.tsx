@@ -503,7 +503,8 @@ function BidForm({
 const QUEUED_STATUS: Record<StandingView["status"], string> = {
   open: "waiting for the open",
   submitted: "sent to the batch",
-  cancelled: "cancelled",
+  // The keeper's release when the launch cancels (one the trader cancelled reads "cancelled").
+  cancelled: "released",
   expired: "expired",
   failed: "not sent",
 };
@@ -519,7 +520,7 @@ function QueuedAtOpen({ orders, onCancel }: { orders: StandingView[]; onCancel: 
             <span className="font-mono text-chrome">${fmtUsdc(BigInt(o.amountIn))}</span>
             <span className="font-mono text-muted">up to {fmtTokenPrice(o.triggerUsd)}</span>
             <span className={`ml-auto text-[10.5px] ${o.status === "open" ? "text-signal" : "text-dim"}`} title={o.note ?? undefined}>
-              {QUEUED_STATUS[o.status]}
+              {o.status === "cancelled" && !o.note?.startsWith("Launch cancelled") ? "cancelled" : QUEUED_STATUS[o.status]}
             </span>
             {o.status === "open" && (
               <button type="button" onClick={() => onCancel(o)} aria-label="Cancel this buy at open" className="text-dim hover:text-down">
@@ -1280,8 +1281,43 @@ export function ExecutionPanel({
           Demand stayed below the floor, so no tokens were sold and every deposit is refundable in full. If this wallet bid, its refund is
           in the notice above.
         </p>
+        {crux.loggedIn && crux.account && <ReleasedBuysAtOpen token={auction.token} />}
       </section>
     );
   }
   return <div className="p-3">{fallback}</div>;
+}
+
+/**
+ * A cancelled launch's buys at open from the account: the keeper releases them as soon as it sees the cancellation (no
+ * USDC ever left the account); one it hasn't reached yet can be cancelled here.
+ */
+function ReleasedBuysAtOpen({ token }: { token: Address }) {
+  const crux = useCruxAccount();
+  const standing = useStandingOrders();
+  const [error, setError] = useState<string | null>(null);
+  const mine = (standing.orders ?? []).filter((o) => o.atOpen && o.token.toLowerCase() === token.toLowerCase());
+  if (mine.length === 0) return null;
+  const cancel = async (o: StandingView) => {
+    if (!crux.sign || !crux.owner || !crux.account) return;
+    try {
+      await cancelStanding(crux.sign, crux.owner, crux.account, [BigInt(o.nonce)], []);
+      standing.refresh();
+    } catch (err) {
+      setError(launchError(err));
+    }
+  };
+  return (
+    <div className="mt-3">
+      <p className="text-[12px] leading-relaxed text-muted">
+        {mine.some((o) => o.status === "open")
+          ? "Your buy at open is being released: nothing was spent, and the USDC stays in your CRUX Account."
+          : "Your buy at open was released: nothing was spent, and the USDC stayed in your CRUX Account."}
+      </p>
+      <div className="mt-2">
+        <QueuedAtOpen orders={mine} onCancel={(o) => void cancel(o)} />
+      </div>
+      {error && <p className="mt-1.5 text-[11.5px] text-down">{error}</p>}
+    </div>
+  );
 }

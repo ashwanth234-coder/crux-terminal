@@ -10,7 +10,7 @@ import { SOLANA_KEPT_SOL, SOLANA_MIN_SOL, SOLANA_OPEN_SOL, SOLANA_RETURNED_SOL, 
 export const metadata: Metadata = {
   title: "Alpha tester guide · Crux",
   description:
-    "How to test Crux on Base Sepolia: wallet setup, faucets, launching and bidding in a batch auction, trading graduated tokens with one signature, paying from other chains, refunds and the alpha's trust model.",
+    "How to test Crux on Base Sepolia: wallet and CRUX Account setup, deposits from any chain, launching and buying in the 60-second fair launch, buy at open, trading graduated tokens, refunds and the alpha's trust model.",
 };
 
 /** Set NEXT_PUBLIC_ALPHA_FEEDBACK_URL (Telegram, Discord or a form) to show a feedback button. */
@@ -22,7 +22,8 @@ const BASESCAN = "https://sepolia.basescan.org";
 const SECTIONS = [
   { id: "overview", title: "Overview" },
   { id: "setup", title: "Network & wallet" },
-  { id: "auction", title: "Launch & bid" },
+  { id: "account", title: "Your CRUX Account" },
+  { id: "auction", title: "Launch & buy" },
   { id: "trading", title: "Trade graduated tokens" },
   { id: "troubleshooting", title: "Troubleshooting & refunds" },
   { id: "trust", title: "Trust disclosures" },
@@ -31,12 +32,14 @@ const SECTIONS = [
 
 /** The live testnet contracts (Base Sepolia unless a link says otherwise). */
 const CONTRACTS: { name: string; address: string; href?: string }[] = [
-  { name: "CruxFactoryV7 (launches)", address: "0xeacB98371D5597c20A9ECDf6f09726817489722e" },
+  { name: "CruxFactoryV8 (launches, token addresses ending in 5afe)", address: "0xdB9f226fb44D5E8d25e2aACA4f7080c83011CfB5" },
+  { name: "CruxFactoryV7 (earlier launches)", address: "0xeacB98371D5597c20A9ECDf6f09726817489722e" },
   { name: "CruxSettlerV4 (holds orders until they fill)", address: "0x399147a5960A120A3b8b89A33a30500a561145D9" },
   { name: "CruxDestinationSettlerV2 (fills)", address: "0x62e5ed6BC2f604fad76152045559805c11D1cdf4" },
   { name: "CruxLister (automatic listing)", address: "0xCC99DaBf30b73978be799957717a2f7600cb39BF" },
   { name: "CruxFillProver (confirms cross-chain fills, via Hyperlane)", address: "0x7cb1aDd4975CbF1a5a3FA4fd60F11b010E4b29e8" },
-  { name: "CruxAccountFactoryV2 (Crux accounts)", address: "0xf8962965f04e20B95dAdD931fDe00121906a97DC" },
+  { name: "CruxAccountFactoryV3 (CRUX Accounts, addresses ending in 5afe)", address: "0xBD7AF76bcc2D080364a0c3C138ef82efCF8E12DF" },
+  { name: "CruxAccountFactoryV2 (earlier Crux accounts, standing orders)", address: "0xf8962965f04e20B95dAdD931fDe00121906a97DC" },
   { name: "Admin Safe (2-of-3)", address: "0x49441cbA3cF9Db98d39Df4bDf8bF1a9D4Ea4fb6d" },
   { name: "Crux filler + keeper wallet", address: "0xDEbbE137f2AB252e28d1070F687010C0909d0492" },
   { name: "Earlier filler + keeper wallet (retired 2026-11-01)", address: "0x69E422d3Cca945a44210684b57F85f556212AD67" },
@@ -121,8 +124,8 @@ export default function AlphaGuidePage() {
               <span className="block text-steel">Base Sepolia testnet.</span>
             </h1>
             <p className="mt-6 max-w-[40rem] text-[16px] leading-relaxed text-chrome/70">
-              Everything you need to launch a token, bid in a fair batch auction and trade graduated tokens with one signature. Every
-              token here is a test token with no value.
+              Everything you need to launch a token, buy into its 60-second fair launch and trade it after, from a wallet or a gasless
+              CRUX Account funded from any chain. Every token here is a test token with no value.
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
               {["Base Sepolia · 84532", "Test tokens only", "Unaudited contracts"].map((t) => (
@@ -139,18 +142,23 @@ export default function AlphaGuidePage() {
             </p>
             <ul className="space-y-2.5">
               <li>
-                {b("Batch auctions.")} A launch sells in one window (the creator picks 60 seconds, 5 minutes, 1 hour or 24 hours) and
-                every filled bid pays one uniform clearing price.
+                {b("Fair launches.")} A launch opens with a 60-second window (5 minutes if the creator picks it) where every buyer pays
+                one opening price, then trades in 60-second batches at one price each before moving to Uniswap. Bots get no
+                first-block edge.
               </li>
-              <li>{b("Limit bids and caps.")} You can cap the price you&apos;ll pay, and each wallet&apos;s deposit is capped by the creator.</li>
               <li>
-                {b("One-signature trading.")} After a launch graduates, you trade its token by signing an order. Crux fills it from
-                the token&apos;s locked Uniswap V2 pool in a batch where everyone pays the same price.
+                {b("One amount, one Buy.")} You enter USDC and press Buy. A max price is set for you (10x the projected price);
+                you can set your own under ⚙️ Advanced. Each wallet&apos;s deposit is capped by the creator.
+              </li>
+              <li>
+                {b("A CRUX Account.")} Log in with email or Google, deposit test USDC from any chain, and trade, launch and buy at open
+                with no gas and no wallet pop-ups.
               </li>
             </ul>
             <p>
-              {b("Chains.")} Tokens, auctions and pools live on Base Sepolia. You can trade from {LIVE_NAMES} (testnets; Solana
-              devnet), and nothing has to be bridged. {SOON_LINE}. Auction bids pay from Base Sepolia for now.
+              {b("Chains.")} Tokens, auctions and pools live on Base Sepolia. You can deposit and trade from {LIVE_NAMES} (testnets;
+              Solana devnet), and nothing has to be bridged. {SOON_LINE}. A wallet pays into the opening from Base Sepolia; a CRUX
+              Account queues a buy at open instead.
             </p>
             <p>Use it like you would a real product, try to break it, and tell us what confused you.</p>
           </Section>
@@ -198,7 +206,35 @@ export default function AlphaGuidePage() {
             />
           </Section>
 
-          <Section id="auction" title="3. Workflow 1: the batch auction">
+          <Section id="account" title="3. Your CRUX Account">
+            <p>
+              A CRUX Account is a smart account on Base Sepolia (its address ends in <code className="font-mono text-[13.5px] text-chrome">5afe</code>). It trades, launches and buys at
+              open without gas or pop-ups, and its funds can only ever be withdrawn to the wallet you bind to it.
+            </p>
+            <Steps
+              items={[
+                <>
+                  Click {b("Log in")} in the top bar and sign in with email or Google. Your account&apos;s balance then shows in the top
+                  bar: click it to open the account page, and bind your withdrawal wallet when asked.
+                </>,
+                <>
+                  Under {b("Deposit")}, pick the chain your test USDC is on: {b("Base Sepolia")}, Arbitrum Sepolia, Ethereum Sepolia,
+                  BNB Chain testnet or Solana devnet. Enter an amount and press {b("Deposit")}.
+                </>,
+                <>
+                  From Base Sepolia it&apos;s one transfer, with no fee, and arrives at once. From another chain your wallet escrows the
+                  USDC there and Crux pays it into your account on Base in about a minute, less 0.3%. You need a little of that
+                  chain&apos;s gas token (Solana: about {SOLANA_MIN_SOL} devnet SOL).
+                </>,
+                <>
+                  You can also send test USDC on {b("Base Sepolia")} straight to the account address shown under the Base choice. Only
+                  on Base Sepolia: USDC sent to that address on any other chain doesn&apos;t reach the account.
+                </>,
+              ]}
+            />
+          </Section>
+
+          <Section id="auction" title="4. Workflow 1: the fair launch">
             <p>{b("Launch a token")} (creators):</p>
             <Steps
               items={[
@@ -213,42 +249,48 @@ export default function AlphaGuidePage() {
                   shows each wallet&apos;s deposit limit and how many buyers the sale needs.
                 </>,
                 <>
-                  Choose a {b("5 min")} batch window, click {b("Deploy Token & Initialize Auction")} and confirm in your wallet. You land
-                  on the auction page: share that link with the cohort.
+                  Keep {b("60s Fair Launch")} (the default) or pick {b("5m Fair Launch")}. Click {b("Deploy Token & Initialize Auction")}{" "}
+                  and confirm in your wallet, or, logged in, {b("Launch from Crux account")}: no gas, and your creator earnings land in
+                  the account. You land on the launch page: share that link with the cohort.
                 </>,
               ]}
             />
 
-            <p>{b("Bid")} (everyone):</p>
+            <p>{b("Buy")} (everyone):</p>
             <Steps
               items={[
-                <>Open the auction link. When the status turns {b("Deposits open")}, the bid panel appears.</>,
                 <>
-                  Type an amount, or tap {b("25%")}, {b("50%")} or {b("MAX")}. MAX is the most you can bid: your test USDC balance or
-                  your remaining wallet cap, whichever is lower.
+                  Open the launch link. When the countdown starts, the {b("Opening pot")} appears: USDC committed, buyers, the implied
+                  market cap and what&apos;s left to the target, updating live.
                 </>,
                 <>
-                  Optional: turn on {b("Limit price")} and set the most you&apos;ll pay per token (the contract&apos;s{" "}
-                  <code className="font-mono text-[12.5px]">maxPricePerToken</code>). It rounds down to the nearest 1% price step. If the
-                  batch clears above your limit, your whole bid is refunded.
+                  {b("From a wallet:")} pick {b("Wallet")}, type an amount in {b("Amount in USDC")} (or tap {b("25%")}, {b("50%")},{" "}
+                  {b("MAX")}) and press {b("Buy (Fair Launch)")}. The first time, your wallet asks twice: approve the exact amount, then
+                  buy. You see {b("✅ Locked in the opening batch")}.
                 </>,
                 <>
-                  Read the {b("Risk preview")}: your worst price, the minimum you receive, and what selling everything at graduation
-                  would return. Then click {b("Submit batch bid")}. The first time, your wallet asks twice: approve the exact amount,
-                  then place the bid. Watch the {b("Demand curve")} and the {b("Projected clearing")} price move as others bid.
+                  {b("From a CRUX Account:")} the opening auction itself takes wallets only, so the account queues a{" "}
+                  {b("Buy at open")} instead, as soon as the launch page appears, even before the countdown. Enter an amount and press{" "}
+                  {b("Buy at open · CRUX Account")}: no gas. Crux buys for you in the first 60-second batches after the open, at the
+                  batch price, never above the max price. It shows under the form, where you can cancel it until then.
                 </>,
                 <>
-                  When the window closes, the Crux keeper settles the auction automatically within about 15 seconds (anyone can also
-                  press Settle). Then {b("Claim tokens")}: your tokens at the clearing price plus any unused USDC. If demand missed the
-                  target, it cancels and you {b("Claim refund")} in full.
+                  Optional, under {b("⚙️ Advanced")}: {b("Set my own max price")} instead of the automatic 10x. It rounds down to the
+                  nearest 1% price step. If the opening clears above it, your whole buy is refunded.
+                </>,
+                <>
+                  When the window closes, the Crux keeper settles within about 15 seconds (anyone can also press Settle). Then{" "}
+                  {b("Claim tokens")}: your tokens at the opening price plus any unused USDC. If deposits missed the target, the launch
+                  cancels: you {b("Claim refund")} in full, and a queued buy at open is released without spending anything.
                 </>,
               ]}
             />
 
             <Callout title="The anti-sniper guarantee">
-              Arriving first buys nothing. Whether you bid in the first second or the last, every filled bid pays the same clearing
-              price, and per-wallet caps stop one address from taking the sale. Bids are public on-chain while the window is open
-              (not sealed), so use a limit price if you care about the ceiling.
+              Arriving first buys nothing. Whether you buy in the first second or the last, everyone in the opening pays the same
+              price, and per-wallet caps stop one address from taking the sale. The first trading minute after the open clears the
+              same way, in one 60-second batch. Buys are public on-chain while the window is open (not sealed), so set your own max
+              price if you care about the ceiling.
             </Callout>
             <p className="text-[14px] text-chrome/65">
               On graduation, 30% of supply and half the raise seed a Uniswap V2 pool whose LP tokens go to 0x…dEaD, locked forever.
@@ -258,7 +300,7 @@ export default function AlphaGuidePage() {
             </p>
           </Section>
 
-          <Section id="trading" title="4. Workflow 2: trading graduated tokens">
+          <Section id="trading" title="5. Workflow 2: trading graduated tokens">
             <Steps
               items={[
                 <>
@@ -270,8 +312,10 @@ export default function AlphaGuidePage() {
                   you receive, the minimum signed into your order, the slippage and the cost of selling straight back.
                 </>,
                 <>
-                  Click {b("Sign order")}: approve the exact amount, sign the order (the signature itself is free), then submit it.
-                  Approving and submitting each cost a little test ETH. The settler holds your funds until the order fills.
+                  Logged in, the order pays from your {b("CRUX Account")} by default: press {b("Buy now · CRUX Account")}, with no gas
+                  and no pop-up. From a wallet, click {b("Sign order")}: approve the exact amount, sign the order (the signature itself
+                  is free), then submit it; approving and submitting each cost a little test ETH. The settler holds the funds until the
+                  order fills.
                 </>,
                 <>
                   Within about a minute, Crux&apos;s next batch swaps in the token&apos;s Uniswap V2 pool and delivers to your wallet;
@@ -303,7 +347,7 @@ export default function AlphaGuidePage() {
             </Callout>
           </Section>
 
-          <Section id="troubleshooting" title="5. Troubleshooting & refunds">
+          <Section id="troubleshooting" title="6. Troubleshooting & refunds">
             <p>{b("An order didn't fill.")} Every order has a 10-minute fill deadline. If it isn&apos;t filled:</p>
             <Steps
               items={[
@@ -341,7 +385,7 @@ export default function AlphaGuidePage() {
             </ul>
           </Section>
 
-          <Section id="trust" title="6. Transparent trust disclosures">
+          <Section id="trust" title="7. Transparent trust disclosures">
             <p>This alpha is deliberately simple. You should know exactly what you&apos;re trusting:</p>
             <ul className="divide-y divide-line rounded-xl border border-line bg-panel">
               {[
@@ -349,7 +393,7 @@ export default function AlphaGuidePage() {
                 ["Escrow pays only the proven filler.", "On Base, the settler releases your funds only to the filler the destination contract recorded as delivering your exact order; nobody else, the team included, can redirect it. Unfilled orders refund to you after the deadline."],
                 ["Cross-chain orders are confirmed back on the paying chain.", "Paid from Ethereum, Arbitrum or BNB Chain testnets, or from Solana devnet: your funds on that chain are released only when a Hyperlane message from the Crux fill prover on Base proves who filled the order. This trusts Hyperlane's validators (the default security module). With no proof, you refund 6 hours after the deadline."],
                 ["Crux accounts: withdrawals only to your wallet.", "An email or Google account can trade, but its funds can only be withdrawn to the wallet you bound. Changing that wallet waits 48 hours (a timelock), and your current wallet can cancel the change and sweep everything to itself."],
-                ["Standing orders run without you.", "Take profit, stop loss, trailing stop and buy-the-dip orders wait for their price with this page closed. Your signed floor is enforced on-chain, so an order can never fill below it; the keeper decides when to send it. Orders in one group (TP + SL) are one-cancels-the-other: when one fills, the other can't."],
+                ["Standing orders run without you.", "Take profit, stop loss, trailing stop, buy-the-dip and buy-at-open orders wait for their moment with this page closed. Your signed floor is enforced on-chain, so an order can never fill below it; the keeper decides when to send it. Orders in one group (TP + SL) are one-cancels-the-other: when one fills, the other can't."],
                 ["Automatic listing, admin by a Safe.", "Graduated tokens are listed for Crux orders by a permissionless lister. Admin settings (the fee treasury, new factories, session limits) need 2 of the 3 signers of the Crux Safe."],
                 ["Unaudited contracts, testnet only.", "Nothing here has been audited. The next contract set (including settler V5) is frozen for an external audit that hasn't started yet. Never use a wallet that holds real funds, and never share a private key or seed phrase with anyone, including us."],
               ].map(([t, d]) => (
@@ -375,7 +419,7 @@ export default function AlphaGuidePage() {
             </dl>
           </Section>
 
-          <Section id="feedback" title="7. Feedback & bug reports">
+          <Section id="feedback" title="8. Feedback & bug reports">
             <p>The most useful reports include:</p>
             <ul className="grid gap-2 text-[14px] sm:grid-cols-2">
               {[
