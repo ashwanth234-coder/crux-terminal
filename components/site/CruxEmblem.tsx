@@ -1,12 +1,13 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useRef } from "react";
+import { CRUX_MARK_PATH } from "./Logo";
 
 /**
- * The hero's CRUX emblem: the glass and liquid-chrome star (public/crux-emblem.webp) in a black lens. It follows the
- * pointer anywhere on the page: the star tilts towards it, a reflection slides across the chrome, and the orange core
- * brightens as the pointer nears it; a tap sends one pulse out from the core. With no pointer it drifts slowly.
+ * The hero's CRUX emblem: the mark (components/site/Logo.tsx), lit Electric Orange, in a black glass lens. It follows
+ * the pointer anywhere on the page: the mark tilts towards it, a reflection slides across it, and the core glows through
+ * the diamond at its centre as the pointer nears it; a tap sends one pulse out from the core. With no pointer it drifts
+ * slowly.
  * prefers-reduced-motion keeps it still. On black the lens is invisible; on the light theme it reads as a glass disc.
  */
 
@@ -82,8 +83,22 @@ export function CruxEmblem({ className = "" }: { className?: string }) {
       <div data-stage className="absolute inset-0 [transform-style:preserve-3d] [transform:rotateX(var(--rx))_rotateY(var(--ry))] will-change-transform">
         {/* The lens: black glass, so the image's black ground disappears on the dark theme */}
         <div className="absolute inset-0 isolate overflow-hidden rounded-full bg-black ring-1 ring-tint/10">
-          <Image src="/crux-emblem.webp" alt="" fill priority sizes="(min-width: 768px) 480px, 300px" className="pointer-events-none object-cover" draggable={false} />
-          {/* A reflection that follows the pointer; overlay leaves the black untouched and lifts only the chrome */}
+          {/* The mark, lit from the upper left, with a soft orange bloom behind it */}
+          <svg viewBox="0 0 24 24" className="pointer-events-none absolute inset-[22%] h-[56%] w-[56%]">
+            <defs>
+              <linearGradient id="crux-emblem-fill" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stopColor="#ff8a4c" />
+                <stop offset="0.55" stopColor="#ff5500" />
+                <stop offset="1" stopColor="#c23d00" />
+              </linearGradient>
+              <filter id="crux-emblem-bloom" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="1.1" />
+              </filter>
+            </defs>
+            <path d={CRUX_MARK_PATH} fillRule="evenodd" fill="#ff5500" opacity="0.45" filter="url(#crux-emblem-bloom)" />
+            <path d={CRUX_MARK_PATH} fillRule="evenodd" fill="url(#crux-emblem-fill)" />
+          </svg>
+          {/* A reflection that follows the pointer; overlay leaves the black untouched and lifts only the mark */}
           <div
             className="absolute inset-0 mix-blend-overlay"
             style={{ background: "radial-gradient(circle at var(--gx) var(--gy), rgb(255 255 255 / 0.85), rgb(255 190 150 / 0.25) 22%, transparent 48%)" }}
@@ -91,7 +106,7 @@ export function CruxEmblem({ className = "" }: { className?: string }) {
         </div>
         {/* The core flare, floating in front of the glass; brighter as the pointer nears it */}
         <div
-          className="pointer-events-none absolute left-1/2 top-[45.7%] aspect-square w-[30%] rounded-full mix-blend-screen"
+          className="pointer-events-none absolute left-1/2 top-1/2 aspect-square w-[22%] rounded-full mix-blend-screen"
           style={{
             background: "radial-gradient(circle, rgb(255 214 186 / 0.9), rgb(255 85 0 / 0.55) 28%, rgb(255 85 0 / 0.12) 55%, transparent 70%)",
             opacity: "calc(0.15 + var(--glow) * 0.85)",

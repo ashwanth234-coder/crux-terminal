@@ -119,11 +119,11 @@ The terminal, launch and pro views use the same tokens, packed tighter.
 
 ## Brand mark
 
-One geometric four-point mark (`CRUX_MARK_PATH` in components/site/Logo.tsx): four equal tapered arms meeting at a waist, so it reads as a convergence point, not a cross.
-- Flat Electric Orange on black: favicon (app/icon.svg), app icon and splash (public/), OG image.
-- Single colour (`CruxMark`, currentColor): legible at 16px, no glow, works on any ground.
-- Glass and liquid chrome (`CruxEmblem`): the hero version, a rendered image (public/crux-emblem.webp) of the mark as a liquid-chrome glass star with an orange core, set in a black lens (invisible on the dark ground, a glass disc on the light one). It follows the pointer anywhere on the page: up to 14° of 3D tilt, a reflection sliding across the chrome (overlay blend, so the black stays black), and a core flare that brightens as the pointer nears it. A tap sends one orange pulse ring from the core; with no pointer for 3s it drifts slowly. It only animates while on screen.
-- Wordmark: CRUX in Archivo 500, chrome, 0.42em tracking.
+One geometric X mark (`CRUX_MARK_PATH` in components/site/Logo.tsx, adopted 2026-11-02): four bold arms with square-cut ends meeting around a diamond cut out of the centre, the crux where every chain's route converges on one pool. It replaced a four-point star that read as an AI sparkle (Gemini). Straight edges and no seams, so it holds at 16px.
+- Flat Electric Orange on black: favicon (app/icon.svg, public/icon.svg), app icon and splash (public/icon-1024.png, public/splash.png from scripts/generate-icons.mjs), OG image.
+- Single colour (`CruxMark`, currentColor, fill-rule evenodd): legible at 16px, no glow, works on any ground.
+- The hero (`CruxEmblem`): the mark lit in orange (a gentle upper-left gradient and a soft bloom), drawn in SVG inside a black lens (invisible on the dark ground, a glass disc on the light one). It follows the pointer anywhere on the page: up to 14° of 3D tilt, a reflection sliding across it (overlay blend, so the black stays black), and a core flare through the centre diamond that brightens as the pointer nears it. A tap sends one orange pulse ring from the core; with no pointer for 3s it drifts slowly. It only animates while on screen.
+- Wordmark: "CRU" in Archivo 500, chrome, 0.42em tracking, with the mark as its X (sized to the capitals).
 
 ## Components
 

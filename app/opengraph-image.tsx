@@ -21,11 +21,12 @@ export default function OpengraphImage() {
           fontFamily: "sans-serif",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-          <svg width="44" height="44" viewBox="0 0 24 24">
-            <path d={CRUX_MARK_PATH} fill="#ff5500" />
+        {/* The wordmark: "CRU" with the mark as its X */}
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <div style={{ fontSize: 30, letterSpacing: 14, fontWeight: 500 }}>CRU</div>
+          <svg width="27" height="27" viewBox="0 0 24 24">
+            <path d={CRUX_MARK_PATH} fill="#ff5500" fillRule="evenodd" />
           </svg>
-          <div style={{ fontSize: 30, letterSpacing: 14, fontWeight: 500 }}>CRUX</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", fontSize: 116, fontWeight: 400, lineHeight: 0.95, letterSpacing: -2 }}>
           <div>MARKETS</div>
