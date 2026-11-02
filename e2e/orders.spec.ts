@@ -60,8 +60,10 @@ test.describe("fair-launch opening", () => {
     // The bench's auction: $6,000 from 3 buyers toward a $10,000 target, about 3 minutes left.
     await expect(pot.getByLabel("$6,000.00 committed")).toBeVisible();
     await expect(pot.getByText("3", { exact: true })).toBeVisible();
-    await expect(pot.getByText(/\$4,000(\.00)? more/)).toBeVisible();
+    await expect(pot.getByText("$4,000 more", { exact: true })).toBeVisible();
     await expect(pot.getByText(/opens in/)).toBeVisible();
+    // $6,000 in the first 2 minutes with 3 left: on pace to pass $10,000.
+    await expect(pot.getByText(/On track: at this pace it fills/)).toBeVisible();
   });
 
   test("⚙️ Advanced: a buyer's own max price replaces the automatic one", async ({ page }) => {

@@ -29,7 +29,7 @@ import { useOrderRequests, type ChartOrderKind, type ChartOrderRequest } from "@
 import { slippageFor, useTradeSettings } from "@/hooks/useTradeSettings";
 import { USDC_DECIMALS, fmtTokens, fmtUsdc, formatRemaining, launchError, type TxStep } from "@/lib/launch";
 import { fmtTokenPrice, launchCaip19 } from "@/lib/launchTrade";
-import { PRICE_DECIMALS, V3_TICK_STEP_PERCENT, fmtUsdcExact, graduationNeeds, parsePriceUsd, priceUsd, usesTicks, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
+import { PRICE_DECIMALS, V3_TICK_STEP_PERCENT, fmtUsdcExact, graduationNeeds, maxDepositV3, parsePriceUsd, priceUsd, usesTicks, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
 import { cancelStanding, placeStanding, standingFloor, type StandingView } from "@/lib/standing";
 import { useStandingOrders } from "@/hooks/useStandingOrders";
 import { minReceived, sourceAsset, type OrderDraft, type Side } from "@/lib/order";
@@ -590,6 +590,27 @@ function useCountUp(target: number) {
   return reduced ? target : shown;
 }
 
+/**
+ * One line on where the opening is heading, from its pace so far: met, on track at this rate, or what it still needs in
+ * the time left (in buyers at the per-wallet cap), so buyers can see a launch about to fill, or about to miss.
+ */
+function momentum(a: AuctionV2, now: number, short: bigint): { text: string; tone: "good" | "warn" | "plain" } {
+  const elapsed = Math.max(0, now - a.startTime);
+  const left = Math.max(0, a.startTime + a.batchWindow - now);
+  if (short === BigInt(0)) return { text: "Target met ✓ It launches when the countdown ends; buys until then still get the same price.", tone: "good" };
+  if (left === 0) return { text: "Countdown over: settling now. Short of the target means everyone is refunded.", tone: "warn" };
+  const shortUsd = Number(formatUnits(short, USDC_DECIMALS));
+  const perWallet = maxDepositV3(a);
+  const buyers = perWallet > BigInt(0) ? Number((short + perWallet - BigInt(1)) / perWallet) : null;
+  const need = `Needs ${shortUsd < 0.01 ? "$0.01" : wholeUsd.format(Math.ceil(shortUsd))} more in ${formatRemaining(left)}${buyers !== null ? ` (${buyers}+ more buyer${buyers === 1 ? "" : "s"})` : ""}.`;
+  // A pace once a few seconds have passed: deposits so far per second, carried to the end of the window.
+  if (elapsed >= 5 && a.totalDeposits > BigInt(0)) {
+    const projected = Number(formatUnits(a.totalDeposits, USDC_DECIMALS)) * (1 + left / elapsed);
+    if (projected >= Number(formatUnits(a.totalDeposits + short, USDC_DECIMALS))) return { text: `On track: at this pace it fills before the countdown ends. ${need}`, tone: "good" };
+  }
+  return { text: need, tone: "warn" };
+}
+
 const potFmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 const wholeUsd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const capFmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 2 });
@@ -611,6 +632,7 @@ function OpeningPot({ model, auction }: { model: LaunchV2Model; auction: Auction
   const shownPot = useCountUp(pot);
   const shownCap = useCountUp(cap);
   const filled = target > 0 ? Math.min(100, (pot / target) * 100) : 0;
+  const pace = momentum(auction, now, short);
   return (
     <div className="mb-3 rounded-lg border border-line bg-void/60 p-3" role="group" aria-label="Opening pot">
       <div className="flex items-baseline justify-between">
@@ -625,6 +647,9 @@ function OpeningPot({ model, auction }: { model: LaunchV2Model; auction: Auction
       <div className="mt-2 h-1 overflow-hidden rounded-full bg-line" aria-hidden="true">
         <div className="h-full rounded-full bg-signal transition-[width] duration-700" style={{ width: `${filled}%` }} />
       </div>
+      <p className={`mt-1.5 text-[11.5px] leading-snug ${pace.tone === "good" ? "text-up" : pace.tone === "warn" ? "text-signal" : "text-muted"}`} aria-live="polite">
+        {pace.text}
+      </p>
       <dl className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
         <div>
           <dt className="text-dim">Buyers</dt>

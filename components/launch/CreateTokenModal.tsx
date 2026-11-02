@@ -10,7 +10,7 @@ import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { cruxBatchFactoryAbi, cruxFactoryAbi, factoryV4Abi, factoryV6Abi, factoryV8Abi } from "@/contracts/abis/batchAuction";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import { BATCH_WINDOW_SECONDS, FACTORY, FACTORY_V7, LAUNCH_FACTORY } from "@/lib/intents";
-import { PRICE_DENOMINATOR, V2_FEE, V2_MIN_LEAD_SECONDS, V2_SPLIT, V2_WINDOWS, buyersNeeded, fmtUsdcExact, graduationNeeds, maxDepositV3, windowLabel } from "@/lib/launchV2";
+import { PRICE_DENOMINATOR, V2_FEE, V2_MIN_LEAD_SECONDS, V2_SPLIT, V2_WINDOWS, buyersNeeded, graduationNeeds, maxDepositV3, windowLabel } from "@/lib/launchV2";
 import { launchError, previewHref } from "@/lib/launch";
 import { simulateThenWrite } from "@/lib/preflight";
 import { VestingBadge } from "@/components/ui/VestingBadge";
@@ -61,6 +61,22 @@ const FAIR_LAUNCH_CHOICES = [
   { seconds: 300, title: "5m Fair Launch", note: "Five minutes for buyers to find it, for a launch you'll announce as it opens. Everyone still pays one price." },
 ] as const;
 
+/**
+ * What a creator picks instead of numbers: how many people they expect in the opening. Each sets the graduation target
+ * and the per-wallet cap, so the sale needs about that many buyers to fill; Custom shows the fields. The targets are
+ * multiples of $3, which the sale of a 1B supply (600M tokens) divides evenly: no rounding is added on top.
+ */
+const LAUNCH_SIZES = [
+  { key: "small", title: "Small", who: "A few friends", target: "3", walletCap: "34" },
+  { key: "community", title: "Community", who: "Your group chat or followers", target: "30", walletCap: "10" },
+  { key: "wide", title: "Wide", who: "A big audience, each buying a little", target: "90", walletCap: "2" },
+] as const;
+type LaunchSize = (typeof LAUNCH_SIZES)[number]["key"] | "custom";
+const DEFAULT_SUPPLY = "1,000,000,000";
+
+/** USDC to the cent for creators ($10.00, not $10.000001: the extra unit only matters to the opening's last buyer). */
+const cents = (units: bigint) => `$${(Number(units) / 1e6).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 const INITIAL: Form = {
   name: "",
   symbol: "",
@@ -70,13 +86,13 @@ const INITIAL: Form = {
   website: "",
   telegram: "",
   github: "",
-  supply: "1,000,000,000",
-  target: FACTORY || LAUNCH_FACTORY ? "10" : "50,000",
+  supply: DEFAULT_SUPPLY,
+  target: LAUNCH_FACTORY ? "30" : FACTORY ? "10" : "50,000",
   batchAuction: true,
   instantUnlock: false,
   antiSniper: true,
   startsIn: "10",
-  walletCap: "5",
+  walletCap: "10",
   window: "60",
 };
 
@@ -135,11 +151,6 @@ function exactRaise(supply: string, target: string, walletCap: string) {
   return { graduationTarget, needs, perWallet, buyers };
 }
 
-/** The target's hint: what deposits must total, when the floor price's rounding puts it above the target. */
-function targetHint(supply: string, target: string, base: string) {
-  const r = exactRaise(supply, target, "100");
-  return r && r.needs > r.graduationTarget ? `${base}. Deposits must total $${fmtUsdcExact(r.needs)}: the floor price rounds up.` : base;
-}
 
 /** How many wallets a cap needs before the sale can fill (and so graduate). */
 function capHint(walletCap: string, target: string, supply: string) {
@@ -151,7 +162,7 @@ function capHint(walletCap: string, target: string, supply: string) {
     // the exact total (graduationNeeds), so the count of buyers is worked out in base units, not percent.
     const r = exactRaise(supply, target, walletCap);
     if (!r || r.buyers === null) return "Share of the sale one wallet can receive; the excess is refunded";
-    const each = `Each wallet can deposit up to $${fmtUsdcExact(r.perWallet)}`;
+    const each = `Each wallet can deposit up to ${cents(r.perWallet)}`;
     return r.buyers === 1 ? `${each}; one wallet can fill the whole sale` : `${each}; needs at least ${r.buyers} buyers to fill the sale and graduate`;
   }
   return n === 1
@@ -218,6 +229,9 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
 
   const [form, setForm] = useState<Form>(INITIAL);
   const [protectionAdvanced, setProtectionAdvanced] = useState(false);
+  // One choice instead of numbers (target and cap); Custom shows the fields.
+  const [size, setSize] = useState<LaunchSize>(LAUNCH_FACTORY ? "community" : "custom");
+  const custom = !LAUNCH_FACTORY || size === "custom";
   // Logged in with a Crux account and launching on V7: the launch is signed by the login key and submitted by the relay,
   // with the account as creator (no gas, nothing needed on Base). The wallet stays one tap away.
   const crux = useCruxAccount();
@@ -667,6 +681,50 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             </Field>
           </div>
 
+          {LAUNCH_FACTORY && (
+            <fieldset className="rounded-xl border border-line p-4">
+              <legend className="px-1 text-[13px] text-chrome">Launch size</legend>
+              <p className="text-[11.5px] leading-snug text-dim">
+                How many people do you expect in the opening? It sets how much it raises and how much each wallet can buy. If it
+                doesn&apos;t raise that, everyone is refunded.
+              </p>
+              <div role="radiogroup" aria-label="Launch size" className="mt-3 grid gap-2 sm:grid-cols-4">
+                {[...LAUNCH_SIZES, { key: "custom" as const, title: "Custom", who: "Set the numbers yourself", target: "", walletCap: "" }].map((s) => {
+                  const active = size === s.key;
+                  const r = s.key === "custom" ? null : exactRaise(DEFAULT_SUPPLY, s.target, s.walletCap);
+                  return (
+                    <button
+                      key={s.key}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => {
+                        setSize(s.key);
+                        if (s.key !== "custom") {
+                          set("supply", DEFAULT_SUPPLY);
+                          set("target", s.target);
+                          set("walletCap", s.walletCap);
+                        }
+                      }}
+                      className={`rounded-lg border p-3 text-left transition-colors ${active ? "border-signal/70 bg-panel-2" : "border-line hover:border-line-2"}`}
+                    >
+                      <span className={`block text-[13px] ${active ? "text-chrome" : "text-muted"}`}>{s.title}</span>
+                      <span className="mt-1 block text-[11.5px] leading-snug text-dim">{s.who}</span>
+                      {r && (
+                        <span className="mt-2 block font-mono text-[11px] leading-snug text-chrome/80">
+                          raises {cents(r.graduationTarget)}
+                          <br />
+                          {r.buyers}+ buyers · up to {cents(r.perWallet)} each
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+          )}
+
+          {custom && (
           <div className="grid gap-4 sm:grid-cols-2">
             <Field id={id("supply")} label="Initial supply" error={showErr("supply")} hint="Tokens, 18 decimals">
               <input
@@ -683,7 +741,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
               id={id("target")}
               label="Graduation target"
               error={showErr("target")}
-              hint={targetHint(form.supply, form.target, FACTORY ? "Test USDC the auction must raise to graduate" : "USDC the auction must raise to graduate")}
+              hint={FACTORY ? "Test USDC the opening must raise for the token to launch; under it, everyone is refunded" : "USDC the opening must raise for the token to launch; under it, everyone is refunded"}
             >
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-[14px] text-dim">$</span>
@@ -700,6 +758,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
               </div>
             </Field>
           </div>
+          )}
 
           {LAUNCH_FACTORY && (
             <div className="grid gap-4 sm:grid-cols-2">
@@ -722,6 +781,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                   <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-dim">minutes</span>
                 </div>
               </Field>
+              {custom && (
               <Field
                 id={id("walletCap")}
                 label="Max allocation per wallet"
@@ -741,6 +801,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                   <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-dim">%</span>
                 </div>
               </Field>
+              )}
             </div>
           )}
 
