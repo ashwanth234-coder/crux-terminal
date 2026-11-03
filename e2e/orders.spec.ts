@@ -250,7 +250,8 @@ test.describe("launch form", () => {
     const small = sizes.getByRole("radio").filter({ hasText: "Small" });
     await expect(small).toHaveAttribute("aria-checked", "true");
     await expect(small).toContainText("raises $3.00");
-    await expect(small).toContainText("1+ buyer · up to $3.00 each");
+    await expect(small).toContainText("1+ buyer");
+    await expect(small).toContainText("up to $3.00 each");
     await expect(small).toContainText("60s open");
     await expect(sizes.getByRole("radio").filter({ hasText: "Community" })).toContainText("5m open");
     await expect(sizes.getByRole("radio").filter({ hasText: "Wide" })).toContainText("10m open");

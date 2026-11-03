@@ -29,7 +29,7 @@ import { useOrderRequests, type ChartOrderKind, type ChartOrderRequest } from "@
 import { slippageFor, useTradeSettings } from "@/hooks/useTradeSettings";
 import { USDC_DECIMALS, fmtTokens, fmtUsdc, formatRemaining, launchError, type TxStep } from "@/lib/launch";
 import { fmtTokenPrice, launchCaip19 } from "@/lib/launchTrade";
-import { PRICE_DECIMALS, V3_TICK_STEP_PERCENT, fmtUsdcExact, graduationNeeds, maxDepositV3, parsePriceUsd, priceUsd, usesTicks, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
+import { PRICE_DECIMALS, V3_TICK_STEP_PERCENT, fmtUsdcExact, graduationNeeds, maxDepositV3, parsePriceUsd, priceUsd, priceUsdPlain, usesTicks, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
 import { cancelStanding, placeStanding, standingFloor, type StandingView } from "@/lib/standing";
 import { useStandingOrders } from "@/hooks/useStandingOrders";
 import { useCreatorVestingDays } from "@/hooks/useCreatorVesting";
@@ -451,7 +451,7 @@ function BidForm({
                   id={`${uid}-lim`}
                   inputMode="decimal"
                   autoComplete="off"
-                  placeholder={priceUsd(auction.floorPrice * BigInt(2))}
+                  placeholder={priceUsdPlain(auction.floorPrice * BigInt(2))}
                   value={limit}
                   onChange={(e) => setLimit(e.target.value.replace(/[^0-9.]/g, ""))}
                   className="w-full min-w-0 bg-transparent font-mono text-[15px] text-chrome outline-none placeholder:text-dim"
@@ -1159,7 +1159,17 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
             : `Selling ${symbol}`}
         </span>
         <span className="font-mono text-muted">
-          Bal {side === "buy" ? (usdcBalance !== null ? usd6(usdcBalance) : "…") : tokenBalance !== null ? fmtTokens(tokenBalance) : "…"}
+          {/* Nothing connected to read a balance from: a dash, not a loading ellipsis that never resolves. */}
+          Balance{" "}
+          {!viaAccount && (viaSolana ? !solana.payer : !address)
+            ? "—"
+            : side === "buy"
+              ? usdcBalance !== null
+                ? usd6(usdcBalance)
+                : "…"
+              : tokenBalance !== null
+                ? fmtTokens(tokenBalance)
+                : "…"}
         </span>
       </div>
 

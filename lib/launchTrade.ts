@@ -1,4 +1,5 @@
 import { getAddress, type Address } from "viem";
+import { compactZeros } from "./priceText.ts";
 
 /**
  * Intents for graduated launch tokens. The Crux solver (crux-solver/scripts/pool.ts) prices them from the
@@ -49,9 +50,9 @@ export function midPrice(r: PoolReserves, tokenDecimals: number) {
   return Number(r.usdc) / 1e6 / (Number(r.token) / 10 ** tokenDecimals);
 }
 
-/** Prices far below a cent still need their digits: $0.000000005. */
+/** Prices far below a cent keep their digits, with long runs of zeros counted: $0.0₈5 rather than $0.000000005. */
 export function fmtTokenPrice(usd: number) {
   if (!Number.isFinite(usd) || usd <= 0) return "$0";
   if (usd >= 0.01) return `$${usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
-  return `$${usd.toLocaleString("en-US", { maximumSignificantDigits: 3, maximumFractionDigits: 20 })}`;
+  return `$${compactZeros(usd.toLocaleString("en-US", { maximumSignificantDigits: 3, maximumFractionDigits: 20 }))}`;
 }

@@ -117,7 +117,7 @@ export function DemandCurve({
           </span>
         </div>
         <p className="text-[11px] text-dim">
-          <span className="font-mono text-muted">{book.length}</span> bidders · demand at floor{" "}
+          <span className="font-mono text-muted">{book.length}</span> {book.length === 1 ? "bidder" : "bidders"} · demand at floor{" "}
           <span className="font-mono text-muted">{pctDown(coverage)}%</span> of the sale
           {noLimit > 0 && (
             <>
@@ -134,7 +134,7 @@ export function DemandCurve({
         onPointerMove={(e) => setHoverX(e.clientX - e.currentTarget.getBoundingClientRect().left)}
         onPointerLeave={() => setHoverX(null)}
         role="img"
-        aria-label={`Demand curve: ${book.length} bidders; demand at the floor is ${pctDown(coverage)}% of the sale${
+        aria-label={`Demand curve: ${book.length} ${book.length === 1 ? "bidder" : "bidders"}; demand at the floor is ${pctDown(coverage)}% of the sale${
           shownClearing ? `; projected clearing price $${priceUsd(shownClearing)}` : "; not clearing yet"
         }.`}
       >

@@ -1,4 +1,5 @@
 import { formatUnits, parseUnits } from "viem";
+import { compactZeros } from "./priceText.ts";
 
 /**
  * CruxFactoryV2 units. Prices are quote base units per whole token, × 1e18, so with
@@ -69,8 +70,13 @@ export function phaseV2(a: Pick<AuctionV2, "status" | "startTime" | "batchWindow
 
 const usdFmt = new Intl.NumberFormat("en-US", { maximumSignificantDigits: 4 });
 
-/** USD per token for a V2 price (exact for display; sub-cent prices keep their digits). */
+/** USD per token for a V2 price, for display: sub-cent prices keep their digits, long runs of zeros counted (0.0₈232). */
 export function priceUsd(price: bigint) {
+  return compactZeros(priceUsdPlain(price));
+}
+
+/** The same with every zero written out: for inputs and placeholders, which people type into. */
+export function priceUsdPlain(price: bigint) {
   return usdFmt.format(Number(formatUnits(price, PRICE_DECIMALS)));
 }
 

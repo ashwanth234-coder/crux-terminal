@@ -86,12 +86,7 @@ export function ProTerminal({
         <aside aria-label="Execution" className="bg-panel lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:overflow-y-auto">
           {execution}
           {mode === "trade" && auction.pair !== zeroAddress && <Momentum auction={auction} symbol={model.symbol} />}
-          <p className="border-t border-line px-4 py-3 text-[11.5px] text-dim">
-            Prefer a simpler layout?{" "}
-            <a href={`/launch/v${version}/${id}?view=classic`} className="text-muted underline decoration-line-2 hover:text-chrome">
-              Open the classic view
-            </a>
-          </p>
+
         </aside>
 
         <section aria-label="Trades, holders and trust" className="min-h-[260px] bg-void p-3 lg:col-start-1 lg:row-start-2">

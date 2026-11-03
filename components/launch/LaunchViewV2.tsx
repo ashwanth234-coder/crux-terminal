@@ -32,6 +32,7 @@ import {
   parsePriceUsd,
   phaseV2,
   priceUsd,
+  priceUsdPlain,
   windowLabel,
   type AuctionV2,
   type BatchVersion,
@@ -454,7 +455,7 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
                 id={`${uid}-lim`}
                 inputMode="decimal"
                 autoComplete="off"
-                placeholder={priceUsd(auction.floorPrice * BigInt(2))}
+                placeholder={priceUsdPlain(auction.floorPrice * BigInt(2))}
                 value={limit}
                 onChange={(e) => setLimit(e.target.value.replace(/[^0-9.]/g, ""))}
                 className="w-full min-w-0 bg-transparent font-mono text-[16px] text-chrome outline-none placeholder:text-dim"

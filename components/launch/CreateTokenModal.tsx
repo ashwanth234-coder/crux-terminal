@@ -242,6 +242,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
 
   const [form, setForm] = useState<Form>(INITIAL);
   const [protectionAdvanced, setProtectionAdvanced] = useState(false);
+  const [detailsShown, setDetailsOpen] = useState(false);
   // One choice instead of numbers (target and cap); Custom shows the fields.
   const [size, setSize] = useState<LaunchSize>(LAUNCH_FACTORY ? DEFAULT_SIZE.key : "custom");
   const custom = !LAUNCH_FACTORY || size === "custom";
@@ -271,6 +272,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
 
   const errors = validate(form);
   const showErr = (k: keyof Form) => (touched ? errors[k] : undefined);
+  const detailsOpen = detailsShown || Boolean(showErr("website") || showErr("logo"));
   // Anti-vamp: the ticker, artwork and X link may not copy an existing Crux token (checked as the creator types).
   const guard = useLaunchGuard(form.symbol, form.logo.trim(), form.x.trim());
   // A block found at submit holds only for the inputs it was found for.
@@ -653,46 +655,59 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             </Field>
           </div>
 
-          <Field id={id("desc")} label="Description" hint={`${form.description.length}/280`}>
-            <textarea
-              id={id("desc")}
-              rows={3}
-              maxLength={280}
-              className={`${inputCls} resize-none`}
-              placeholder="What is this token for?"
-              value={form.description}
-              aria-describedby={`${id("desc")}-msg`}
-              onChange={(e) => set("description", e.target.value)}
-            />
-          </Field>
-
-          <Field id={id("logo")} label="Display image" error={showErr("logo")}>
-            <DisplayImageField id={id("logo")} value={form.logo} onChange={(v) => set("logo", v)} invalid={Boolean(showErr("logo"))} inputCls={inputCls} />
-          </Field>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field id={id("x")} label="X">
-              <input id={id("x")} className={inputCls} placeholder="@handle" value={form.x} onChange={(e) => set("x", e.target.value)} />
-            </Field>
-            <Field id={id("web")} label="Website" error={showErr("website")}>
-              <input
-                id={id("web")}
-                className={inputCls}
-                placeholder="https://"
-                inputMode="url"
-                value={form.website}
-                aria-invalid={Boolean(showErr("website"))}
-                aria-describedby={`${id("web")}-msg`}
-                onChange={(e) => set("website", e.target.value)}
+          {/* What a launch needs is a name, a ticker and a size; the rest is optional and folds away. */}
+          <button
+            type="button"
+            aria-expanded={detailsOpen}
+            onClick={() => setDetailsOpen((v) => !v)}
+            className="-mt-1 self-start text-left text-[12px] text-muted transition-colors hover:text-chrome"
+          >
+            {detailsOpen ? "− Hide details" : "+ Add description, image and links (optional)"}
+          </button>
+          {detailsOpen && (
+            <>
+            <Field id={id("desc")} label="Description" hint={`${form.description.length}/280`}>
+              <textarea
+                id={id("desc")}
+                rows={3}
+                maxLength={280}
+                className={`${inputCls} resize-none`}
+                placeholder="What is this token for?"
+                value={form.description}
+                aria-describedby={`${id("desc")}-msg`}
+                onChange={(e) => set("description", e.target.value)}
               />
             </Field>
-            <Field id={id("tg")} label="Telegram">
-              <input id={id("tg")} className={inputCls} placeholder="@group or https://t.me/…" value={form.telegram} onChange={(e) => set("telegram", e.target.value)} />
+
+            <Field id={id("logo")} label="Display image" error={showErr("logo")}>
+              <DisplayImageField id={id("logo")} value={form.logo} onChange={(v) => set("logo", v)} invalid={Boolean(showErr("logo"))} inputCls={inputCls} />
             </Field>
-            <Field id={id("gh")} label="GitHub">
-              <input id={id("gh")} className={inputCls} placeholder="org or https://github.com/…" value={form.github} onChange={(e) => set("github", e.target.value)} />
-            </Field>
-          </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field id={id("x")} label="X">
+                <input id={id("x")} className={inputCls} placeholder="@handle" value={form.x} onChange={(e) => set("x", e.target.value)} />
+              </Field>
+              <Field id={id("web")} label="Website" error={showErr("website")}>
+                <input
+                  id={id("web")}
+                  className={inputCls}
+                  placeholder="https://"
+                  inputMode="url"
+                  value={form.website}
+                  aria-invalid={Boolean(showErr("website"))}
+                  aria-describedby={`${id("web")}-msg`}
+                  onChange={(e) => set("website", e.target.value)}
+                />
+              </Field>
+              <Field id={id("tg")} label="Telegram">
+                <input id={id("tg")} className={inputCls} placeholder="@group or https://t.me/…" value={form.telegram} onChange={(e) => set("telegram", e.target.value)} />
+              </Field>
+              <Field id={id("gh")} label="GitHub">
+                <input id={id("gh")} className={inputCls} placeholder="org or https://github.com/…" value={form.github} onChange={(e) => set("github", e.target.value)} />
+              </Field>
+            </div>
+            </>
+          )}
 
           {LAUNCH_FACTORY && (
             <fieldset className="rounded-xl border border-line p-4">
@@ -731,9 +746,11 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                       <span className="mt-1 block text-[11.5px] leading-snug text-dim">{s.who}</span>
                       {r && (
                         <span className="mt-2 block font-mono text-[11px] leading-snug text-chrome/80">
-                          raises {cents(r.graduationTarget)}
-                          <br />
-                          {r.buyers}+ buyer{r.buyers === 1 ? "" : "s"} · up to {cents(r.perWallet)} each
+                          <span className="block">raises {cents(r.graduationTarget)}</span>
+                          <span className="block">
+                            {r.buyers}+ buyer{r.buyers === 1 ? "" : "s"}
+                          </span>
+                          <span className="block text-dim">up to {cents(r.perWallet)} each</span>
                         </span>
                       )}
                       {s.window && <span className="mt-1.5 block text-[11px] text-dim">{openFor(Number(s.window))}</span>}
