@@ -199,8 +199,9 @@ function BidForm({
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ text: string; hash?: Hex } | null>(null);
-  // Account first: a logged-in CRUX Account queues a buy at open (the opening auction itself takes wallets only), filled
-  // in the first 60-second batches after the open at the batch price, up to the same max price. No gas, no pop-ups.
+  // Account first: a logged-in CRUX Account queues a buy at open (the opening auction takes deposits from wallets only).
+  // The Crux solver bids it in the opening (crux-solver openingbids.ts), so it counts toward the launch's target, and
+  // fills it at the opening price from the tokens it claims, up to the same max price. No gas, no pop-ups.
   const crux = useCruxAccount();
   const trade = useTradeSettings();
   const hasAccount = crux.loggedIn && crux.account !== null;
@@ -304,7 +305,7 @@ function BidForm({
       lifetime: Math.max(0, opensAt - unixNow()) + AT_OPEN_GRACE_SECONDS,
     });
     setDone({
-      text: `Queued: $${fmtUsdc(quote)} from your CRUX Account buys ${symbol} in the first 60-second batches after the open, at the batch price, up to $${priceUsd(cap)} per token. You can cancel it below until then.`,
+      text: `Queued: $${fmtUsdc(quote)} from your CRUX Account. Crux bids it in the opening for you, so it counts toward the launch, and you get ${symbol} at the opening price, up to $${priceUsd(cap)} per token. You can cancel it below until then.`,
     });
     standing.refresh();
   };
@@ -394,7 +395,7 @@ function BidForm({
       </div>
       <p className="-mt-2 text-[11px] text-dim">
         {viaAccount
-          ? "Buy at open: your CRUX Account buys in the first 60-second batches after the open, at the batch price everyone in it pays, never above your max price. No gas, no pop-ups; unspent, it expires 2 hours after the open."
+          ? "Buy at open: Crux bids your amount in the opening for you, so it counts toward the launch, and you get your tokens at the opening price everyone pays, never above your max price. No gas, no pop-ups. If the launch doesn't fill, nothing is spent."
           : `The opening auction takes payment from a wallet on Base. A CRUX Account (no gas, no pop-ups) can queue a buy at open instead; or pay from a wallet on ${ORIGIN_NAMES} once trading starts.`}
       </p>
 
@@ -471,7 +472,7 @@ function BidForm({
       )}
       <ProtectionRow>
         {viaAccount
-          ? "Fair-launch protection: the first trades after the open clear in 60-second batches at one price each. Bots get no first-block edge."
+          ? "Fair-launch protection: everyone in the opening, your CRUX Account included, pays the same price. Bots get no first-block edge."
           : "Fair-launch protection: everyone who buys before the countdown ends pays the same opening price. Bots get no first-block edge."}
       </ProtectionRow>
 

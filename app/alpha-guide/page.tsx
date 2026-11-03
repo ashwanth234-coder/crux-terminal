@@ -158,7 +158,7 @@ export default function AlphaGuidePage() {
             <p>
               {b("Chains.")} Tokens, auctions and pools live on Base Sepolia. You can deposit and trade from {LIVE_NAMES} (testnets;
               Solana devnet), and nothing has to be bridged. {SOON_LINE}. A wallet pays into the opening from Base Sepolia; a CRUX
-              Account queues a buy at open instead.
+              Account queues a buy at open, which Crux bids in the opening for it.
             </p>
             <p>Use it like you would a real product, try to break it, and tell us what confused you.</p>
           </Section>
@@ -269,10 +269,10 @@ export default function AlphaGuidePage() {
                   buy. You see {b("✅ Locked in the opening batch")}.
                 </>,
                 <>
-                  {b("From a CRUX Account:")} the opening auction itself takes wallets only, so the account queues a{" "}
-                  {b("Buy at open")} instead, as soon as the launch page appears, even before the countdown. Enter an amount and press{" "}
-                  {b("Buy at open · CRUX Account")}: no gas. Crux buys for you in the first 60-second batches after the open, at the
-                  batch price, never above the max price. It shows under the form, where you can cancel it until then.
+                  {b("From a CRUX Account:")} queue a {b("Buy at open")}, as soon as the launch page appears, even before the countdown.
+                  Enter an amount and press {b("Buy at open · CRUX Account")}: no gas. Crux bids it in the opening for you, so it counts
+                  toward the launch&apos;s target, and you get your tokens at the opening price, never above the max price. It shows under
+                  the form, where you can cancel it until then.
                 </>,
                 <>
                   Optional, under {b("⚙️ Advanced")}: {b("Set my own max price")} instead of the automatic 10x. It rounds down to the
