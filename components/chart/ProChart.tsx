@@ -30,6 +30,7 @@ const windowOf = (interval: number) => (interval < 60 ? { max: 5_000, step: 1_25
 import { studyById } from "@/lib/indicators";
 import { fmtTokenPrice } from "@/lib/launchTrade";
 import { PRICE_DECIMALS, type AuctionV2 } from "@/lib/launchV2";
+import { openingTrade } from "@/lib/openingTrade";
 import { BottomBar } from "./BottomBar";
 import { ContextMenu, ScaleMenu, type ContextAt } from "./ContextMenu";
 import { ChartEngine } from "./engine";
@@ -215,16 +216,20 @@ export function ProChart({
   const feed = useFeedCandles(external ? null : auction.pair, config.interval);
   const feedLive = feed.usable;
   const feedCandles = useThrottled(feedLive ? feed.candles : null, 250);
-  // Oldest first (the scan is newest first), so the candles needn't sort.
+  // The opening, the token's first trade (lib/openingTrade): a launch whose only activity is its opening still draws.
+  const opening = useMemo(() => (external ? null : openingTrade(auction)), [external, auction]);
+  // Oldest first (the scan is newest first), so the candles needn't sort; the opening comes first of all.
   const fills = useMemo(() => {
     const trades = feedLive ? [] : (swapData?.trades ?? []);
-    const out: Fill[] = new Array(trades.length);
+    const lead = opening && (trades.length === 0 || trades[trades.length - 1].time >= opening.time) ? 1 : 0;
+    const out: Fill[] = new Array(trades.length + lead);
+    if (lead) out[0] = { time: opening!.time, price: opening!.price, usdc: opening!.usdc };
     for (let i = 0; i < trades.length; i++) {
       const t = trades[trades.length - 1 - i];
-      out[i] = { time: t.time, price: t.price, usdc: t.usdc };
+      out[i + lead] = { time: t.time, price: t.price, usdc: t.usdc };
     }
     return out;
-  }, [swapData, feedLive]);
+  }, [swapData, feedLive, opening]);
   // A loop, not Math.min(...): spreading a long history's times overflows the call stack.
   const first = fills.length ? fills.reduce((m, f) => (f.time < m ? f.time : m), fills[0].time) : auction.settledAt;
   const interval =
@@ -248,6 +253,15 @@ export function ProChart({
         const c = kept[0];
         kept[0] = { ...c, open: gradPrice, high: Math.max(c.high, gradPrice), low: Math.min(c.low, gradPrice) };
       }
+      // The opening's own candle, its whole raise at the clearing price: the feed counts pool trades only.
+      if (opening && cut === 0) {
+        const at = Math.floor(opening.time / interval) * interval;
+        const volume = Number(opening.usdc) / 1e6;
+        if (kept.length && kept[0].time === at) kept[0] = { ...kept[0], volume: kept[0].volume + volume, trades: kept[0].trades + 1 };
+        else if (at >= from && (kept.length === 0 || kept[0].time > at)) {
+          kept.unshift({ time: at, open: opening.price, high: opening.price, low: opening.price, close: opening.price, volume, trades: 1 });
+        }
+      }
       return fillGaps(kept, interval, nowBucket, max + stepCandles);
     }
     let lo = 0;
@@ -259,7 +273,7 @@ export function ProChart({
     }
     const open = lo > 0 && fills[lo - 1].price > 0 ? fills[lo - 1].price : gradPrice > 0 ? gradPrice : null;
     return fillGaps(toCandles(lo > 0 ? fills.slice(lo) : fills, interval, open), interval, nowBucket, max + stepCandles);
-  }, [fills, feedCandles, feed.firstTime, interval, gradPrice, nowBucket]);
+  }, [fills, feedCandles, feed.firstTime, interval, gradPrice, nowBucket, opening]);
   // Bar replay: the chart as it stood at `index`, played forward a candle at a time. Off: every candle, live.
   const [replay, setReplay] = useState<{ index: number | null; playing: boolean; speed: number } | null>(null);
   const replayIndex = replay?.index ?? null;

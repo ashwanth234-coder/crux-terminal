@@ -103,7 +103,9 @@ test.describe("fair-launch opening from the CRUX Account", () => {
   test("before the opening starts, the account can already queue its buy at open; the wallet waits for the countdown", async ({ page }) => {
     const posted = await open(page, "scheduled", { account: true });
     const section = page.getByRole("region", { name: "Buy at open" });
-    await expect(page.getByText("Deposits open in 2 minutes.")).toBeVisible();
+    // No wallet prompt for an account: when it opens, and the buy at open.
+    await expect(page.getByRole("region", { name: "Opens in" })).toContainText("Fair launch opens in");
+    await expect(page.getByText("Deposits open in 2 minutes.")).toHaveCount(0);
     await expect(section.getByRole("radio", { name: "Wallet" })).toBeDisabled();
     await section.getByLabel("Amount in USDC").fill("10");
     await section.getByRole("button", { name: /^Buy at open · CRUX Account/ }).first().click();

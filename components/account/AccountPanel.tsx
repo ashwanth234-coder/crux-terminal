@@ -67,7 +67,7 @@ export function AccountPanel() {
   });
 
   // Launch tokens the account holds: shown, and swept along with USDC.
-  const { launches } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7, FACTORY_V8);
+  const { launches, loading: launchesLoading } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7, FACTORY_V8);
   const tokens = useMemo(() => launches.filter((l) => l.v2 && l.v2.status === 1), [launches]);
   const balances = useReadContracts({
     contracts: tokens.map((l) => ({ chainId: TESTNET.id, address: l.v2!.token, abi: erc20Abi, functionName: "balanceOf" as const, args: [a.account ?? zeroAddress] as const })),
@@ -478,7 +478,10 @@ export function AccountPanel() {
         </Card>
 
         <Card title="Holdings">
-          {held.length === 0 ? (
+          {/* Still reading the launches or their balances: say so, not "nothing yet" (a fresh fill would look lost). */}
+          {held.length === 0 && (launchesLoading || (tokens.length > 0 && balances.isPending)) ? (
+            <p className="text-[12.5px] text-dim">Reading your holdings…</p>
+          ) : held.length === 0 ? (
             <p className="text-[12.5px] text-dim">No launch tokens in this account yet. Buy from any token page while logged in.</p>
           ) : (
             <ul className="divide-y divide-line">

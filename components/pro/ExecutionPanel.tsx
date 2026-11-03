@@ -227,7 +227,23 @@ function BidForm({
   const autoCap = basis * AUTO_CAP_MULTIPLE;
 
   // The wallet cap is the auction's; an account's buy at open joins the trading batches, which have none.
-  const capLeft = viaAccount ? null : model.maxDeposit !== null ? (model.maxDeposit > model.myBid.quote ? model.maxDeposit - model.myBid.quote : BigInt(0)) : null;
+  // This launch's buys at open from the account: queued, sent, or ended, each cancellable while it waits.
+  const standing = useStandingOrders();
+  const queued = (standing.orders ?? []).filter((o) => o.atOpen && o.token.toLowerCase() === auction.token.toLowerCase());
+  // A wallet's cap is its own deposit limit. The account's buys at open are bid by the Crux solver as one wallet, so
+  // together they fit the same limit: what's left after the ones already waiting (the relay refuses more, counting
+  // every account's).
+  const queuedOpen = queued.filter((o) => o.status === "open").reduce((sum, o) => sum + BigInt(o.amountIn), BigInt(0));
+  const capLeft =
+    model.maxDeposit === null
+      ? null
+      : viaAccount
+        ? model.maxDeposit > queuedOpen
+          ? model.maxDeposit - queuedOpen
+          : BigInt(0)
+        : model.maxDeposit > model.myBid.quote
+          ? model.maxDeposit - model.myBid.quote
+          : BigInt(0);
   const balance = viaAccount ? crux.usdc : model.usdcBalance;
   const maxBid = balance === null ? null : capLeft !== null && capLeft < balance ? capLeft : balance;
   const overBalance = parsed !== null && balance !== null && parsed > balance;
@@ -282,7 +298,9 @@ function BidForm({
   const label = overBalance
     ? `Not enough test USDC${viaAccount ? " in your account" : ""}`
     : overCap
-      ? "Over this wallet's cap"
+      ? viaAccount
+        ? "Over what this opening can take"
+        : "Over this wallet's cap"
       : viaAccount
         ? "Buy at open · CRUX Account"
         : needsApproval
@@ -309,9 +327,6 @@ function BidForm({
     });
     standing.refresh();
   };
-  // This launch's buys at open from the account: queued, sent, or ended, each cancellable while it waits.
-  const standing = useStandingOrders();
-  const queued = (standing.orders ?? []).filter((o) => o.atOpen && o.token.toLowerCase() === auction.token.toLowerCase());
   const cancelQueued = async (o: StandingView) => {
     if (!crux.sign || !crux.owner || !crux.account) return;
     try {
@@ -406,7 +421,9 @@ function BidForm({
       <Presets items={presets} onPick={pick} />
       {capLeft !== null && (
         <p className={`-mt-1.5 text-[11px] ${overCap ? "text-down" : "text-dim"}`}>
-          {model.myBid.quote > BigInt(0) ? `You're in for $${fmtUsdc(model.myBid.quote)}; ` : ""}this wallet can add up to ${fmtUsdc(capLeft)}.
+          {viaAccount
+            ? `${queuedOpen > BigInt(0) ? `You've queued $${fmtUsdc(queuedOpen)}; ` : ""}up to $${fmtUsdc(capLeft)} more can join this opening from your account.`
+            : `${model.myBid.quote > BigInt(0) ? `You're in for $${fmtUsdc(model.myBid.quote)}; ` : ""}this wallet can add up to $${fmtUsdc(capLeft)}.`}
         </p>
       )}
 
@@ -1289,10 +1306,11 @@ export function ExecutionPanel({
   const unlocked = vestDays === 0 ? <UnlockedWarning /> : null;
 
   // Before the opening: the account can already queue its buy at open (wallets pay in once the countdown starts).
+  // The standard panel asks for a wallet to buy, settle or claim; an account user needs none of that, only the time.
   if (phase === "scheduled" && crux.loggedIn && crux.account) {
     return (
       <div className="p-3">
-        {fallback}
+        <OpensIn at={auction.startTime} />
         {unlocked && <div className="mt-3 px-1">{unlocked}</div>}
         <section aria-label="Buy at open" className="mt-3 px-1">
           <h2 className="mb-3 text-[14px] font-medium text-chrome">Buy at open</h2>
@@ -1333,6 +1351,22 @@ export function ExecutionPanel({
     );
   }
   return <div className="p-3">{fallback}</div>;
+}
+
+/** Before the opening, for a CRUX Account: when it opens, and that the account can queue its buy now. */
+function OpensIn({ at }: { at: number }) {
+  const now = useNow();
+  return (
+    <section aria-label="Opens in" className="rounded-xl border border-line px-4 py-3">
+      <p className="flex items-baseline justify-between gap-3">
+        <span className="text-[13px] text-chrome">Fair launch opens in</span>
+        <span className="font-mono text-[15px] text-signal">{formatRemaining(Math.max(0, at - now))}</span>
+      </p>
+      <p className="mt-1.5 text-[11.5px] leading-snug text-dim">
+        Your CRUX Account can queue its buy now, with no wallet needed. Wallets can buy once the countdown ends.
+      </p>
+    </section>
+  );
 }
 
 /** The buy box's warning on a launch whose creator chose an instant unlock (no vesting). */

@@ -13,6 +13,7 @@ import { isSystem } from "@/lib/holders";
 import { fmtTokens } from "@/lib/launch";
 import { fmtTokenPrice } from "@/lib/launchTrade";
 import { priceUsd, type AuctionV2, type BatchVersion } from "@/lib/launchV2";
+import { openingTrade } from "@/lib/openingTrade";
 import { HoldersTable } from "@/components/pro/HoldersTable";
 import { TopTraders } from "@/components/pro/TopTraders";
 import { TrustRadar } from "@/components/pro/TrustRadar";
@@ -149,8 +150,11 @@ export function LiveTape({
       (side === "all" || t.side === side) &&
       (focus === null || getAddress(t.to) === getAddress(focus)),
   );
+  // The opening, the oldest row: its whole raise at the clearing price (it isn't a pool swap, so the scan misses it).
+  const opening = graduated ? openingTrade(auction) : null;
+  const openingShown = opening !== null && focus === null && side !== "sell" && Number(opening.usdc) / 1e6 >= minUsd;
   const active = tab === "trades" ? swaps : bids;
-  const total = tab === "trades" ? tradeRows.length : bidRows.length;
+  const total = tab === "trades" ? tradeRows.length + (openingShown ? 1 : 0) : bidRows.length;
   const truncated = tab === "trades" ? swaps.data?.truncated : bids.data?.truncated;
   const filtered = minUsd > 0 || side !== "all" || focus !== null;
 
@@ -260,7 +264,8 @@ export function LiveTape({
           </thead>
           <tbody className="divide-y divide-line">
             {tab === "trades"
-              ? tradeRows.slice(0, shown).map((t) => {
+              ? [
+                  ...tradeRows.slice(0, shown).map((t) => {
                   const route = t.viaIntent ? "intent" : t.venue === "batch-pool" ? "batch" : null;
                   return (
                     <tr key={`${t.txHash}-${t.logIndex}-${t.usdc}`} className={`hover:bg-tint/[0.02] ${t.side === "buy" ? "bg-up/[0.025]" : "bg-down/[0.025]"}`}>
@@ -297,7 +302,33 @@ export function LiveTape({
                       </td>
                     </tr>
                   );
-                })
+                  }),
+                  openingShown && tradeRows.length < shown ? (
+                    <tr key="opening" className="bg-up/[0.025] hover:bg-tint/[0.02]">
+                      <td className={`${td} font-mono text-dim`} title={new Date(opening!.time * 1000).toLocaleString()}>
+                        {ago(now, opening!.time)}
+                      </td>
+                      <td className={td}>
+                        <span className="text-up">Opening</span>
+                      </td>
+                      <td className={`${td} text-right font-mono text-up`}>{usd(opening!.usdc)}</td>
+                      <td className={`${td} text-right font-mono text-chrome/90`}>{fmtTokens(opening!.tokens)}</td>
+                      <td className={`${td} text-right font-mono text-muted`}>{fmtTokenPrice(opening!.price)}</td>
+                      <td className={`${td} text-right font-mono text-chrome/90`}>{mcapText(opening!.price * supply)}</td>
+                      <td className={`${td} text-muted`}>
+                        {opening!.buyers} buyer{opening!.buyers === 1 ? "" : "s"}
+                      </td>
+                      <td className={td}>
+                        <span
+                          title="The fair-launch opening: every buyer paid this one price"
+                          className="rounded-[3px] border border-signal/50 px-1.5 py-px font-mono text-[9.5px] uppercase tracking-[0.12em] text-signal"
+                        >
+                          Opening
+                        </span>
+                      </td>
+                    </tr>
+                  ) : null,
+                ]
               : bidRows.slice(0, shown).map((b) => (
                   <tr key={`${b.txHash}-${b.account}-${b.totalQuote}`} className="hover:bg-tint/[0.02]">
                     <td className={`${td} font-mono text-dim`}>
