@@ -45,6 +45,8 @@ type Form = {
   batchAuction: boolean;
   /** V4: release the creator's share at graduation instead of vesting it over 30 days. */
   instantUnlock: boolean;
+  /** The creator confirmed what an instant unlock shows buyers (required before it can launch). */
+  instantAck: boolean;
   /** V6: the first minute of trading after graduation in one uniform-price batch (else straight to Uniswap). */
   antiSniper: boolean;
   /** V2: minutes from now until deposits open. */
@@ -99,6 +101,7 @@ const INITIAL: Form = {
   target: LAUNCH_FACTORY ? DEFAULT_SIZE.target : FACTORY ? "10" : "50,000",
   batchAuction: true,
   instantUnlock: false,
+  instantAck: false,
   antiSniper: true,
   startsIn: "10",
   walletCap: LAUNCH_FACTORY ? DEFAULT_SIZE.walletCap : "5",
@@ -137,6 +140,7 @@ function validate(f: Form) {
     }
     const cap = Number(f.walletCap);
     if (!Number.isFinite(cap) || cap < 0.1 || cap > 100) errors.walletCap = "Between 0.1% and 100% of the sale.";
+    if (f.instantUnlock && !f.instantAck) errors.instantAck = "Confirm you understand what buyers will see, or keep the 30-day vesting.";
   }
   return errors;
 }
@@ -716,6 +720,9 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                           set("walletCap", s.walletCap);
                           set("window", s.window);
                           set("antiSniper", true);
+                          // The launch sizes always vest; an instant unlock is a Custom choice.
+                          set("instantUnlock", false);
+                          set("instantAck", false);
                         }
                       }}
                       className={`rounded-lg border p-3 text-left transition-colors ${active ? "border-signal/70 bg-panel-2" : "border-line hover:border-line-2"}`}
@@ -886,19 +893,53 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             </fieldset>
           )}
 
-          {/* Every launch from Crux vests the creator's allocation: the contract still offers an instant unlock, but 49% of the
-              raise released on day one is the easiest exit there is, so this form never sets it (instantUnlock stays false).
-              A launch made on the contract directly with an instant unlock still shows the red badge, read from chain. */}
+          {/* Creator vesting: the creator's choice, vested by default. An instant unlock releases 49% of the raise and the
+              creator's 10% at graduation, the easiest exit there is, so it sits under Custom, says what buyers will see, and
+              needs a confirmation; buyers get a red badge and a warning in the buy box. */}
           {LAUNCH_FACTORY && LAUNCH_FACTORY.version >= 4 && (
-            <div className="flex items-start justify-between gap-3 rounded-xl border border-up/30 bg-up/[0.04] p-4">
-              <div>
-                <p className="text-[13px] text-chrome">🛡️ Creator allocation vested 30 days</p>
-                <p className="mt-1.5 text-[11.5px] leading-snug text-dim">
-                  Your 10% of the supply and your share of the raise unlock linearly over 30 days from graduation. Every launch on
-                  Crux vests, and buyers see it as a trust badge. Fixed on-chain at launch.
-                </p>
+            <div className={`rounded-xl border p-4 ${form.instantUnlock ? "border-down/40 bg-down/[0.04]" : "border-up/30 bg-up/[0.04]"}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[13px] text-chrome">{form.instantUnlock ? "⚠️ Creator allocation unlocked at graduation" : "🛡️ Creator allocation vested 30 days"}</p>
+                  <p className="mt-1.5 text-[11.5px] leading-snug text-dim">
+                    {form.instantUnlock
+                      ? "Your 10% of the supply and your share of the raise (49%) are released to you at graduation, and you can sell at once. Buyers see a red Instant unlock badge on the launch and a warning in the buy box. Fixed on-chain at launch."
+                      : "Your 10% of the supply and your share of the raise unlock linearly over 30 days from graduation. Buyers see it as a trust badge. Fixed on-chain at launch."}
+                  </p>
+                </div>
+                <VestingBadge days={form.instantUnlock ? 0 : 30} />
               </div>
-              <VestingBadge days={30} />
+              {custom && (
+                <div role="radiogroup" aria-label="Creator vesting" className="mt-3 flex flex-wrap gap-1.5 text-[11.5px]">
+                  {[
+                    { instant: false, label: "30-day vesting (recommended)" },
+                    { instant: true, label: "Instant unlock" },
+                  ].map((o) => (
+                    <button
+                      key={o.label}
+                      type="button"
+                      role="radio"
+                      aria-checked={form.instantUnlock === o.instant}
+                      onClick={() => {
+                        set("instantUnlock", o.instant);
+                        set("instantAck", false);
+                      }}
+                      className={`h-7 rounded-[4px] border px-2.5 transition-colors ${
+                        form.instantUnlock === o.instant ? (o.instant ? "border-down/60 text-down" : "border-up/60 text-up") : "border-line-2 text-muted hover:text-chrome"
+                      }`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {form.instantUnlock && (
+                <label className="mt-3 flex items-start gap-2 text-[11.5px] leading-snug text-chrome">
+                  <input type="checkbox" checked={form.instantAck} onChange={(e) => set("instantAck", e.target.checked)} className="mt-0.5 accent-[var(--color-down)]" />
+                  I understand buyers will see that I can take my share of the raise and sell my tokens at graduation.
+                </label>
+              )}
+              {showErr("instantAck") && <p className="mt-1.5 text-[11.5px] text-down">{showErr("instantAck")}</p>}
             </div>
           )}
 

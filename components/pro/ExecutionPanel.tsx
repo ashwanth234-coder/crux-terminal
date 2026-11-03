@@ -32,6 +32,7 @@ import { fmtTokenPrice, launchCaip19 } from "@/lib/launchTrade";
 import { PRICE_DECIMALS, V3_TICK_STEP_PERCENT, fmtUsdcExact, graduationNeeds, maxDepositV3, parsePriceUsd, priceUsd, usesTicks, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
 import { cancelStanding, placeStanding, standingFloor, type StandingView } from "@/lib/standing";
 import { useStandingOrders } from "@/hooks/useStandingOrders";
+import { useCreatorVestingDays } from "@/hooks/useCreatorVesting";
 import { minReceived, sourceAsset, type OrderDraft, type Side } from "@/lib/order";
 import { placeOneClick } from "@/lib/session";
 import { SOLVER_MAX_IMPACT_PCT, bidRisk, tradeRisk } from "@/lib/risk";
@@ -1272,12 +1273,16 @@ export function ExecutionPanel({
 }) {
   const symbol = model.symbol ? `$${model.symbol}` : "tokens";
   const crux = useCruxAccount();
+  // An instant-unlock launch: said in the buy box itself, not only in the token bar's badge.
+  const vestDays = useCreatorVestingDays(factory, BigInt(id), version);
+  const unlocked = vestDays === 0 ? <UnlockedWarning /> : null;
 
   // Before the opening: the account can already queue its buy at open (wallets pay in once the countdown starts).
   if (phase === "scheduled" && crux.loggedIn && crux.account) {
     return (
       <div className="p-3">
         {fallback}
+        {unlocked && <div className="mt-3 px-1">{unlocked}</div>}
         <section aria-label="Buy at open" className="mt-3 px-1">
           <h2 className="mb-3 text-[14px] font-medium text-chrome">Buy at open</h2>
           <BidForm factory={factory} id={id} model={model} auction={auction} version={version} symbol={symbol} scheduled />
@@ -1289,6 +1294,7 @@ export function ExecutionPanel({
     return (
       <section aria-label="Fair launch" className="p-4">
         <h2 className="mb-3 text-[14px] font-medium text-chrome">Fair launch</h2>
+        {unlocked}
         <OpeningPot model={model} auction={auction} />
         <BidForm factory={factory} id={id} model={model} auction={auction} version={version} symbol={symbol} />
       </section>
@@ -1296,7 +1302,12 @@ export function ExecutionPanel({
   }
   // Claims and creator vesting live in the notice banner above the terminal, so the desk stays the desk.
   if (phase === "graduated" && auction.pair !== zeroAddress) {
-    return <GraduatedDesk auction={auction} symbol={symbol} />;
+    return (
+      <>
+        {unlocked && <div className="px-4 pt-4">{unlocked}</div>}
+        <GraduatedDesk auction={auction} symbol={symbol} />
+      </>
+    );
   }
   if (phase === "cancelled") {
     return (
@@ -1311,6 +1322,16 @@ export function ExecutionPanel({
     );
   }
   return <div className="p-3">{fallback}</div>;
+}
+
+/** The buy box's warning on a launch whose creator chose an instant unlock (no vesting). */
+function UnlockedWarning() {
+  return (
+    <p role="note" className="mb-3 rounded-lg border border-down/40 bg-down/[0.06] px-3 py-2 text-[11.5px] leading-snug text-down">
+      ⚠️ Creator unlocked: no vesting. At graduation the creator receives 49% of the raise and their 10% of the supply at once,
+      and can sell it immediately.
+    </p>
+  );
 }
 
 /**

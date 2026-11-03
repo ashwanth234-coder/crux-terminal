@@ -261,4 +261,22 @@ test.describe("launch form", () => {
     await expect(page.getByLabel("Graduation target")).toHaveValue("3");
     await expect(page.getByRole("radiogroup", { name: "Fair-launch protection" })).toBeVisible();
   });
+
+  test("creator vesting: 30 days by default; an instant unlock is a Custom choice that must be confirmed", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: /^launch$/i }).first().click();
+    const sizes = page.getByRole("radiogroup", { name: "Launch size" });
+    await expect(sizes).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText("Creator allocation vested 30 days")).toBeVisible();
+    await expect(page.getByRole("radiogroup", { name: "Creator vesting" })).toHaveCount(0);
+    await sizes.getByRole("radio").filter({ hasText: "Custom" }).click();
+    const vesting = page.getByRole("radiogroup", { name: "Creator vesting" });
+    await expect(vesting.getByRole("radio", { name: /30-day vesting/ })).toHaveAttribute("aria-checked", "true");
+    await vesting.getByRole("radio", { name: "Instant unlock" }).click();
+    await expect(page.getByText("Creator allocation unlocked at graduation")).toBeVisible();
+    await expect(page.getByRole("checkbox", { name: /I understand buyers will see/ })).not.toBeChecked();
+    // Back to a launch size: vesting again.
+    await sizes.getByRole("radio").filter({ hasText: "Small" }).click();
+    await expect(page.getByText("Creator allocation vested 30 days")).toBeVisible();
+  });
 });

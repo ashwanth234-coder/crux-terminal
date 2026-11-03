@@ -295,8 +295,8 @@ export default function AlphaGuidePage() {
             <p className="text-[14px] text-chrome/65">
               On graduation, 30% of supply and half the raise seed a Uniswap V2 pool whose LP tokens go to 0x…dEaD, locked forever.
               Creators receive 70% of the 1% protocol fee at once; their share of the raise and their 10% of supply vest over 30 days,
-              on every launch made on Crux ({b("🛡️ Creator vested 30D")}). The contract itself still allows an instant unlock, so a
-              launch made on it directly could skip vesting: that shows as a red {b("Instant unlock")} badge, read from the chain.
+              by default ({b("🛡️ Creator vested 30D")}). A creator can choose an instant unlock under Custom instead: the launch then
+              shows a red {b("Instant unlock")} badge and the buy box warns that the creator can take their share at graduation.
             </p>
           </Section>
 
