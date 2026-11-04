@@ -83,7 +83,7 @@ const FAIR_LAUNCH_CHOICES = [
  * launch never defaults to one wallet buying the whole sale.
  */
 const LAUNCH_SIZES = [
-  { key: "small", title: "Small", who: "Just you or a few friends", target: "3", walletCap: "100", window: "30" },
+  { key: "small", title: "Small", who: "Just you or a few friends", target: "1", walletCap: "100", window: "30" },
   { key: "community", title: "Community", who: "Your group chat or followers", target: "30", walletCap: "10", window: "300" },
   { key: "wide", title: "Wide", who: "A big audience, each buying a little", target: "90", walletCap: "2", window: "600" },
 ] as const;
@@ -179,7 +179,8 @@ function exactRaise(supply: string, target: string, walletCap: string) {
 
 /** Under the first buy: whether it covers the launch's goal by itself, or what others still need to add. */
 function firstBuyHint(firstBuy: bigint | null, needs: bigint | null) {
-  if (firstBuy === null || firstBuy === BigInt(0) || needs === null) return "Buy some yourself at the opening price, the same as everyone. Set 0 to skip.";
+  if (firstBuy === null || firstBuy === BigInt(0) || needs === null)
+    return "Optional. Your launch needs no money from you: anyone's buys in the opening take it live. You can buy some yourself at the opening price, the same as everyone.";
   if (firstBuy >= needs) return `Bought at the opening price, the same as everyone. It covers the ${cents(needs)} goal, so your launch goes live.`;
   return `Bought at the opening price, the same as everyone. Others need to add ${cents(needs - firstBuy)} more during the opening, or everyone is refunded.`;
 }
@@ -215,6 +216,8 @@ function metadataURI(f: Form) {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** The wall clock (ms). Only ever read inside event handlers (launch, simulate), never while rendering. */
+const wallClockMs = () => Date.now();
 
 /**
  * "Start now": how far ahead the opening is set so the launch transaction lands before it (the contract needs 60 s).
@@ -311,8 +314,8 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
   const firstBuyOn = accountLaunch && accountOnV8 && LAUNCH_FACTORY !== null;
   const raise = exactRaise(form.supply, form.target, form.walletCap);
   const perBuyer = raise && raise.perWallet > BigInt(0) ? raise.perWallet : null;
-  const autoFirstBuy = perBuyer === null ? null : crux.usdc !== null && crux.usdc < perBuyer ? crux.usdc : perBuyer;
-  const firstBuy = !firstBuyOn ? null : form.firstBuy === "" ? autoFirstBuy : (() => {
+  // Optional and empty by default: a creator's stake is the token and its locks, not money.
+  const firstBuy = !firstBuyOn ? null : form.firstBuy === "" ? null : (() => {
     try {
       return parseUnits(form.firstBuy, 6);
     } catch {
@@ -388,8 +391,8 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
       await sleep(1400);
     }
     // A deterministic preview address; clearly labelled as not on-chain.
-    const preview = getAddress(`0x${keccak256(toHex(`crux:${form.name}:${form.symbol}:${Date.now()}`)).slice(-40)}`);
-    setPhase({ kind: "done", token: preview, simulated: true, start: Math.floor(Date.now() / 1000) });
+    const preview = getAddress(`0x${keccak256(toHex(`crux:${form.name}:${form.symbol}:${wallClockMs()}`)).slice(-40)}`);
+    setPhase({ kind: "done", token: preview, simulated: true, start: Math.floor(wallClockMs() / 1000) });
   };
 
   /** The launch parameters from the form (V2 and later). */
@@ -403,7 +406,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
       metadataURI: metadataURI(form),
       totalSupply,
       graduationTarget: parseUnits(digits(form.target), 6),
-      startTime: BigInt(Math.floor(Date.now() / 1000) + (form.startNow ? START_NOW_LEAD[accountLaunch ? "account" : "wallet"] : Math.round(Number(form.startsIn) * 60))),
+      startTime: BigInt(Math.floor(wallClockMs() / 1000) + (form.startNow ? START_NOW_LEAD[accountLaunch ? "account" : "wallet"] : Math.round(Number(form.startsIn) * 60))),
       batchWindow: Number(form.window),
       maxAllocationPerWallet: (sale * capBps) / BigInt(10_000),
     };
@@ -470,7 +473,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
           tokenOut: launchCaip19(token),
           minAmountOut: standingFloor("buy", quote, capUsd, 18, slippageFor(trade, "buy")),
           triggerUsd: capUsd,
-          lifetime: Math.max(0, opensAt - Math.floor(Date.now() / 1000)) + FIRST_BUY_GRACE_SECONDS,
+          lifetime: Math.max(0, opensAt - Math.floor(wallClockMs() / 1000)) + FIRST_BUY_GRACE_SECONDS,
         });
         return true;
       } catch {
@@ -766,7 +769,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
           {firstBuyOn && (
             <Field
               id={id("firstBuy")}
-              label="Your first buy"
+              label="Your first buy (optional)"
               error={showErr("firstBuy")}
               hint={firstBuyHint(firstBuy, raise?.needs ?? null)}
             >
@@ -776,7 +779,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                   id={id("firstBuy")}
                   className={`${inputCls} pl-6 pr-28 font-mono`}
                   inputMode="decimal"
-                  placeholder={autoFirstBuy !== null ? fmtUsdc(autoFirstBuy) : "0"}
+                  placeholder="0"
                   value={form.firstBuy}
                   aria-invalid={Boolean(showErr("firstBuy"))}
                   aria-describedby={`${id("firstBuy")}-msg`}

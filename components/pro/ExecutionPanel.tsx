@@ -33,6 +33,7 @@ import { PRICE_DECIMALS, V3_TICK_STEP_PERCENT, fmtUsdcExact, graduationNeeds, ma
 import { cancelStanding, placeStanding, standingFloor, type StandingView } from "@/lib/standing";
 import { useStandingOrders } from "@/hooks/useStandingOrders";
 import { useCreatorVestingDays } from "@/hooks/useCreatorVesting";
+import { useAntiSniperSeconds } from "@/hooks/useAntiSniper";
 import { minReceived, sourceAsset, type OrderDraft, type Side } from "@/lib/order";
 import { placeOneClick, warmRelay } from "@/lib/session";
 import { SOLVER_MAX_IMPACT_PCT, bidRisk, tradeRisk } from "@/lib/risk";
@@ -1401,6 +1402,7 @@ export function ExecutionPanel({
   const crux = useCruxAccount();
   // An instant-unlock launch: said in the buy box itself, not only in the token bar's badge.
   const vestDays = useCreatorVestingDays(factory, BigInt(id), version);
+  const antiSniperSeconds = useAntiSniperSeconds(factory, BigInt(id), version);
   const unlocked = vestDays === 0 ? <UnlockedWarning /> : null;
 
   // Before the opening: the account can already queue its buy at open (wallets pay in once the countdown starts).
@@ -1417,7 +1419,7 @@ export function ExecutionPanel({
     return (
       <div className="p-3">
         {guide}
-        <OpensIn at={auction.startTime} token={auction.token} vestDays={vestDays} />
+        <OpensIn at={auction.startTime} token={auction.token} vestDays={vestDays} antiSniperSeconds={antiSniperSeconds} />
         {unlocked && <div className="mt-3 px-1">{unlocked}</div>}
         <section aria-label="Buy" className="mt-3 px-1">
           <h2 className="mb-3 text-[14px] font-medium text-chrome">Buy {symbol}</h2>
@@ -1483,7 +1485,7 @@ function FirstBuyMissed({ token }: { token: Address }) {
  * Only what's true is listed: the copycat check for a launch this browser made, the creator's lock when there is one,
  * and this account's buy once it's queued.
  */
-function OpensIn({ at, token, vestDays }: { at: number; token: Address; vestDays: number | null }) {
+function OpensIn({ at, token, vestDays, antiSniperSeconds }: { at: number; token: Address; vestDays: number | null; antiSniperSeconds: number | null }) {
   const now = useNow();
   const standing = useStandingOrders();
   const [checked] = useState(() => (typeof window === "undefined" ? false : launchChecked(token)));
@@ -1491,6 +1493,9 @@ function OpensIn({ at, token, vestDays }: { at: number; token: Address; vestDays
   const queuedUsd = mine.reduce((sum, o) => sum + BigInt(o.amountIn), BigInt(0));
   const done = [
     checked && "Copycat check passed",
+    // Every opening is one batch at one price: true of every launch, so always listed.
+    "Anti-sniper batch: one price for everyone",
+    antiSniperSeconds !== null && antiSniperSeconds > 0 && `Fair first ${antiSniperSeconds >= 120 ? `${Math.round(antiSniperSeconds / 60)} minutes` : "minute"} after it goes live`,
     vestDays !== null && vestDays > 0 && `Creator's share locked for ${vestDays} days`,
     queuedUsd > BigInt(0) && `Your $${fmtUsdc(queuedUsd)} buy is in`,
   ].filter((x): x is string => Boolean(x));
