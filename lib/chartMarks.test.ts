@@ -56,9 +56,9 @@ test("buys from venues and sells into them, for the people worth marking", () =>
   );
 });
 
-test("the viewer outranks the dev label when the creator is the viewer", () => {
+test("the dev label outranks the viewer when the creator is the viewer (marked DB / DS)", () => {
   const [m] = markTrades([tr(PAIR, DEV, 1, 1)], { ...ctx, me: [DEV] }, () => 1);
-  assert.equal(m.who, "me");
+  assert.equal(m.who, "dev");
 });
 
 test("a mark sits on the latest bar at or before its time", () => {

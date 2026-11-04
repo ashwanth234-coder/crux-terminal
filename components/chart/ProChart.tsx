@@ -15,7 +15,7 @@ import { barTime, markTrades, type MarkWho } from "@/lib/chartMarks";
 import { buildHolders } from "@/lib/holders";
 import { CRUX_SOLVERS, PREVIOUS_SETTLERS, SETTLER } from "@/lib/intents";
 import { EMPTY_CONTEXT, computeInstance, flowByCandle, holdersByCandle, paramsOf, poolByCandle, top10ByCandle, type StudyContext, type StudyId } from "@/lib/indicators";
-import { INTERVALS, autoInterval, fillGaps, toCandles, type Candle, type Fill } from "@/lib/candles";
+import { INTERVALS, autoInterval, toCandles, type Candle, type Fill } from "@/lib/candles";
 import { useThrottled } from "@/hooks/useThrottled";
 import { useFeedCandles } from "@/hooks/useFeed";
 import type { FeedCandle } from "@/lib/feed";
@@ -237,7 +237,8 @@ export function ProChart({
   const first = fills.length ? fills.reduce((m, f) => (f.time < m ? f.time : m), fills[0].time) : auction.settledAt;
   const interval =
     config.interval !== "auto" ? config.interval : feedLive ? feed.interval! : autoInterval(Math.min(first, auction.settledAt), now ?? auction.settledAt, 200);
-  // Quiet periods drawn flat up to the current period (fillGaps), so the time axis is true however thin the trading.
+  // Only periods that traded get a candle, side by side as trading terminals draw a thin token: quiet hours aren't
+  // stretches of empty axis (or rows of flat bars). Each candle still opens at the previous one's close.
   const nowBucket = now === null ? 0 : Math.floor(now / interval) * interval;
   // The newest candles only (as fillGaps caps quiet periods): a day of 1-second candles is 86,400, more than any screen
   // shows and slow to redraw on every trade. Older history is a larger timeframe away.
@@ -265,7 +266,7 @@ export function ProChart({
           kept.unshift({ time: at, open: opening.price, high: opening.price, low: opening.price, close: opening.price, volume, trades: 1 });
         }
       }
-      return fillGaps(kept, interval, nowBucket, max + stepCandles);
+      return kept;
     }
     let lo = 0;
     let hi = fills.length;
@@ -275,7 +276,7 @@ export function ProChart({
       else hi = mid;
     }
     const open = lo > 0 && fills[lo - 1].price > 0 ? fills[lo - 1].price : gradPrice > 0 ? gradPrice : null;
-    return fillGaps(toCandles(lo > 0 ? fills.slice(lo) : fills, interval, open), interval, nowBucket, max + stepCandles);
+    return toCandles(lo > 0 ? fills.slice(lo) : fills, interval, open);
   }, [fills, feedCandles, feed.firstTime, interval, gradPrice, nowBucket, opening]);
   // Bar replay: the chart as it stood at `index`, played forward a candle at a time. Off: every candle, live.
   const [replay, setReplay] = useState<{ index: number | null; playing: boolean; speed: number } | null>(null);
@@ -554,7 +555,7 @@ export function ProChart({
       // Only within the candles: a milestone still to come has no bar to sit on yet.
       if (times.length === 0 || m.time < times[0] || m.time > times[times.length - 1] + interval) return [];
       const time = barTime(times, m.time);
-      return time === null ? [] : [{ time: time as Time, position: "aboveBar" as const, shape: "square" as const, color: m.color, text: m.text, size: 0.6 }];
+      return time === null ? [] : [{ time: time as Time, position: "belowBar" as const, shape: "square" as const, color: m.color, text: m.text, size: 0.6 }];
     });
     engine.setMarkers([...bars, ...events].sort((a, b) => (a.time as number) - (b.time as number)));
   }, [engine, candles, k, fmt, minMove, config.type, drawnStudies, config.alerts, settings, marksHidden, gradPrice, shownMarks, mine, last, standingOrders, auction.token, auction.settledAt, external, market.protectedUntil, vestDays, interval]);

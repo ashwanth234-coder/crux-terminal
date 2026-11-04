@@ -111,7 +111,7 @@ export class ChartEngine {
   private mainLines: IPriceLine[] = [];
   /** The pending-trade candle's own series (lib/pendingTrades), made on first use. */
   private pending: ISeriesApi<"Candlestick"> | null = null;
-  /** Every period on the time axis, quiet ones (drawn blank) included: what the views count in. */
+  /** How many candles the chart holds: what the opening view counts in. */
   private slots = 0;
   private markers: ISeriesMarkersPluginApi<Time> | null = null;
   private markerData: SeriesMarker<Time>[] = [];
@@ -320,12 +320,8 @@ export class ChartEngine {
     };
     if (this.type === "candles" || this.type === "hollow" || this.type === "bars" || this.type === "hlc" || this.type === "heikin") {
       const cs = this.type === "heikin" ? heikinAshi(candles) : candles;
-      // A period with no trades keeps its place on the time axis but draws nothing (a run of flat bars read as a dotted line).
-      const quiet = (i: number) => candles[i].trades === 0 && candles[i].volume === 0;
-      const snap = flat(4, (c, o) => (c.trades === 0 && c.volume === 0 ? o.push(NaN, NaN, NaN, NaN) : o.push(c.open * k, c.high * k, c.low * k, c.close * k)), cs);
-      this.mainData = syncSeries(this.main, this.mainData, snap, (i) =>
-        quiet(i) ? { time: t(cs[i]) } : { time: t(cs[i]), open: snap.values[i * 4], high: snap.values[i * 4 + 1], low: snap.values[i * 4 + 2], close: snap.values[i * 4 + 3] },
-      );
+      const snap = flat(4, (c, o) => o.push(c.open * k, c.high * k, c.low * k, c.close * k), cs);
+      this.mainData = syncSeries(this.main, this.mainData, snap, (i) => ({ time: t(cs[i]), open: snap.values[i * 4], high: snap.values[i * 4 + 1], low: snap.values[i * 4 + 2], close: snap.values[i * 4 + 3] }));
     } else if (this.type === "highlow") {
       // One bar from low to high, coloured by the candle's direction.
       const snap = flat(3, (c, o) => o.push(c.low * k, c.high * k, dir(c)));

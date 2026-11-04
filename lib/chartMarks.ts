@@ -39,7 +39,8 @@ export function markTrades(transfers: TokenTransfer[], ctx: MarkContext, priceAt
   const dev = ctx.dev.toLowerCase();
   const focus = ctx.focus?.toLowerCase() ?? null;
   const whoOf = (a: string): MarkWho | null =>
-    a === focus ? "focus" : me.has(a) ? "me" : a === dev ? "dev" : whales.has(a) ? "whale" : top.has(a) ? "top" : null;
+    // The dev first: a creator trading their own token is marked DB / DS, whoever is looking.
+    a === focus ? "focus" : a === dev ? "dev" : me.has(a) ? "me" : whales.has(a) ? "whale" : top.has(a) ? "top" : null;
 
   const out: MarkTrade[] = [];
   for (const t of transfers) {
