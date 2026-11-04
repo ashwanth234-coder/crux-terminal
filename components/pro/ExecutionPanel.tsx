@@ -253,6 +253,10 @@ function BidForm({
   const maxBid = balance === null ? null : capLeft !== null && capLeft < balance ? capLeft : balance;
   const overBalance = parsed !== null && balance !== null && parsed > balance;
   const overCap = parsed !== null && capLeft !== null && parsed > capLeft;
+  // This buyer already holds the most the opening takes: not an error, a done deal until it goes live.
+  const wholeOpening = capLeft !== null && capLeft === BigInt(0) && (viaAccount ? queuedOpen : model.myBid.quote) > BigInt(0);
+  const liveIn = useNow();
+  const liveLeft = Math.max(0, auction.startTime + auction.batchWindow - liveIn);
   const needsApproval = !viaAccount && parsed !== null && model.allowance !== null && parsed > model.allowance;
 
   const risk = parsed
@@ -299,8 +303,10 @@ function BidForm({
       ]
     : [];
 
-  const disabled = !parsed || overBalance || overCap || limitTooLow || (limitOn && !effectiveLimit) || busy !== null;
-  const label = overBalance
+  const disabled = wholeOpening || !parsed || overBalance || overCap || limitTooLow || (limitOn && !effectiveLimit) || busy !== null;
+  const label = wholeOpening
+    ? "You've got the whole opening ✓"
+    : overBalance
     ? `Not enough test USDC${viaAccount ? " in your account" : ""}`
     : overCap
       ? viaAccount
@@ -420,9 +426,15 @@ function BidForm({
       <label htmlFor={`${uid}-amt`} className="-mb-2 text-[11px] text-muted">
         How much to spend (USDC)
       </label>
-      <AmountField id={`${uid}-amt`} value={amount} onChange={setAmount} unit="USDC" />
-      <Presets items={presets} onPick={pick} />
-      {capLeft !== null && (
+      <div className={wholeOpening ? "pointer-events-none flex flex-col gap-3 opacity-40" : "contents"} aria-disabled={wholeOpening || undefined}>
+        <AmountField id={`${uid}-amt`} value={amount} onChange={setAmount} unit="USDC" />
+        <Presets items={presets} onPick={pick} />
+      </div>
+      {wholeOpening ? (
+        <p className="-mt-1.5 text-[11.5px] text-signal">
+          You&apos;ve got the whole opening ✓ Buy more once it&apos;s live{liveLeft > 0 ? ` in ${formatRemaining(liveLeft)}` : ""}.
+        </p>
+      ) : capLeft !== null && (
         <p className={`-mt-1.5 text-[11px] ${overCap ? "text-down" : "text-dim"}`}>
           {viaAccount
             ? queuedOpen > BigInt(0)
@@ -511,7 +523,7 @@ function BidForm({
             <AmountField id={`${uid}-dock`} value={amount} onChange={setAmount} unit="USDC" compact />
           </div>
           <button type="button" disabled={disabled} onClick={() => void submit()} className={buttonClass("buy", "md", "shrink-0 rounded-xl px-4 font-semibold")}>
-            {busy ? "…" : overCap ? "Over cap" : "Buy"}
+            {busy ? "…" : wholeOpening ? "Got it all ✓" : overCap ? "Over cap" : "Buy"}
           </button>
         </div>
         {risk?.exit && (
@@ -716,12 +728,11 @@ function GraduatedDesk({ auction, symbol }: { auction: AuctionV2; symbol: string
     return (
       <section aria-label="Trade on Crux" className="p-4">
         <h2 className="text-[14px] font-medium text-chrome">{t("ticket.title")}</h2>
-        <p role="status" className="mt-3 flex items-center gap-2 text-[12.5px] text-chrome">
-          <KineticLoader className="text-signal" /> {OPENING_TRADES}
+        <p role="status" className="mt-1.5 flex items-center gap-2 text-[11.5px] leading-snug text-muted">
+          <KineticLoader className="text-signal" /> Open trading starts in a few seconds. Buy now and it fills as soon as it does.
         </p>
-        <p className="mt-1.5 text-[11.5px] leading-snug text-dim">
-          The fair first minute is over and open trading starts by itself, usually within seconds. Nothing you hold moves.
-        </p>
+        <div className="mt-3" />
+        <TradeForm auction={auction} symbol={symbol} handover />
       </section>
     );
   }
@@ -774,7 +785,7 @@ function ProtectionNote({ market }: { market: LaunchMarket }) {
 
 // ------------------------------------------------------------------ graduated: trade via intent
 
-function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) {
+function TradeForm({ auction, symbol, handover = false }: { auction: AuctionV2; symbol: string; handover?: boolean }) {
   const t = useT();
   const uid = useId();
   const { address, isConnected } = useConnection();
@@ -922,6 +933,8 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   const tooBig = risk !== null && risk.poolImpactPct > SOLVER_MAX_IMPACT_PCT;
   const blocked = !SETTLER_DEPLOYED
     ? "Crux orders aren't live in this build"
+    : handover && side === "sell"
+      ? "Selling opens in a few seconds"
     : market.protected && side === "sell" && !viaAccount
       ? "Sell into the batch under ⚙️ Advanced"
       : !market.reserves

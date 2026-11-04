@@ -526,7 +526,7 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
       <h2 className="text-[15px] font-medium text-chrome">{phase === "open" || phase === "scheduled" ? `Buy ${symbol}` : phase === "closed" ? "Going live" : "Your tokens"}</h2>
       <p className="mt-1 text-[12px] text-muted">Base Sepolia testnet · test USDC only</p>
       <div className="mt-5">{body}</div>
-      {model.account && (phase === "open" || phase === "closed" || phase === "graduated" || phase === "cancelled") && (
+      {model.account && (phase === "open" || phase === "graduated" || phase === "cancelled") && (
         <SmartAccountNote address={model.account} className="mt-4" />
       )}
       {error && (
