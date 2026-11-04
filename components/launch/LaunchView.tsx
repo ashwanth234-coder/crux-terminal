@@ -18,6 +18,7 @@ import { StatusTag } from "@/components/ui/StatusTag";
 import { useLiveLaunch, useNow, useSimulatedLaunch, type PreviewParams } from "@/hooks/useLaunchAuction";
 import { TESTNET_EXPLORER } from "@/lib/chains";
 import { FACTORY } from "@/lib/intents";
+import { PHASE_WORDS } from "@/lib/phaseWords";
 import {
   USDC_DECIMALS,
   auctionPhase,
@@ -155,12 +156,12 @@ export function Notice({ title, children }: { title: string; children: ReactNode
 // ------------------------------------------------------------------- view
 
 const STATUS: Record<Phase, { label: string; live: boolean }> = {
-  scheduled: { label: "Scheduled", live: false },
-  open: { label: "Deposits open", live: true },
-  closed: { label: "Window closed · awaiting settlement", live: false },
-  settled: { label: "Settled", live: false },
-  graduated: { label: "Graduated", live: false },
-  cancelled: { label: "Cancelled · refunds open", live: false },
+  scheduled: { label: PHASE_WORDS.scheduled, live: false },
+  open: { label: PHASE_WORDS.open, live: true },
+  closed: { label: PHASE_WORDS.closed, live: true },
+  settled: { label: PHASE_WORDS.settled, live: false },
+  graduated: { label: PHASE_WORDS.graduated, live: false },
+  cancelled: { label: PHASE_WORDS.cancelled, live: false },
 };
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;

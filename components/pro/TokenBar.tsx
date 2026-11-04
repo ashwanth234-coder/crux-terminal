@@ -304,7 +304,7 @@ export function TokenBar({
               </span>
             )}
             {phase === "scheduled" && opensIn !== null && <Stat label={t("stat.opensIn")}>{formatRemaining(opensIn)}</Stat>}
-            {phase === "open" && closesIn !== null && <Stat label={t("stat.closesIn")}>{formatRemaining(closesIn)}</Stat>}
+            {phase === "open" && closesIn !== null && <Stat label={t("stat.liveIn")}>{formatRemaining(closesIn)}</Stat>}
             {graduated && now !== null && auction.settledAt > 0 && (
               <Stat label={t("stat.age")} hint={`Trading since ${new Date(auction.settledAt * 1000).toLocaleString()}`}>
                 {formatRemaining(Math.max(0, now - auction.settledAt))}

@@ -39,15 +39,16 @@ import {
   type PhaseV2,
   usesTicks,
 } from "@/lib/launchV2";
+import { PHASE_WORDS } from "@/lib/phaseWords";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
 const STATUS: Record<PhaseV2, { label: string; tone: string; dot: string }> = {
-  scheduled: { label: "Scheduled", tone: "border-line-2 text-chrome", dot: "bg-chrome/50" },
-  open: { label: "Deposits open", tone: "border-signal/40 text-chrome", dot: "bg-signal" },
-  closed: { label: "Window closed · awaiting settlement", tone: "border-line-2 text-chrome", dot: "bg-dim" },
-  graduated: { label: "Graduated", tone: "border-chrome/40 text-chrome", dot: "bg-chrome" },
-  cancelled: { label: "Cancelled · refunds open", tone: "border-dashed border-line-2 text-chrome", dot: "border border-muted" },
+  scheduled: { label: PHASE_WORDS.scheduled, tone: "border-line-2 text-chrome", dot: "bg-chrome/50" },
+  open: { label: PHASE_WORDS.open, tone: "border-signal/40 text-chrome", dot: "bg-signal" },
+  closed: { label: PHASE_WORDS.closed, tone: "border-signal/40 text-chrome", dot: "bg-signal" },
+  graduated: { label: PHASE_WORDS.graduated, tone: "border-up/40 text-chrome", dot: "bg-up" },
+  cancelled: { label: PHASE_WORDS.cancelled, tone: "border-dashed border-line-2 text-chrome", dot: "border border-muted" },
 };
 
 /**
@@ -336,10 +337,12 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
   };
 
   let body: ReactNode;
-  if (!model.account) {
+  if (phase === "closed" && !busy) {
+    body = <SettingPrice auction={auction} onSettle={model.account ? () => void run(model.settle, "Done: the opening price is set.") : model.connect} wallet={model.account !== null} />;
+  } else if (!model.account) {
     body = (
       <>
-        <p className="text-[13px] text-muted">Connect a wallet on Base Sepolia to buy, settle or claim.</p>
+        <p className="text-[13px] text-muted">Connect a wallet on Base Sepolia to buy or collect your tokens.</p>
         <button type="button" onClick={model.connect} className={buttonClass("primary", "md", "mt-5 w-full rounded-xl font-semibold")}>
           Connect wallet
         </button>
@@ -362,9 +365,9 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
   } else if (phase === "scheduled") {
     body = (
       <p className="text-[13px] leading-relaxed text-muted">
-        Deposits open at{" "}
+        Opens at{" "}
         <span className="text-chrome">{new Date(auction.startTime * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</span>. Everyone
-        who buys before the countdown ends pays the same opening price.
+        who buys before it goes live pays the same opening price.
       </p>
     );
   } else if (phase === "open") {
@@ -375,7 +378,7 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
           if (!parsed || parsed <= BigInt(0) || overBalance || overCap || !limitPrice || limitError) return;
           void run(
             (s) => model.deposit(parsed!, limitPrice, s),
-            `✅ Locked in the opening batch: $${fmtUsdc(parsed!)} committed at the fair open price, up to $${priceUsd(limitPrice!)} a token (refunded in full if it opens higher).`,
+            `✅ You're in: $${fmtUsdc(parsed!)}. You'll get ${symbol} at the opening price, the same as everyone. If the launch doesn't go ahead, you get it all back.`,
           ).then((ok) => {
             if (!ok) return;
             setAmount("");
@@ -485,21 +488,9 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
           disabled={!parsed || overBalance || overCap || Boolean(limitError) || (limitOn && !limitPrice)}
           className={buttonClass("primary", "md", "mt-5 w-full rounded-xl font-semibold")}
         >
-          {overBalance ? "Not enough test USDC" : overCap ? "Over this wallet's cap" : needsApproval ? "Approve & buy (Fair Launch)" : "Buy (Fair Launch)"} <ArrowUpRight />
+          {overBalance ? "Not enough test USDC" : overCap ? "More than one wallet can buy" : needsApproval ? "Approve & buy" : "Buy"} <ArrowUpRight />
         </button>
       </form>
-    );
-  } else if (phase === "closed") {
-    body = (
-      <>
-        <p className="text-[13px] leading-relaxed text-muted">
-          The window has closed. Anyone can crank the settlement: it finds the clearing price, seeds the locked pool and pays
-          the creator&apos;s {V2_FEE.creatorShareBps / 100}% share of the {V2_FEE.feeBps / 100}% fee.
-        </p>
-        <button type="button" onClick={() => void run(model.settle, "Settled.")} className={buttonClass("primary", "md", "mt-5 w-full rounded-xl font-semibold")}>
-          Settle the fair launch <ArrowUpRight />
-        </button>
-      </>
     );
   } else {
     const has = model.myClaim.tokens > BigInt(0) || model.myClaim.refund > BigInt(0);
@@ -507,10 +498,10 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
       <>
         <p className="text-[13px] leading-relaxed text-muted">
           {phase === "cancelled" ? (
-            <>The target was missed. You get your full deposit back.</>
+            <>It didn&apos;t reach its goal, so you get your money back in full.</>
           ) : (
             <>
-              You secured <span className="font-mono text-chrome">{fmtTokens(model.myClaim.tokens)}</span> {symbol} at{" "}
+              You got <span className="font-mono text-chrome">{fmtTokens(model.myClaim.tokens)}</span> {symbol} at{" "}
               <span className="font-mono text-chrome">${priceUsd(auction.clearingPrice)}</span> per token
               {model.myClaim.refund > BigInt(0) && (
                 <>
@@ -522,17 +513,17 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
           )}
         </p>
         <button type="button" onClick={() => void run(model.claim, "Claimed.")} className={buttonClass("primary", "md", "mt-5 w-full rounded-xl font-semibold")}>
-          {phase === "cancelled" ? `Claim refund · $${fmtUsdc(model.myClaim.refund)}` : "Claim tokens"} <ArrowUpRight />
+          {phase === "cancelled" ? `Get my $${fmtUsdc(model.myClaim.refund)} back` : "Collect my tokens"} <ArrowUpRight />
         </button>
       </>
     ) : (
-      <p className="text-[13px] text-muted">This wallet has nothing to claim in this auction.</p>
+      <p className="text-[13px] text-muted">This wallet has nothing to collect here.</p>
     );
   }
 
   return (
     <section aria-label="Your position" className="rounded-2xl border border-line bg-panel p-5 sm:p-6">
-      <h2 className="text-[15px] font-medium text-chrome">{phase === "open" || phase === "scheduled" ? "Fair launch" : phase === "closed" ? "Settle" : "Claim"}</h2>
+      <h2 className="text-[15px] font-medium text-chrome">{phase === "open" || phase === "scheduled" ? `Buy ${symbol}` : phase === "closed" ? "Going live" : "Your tokens"}</h2>
       <p className="mt-1 text-[12px] text-muted">Base Sepolia testnet · test USDC only</p>
       <div className="mt-5">{body}</div>
       {model.account && (phase === "open" || phase === "closed" || phase === "graduated" || phase === "cancelled") && (
@@ -579,3 +570,31 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
   );
 }
 
+
+/** Seconds after the opening ends before a wallet is offered to set the price itself (the Crux keeper does it first). */
+const SELF_SETTLE_AFTER = 90;
+
+/**
+ * The seconds between the opening and trading: the price is set on its own (the Crux keeper settles every launch), so
+ * this is a short wait, not a step. Only if it lingers is a wallet offered to do it, which anyone may.
+ */
+function SettingPrice({ auction, onSettle, wallet }: { auction: AuctionV2; onSettle: () => void; wallet: boolean }) {
+  const now = useNow();
+  const late = now !== null && now - (auction.startTime + auction.batchWindow) > SELF_SETTLE_AFTER;
+  return (
+    <div>
+      <p role="status" className="flex items-center gap-2 text-[13px] text-chrome">
+        <KineticLoader className="text-signal" /> Setting the opening price…
+      </p>
+      <p className="mt-2 text-[12px] leading-relaxed text-muted">
+        This happens by itself and usually takes a few seconds. Everyone who bought gets the same price. If it fell short of its
+        goal, everyone gets a full refund instead.
+      </p>
+      {late && (
+        <button type="button" onClick={onSettle} className="mt-4 text-[12px] text-dim underline decoration-line-2 underline-offset-2 hover:text-chrome">
+          Taking a while? {wallet ? "Finish it from your wallet" : "Connect a wallet to finish it"} (a little Base Sepolia gas)
+        </button>
+      )}
+    </div>
+  );
+}

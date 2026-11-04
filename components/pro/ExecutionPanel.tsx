@@ -40,8 +40,12 @@ import { PAY_SOURCES } from "@/lib/tokens";
 import { useConnectModal } from "@/providers/Web3Provider";
 import { ORIGIN_NAMES, SOON_MAINNET, SOON_NETWORKS } from "@/lib/networks";
 import { SOLANA_OPEN_SOL, SOLANA_RETURNED_SOL, solAmount } from "@/lib/solanaEscrow";
+import { LaunchSteps, stepOf } from "@/components/launch/LaunchSteps";
+import { firstBuyFailed } from "@/lib/firstBuy";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+/** The few seconds between the fair first minute and open trading, or before a new token is ready to trade. */
+const OPENING_TRADES = "Opening trading… a few seconds";
 const pct = (v: number) => `${v >= 0 ? "−" : "+"}${Math.abs(v).toFixed(2)}%`;
 const usd6 = (units: bigint) => `$${Number(formatUnits(units, 6)).toLocaleString("en-US", { maximumFractionDigits: 6 })}`;
 const TEST_USDC_SOURCE = PAY_SOURCES.find((s) => s.id === "base-usdc") ?? PAY_SOURCES[0];
@@ -299,13 +303,11 @@ function BidForm({
     ? `Not enough test USDC${viaAccount ? " in your account" : ""}`
     : overCap
       ? viaAccount
-        ? "Over what this opening can take"
-        : "Over this wallet's cap"
-      : viaAccount
-        ? "Buy at open · CRUX Account"
-        : needsApproval
-          ? "Approve & buy (Fair Launch)"
-          : "Buy (Fair Launch)";
+        ? "More than this opening can take"
+        : "More than one wallet can buy"
+      : needsApproval
+        ? "Approve & buy"
+        : "Buy";
 
   /** The account's buy at open: a buy-the-dip standing order whose trigger is the max price, kept by the Crux keeper. */
   const queueAtOpen = async (quote: bigint, cap: bigint) => {
@@ -323,7 +325,7 @@ function BidForm({
       lifetime: Math.max(0, opensAt - unixNow()) + AT_OPEN_GRACE_SECONDS,
     });
     setDone({
-      text: `Queued: $${fmtUsdc(quote)} from your CRUX Account. Crux bids it in the opening for you, so it counts toward the launch, and you get ${symbol} at the opening price, up to $${priceUsd(cap)} per token. You can cancel it below until then.`,
+      text: `✅ You're in: $${fmtUsdc(quote)} from your CRUX Account. You'll get ${symbol} at the opening price, the same as everyone, as soon as it goes live. If the launch doesn't go ahead, nothing is spent. You can cancel below until then.`,
     });
     standing.refresh();
   };
@@ -350,7 +352,7 @@ function BidForm({
       }
       const hash = await model.deposit(parsed, cap, setBusy);
       setDone({
-        text: `✅ Locked in the opening batch: $${fmtUsdc(parsed)} committed at the fair open price, up to $${priceUsd(cap)} a token (refunded in full if it opens higher).`,
+        text: `✅ You're in: $${fmtUsdc(parsed)}. You'll get ${symbol} at the opening price, the same as everyone. If the launch doesn't go ahead, you get it all back.`,
         hash,
       });
       setAmount("");
@@ -405,31 +407,35 @@ function BidForm({
         </div>
       )}
       <div className="flex items-baseline justify-between text-[11.5px] text-muted">
-        <span>Paying with: {viaAccount ? "your CRUX Account's test USDC" : "Base Sepolia test USDC"}</span>
-        <span className="font-mono text-chrome/80">{balance !== null ? `$${fmtUsdc(balance)}` : "…"}</span>
+        <span>{viaAccount ? "From your CRUX Account" : "From your wallet on Base"}</span>
+        <span className="font-mono text-chrome/80">{balance !== null ? `$${fmtUsdc(balance)} test USDC` : "…"}</span>
       </div>
-      <p className="-mt-2 text-[11px] text-dim">
+      <p className="-mt-2 text-[11px] leading-snug text-dim">
         {viaAccount
-          ? "Buy at open: Crux bids your amount in the opening for you, so it counts toward the launch, and you get your tokens at the opening price everyone pays, never above your max price. No gas, no pop-ups. If the launch doesn't fill, nothing is spent."
-          : `The opening auction takes payment from a wallet on Base. A CRUX Account (no gas, no pop-ups) can queue a buy at open instead; or pay from a wallet on ${ORIGIN_NAMES} once trading starts.`}
+          ? "You pay the opening price, the same as everyone. No gas, no pop-ups. If the launch doesn't go ahead, nothing is spent."
+          : `You pay the opening price, the same as everyone. If the launch doesn't go ahead, you get it all back. Paying from ${ORIGIN_NAMES} works once it's live.`}
       </p>
 
       <label htmlFor={`${uid}-amt`} className="-mb-2 text-[11px] text-muted">
-        Amount in USDC
+        How much to spend (USDC)
       </label>
       <AmountField id={`${uid}-amt`} value={amount} onChange={setAmount} unit="USDC" />
       <Presets items={presets} onPick={pick} />
       {capLeft !== null && (
         <p className={`-mt-1.5 text-[11px] ${overCap ? "text-down" : "text-dim"}`}>
           {viaAccount
-            ? `${queuedOpen > BigInt(0) ? `You've queued $${fmtUsdc(queuedOpen)}; ` : ""}up to $${fmtUsdc(capLeft)} more can join this opening from your account.`
-            : `${model.myBid.quote > BigInt(0) ? `You're in for $${fmtUsdc(model.myBid.quote)}; ` : ""}this wallet can add up to $${fmtUsdc(capLeft)}.`}
+            ? queuedOpen > BigInt(0)
+              ? `You're in for $${fmtUsdc(queuedOpen)}${capLeft > BigInt(0) ? `; you can add up to $${fmtUsdc(capLeft)} more` : ", the most this opening takes from one buyer"}.`
+              : `You can buy up to $${fmtUsdc(capLeft)} in this opening.`
+            : model.myBid.quote > BigInt(0)
+              ? `You're in for $${fmtUsdc(model.myBid.quote)}${capLeft > BigInt(0) ? `; you can add up to $${fmtUsdc(capLeft)} more` : ""}.`
+              : `You can buy up to $${fmtUsdc(capLeft)} in this opening.`}
         </p>
       )}
 
       {risk?.tokensAtProjected != null && (
         <p className="-mt-1 text-[11.5px] text-muted">
-          If it opened now: <span className="font-mono text-chrome">{fmtTokens(risk.tokensAtProjected)} {symbol}</span>
+          You&apos;d get about <span className="font-mono text-chrome">{fmtTokens(risk.tokensAtProjected)} {symbol}</span> at today&apos;s price
         </p>
       )}
       <button
@@ -488,9 +494,7 @@ function BidForm({
         </div>
       )}
       <ProtectionRow>
-        {viaAccount
-          ? "Fair-launch protection: everyone in the opening, your CRUX Account included, pays the same price. Bots get no first-block edge."
-          : "Fair-launch protection: everyone who buys before the countdown ends pays the same opening price. Bots get no first-block edge."}
+        Fair price: everyone who buys before it goes live pays the same price, so bots can&apos;t jump ahead of you.
       </ProtectionRow>
 
       <button type="button" disabled={disabled} onClick={() => void submit()} className={buttonClass("buy", "md", "w-full rounded-xl font-semibold max-lg:hidden")}>
@@ -521,7 +525,7 @@ function BidForm({
 
 const QUEUED_STATUS: Record<StandingView["status"], string> = {
   open: "waiting for the open",
-  submitted: "sent to the batch",
+  submitted: "buying now",
   // The keeper's release when the launch cancels (one the trader cancelled reads "cancelled").
   cancelled: "released",
   expired: "expired",
@@ -532,12 +536,12 @@ const QUEUED_STATUS: Record<StandingView["status"], string> = {
 function QueuedAtOpen({ orders, onCancel }: { orders: StandingView[]; onCancel: (o: StandingView) => void }) {
   return (
     <div>
-      <p className="text-[11px] text-dim">Your buys at open</p>
+      <p className="text-[11px] text-dim">Your buys</p>
       <ul className="mt-1 divide-y divide-line rounded-lg border border-line">
         {orders.slice(0, 6).map((o) => (
           <li key={o.id} className="flex items-center gap-2 px-2.5 py-1.5 text-[11.5px]">
             <span className="font-mono text-chrome">${fmtUsdc(BigInt(o.amountIn))}</span>
-            <span className="font-mono text-muted">up to {fmtTokenPrice(o.triggerUsd)}</span>
+            <span className="font-mono text-muted" title="The most you'll pay per token. If the opening price is higher, nothing is spent.">max {fmtTokenPrice(o.triggerUsd)}</span>
             <span className={`ml-auto text-[10.5px] ${o.status === "open" ? "text-signal" : "text-dim"}`} title={o.note ?? undefined}>
               {o.status === "cancelled" && !o.note?.startsWith("Launch cancelled") ? "cancelled" : QUEUED_STATUS[o.status]}
             </span>
@@ -616,16 +620,18 @@ function useCountUp(target: number) {
 function momentum(a: AuctionV2, now: number, short: bigint): { text: string; tone: "good" | "warn" | "plain" } {
   const elapsed = Math.max(0, now - a.startTime);
   const left = Math.max(0, a.startTime + a.batchWindow - now);
-  if (short === BigInt(0)) return { text: "Target met ✓ It launches when the countdown ends; buys until then still get the same price.", tone: "good" };
-  if (left === 0) return { text: "Countdown over: settling now. Short of the target means everyone is refunded.", tone: "warn" };
+  if (short === BigInt(0)) return { text: "Goal reached ✓ It goes live when the timer ends. Buying now still gets the same price.", tone: "good" };
+  if (left === 0) return { text: "Time's up: setting the opening price now. If it fell short of the goal, everyone gets a full refund.", tone: "plain" };
+  // Buys placed before the start join in the first seconds: say so instead of a bare $0.
+  if (elapsed < 15) return { text: "Starting… buys placed before the timer are joining now.", tone: "plain" };
   const shortUsd = Number(formatUnits(short, USDC_DECIMALS));
   const perWallet = maxDepositV3(a);
   const buyers = perWallet > BigInt(0) ? Number((short + perWallet - BigInt(1)) / perWallet) : null;
-  const need = `Needs ${shortUsd < 0.01 ? "$0.01" : wholeUsd.format(Math.ceil(shortUsd))} more in ${formatRemaining(left)}${buyers !== null ? ` (${buyers}+ more buyer${buyers === 1 ? "" : "s"})` : ""}.`;
+  const need = `Needs ${shortUsd < 0.01 ? "$0.01" : wholeUsd.format(Math.ceil(shortUsd))} more in ${formatRemaining(left)} to go live${buyers !== null ? ` (${buyers}+ more buyer${buyers === 1 ? "" : "s"})` : ""}. If it falls short, everyone is refunded.`;
   // A pace once a few seconds have passed: deposits so far per second, carried to the end of the window.
   if (elapsed >= 5 && a.totalDeposits > BigInt(0)) {
     const projected = Number(formatUnits(a.totalDeposits, USDC_DECIMALS)) * (1 + left / elapsed);
-    if (projected >= Number(formatUnits(a.totalDeposits + short, USDC_DECIMALS))) return { text: `On track: at this pace it fills before the countdown ends. ${need}`, tone: "good" };
+    if (projected >= Number(formatUnits(a.totalDeposits + short, USDC_DECIMALS))) return { text: `On track to go live. ${need}`, tone: "good" };
   }
   return { text: need, tone: "warn" };
 }
@@ -655,9 +661,9 @@ function OpeningPot({ model, auction }: { model: LaunchV2Model; auction: Auction
   return (
     <div className="mb-3 rounded-lg border border-line bg-void/60 p-3" role="group" aria-label="Opening pot">
       <div className="flex items-baseline justify-between">
-        <span className="text-[11px] uppercase tracking-[0.14em] text-dim">Opening pot</span>
+        <span className="text-[11px] uppercase tracking-[0.14em] text-dim">Raised so far</span>
         <span className="font-mono text-[12px] text-signal" aria-live="off">
-          {left > 0 ? `opens in ${formatRemaining(left)}` : "opening…"}
+          {left > 0 ? `live in ${formatRemaining(left)}` : "going live…"}
         </span>
       </div>
       <p className="mt-1 font-mono text-[24px] leading-none text-chrome" aria-label={`${potFmt.format(pot)} committed`}>
@@ -675,15 +681,15 @@ function OpeningPot({ model, auction }: { model: LaunchV2Model; auction: Auction
           <dd className="font-mono text-[13px] text-chrome">{auction.bidderCount}</dd>
         </div>
         <div>
-          <dt className="text-dim">Implied mcap</dt>
+          <dt className="text-dim">Market cap</dt>
           <dd className="font-mono text-[13px] text-chrome" title={model.indicativePrice === null ? "At the floor price: the opening price is set when the countdown ends" : "At the price the opening would clear at now"}>
             {model.indicativePrice === null ? "≥ " : ""}
             {capFmt.format(shownCap)}
           </dd>
         </div>
         <div>
-          <dt className="text-dim">To open</dt>
-          <dd className="whitespace-nowrap font-mono text-[13px] text-chrome">{short === BigInt(0) ? "met ✓" : short < BigInt(10_000) ? `$${fmtUsdcExact(short)} more` : `${wholeUsd.format(Math.ceil(Number(formatUnits(short, USDC_DECIMALS))))} more`}</dd>
+          <dt className="text-dim">Goal</dt>
+          <dd className="whitespace-nowrap font-mono text-[13px] text-chrome">{short === BigInt(0) ? "reached ✓" : short < BigInt(10_000) ? `$${fmtUsdcExact(short)} to go` : `${wholeUsd.format(Math.ceil(Number(formatUnits(short, USDC_DECIMALS))))} to go`}</dd>
         </div>
       </dl>
     </div>
@@ -704,13 +710,16 @@ function GraduatedDesk({ auction, symbol }: { auction: AuctionV2; symbol: string
   const market = useLaunchMarket(auction.token, auction.pair);
   const [mode, setMode] = useState<"batch" | "intent">("intent");
   const now = useNow();
+  // The first minute's batches hand over to the open pool on their own, usually within seconds: a short wait, not a step.
   if (market.protected && market.protectedUntil !== null && now >= market.protectedUntil) {
     return (
-      <section aria-label="Moving to Uniswap" className="p-4">
-        <h2 className="text-[14px] font-medium text-chrome">Moving to Uniswap</h2>
-        <p role="status" className="mt-1.5 text-[11.5px] leading-snug text-muted">
-          The fair-launch window has closed. The keeper is clearing the last batch and moving the liquidity into the
-          Uniswap pool with the LP burned, usually within seconds. Trading reopens here when it lands.
+      <section aria-label="Trade on Crux" className="p-4">
+        <h2 className="text-[14px] font-medium text-chrome">{t("ticket.title")}</h2>
+        <p role="status" className="mt-3 flex items-center gap-2 text-[12.5px] text-chrome">
+          <KineticLoader className="text-signal" /> {OPENING_TRADES}
+        </p>
+        <p className="mt-1.5 text-[11.5px] leading-snug text-dim">
+          The fair first minute is over and open trading starts by itself, usually within seconds. Nothing you hold moves.
         </p>
       </section>
     );
@@ -724,8 +733,8 @@ function GraduatedDesk({ auction, symbol }: { auction: AuctionV2; symbol: string
     );
   }
   return (
-    <section aria-label="Fair launch" className="p-4">
-      <h2 className="text-[14px] font-medium text-chrome">Fair launch</h2>
+    <section aria-label="Trade on Crux" className="p-4">
+      <h2 className="text-[14px] font-medium text-chrome">{t("ticket.title")}</h2>
       <ProtectionNote market={market} />
       <div className="mt-3" />
       {mode === "batch" ? <BatchOrderForm market={market} symbol={symbol} /> : <TradeForm auction={auction} symbol={symbol} />}
@@ -735,7 +744,7 @@ function GraduatedDesk({ auction, symbol }: { auction: AuctionV2; symbol: string
         onClick={() => setMode((m) => (m === "batch" ? "intent" : "batch"))}
         className="mt-3 text-[11.5px] text-dim transition-colors hover:text-chrome"
       >
-        <span aria-hidden="true">⚙️</span> {mode === "batch" ? "Back to the simple buy" : "Advanced: join the batch straight from a wallet, or sell into it"}
+        <span aria-hidden="true">⚙️</span> {mode === "batch" ? "Back to the simple buy" : "Advanced: trade straight from a wallet"}
       </button>
     </section>
   );
@@ -756,8 +765,8 @@ function ProtectionNote({ market }: { market: LaunchMarket }) {
   const left = market.protectedUntil !== null ? Math.max(0, market.protectedUntil - now) : null;
   return (
     <p className="mt-1.5 text-[11.5px] leading-snug text-muted">
-      Batch-only{left !== null ? ` for ${formatRemaining(left)} more` : ""}: every trade lands in a 60-second batch that clears at one price
-      on-chain, so nobody can buy ahead of you. Then the liquidity moves to Uniswap, LP burned.
+      🛡️ Fair first minute{left !== null ? ` · ${formatRemaining(left)} left` : ""}: buys made together get the same price, so bots can&apos;t jump
+      ahead of you. Open trading follows on its own.
     </p>
   );
 }
@@ -878,7 +887,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
         ? "Reading the pool…"
         : "Pool unavailable"
       : !listed
-        ? "Not listed for Crux orders yet"
+        ? OPENING_TRADES
         : null;
   const oneClickReady = !viaAccount && side === "buy" && payFrom === "base" && oneClick.session !== null;
   const overCap = oneClickReady && input !== null && oneClick.remaining !== null && input > oneClick.remaining;
@@ -893,9 +902,9 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
         : overCap
           ? "Over your one-click cap"
           : market.protected && side === "buy" && (viaAccount || oneClickReady)
-            ? "Buy (Fair Launch)"
+            ? "Buy"
             : viaAccount
-            ? `${side === "buy" ? "Buy" : "Sell"} now · CRUX Account`
+            ? side === "buy" ? "Buy" : "Sell"
             : viaSolana
               ? !solana.payer
                 ? t("ticket.connectSolana")
@@ -1199,7 +1208,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
         <TradeSettingsButton side={side} />
       </div>
 
-      {rows.length > 0 && <RiskPreview rows={rows} note={tooBig ? `Crux skips orders that move a pool more than ${SOLVER_MAX_IMPACT_PCT}% in one batch. Trade smaller.` : undefined} />}
+      {rows.length > 0 && <RiskPreview rows={rows} note={tooBig ? `This pool is still small: a trade this size would move the price more than ${SOLVER_MAX_IMPACT_PCT}%, so Crux won't place it. Try a smaller amount.` : undefined} />}
       <ProtectionRow>{t("ticket.minEnforced")}</ProtectionRow>
 
       {side === "buy" && payFrom === "base" && !viaAccount && <OneClickBar oneClick={oneClick} />}
@@ -1212,20 +1221,19 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
 
       {market.protected ? (
         <p className="text-[11px] leading-snug text-dim">
-          Fair-launch protection: your order joins the next 60-second batch, where everyone pays the same price and bots get no
-          first-block edge. Your share (less the 0.3% spread) lands {viaAccount ? "in your CRUX Account" : "in your wallet"} when it
-          clears. Your signed minimum still holds; if the batch can&apos;t meet it, you&apos;re refunded after the deadline.
+          Your buy is grouped with everyone else&apos;s this minute and all of it fills at one price. Tokens land {viaAccount ? "in your CRUX Account" : "in your wallet"} within
+          about a minute. If the price moves past your limit, you get your money back.
         </p>
       ) : (
       <p className="text-[11px] leading-snug text-dim">
-        Route: your order → Crux → Uniswap V2 pool{" "}
-        <a href={`${TESTNET_EXPLORER}/address/${auction.pair}`} target="_blank" rel="noopener noreferrer" className="font-mono underline decoration-line-2">
-          {short(auction.pair)}
+        Trades against the token&apos;s{" "}
+        <a href={`${TESTNET_EXPLORER}/address/${auction.pair}`} target="_blank" rel="noopener noreferrer" className="underline decoration-line-2" title={`Uniswap V2 pool ${auction.pair}`}>
+          locked pool
         </a>
         {market.price !== null && <> at {fmtTokenPrice(market.price)}</>}.{" "}
         {fromOrigin
           ? `Held on ${fromOrigin.name}, filled on Base in the next batch at the price everyone pays, and released only once that fill is confirmed on ${fromOrigin.name}; refundable 6 hours after its deadline otherwise.`
-          : "Filled in the next 10-second batch, where everyone pays the same price, or refundable after its deadline."}
+          : "Fills within seconds at one fair price. If it can't fill within your limit, you get your money back."}
       </p>
       )}
 
@@ -1307,13 +1315,22 @@ export function ExecutionPanel({
 
   // Before the opening: the account can already queue its buy at open (wallets pay in once the countdown starts).
   // The standard panel asks for a wallet to buy, settle or claim; an account user needs none of that, only the time.
+  const steps = stepOf(phase);
+  const guide =
+    steps !== null && steps < 2 ? (
+      <>
+        <LaunchSteps current={steps} className="mb-3" />
+        <FirstBuyMissed token={auction.token} />
+      </>
+    ) : null;
   if (phase === "scheduled" && crux.loggedIn && crux.account) {
     return (
       <div className="p-3">
+        {guide}
         <OpensIn at={auction.startTime} />
         {unlocked && <div className="mt-3 px-1">{unlocked}</div>}
-        <section aria-label="Buy at open" className="mt-3 px-1">
-          <h2 className="mb-3 text-[14px] font-medium text-chrome">Buy at open</h2>
+        <section aria-label="Buy" className="mt-3 px-1">
+          <h2 className="mb-3 text-[14px] font-medium text-chrome">Buy {symbol}</h2>
           <BidForm factory={factory} id={id} model={model} auction={auction} version={version} symbol={symbol} scheduled />
         </section>
       </div>
@@ -1321,8 +1338,9 @@ export function ExecutionPanel({
   }
   if (phase === "open") {
     return (
-      <section aria-label="Fair launch" className="p-4">
-        <h2 className="mb-3 text-[14px] font-medium text-chrome">Fair launch</h2>
+      <section aria-label="Buy" className="p-4">
+        {guide}
+        <h2 className="mb-3 text-[14px] font-medium text-chrome">Buy {symbol}</h2>
         {unlocked}
         <OpeningPot model={model} auction={auction} />
         <BidForm factory={factory} id={id} model={model} auction={auction} version={version} symbol={symbol} />
@@ -1341,16 +1359,33 @@ export function ExecutionPanel({
   if (phase === "cancelled") {
     return (
       <section aria-label="Cancelled" className="p-4">
-        <h2 className="text-[14px] font-medium text-chrome">Launch cancelled</h2>
+        <h2 className="text-[14px] font-medium text-chrome">This launch didn&apos;t go ahead</h2>
         <p className="mt-2 text-[12.5px] leading-relaxed text-muted">
-          Demand stayed below the floor, so no tokens were sold and every deposit is refundable in full. If this wallet bid, its refund is
-          in the notice above.
+          It didn&apos;t reach its goal in time, so no tokens were sold and everyone gets their money back in full. If you bought from a
+          wallet, your refund is in the notice above.
         </p>
         {crux.loggedIn && crux.account && <ReleasedBuysAtOpen token={auction.token} />}
       </section>
     );
   }
-  return <div className="p-3">{fallback}</div>;
+  return (
+    <div className="p-3">
+      {guide}
+      {fallback}
+    </div>
+  );
+}
+
+/** Just after a launch whose creator's first buy couldn't be placed: say so, so they buy it here before the opening. */
+function FirstBuyMissed({ token }: { token: Address }) {
+  // The panel only renders in the browser, once the launch is read: storage is there to read on the first render.
+  const [missed] = useState(() => (typeof window === "undefined" ? null : firstBuyFailed(token)));
+  if (missed === null) return null;
+  return (
+    <p role="alert" className="mb-3 rounded-lg border border-signal/40 bg-signal/[0.06] px-3 py-2 text-[11.5px] leading-snug text-chrome">
+      Your launch is live, but your ${fmtUsdc(missed)} first buy didn&apos;t go through. Buy it below before the opening ends. Nothing was spent.
+    </p>
+  );
 }
 
 /** Before the opening, for a CRUX Account: when it opens, and that the account can queue its buy now. */
@@ -1359,11 +1394,11 @@ function OpensIn({ at }: { at: number }) {
   return (
     <section aria-label="Opens in" className="rounded-xl border border-line px-4 py-3">
       <p className="flex items-baseline justify-between gap-3">
-        <span className="text-[13px] text-chrome">Fair launch opens in</span>
+        <span className="text-[13px] text-chrome">Opens in</span>
         <span className="font-mono text-[15px] text-signal">{formatRemaining(Math.max(0, at - now))}</span>
       </p>
       <p className="mt-1.5 text-[11.5px] leading-snug text-dim">
-        Your CRUX Account can queue its buy now, with no wallet needed. Wallets can buy once the countdown ends.
+        Buy now from your CRUX Account and you get in at the opening price, the same as everyone. No wallet needed.
       </p>
     </section>
   );
@@ -1373,8 +1408,8 @@ function OpensIn({ at }: { at: number }) {
 function UnlockedWarning() {
   return (
     <p role="note" className="mb-3 rounded-lg border border-down/40 bg-down/[0.06] px-3 py-2 text-[11.5px] leading-snug text-down">
-      ⚠️ Creator unlocked: no vesting. At graduation the creator receives 49% of the raise and their 10% of the supply at once,
-      and can sell it immediately.
+      ⚠️ The creator can sell right away: their 10% of the tokens and 49% of the money raised are not locked up. Most launches
+      lock these for 30 days.
     </p>
   );
 }
@@ -1402,8 +1437,8 @@ function ReleasedBuysAtOpen({ token }: { token: Address }) {
     <div className="mt-3">
       <p className="text-[12px] leading-relaxed text-muted">
         {mine.some((o) => o.status === "open")
-          ? "Your buy at open is being released: nothing was spent, and the USDC stays in your CRUX Account."
-          : "Your buy at open was released: nothing was spent, and the USDC stayed in your CRUX Account."}
+          ? "Your buy is being cancelled: nothing was spent, and the money stays in your CRUX Account."
+          : "Your buy was cancelled: nothing was spent, and the money stayed in your CRUX Account."}
       </p>
       <div className="mt-2">
         <QueuedAtOpen orders={mine} onCancel={(o) => void cancel(o)} />

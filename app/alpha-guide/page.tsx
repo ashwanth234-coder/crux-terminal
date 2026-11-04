@@ -238,20 +238,15 @@ export default function AlphaGuidePage() {
             <p>{b("Launch a token")} (creators):</p>
             <Steps
               items={[
-                <>Click {b("Launch")} in the top bar.</>,
-                <>Fill in name and symbol. Keep the initial supply at 1,000,000,000.</>,
+                <>Click {b("Launch")} in the top bar and log in with your CRUX Account.</>,
+                <>Type a name and a ticker.</>,
                 <>
-                  Set a {b("graduation target")} (e.g. $3 to $10). Tip: with 1B supply, a target divisible by 3 (like $3 or $9) lets one
-                  wallet at the cap fill the sale exactly.
+                  {b("Your first buy")} is filled in for you ($3 on the default size, or what your account holds). It&apos;s bought at the
+                  opening price like everyone else&apos;s, and on the default size it covers the goal, so your launch goes live.
                 </>,
                 <>
-                  Set {b("Scheduled start")} (3+ minutes, so people can arrive) and {b("Max allocation per wallet")}. The hint under it
-                  shows each wallet&apos;s deposit limit and how many buyers the sale needs.
-                </>,
-                <>
-                  Keep {b("60s Fair Launch")} (the default) or pick {b("5m Fair Launch")}. Click {b("Deploy Token & Initialize Auction")}{" "}
-                  and confirm in your wallet, or, logged in, {b("Launch from Crux account")}: no gas, and your creator earnings land in
-                  the account. You land on the launch page: share that link with the cohort.
+                  Press {b("Launch $TICKER")}: no gas. It opens about a minute later. Everything else (description, image, how many
+                  buyers you expect, a later start) is under {b("More options")}. Share the launch link with the cohort.
                 </>,
               ]}
             />
@@ -260,28 +255,23 @@ export default function AlphaGuidePage() {
             <Steps
               items={[
                 <>
-                  Open the launch link. When the countdown starts, the {b("Opening pot")} appears: USDC committed, buyers, the implied
-                  market cap and what&apos;s left to the target, updating live.
+                  Open the launch link. The steps at the top show where it is: {b("Opens soon")}, then the one-minute{" "}
+                  {b("Fair opening")}, then {b("Live")}. During the opening, {b("Raised so far")} shows the money in, the buyers and how
+                  much is left to the goal.
                 </>,
                 <>
-                  {b("From a wallet:")} pick {b("Wallet")}, type an amount in {b("Amount in USDC")} (or tap {b("25%")}, {b("50%")},{" "}
-                  {b("MAX")}) and press {b("Buy (Fair Launch)")}. The first time, your wallet asks twice: approve the exact amount, then
-                  buy. You see {b("✅ Locked in the opening batch")}.
+                  Type an amount in {b("How much to spend")} and press {b("Buy")}, any time before it goes live. From a CRUX Account
+                  there&apos;s no gas and no pop-up; from a wallet (pick {b("Wallet")}), the first time asks twice: approve, then buy.
+                  Everyone in the opening pays the same price. Your buy shows under the button, where you can cancel it until then.
                 </>,
                 <>
-                  {b("From a CRUX Account:")} queue a {b("Buy at open")}, as soon as the launch page appears, even before the countdown.
-                  Enter an amount and press {b("Buy at open · CRUX Account")}: no gas. Crux bids it in the opening for you, so it counts
-                  toward the launch&apos;s target, and you get your tokens at the opening price, never above the max price. It shows under
-                  the form, where you can cancel it until then.
+                  Optional, under {b("⚙️ Advanced")}: {b("Set my own max price")} instead of the automatic 10x. If the opening price is
+                  higher, nothing is spent.
                 </>,
                 <>
-                  Optional, under {b("⚙️ Advanced")}: {b("Set my own max price")} instead of the automatic 10x. It rounds down to the
-                  nearest 1% price step. If the opening clears above it, your whole buy is refunded.
-                </>,
-                <>
-                  When the window closes, the Crux keeper settles within about 15 seconds (anyone can also press Settle). Then{" "}
-                  {b("Claim tokens")}: your tokens at the opening price plus any unused USDC. If deposits missed the target, the launch
-                  cancels: you {b("Claim refund")} in full, and a queued buy at open is released without spending anything.
+                  When the minute ends, the price is set by itself in a few seconds and the token goes {b("Live")}. A CRUX Account gets
+                  its tokens automatically; a wallet presses {b("Collect my tokens")}. If the goal wasn&apos;t reached, nobody pays:
+                  wallets press {b("Get my $… back")}, and a CRUX Account&apos;s buy is cancelled without spending anything.
                 </>,
               ]}
             />

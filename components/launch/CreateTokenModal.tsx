@@ -2,16 +2,21 @@
 
 import { useId, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { getAddress, keccak256, parseAbi, parseEventLogs, parseUnits, toHex, type Address, type Hex } from "viem";
+import { formatUnits, getAddress, keccak256, parseAbi, parseEventLogs, parseUnits, toHex, type Address, type Hex } from "viem";
 import { useConfig, useConnection, useReadContract, useSwitchChain } from "wagmi";
 import { readContract, waitForTransactionReceipt } from "wagmi/actions";
 import { Modal, KineticLoader } from "@/components/ui/Modal";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { cruxBatchFactoryAbi, cruxFactoryAbi, factoryV4Abi, factoryV6Abi, factoryV8Abi } from "@/contracts/abis/batchAuction";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
-import { BATCH_WINDOW_SECONDS, FACTORY, FACTORY_V7, LAUNCH_FACTORY } from "@/lib/intents";
-import { PRICE_DENOMINATOR, V2_FEE, V2_MIN_LEAD_SECONDS, V2_SPLIT, V2_WINDOWS, buyersNeeded, graduationNeeds, maxDepositV3, windowLabel } from "@/lib/launchV2";
-import { launchError, previewHref } from "@/lib/launch";
+import { BATCH_WINDOW_SECONDS, FACTORY, FACTORY_V7, LAUNCH_FACTORY, TESTNET_USDC } from "@/lib/intents";
+import { PRICE_DECIMALS, PRICE_DENOMINATOR, V2_FEE, V2_MIN_LEAD_SECONDS, V2_SPLIT, V2_WINDOWS, buyersNeeded, graduationNeeds, maxDepositV3, windowLabel } from "@/lib/launchV2";
+import { fmtUsdc, launchError, previewHref } from "@/lib/launch";
+import { launchCaip19 } from "@/lib/launchTrade";
+import { placeStanding, standingFloor } from "@/lib/standing";
+import { slippageFor, useTradeSettings } from "@/hooks/useTradeSettings";
+import { LaunchSteps } from "./LaunchSteps";
+import { markFirstBuyFailed } from "@/lib/firstBuy";
 import { simulateThenWrite } from "@/lib/preflight";
 import { VestingBadge } from "@/components/ui/VestingBadge";
 import { AntiSniperBadge } from "@/components/ui/AntiSniperBadge";
@@ -51,6 +56,10 @@ type Form = {
   antiSniper: boolean;
   /** V2: minutes from now until deposits open. */
   startsIn: string;
+  /** Open as soon as the launch lands (about a minute from an account), instead of at `startsIn`. */
+  startNow: boolean;
+  /** USDC of the creator's own buy at open, from the CRUX Account ("" = the launch's per-buyer limit, or the balance). */
+  firstBuy: string;
   /** V2: most of the sale one wallet can receive, as a percentage. */
   walletCap: string;
   /** V2: batch window in seconds. */
@@ -104,6 +113,8 @@ const INITIAL: Form = {
   instantAck: false,
   antiSniper: true,
   startsIn: "10",
+  startNow: true,
+  firstBuy: "",
   walletCap: LAUNCH_FACTORY ? DEFAULT_SIZE.walletCap : "5",
   window: LAUNCH_FACTORY ? DEFAULT_SIZE.window : "60",
 };
@@ -135,7 +146,7 @@ function validate(f: Form) {
   if (!target || target < MIN_TARGET) errors.target = `Set a graduation target of at least $${MIN_TARGET.toLocaleString("en-US")}.`;
   if (LAUNCH_FACTORY) {
     const minutes = Number(f.startsIn);
-    if (!Number.isFinite(minutes) || minutes * 60 < V2_MIN_LEAD_SECONDS || minutes > 30 * 24 * 60) {
+    if (!f.startNow && (!Number.isFinite(minutes) || minutes * 60 < V2_MIN_LEAD_SECONDS || minutes > 30 * 24 * 60)) {
       errors.startsIn = `Schedule the start ${V2_MIN_LEAD_SECONDS / 60} minutes to 30 days ahead.`;
     }
     const cap = Number(f.walletCap);
@@ -164,6 +175,13 @@ function exactRaise(supply: string, target: string, walletCap: string) {
   return { graduationTarget, needs, perWallet, buyers };
 }
 
+
+/** Under the first buy: whether it covers the launch's goal by itself, or what others still need to add. */
+function firstBuyHint(firstBuy: bigint | null, needs: bigint | null) {
+  if (firstBuy === null || firstBuy === BigInt(0) || needs === null) return "Buy some yourself at the opening price, the same as everyone. Set 0 to skip.";
+  if (firstBuy >= needs) return `Bought at the opening price, the same as everyone. It covers the ${cents(needs)} goal, so your launch goes live.`;
+  return `Bought at the opening price, the same as everyone. Others need to add ${cents(needs - firstBuy)} more during the opening, or everyone is refunded.`;
+}
 
 /** How many wallets a cap needs before the sale can fill (and so graduate). */
 function capHint(walletCap: string, target: string, supply: string) {
@@ -196,6 +214,19 @@ function metadataURI(f: Form) {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * "Start now": how far ahead the opening is set so the launch transaction lands before it (the contract needs a minute).
+ * A launch from the account is submitted by the relay in seconds; a wallet's waits on its confirmation.
+ */
+const START_NOW_LEAD = { account: 90, wallet: V2_MIN_LEAD_SECONDS } as const;
+/** The creator's first buy pays at most this many times the floor (the same automatic ceiling as any buy at open). */
+const FIRST_BUY_CAP_MULTIPLE = BigInt(10);
+/** A buy at open waits this long past the opening for the launch to trade, then expires unspent. */
+const FIRST_BUY_GRACE_SECONDS = 2 * 3_600;
+/** The relay may not know a launch seconds old yet (it rereads launches every 15 s): retry the first buy until it does. */
+const FIRST_BUY_TRIES = 6;
+const FIRST_BUY_RETRY_MS = 4_000;
 
 function Field({
   label,
@@ -243,6 +274,9 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
   const [form, setForm] = useState<Form>(INITIAL);
   const [protectionAdvanced, setProtectionAdvanced] = useState(false);
   const [detailsShown, setDetailsOpen] = useState(false);
+  // Everything past name, ticker and the first buy is optional and folds away under "More options".
+  const [moreShown, setMoreOpen] = useState(false);
+  const trade = useTradeSettings();
   // One choice instead of numbers (target and cap); Custom shows the fields.
   const [size, setSize] = useState<LaunchSize>(LAUNCH_FACTORY ? DEFAULT_SIZE.key : "custom");
   const custom = !LAUNCH_FACTORY || size === "custom";
@@ -270,9 +304,28 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
   const [phase, setPhase] = useState<Phase>({ kind: "form" });
   const [error, setError] = useState<string | null>(null);
 
+  // The creator's first buy (an account launch on V8): bought at the opening price like everyone's, so a launch whose
+  // goal it covers goes live for sure. Capped by what one buyer may put in and by the account's USDC.
+  const firstBuyOn = accountLaunch && accountOnV8 && LAUNCH_FACTORY !== null;
+  const raise = exactRaise(form.supply, form.target, form.walletCap);
+  const perBuyer = raise && raise.perWallet > BigInt(0) ? raise.perWallet : null;
+  const autoFirstBuy = perBuyer === null ? null : crux.usdc !== null && crux.usdc < perBuyer ? crux.usdc : perBuyer;
+  const firstBuy = !firstBuyOn ? null : form.firstBuy === "" ? autoFirstBuy : (() => {
+    try {
+      return parseUnits(form.firstBuy, 6);
+    } catch {
+      return null;
+    }
+  })();
   const errors = validate(form);
+  if (firstBuyOn && form.firstBuy !== "" && firstBuy === null) errors.firstBuy = "Enter an amount in USDC, or 0 to skip.";
+  else if (firstBuyOn && firstBuy !== null && firstBuy > BigInt(0)) {
+    if (crux.usdc !== null && firstBuy > crux.usdc) errors.firstBuy = `Your account has $${fmtUsdc(crux.usdc)}. Deposit more on the Account page, or lower this.`;
+    else if (perBuyer !== null && firstBuy > perBuyer) errors.firstBuy = `One buyer can put in at most ${cents(perBuyer)} in this launch.`;
+  }
   const showErr = (k: keyof Form) => (touched ? errors[k] : undefined);
   const detailsOpen = detailsShown || Boolean(showErr("website") || showErr("logo"));
+  const moreOpen = moreShown || detailsOpen || Boolean(showErr("startsIn") || showErr("walletCap") || showErr("target") || showErr("supply") || showErr("instantAck"));
   // Anti-vamp: the ticker, artwork and X link may not copy an existing Crux token (checked as the creator types).
   const guard = useLaunchGuard(form.symbol, form.logo.trim(), form.x.trim());
   // A block found at submit holds only for the inputs it was found for.
@@ -322,7 +375,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
       metadataURI: metadataURI(form),
       totalSupply,
       graduationTarget: parseUnits(digits(form.target), 6),
-      startTime: BigInt(Math.floor(Date.now() / 1000) + Math.round(Number(form.startsIn) * 60)),
+      startTime: BigInt(Math.floor(Date.now() / 1000) + (form.startNow ? START_NOW_LEAD[accountLaunch ? "account" : "wallet"] : Math.round(Number(form.startsIn) * 60))),
       batchWindow: Number(form.window),
       maxAllocationPerWallet: (sale * capBps) / BigInt(10_000),
     };
@@ -354,18 +407,51 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     const salted = { ...params, salt };
     const predicted = await readContract(config, { address: factory, abi: factoryV8Abi, functionName: "predictToken", args: [salted, creator], chainId: TESTNET.id });
     if (getAddress(predicted) !== getAddress(token) || !endsIn5afe(predicted)) throw new Error("The token address didn't check out. Try again.");
-    return { salted, short5afe: `${predicted.slice(0, 6)}…${predicted.slice(-4)}` };
+    return { salted, token: getAddress(predicted), short5afe: `${predicted.slice(0, 6)}…${predicted.slice(-4)}` };
   };
 
   /** CruxFactoryV8, from the 5afe Crux account: a 5afe token, signed silently, submitted (and paid for) by the relay. */
   const deployFromAccountV8 = async (factory: Address) => {
     if (!crux.sign || !crux.launchAccount) throw new Error("Your login key is still being set up. Try again in a moment.");
-    const { salted, short5afe } = await mineFor(factory, launchParams(), crux.launchAccount);
-    setPhase({ kind: "deploying", label: `Launching $${form.symbol} at ${short5afe} on Base: no gas needed…` });
+    const { salted, token } = await mineFor(factory, launchParams(), crux.launchAccount);
+    setPhase({ kind: "deploying", label: `Launching $${form.symbol} on Base: no gas needed…` });
     const auctionId = await launchFromAccountV8(crux.sign, crux.launchAccount, factory, salted, { instantUnlock: form.instantUnlock, antiSniper: form.antiSniper });
+    if (firstBuy !== null && firstBuy > BigInt(0)) {
+      setPhase({ kind: "deploying", label: `$${form.symbol} is launched. Placing your first buy…` });
+      if (!(await placeFirstBuy(token, salted, firstBuy))) markFirstBuyFailed(token, firstBuy);
+    }
     reset();
     onClose();
     router.push(`/launch/v8/${auctionId.toString()}`);
+  };
+
+  /**
+   * The creator's buy at open, from the account: the same order as any buy at open (the Crux solver bids it in the
+   * opening and fills it at the opening price), placed right after the launch lands. False if it couldn't be placed.
+   */
+  const placeFirstBuy = async (token: Address, params: ReturnType<typeof launchParams>, quote: bigint) => {
+    if (!crux.sign || !crux.owner || !crux.account) return false;
+    const sale = (params.totalSupply * BigInt(V2_SPLIT.saleBps)) / BigInt(10_000);
+    const floor = (params.graduationTarget * PRICE_DENOMINATOR + sale - BigInt(1)) / sale;
+    const capUsd = Number(formatUnits(floor * FIRST_BUY_CAP_MULTIPLE, PRICE_DECIMALS));
+    const opensAt = Number(params.startTime) + params.batchWindow;
+    for (let i = 0; i < FIRST_BUY_TRIES; i++) {
+      try {
+        await placeStanding(crux.sign, crux.owner, crux.account, {
+          kind: "dip",
+          tokenIn: TESTNET_USDC,
+          amountIn: quote,
+          tokenOut: launchCaip19(token),
+          minAmountOut: standingFloor("buy", quote, capUsd, 18, slippageFor(trade, "buy")),
+          triggerUsd: capUsd,
+          lifetime: Math.max(0, opensAt - Math.floor(Date.now() / 1000)) + FIRST_BUY_GRACE_SECONDS,
+        });
+        return true;
+      } catch {
+        if (i < FIRST_BUY_TRIES - 1) await sleep(FIRST_BUY_RETRY_MS);
+      }
+    }
+    return false;
   };
 
   /** CruxFactoryV2 and later: scheduled start, per-wallet cap, locked liquidity. */
@@ -525,7 +611,9 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             ? "Simulated preview: the launch contracts are awaiting testnet deployment."
             : "Deployed on Base Sepolia with its batch auction initialised."
           : live
-            ? "Home chain: Base Sepolia (testnet). The token, its auction and its pool all live there."
+            ? accountLaunch
+              ? "On Base Sepolia (testnet). Free to launch: no gas, no wallet pop-ups."
+              : "Home chain: Base Sepolia (testnet). The token, its auction and its pool all live there."
             : "Preview mode: the launch contracts are awaiting testnet deployment."
       }
     >
@@ -655,6 +743,42 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             </Field>
           </div>
 
+          {firstBuyOn && (
+            <Field
+              id={id("firstBuy")}
+              label="Your first buy"
+              error={showErr("firstBuy")}
+              hint={firstBuyHint(firstBuy, raise?.needs ?? null)}
+            >
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-[14px] text-dim">$</span>
+                <input
+                  id={id("firstBuy")}
+                  className={`${inputCls} pl-6 pr-28 font-mono`}
+                  inputMode="decimal"
+                  placeholder={autoFirstBuy !== null ? fmtUsdc(autoFirstBuy) : "0"}
+                  value={form.firstBuy}
+                  aria-invalid={Boolean(showErr("firstBuy"))}
+                  aria-describedby={`${id("firstBuy")}-msg`}
+                  onChange={(e) => set("firstBuy", e.target.value.replace(/[^0-9.]/g, ""))}
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-dim">
+                  {crux.usdc !== null ? `you have $${fmtUsdc(crux.usdc)}` : "USDC"}
+                </span>
+              </div>
+            </Field>
+          )}
+
+          <button
+            type="button"
+            aria-expanded={moreOpen}
+            onClick={() => setMoreOpen((v) => !v)}
+            className="-mt-1 self-start text-left text-[12px] text-muted transition-colors hover:text-chrome"
+          >
+            {moreOpen ? "− Fewer options" : "+ More options: description, image, size, start time"}
+          </button>
+          {moreOpen && (
+          <div className="space-y-4">
           {/* What a launch needs is a name, a ticker and a size; the rest is optional and folds away. */}
           <button
             type="button"
@@ -711,11 +835,10 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
 
           {LAUNCH_FACTORY && (
             <fieldset className="rounded-xl border border-line p-4">
-              <legend className="px-1 text-[13px] text-chrome">Launch size</legend>
+              <legend className="px-1 text-[13px] text-chrome">Who&apos;s buying?</legend>
               <p className="text-[11.5px] leading-snug text-dim">
-                How many people do you expect in the opening? It sets how much it raises, how much each wallet can buy and how long
-                the opening runs. If it doesn&apos;t raise that, everyone is refunded. Everyone in the opening pays one price, and the
-                first trading minute clears the same way, so bots get no first-block edge.
+                This sets the goal your launch must raise to go live, how much each buyer can put in, and how long the opening lasts. If
+                it doesn&apos;t reach the goal, everyone gets their money back.
               </p>
               <div role="radiogroup" aria-label="Launch size" className="mt-3 grid gap-2 sm:grid-cols-4">
                 {[...LAUNCH_SIZES, { key: "custom" as const, title: "Custom", who: "Set the numbers yourself", target: "", walletCap: "", window: "" }].map((s) => {
@@ -735,6 +858,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                           set("walletCap", s.walletCap);
                           set("window", s.window);
                           set("antiSniper", true);
+                          set("firstBuy", "");
                           // The launch sizes always vest; an instant unlock is a Custom choice.
                           set("instantUnlock", false);
                           set("instantAck", false);
@@ -746,7 +870,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                       <span className="mt-1 block text-[11.5px] leading-snug text-dim">{s.who}</span>
                       {r && (
                         <span className="mt-2 block font-mono text-[11px] leading-snug text-chrome/80">
-                          <span className="block">raises {cents(r.graduationTarget)}</span>
+                          <span className="block">goal {cents(r.graduationTarget)}</span>
                           <span className="block">
                             {r.buyers}+ buyer{r.buyers === 1 ? "" : "s"}
                           </span>
@@ -801,10 +925,28 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
                 id={id("startsIn")}
-                label="Scheduled start"
+                label="Start"
                 error={showErr("startsIn")}
-                hint="Minutes from now until deposits open, so buyers can gather"
+                hint={form.startNow ? "Opens about a minute after you launch" : "Minutes from now until it opens, so buyers can gather"}
               >
+                <div role="radiogroup" aria-label="Start" className="mb-2 flex gap-1.5 text-[11.5px]">
+                  {[
+                    { now: true, label: "Right away" },
+                    { now: false, label: "Later" },
+                  ].map((o) => (
+                    <button
+                      key={o.label}
+                      type="button"
+                      role="radio"
+                      aria-checked={form.startNow === o.now}
+                      onClick={() => set("startNow", o.now)}
+                      className={`h-7 flex-1 rounded-[4px] border transition-colors ${form.startNow === o.now ? "border-signal text-signal" : "border-line-2 text-muted hover:text-chrome"}`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+                {!form.startNow && (
                 <div className="relative">
                   <input
                     id={id("startsIn")}
@@ -817,6 +959,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                   />
                   <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-dim">minutes</span>
                 </div>
+                )}
               </Field>
               {custom && (
               <Field
@@ -1043,12 +1186,6 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
           </div>
           )}
 
-          {error && (
-            <p role="alert" className="rounded-lg border border-down/30 bg-down/10 px-3 py-2 text-[12px] text-down">
-              {error}
-            </p>
-          )}
-
           {LAUNCH_FACTORY && (
             <ul className="space-y-2 rounded-xl border border-line p-4 text-[12.5px] leading-snug text-muted">
               <li className="flex items-start gap-2">
@@ -1111,23 +1248,42 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                 {accountLaunch ? "Launch from a wallet instead" : "← Launch from my Crux account"}
               </button>
             </div>
-          ) : (
-            FACTORY_V7 !== null &&
-            !crux.loggedIn && (
-              <p className="rounded-lg border border-line px-3 py-2 text-[11.5px] leading-snug text-muted">
-                <span className="text-chrome">Launch from a Crux account:</span> no gas, nothing needed on Base, and your creator earnings land in
-                the account.{" "}
-                <button type="button" onClick={crux.login} className="text-signal hover:underline">
-                  Log in
-                </button>
-              </p>
-            )
+          ) : null}
+          </div>
+          )}
+
+          {!canLaunchFromAccount && FACTORY_V7 !== null && !crux.loggedIn && (
+            <p className="rounded-lg border border-line px-3 py-2 text-[11.5px] leading-snug text-muted">
+              <span className="text-chrome">Launch from a Crux account:</span> no gas, nothing needed on Base, and your creator earnings land in
+              the account.{" "}
+              <button type="button" onClick={crux.login} className="text-signal hover:underline">
+                Log in
+              </button>
+            </p>
+          )}
+
+          {error && (
+            <p role="alert" className="rounded-lg border border-down/30 bg-down/10 px-3 py-2 text-[12px] text-down">
+              {error}
+            </p>
           )}
 
           {vamp && <VampBanner line={vamp.line} conflicts={vamp.conflicts} onLink={onClose} />}
           <button type="submit" disabled={vamp !== null} className={buttonClass("primary", "md", "w-full rounded-xl font-semibold")}>
-            {accountLaunch ? "Launch from Crux account" : <>Deploy Token &amp; Initialize Auction</>} <ArrowUpRight />
+            {accountLaunch ? `Launch ${form.symbol ? `$${form.symbol}` : "my token"}` : "Launch from my wallet"} <ArrowUpRight />
           </button>
+          {LAUNCH_FACTORY && (
+            <>
+              <p className="text-center text-[11.5px] leading-snug text-dim">
+                {accountLaunch ? "No gas · " : ""}liquidity locked forever · you earn {V2_FEE.feeBps * V2_FEE.creatorShareBps / 1_000_000}% of the raise in fees
+                {form.instantUnlock ? "" : ", plus your share, unlocked over 30 days"}
+              </p>
+              <div>
+                <p className="mb-1.5 text-[11.5px] text-muted">What happens next</p>
+                <LaunchSteps current={null} />
+              </div>
+            </>
+          )}
           {guard.checking && !vamp && <p className="text-center text-[11.5px] text-dim">Checking the ticker, artwork and X link against existing Crux tokens…</p>}
           {live && !isConnected && !accountLaunch && <p className="text-center text-[11.5px] text-dim">You&apos;ll be asked to connect a wallet first.</p>}
         </form>

@@ -39,18 +39,18 @@ async function trades(posted: RelayCall[], n: number) {
 }
 
 test.describe("fair-launch opening", () => {
-  test("one amount, one Buy (Fair Launch) button; the max price is set for you (10x projected)", async ({ page }) => {
+  test("one amount, one Buy button; the max price is set for you (10x projected)", async ({ page }) => {
     await open(page, "open");
-    const panel = page.getByRole("region", { name: "Fair launch" });
-    await expect(panel.getByRole("heading", { name: "Fair launch" })).toBeVisible();
+    const panel = page.getByRole("region", { name: "Buy" });
+    await expect(panel.getByRole("heading", { name: /^Buy / })).toBeVisible();
     // No auction jargon on the primary path.
     expect(await panel.innerText()).not.toMatch(/\bbid\b/i);
-    await panel.getByLabel("Amount in USDC").fill("25");
-    await panel.getByRole("button", { name: /^Buy \(Fair Launch\)/ }).first().click();
+    await panel.getByLabel(/How much to spend/).fill("25");
+    await panel.getByRole("button", { name: /^Buy\b/ }).filter({ visible: true }).first().click();
     await expect.poll(() => page.evaluate(() => window.__benchOrders!.length)).toBe(1);
     const order = await page.evaluate(() => window.__benchOrders![0]);
     expect(order).toEqual({ kind: "deposit", amount: String(25e6), maxPrice: (PROJECTED * BigInt(10)).toString() });
-    await expect(panel.getByText(/Locked in the opening batch: \$25\.00 committed/)).toBeVisible();
+    await expect(panel.getByText(/You're in: \$25\.00\./)).toBeVisible();
   });
 
   test("the opening pot shows what's committed, how many buyers, the implied market cap and the countdown", async ({ page }) => {
@@ -60,21 +60,21 @@ test.describe("fair-launch opening", () => {
     // The bench's auction: $6,000 from 3 buyers toward a $10,000 target, about 3 minutes left.
     await expect(pot.getByLabel("$6,000.00 committed")).toBeVisible();
     await expect(pot.getByText("3", { exact: true })).toBeVisible();
-    await expect(pot.getByText("$4,000 more", { exact: true })).toBeVisible();
-    await expect(pot.getByText(/opens in/)).toBeVisible();
+    await expect(pot.getByText("$4,000 to go", { exact: true })).toBeVisible();
+    await expect(pot.getByText(/live in/)).toBeVisible();
     // $6,000 in the first 2 minutes with 3 left: on pace to pass $10,000.
-    await expect(pot.getByText(/On track: at this pace it fills/)).toBeVisible();
+    await expect(pot.getByText(/On track to go live/)).toBeVisible();
   });
 
   test("⚙️ Advanced: a buyer's own max price replaces the automatic one", async ({ page }) => {
     await open(page, "open");
-    const panel = page.getByRole("region", { name: "Fair launch" });
+    const panel = page.getByRole("region", { name: "Buy" });
     await expect(panel.getByRole("button", { name: /Set my own max price/ })).toHaveCount(0);
     await panel.getByRole("button", { name: /Advanced/ }).click();
     await panel.getByRole("button", { name: /Set my own max price/ }).click();
     await panel.getByLabel("Max price per token").fill("0.00005");
-    await panel.getByLabel("Amount in USDC").fill("40");
-    await panel.getByRole("button", { name: /^Buy \(Fair Launch\)/ }).first().click();
+    await panel.getByLabel(/How much to spend/).fill("40");
+    await panel.getByRole("button", { name: /^Buy\b/ }).filter({ visible: true }).first().click();
     await expect.poll(() => page.evaluate(() => window.__benchOrders!.length)).toBe(1);
     const order = await page.evaluate(() => window.__benchOrders![0]);
     // $0.00005 per token, in the factory's 24-decimal price units.
@@ -86,10 +86,10 @@ test.describe("fair-launch opening", () => {
 test.describe("fair-launch opening from the CRUX Account", () => {
   test("the account queues a buy at open: a standing buy whose trigger is the automatic max price", async ({ page }) => {
     const posted = await open(page, "open", { account: true });
-    const panel = page.getByRole("region", { name: "Fair launch" });
+    const panel = page.getByRole("region", { name: "Buy" });
     await expect(panel.getByRole("radio", { name: "CRUX Account" })).toHaveAttribute("aria-checked", "true");
-    await panel.getByLabel("Amount in USDC").fill("25");
-    await panel.getByRole("button", { name: /^Buy at open · CRUX Account/ }).first().click();
+    await panel.getByLabel(/How much to spend/).fill("25");
+    await panel.getByRole("button", { name: /^Buy\b/ }).filter({ visible: true }).first().click();
     await expect.poll(() => posted.filter((p) => p.path === "/v1/standing").length).toBe(1);
     const { order } = posted.find((p) => p.path === "/v1/standing")!.body as { order: Record<string, string | number> };
     expect(Number(order.kind)).toBe(1);
@@ -97,18 +97,18 @@ test.describe("fair-launch opening from the CRUX Account", () => {
     // 10x projected, from the factory's 24-decimal price units to the order's 18.
     expect(Number(order.triggerPrice) / Number((PROJECTED * BigInt(10)) / BigInt(10) ** BigInt(6))).toBeCloseTo(1, 6);
     expect(await page.evaluate(() => window.__benchOrders!.length)).toBe(0);
-    await expect(panel.getByText(/Queued: \$25\.00 from your CRUX Account/)).toBeVisible();
+    await expect(panel.getByText(/You're in: \$25\.00 from your CRUX Account/)).toBeVisible();
   });
 
   test("before the opening starts, the account can already queue its buy at open; the wallet waits for the countdown", async ({ page }) => {
     const posted = await open(page, "scheduled", { account: true });
-    const section = page.getByRole("region", { name: "Buy at open" });
+    const section = page.getByRole("region", { name: "Buy" });
     // No wallet prompt for an account: when it opens, and the buy at open.
-    await expect(page.getByRole("region", { name: "Opens in" })).toContainText("Fair launch opens in");
+    await expect(page.getByRole("region", { name: "Opens in" })).toContainText("Opens in");
     await expect(page.getByText("Deposits open in 2 minutes.")).toHaveCount(0);
     await expect(section.getByRole("radio", { name: "Wallet" })).toBeDisabled();
-    await section.getByLabel("Amount in USDC").fill("10");
-    await section.getByRole("button", { name: /^Buy at open · CRUX Account/ }).first().click();
+    await section.getByLabel(/How much to spend/).fill("10");
+    await section.getByRole("button", { name: /^Buy\b/ }).filter({ visible: true }).first().click();
     await expect.poll(() => posted.filter((p) => p.path === "/v1/standing").length).toBe(1);
     const { order } = posted.find((p) => p.path === "/v1/standing")!.body as { order: Record<string, string | number> };
     expect(String(order.amountIn)).toBe(String(10e6));
@@ -117,15 +117,15 @@ test.describe("fair-launch opening from the CRUX Account", () => {
   test("before the opening starts, a visitor without an account sees only when deposits open", async ({ page }) => {
     await open(page, "scheduled");
     await expect(page.getByText("Deposits open in 2 minutes.")).toBeVisible();
-    await expect(page.getByRole("region", { name: "Buy at open" })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Buy" })).toHaveCount(0);
   });
 
   test("the wallet is one tap away and pays into the opening auction as before", async ({ page }) => {
     await open(page, "open", { account: true });
-    const panel = page.getByRole("region", { name: "Fair launch" });
+    const panel = page.getByRole("region", { name: "Buy" });
     await panel.getByRole("radio", { name: "Wallet" }).click();
-    await panel.getByLabel("Amount in USDC").fill("25");
-    await panel.getByRole("button", { name: /^Buy \(Fair Launch\)/ }).first().click();
+    await panel.getByLabel(/How much to spend/).fill("25");
+    await panel.getByRole("button", { name: /^Buy\b/ }).filter({ visible: true }).first().click();
     await expect.poll(() => page.evaluate(() => window.__benchOrders!.length)).toBe(1);
   });
 });
@@ -206,19 +206,19 @@ test.describe("trading from the CRUX Account", () => {
     await expect(page.getByLabel(/USDC to spend/)).toHaveValue("20");
     await page.waitForTimeout(500);
     expect(posted.filter((p) => p.path === "/v1/account/trade")).toHaveLength(0);
-    await page.getByRole("button", { name: /Buy now · CRUX Account/ }).first().click();
+    await page.getByRole("button", { name: /^Buy\b/ }).filter({ visible: true }).first().click();
     const [t] = await trades(posted, 1);
     expect((t.body.trade as Record<string, string>).amountIn).toBe(String(20e6));
   });
 
-  test("in the protection window the account's buy reads Buy (Fair Launch); the wallet batch is under Advanced", async ({ page }) => {
+  test("in the protection window the account's buy is a plain Buy; the wallet batch is under Advanced", async ({ page }) => {
     const posted = await open(page, "protected", { account: true, protected: true });
-    await expect(page.getByRole("heading", { name: "Fair launch" })).toBeVisible();
+    await expect(page.getByText(/Fair first minute/)).toBeVisible();
     await page.getByLabel(/USDC to spend/).fill("15");
-    await page.getByRole("button", { name: /^Buy \(Fair Launch\)/ }).first().click();
+    await page.getByRole("button", { name: /^Buy\b/ }).filter({ visible: true }).first().click();
     const [t] = await trades(posted, 1);
     expect((t.body.trade as Record<string, string>).amountIn).toBe(String(15e6));
-    await page.getByRole("button", { name: /Advanced: join the batch straight from a wallet/ }).click();
+    await page.getByRole("button", { name: /Advanced: trade straight from a wallet/ }).click();
     await expect(page.getByRole("button", { name: /Back to the simple buy/ })).toBeVisible();
   });
 });
@@ -244,14 +244,32 @@ test.describe("deposit", () => {
 });
 
 test.describe("launch form", () => {
+  test("a launch needs a name and a ticker; everything else folds under More options", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: /^launch$/i }).first().click();
+    await expect(page.getByLabel("Token name")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("radiogroup", { name: "Launch size" })).toHaveCount(0);
+    await expect(page.getByRole("list", { name: "How a launch works" })).toBeVisible();
+    await page.getByRole("button", { name: /More options/ }).click();
+    await expect(page.getByRole("radiogroup", { name: "Launch size" })).toBeVisible();
+    // Opens right away by default; a later start asks for the minutes.
+    const start = page.getByRole("radiogroup", { name: "Start" });
+    await expect(start.getByRole("radio", { name: "Right away" })).toHaveAttribute("aria-checked", "true");
+    await expect(page.locator('input[id$="-startsIn"]')).toHaveCount(0);
+    await start.getByRole("radio", { name: "Later" }).click();
+    await expect(page.locator('input[id$="-startsIn"]')).toBeVisible();
+  });
+
+
   test("launch size: Small is the default and graduates with one wallet; each size sets its opening length", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("button", { name: /^launch$/i }).first().click();
+    await page.getByRole("button", { name: /More options/ }).click({ timeout: 20_000 });
     const sizes = page.getByRole("radiogroup", { name: "Launch size" });
     await expect(sizes).toBeVisible({ timeout: 20_000 });
     const small = sizes.getByRole("radio").filter({ hasText: "Small" });
     await expect(small).toHaveAttribute("aria-checked", "true");
-    await expect(small).toContainText("raises $3.00");
+    await expect(small).toContainText("goal $3.00");
     await expect(small).toContainText("1+ buyer");
     await expect(small).toContainText("up to $3.00 each");
     await expect(small).toContainText("60s open");
@@ -268,6 +286,7 @@ test.describe("launch form", () => {
   test("creator vesting: 30 days by default; an instant unlock is a Custom choice that must be confirmed", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("button", { name: /^launch$/i }).first().click();
+    await page.getByRole("button", { name: /More options/ }).click({ timeout: 20_000 });
     const sizes = page.getByRole("radiogroup", { name: "Launch size" });
     await expect(sizes).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText("Creator allocation vested 30 days")).toBeVisible();

@@ -10,15 +10,16 @@ import { ArrowUpRight } from "@/components/ui/Button";
 import type { LaunchSummary } from "@/hooks/useLaunches";
 import { fmtUsdc, formatRemaining, type Phase } from "@/lib/launch";
 import { describeLaunch } from "@/lib/launchSummary";
+import { PHASE_WORDS } from "@/lib/phaseWords";
 
 const BADGE: Record<Phase, { label: string; className: string; dot: string }> = {
-  scheduled: { label: "Scheduled", className: "border-line-2 text-chrome/80", dot: "bg-muted" },
-  // Orange means bidding is open right now; nothing else on the card is orange.
-  open: { label: "Live", className: "border-signal/60 text-chrome", dot: "bg-signal" },
-  closed: { label: "Awaiting settlement", className: "border-line-2 text-chrome/80", dot: "bg-muted" },
-  settled: { label: "Settled", className: "border-line-2 text-chrome/80", dot: "bg-muted" },
-  graduated: { label: "Graduated", className: "border-chrome/40 text-chrome", dot: "bg-chrome" },
-  cancelled: { label: "Cancelled", className: "border-dashed border-line-2 text-dim", dot: "border border-dim" },
+  scheduled: { label: PHASE_WORDS.scheduled, className: "border-line-2 text-chrome/80", dot: "bg-muted" },
+  // Orange means the opening is on right now; nothing else on the card is orange.
+  open: { label: PHASE_WORDS.open, className: "border-signal/60 text-chrome", dot: "bg-signal" },
+  closed: { label: PHASE_WORDS.closed, className: "border-signal/60 text-chrome", dot: "bg-signal" },
+  settled: { label: PHASE_WORDS.settled, className: "border-up/40 text-chrome", dot: "bg-up" },
+  graduated: { label: PHASE_WORDS.graduated, className: "border-up/40 text-chrome", dot: "bg-up" },
+  cancelled: { label: PHASE_WORDS.cancelled, className: "border-dashed border-line-2 text-dim", dot: "border border-dim" },
 };
 
 function Bar({ value, className }: { value: number; className: string }) {
@@ -92,7 +93,7 @@ export function LaunchCard({ launch, phase, now }: { launch: LaunchSummary; phas
       <div className="mt-6 space-y-4 border-t border-line pt-4">
         {phase === "scheduled" && (
           <div className="flex items-baseline justify-between gap-3 text-[12px]">
-            <span className="text-muted">Deposits open in</span>
+            <span className="text-muted">Opens in</span>
             <span className="font-mono text-chrome" role="timer">
               {formatRemaining(d.opensIn)}
             </span>
@@ -126,7 +127,7 @@ export function LaunchCard({ launch, phase, now }: { launch: LaunchSummary; phas
       </div>
 
       <span className="mt-auto inline-flex items-center gap-1.5 pt-5 text-[12.5px] text-chrome/75 transition-colors group-hover:text-chrome">
-        {phase === "open" ? "Buy (Fair Launch)" : phase === "closed" ? "Settle" : "View launch"} <ArrowUpRight />
+        {phase === "open" || phase === "scheduled" ? "Buy" : phase === "closed" ? "Opening now" : "View launch"} <ArrowUpRight />
       </span>
     </Link>
   );

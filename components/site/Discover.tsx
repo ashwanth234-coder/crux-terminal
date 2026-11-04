@@ -11,16 +11,17 @@ import { fmtUsdc, type Phase } from "@/lib/launch";
 import { describeLaunch } from "@/lib/launchSummary";
 import { CruxMark } from "./Logo";
 import { Chapter } from "./Chapter";
+import { PHASE_WORDS } from "@/lib/phaseWords";
 
 const SHOWN = 6;
 
 const PHASE: Record<Phase, { label: string; tone: string }> = {
-  scheduled: { label: "Scheduled", tone: "text-chrome/80" },
-  open: { label: "Bidding open", tone: "text-chrome" },
-  closed: { label: "Awaiting settlement", tone: "text-chrome/80" },
-  settled: { label: "Settled", tone: "text-chrome/80" },
-  graduated: { label: "Graduated", tone: "text-chrome" },
-  cancelled: { label: "Cancelled · refunds", tone: "text-dim" },
+  scheduled: { label: PHASE_WORDS.scheduled, tone: "text-chrome/80" },
+  open: { label: PHASE_WORDS.open, tone: "text-chrome" },
+  closed: { label: PHASE_WORDS.closed, tone: "text-chrome" },
+  settled: { label: PHASE_WORDS.settled, tone: "text-chrome" },
+  graduated: { label: PHASE_WORDS.graduated, tone: "text-chrome" },
+  cancelled: { label: PHASE_WORDS.cancelled, tone: "text-dim" },
 };
 
 function Status({ phase }: { phase: Phase }) {

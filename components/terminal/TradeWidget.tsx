@@ -17,7 +17,7 @@ import { PAY_SOURCES, usd } from "@/lib/tokens";
 /** A graduated Crux launch: Base Sepolia only, priced from its locked pool, paid in Base Sepolia test USDC. */
 export type LaunchTrade = { symbol: string; market: LaunchMarket };
 
-const NOT_LISTED = "Not listed for Crux orders yet";
+const NOT_LISTED = "Opening trading… a few seconds";
 
 const TEST_USDC_SOURCE = PAY_SOURCES.find((s) => s.id === "base-usdc") ?? PAY_SOURCES[0];
 

@@ -343,7 +343,7 @@ function HoldingRow({
     if (!SETTLER_DEPLOYED) return { draft: null, reason: "Crux orders aren't live in this build" };
     if (market.protected && !sellsInWindow) return { draft: null, reason: "Batch-only window: sell in the batch on the token page" };
     if (!market.reserves) return { draft: null, reason: market.loading ? "Reading the pool…" : "Pool unavailable" };
-    if (!market.listedForSells) return { draft: null, reason: "Not listed for Crux orders yet" };
+    if (!market.listedForSells) return { draft: null, reason: "Opening trading… a few seconds" };
     const risk = input > BigInt(0) ? tradeRisk("sell", input, market.reserves) : null;
     if (!risk) return { draft: null, reason: "Too small to sell" };
     if (risk.poolImpactPct > SOLVER_MAX_IMPACT_PCT) return { draft: null, reason: `Moves the pool more than ${SOLVER_MAX_IMPACT_PCT}%: trade smaller on the token page` };

@@ -160,7 +160,7 @@ export function SymbolSwitch({ symbol }: { symbol: string }) {
                             ${h.symbol} <span className="text-dim">{h.name}</span>
                           </span>
                           <span className={`shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] ${h.phase === "open" ? "text-signal" : "text-dim"}`}>
-                            {h.phase === "open" ? "Fair launch live" : (PHASE[h.phase] ?? h.phase)}
+                            {PHASE[h.phase] ?? h.phase}
                           </span>
                         </button>
                       </li>
