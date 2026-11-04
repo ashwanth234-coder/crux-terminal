@@ -26,7 +26,8 @@ import type { FeedCandle } from "@/lib/feed";
  * costs a redraw per trade. The start moves in steps, not candle by candle: indicators start from the first candle,
  * so every shift would change all their values and redraw them in full on each trade.
  */
-const windowOf = (interval: number) => (interval < 60 ? { max: 5_000, step: 1_250 } : { max: 20_000, step: 5_000 });
+/** The most candles the chart holds: the newest this many traded periods, however long ago they traded. */
+const MAX_CANDLES = 5_000;
 import { studyById } from "@/lib/indicators";
 import { fmtTokenPrice } from "@/lib/launchTrade";
 import { PRICE_DECIMALS, type AuctionV2 } from "@/lib/launchV2";
@@ -239,17 +240,11 @@ export function ProChart({
     config.interval !== "auto" ? config.interval : feedLive ? feed.interval! : autoInterval(Math.min(first, auction.settledAt), now ?? auction.settledAt, 200);
   // Only periods that traded get a candle, side by side as trading terminals draw a thin token: quiet hours aren't
   // stretches of empty axis (or rows of flat bars). Each candle still opens at the previous one's close.
-  const nowBucket = now === null ? 0 : Math.floor(now / interval) * interval;
-  // The newest candles only (as fillGaps caps quiet periods): a day of 1-second candles is 86,400, more than any screen
-  // shows and slow to redraw on every trade. Older history is a larger timeframe away.
+  // The newest MAX_CANDLES traded periods, counted, not a clock window: on a 1-second chart a token that last traded an
+  // hour ago still shows its recent trades side by side, as Axiom and Padre draw it, not one lone candle.
   const allCandles = useMemo(() => {
-    // Only the trades inside those candles (fills are oldest first): the one before them gives the first candle's open.
-    const { max, step: stepCandles } = windowOf(interval);
-    const step = stepCandles * interval;
-    const from = Math.floor((nowBucket - (max - 1) * interval) / step) * step;
     if (feedCandles) {
-      let cut = 0;
-      while (cut < feedCandles.length && feedCandles[cut].time < from) cut++;
+      const cut = Math.max(0, feedCandles.length - MAX_CANDLES);
       const kept: Candle[] = cut > 0 ? feedCandles.slice(cut) : [...feedCandles];
       // The very first candle opens at the auction's clearing price, as the chart's own bucketing does.
       const firstBucket = feed.firstTime !== null ? Math.floor(feed.firstTime / interval) * interval : null;
@@ -262,22 +257,16 @@ export function ProChart({
         const at = Math.floor(opening.time / interval) * interval;
         const volume = Number(opening.usdc) / 1e6;
         if (kept.length && kept[0].time === at) kept[0] = { ...kept[0], volume: kept[0].volume + volume, trades: kept[0].trades + 1 };
-        else if (at >= from && (kept.length === 0 || kept[0].time > at)) {
+        else if (kept.length === 0 || kept[0].time > at) {
           kept.unshift({ time: at, open: opening.price, high: opening.price, low: opening.price, close: opening.price, volume, trades: 1 });
         }
       }
       return kept;
     }
-    let lo = 0;
-    let hi = fills.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      if (fills[mid].time < from) lo = mid + 1;
-      else hi = mid;
-    }
-    const open = lo > 0 && fills[lo - 1].price > 0 ? fills[lo - 1].price : gradPrice > 0 ? gradPrice : null;
-    return toCandles(lo > 0 ? fills.slice(lo) : fills, interval, open);
-  }, [fills, feedCandles, feed.firstTime, interval, gradPrice, nowBucket, opening]);
+    // Every trade bucketed (only periods that traded become candles), then the newest MAX_CANDLES.
+    const all = toCandles(fills, interval, gradPrice > 0 ? gradPrice : null);
+    return all.length > MAX_CANDLES ? all.slice(-MAX_CANDLES) : all;
+  }, [fills, feedCandles, feed.firstTime, interval, gradPrice, opening]);
   // Bar replay: the chart as it stood at `index`, played forward a candle at a time. Off: every candle, live.
   const [replay, setReplay] = useState<{ index: number | null; playing: boolean; speed: number } | null>(null);
   const replayIndex = replay?.index ?? null;
@@ -547,11 +536,18 @@ export function ProChart({
       if (market.protectedUntil && market.protectedUntil > auction.settledAt) milestones.push({ time: market.protectedUntil, text: "Anti-sniper ends", color: "#5cc08c" });
       if (vestDays) milestones.push({ time: auction.settledAt + vestDays * 86_400, text: "Creator unlocked", color: "#ffd166" });
     }
+    // One label per few candles: milestones close together (graduating, then the anti-sniper window ending a minute
+    // later) would print over each other, so a later one that close keeps its square and drops its words.
+    let lastLabelled = -Infinity;
     const events: SeriesMarker<Time>[] = milestones.flatMap((m) => {
       // Only within the candles: a milestone still to come has no bar to sit on yet.
       if (times.length === 0 || m.time < times[0] || m.time > times[times.length - 1] + interval) return [];
       const time = barTime(times, m.time);
-      return time === null ? [] : [{ time: time as Time, position: "belowBar" as const, shape: "square" as const, color: m.color, text: m.text, size: 0.6 }];
+      if (time === null) return [];
+      const at = times.indexOf(time);
+      const crowded = at - lastLabelled < 4;
+      if (!crowded) lastLabelled = at;
+      return [{ time: time as Time, position: "belowBar" as const, shape: "square" as const, color: m.color, text: crowded ? "" : m.text, size: 0.6 }];
     });
     engine.setMarkers(events.sort((a, b) => (a.time as number) - (b.time as number)));
   }, [engine, candles, k, fmt, minMove, config.type, drawnStudies, config.alerts, settings, marksHidden, gradPrice, shownMarks, mine, last, standingOrders, auction.token, auction.settledAt, external, market.protectedUntil, vestDays, interval]);
