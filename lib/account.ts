@@ -183,13 +183,14 @@ export type AccountTrade = { tokenIn: Address; amountIn: bigint; tokenOut: strin
  */
 export type TradeTiming = Record<string, number>;
 
-export async function tradeFromAccount(
-  sign: AccountSigner,
-  owner: Address,
-  account: Address,
-  t: AccountTrade,
-): Promise<{ orderId: Hex; filled: boolean; timing: TradeTiming }> {
-  // Called straight from the Buy press: this is the click, to the millisecond.
+/** A trade signed and ready to send (signTrade), with when it was pressed and signed. */
+export type SignedTrade = { message: Record<string, unknown>; signature: Hex; t_click: number; t_signed: number };
+
+/**
+ * Signs an account trade. Called the moment the button is pressed (pointer down), so the signature is usually done by
+ * the time the click lands; an unused one (the press was dragged off) is simply dropped.
+ */
+export async function signTrade(sign: AccountSigner, account: Address, t: AccountTrade): Promise<SignedTrade> {
   const tClick = Date.now();
   const now = Math.floor(Date.now() / 1000);
   const message = {
@@ -204,7 +205,18 @@ export async function tradeFromAccount(
     deadline: deadline(),
   };
   const signature = await sign(typed(account, "Trade", message));
-  const sent = { t_click: tClick, t_signed: Date.now() };
+  return { message, signature, t_click: tClick, t_signed: Date.now() };
+}
+
+export async function tradeFromAccount(
+  sign: AccountSigner,
+  owner: Address,
+  account: Address,
+  t: AccountTrade,
+  signed?: Promise<SignedTrade>,
+): Promise<{ orderId: Hex; filled: boolean; timing: TradeTiming }> {
+  const { message, signature, t_click, t_signed } = await (signed ?? signTrade(sign, account, t));
+  const sent = { t_click, t_signed };
   const data = await postRelay("/v1/account/trade", { owner, ...accountFields(account), trade: message, signature, timing: sent });
   if (typeof data.orderId !== "string") throw new Error("The relay opened the trade but didn't return its order id.");
   const timing: TradeTiming = { ...sent, ...(data.timing && typeof data.timing === "object" ? (data.timing as TradeTiming) : {}), t_reply: Date.now() };

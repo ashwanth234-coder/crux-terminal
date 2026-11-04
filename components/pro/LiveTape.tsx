@@ -14,6 +14,7 @@ import { fmtTokens } from "@/lib/launch";
 import { fmtTokenPrice } from "@/lib/launchTrade";
 import { priceUsd, type AuctionV2, type BatchVersion } from "@/lib/launchV2";
 import { openingTrade } from "@/lib/openingTrade";
+import { usePendingTrades } from "@/lib/pendingTrades";
 import { HoldersTable } from "@/components/pro/HoldersTable";
 import { TopTraders } from "@/components/pro/TopTraders";
 import { TrustRadar } from "@/components/pro/TrustRadar";
@@ -21,6 +22,21 @@ import { MyOrders } from "@/components/pro/MyOrders";
 import { FocusChip, Tags, Trader, td, th, type DeskTag } from "@/components/pro/desk";
 
 const PAGE = 25;
+/** The block the solver files a swap it has sent but not yet mined under (crux-solver feedhub PROVISIONAL_BLOCK). */
+const PROVISIONAL_BLOCK = BigInt(9_000_000_000);
+
+/** A trade that's on its way to the chain, not mined yet: sent by you, or by the solver a moment ago. */
+function ConfirmingBadge() {
+  return (
+    <span
+      title="Sent, not yet mined on Base Sepolia: it confirms in about a second, or is taken off if it fails"
+      className="inline-flex items-center gap-1 rounded-[3px] border border-line-2 px-1.5 py-px font-mono text-[9.5px] uppercase tracking-[0.12em] text-muted"
+    >
+      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-signal" aria-hidden="true" />
+      Confirming
+    </span>
+  );
+}
 /** Testnet trades are often cents: keep USDC to its 6 decimals (at least 2). */
 const usd = (units: bigint) => `$${Number(formatUnits(units, 6)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 6 })}`;
 const usdCompact = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 2 });
@@ -106,6 +122,7 @@ export function LiveTape({
   const [side, setSide] = useState<"all" | "buy" | "sell">("all");
   const bids = useAuctionBids(factory, auction, BigInt(id), live);
   const swaps = usePoolSwaps(auction.pair, auction.settledAt, graduated);
+  const pending = usePendingTrades(auction.token);
   const { holders, market } = useLedger(factory, id, auction);
   const supply = Number(auction.totalSupply) / 1e18;
   const mine = useMemo(() => new Set([address, crux.account].filter((a): a is Address => Boolean(a)).map((a) => a.toLowerCase())), [address, crux.account]);
@@ -265,6 +282,29 @@ export function LiveTape({
           <tbody className="divide-y divide-line">
             {tab === "trades"
               ? [
+                  // Yours, the moment you pressed Buy or Sell: until the solver's trade replaces it.
+                  ...(focus === null ? pending : [])
+                    .filter((p) => side === "all" || p.side === side)
+                    .map((p) => (
+                      <tr key={`pending-${p.id}`} className={p.side === "buy" ? "bg-up/[0.05]" : "bg-down/[0.05]"}>
+                        <td className={`${td} font-mono text-dim`}>now</td>
+                        <td className={td}>
+                          <span className={p.side === "buy" ? "text-up" : "text-down"}>{p.side === "buy" ? "Buy" : "Sell"}</span>
+                        </td>
+                        <td className={`${td} text-right font-mono ${p.side === "buy" ? "text-up" : "text-down"}`}>
+                          {p.usdc !== undefined ? `$${p.usdc.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 6 })}` : "…"}
+                        </td>
+                        <td className={`${td} text-right font-mono text-chrome/90`}>{p.tokens !== undefined ? `~${fmtTokens(BigInt(Math.floor(p.tokens)) * BigInt(10) ** BigInt(18))}` : "…"}</td>
+                        <td className={`${td} text-right font-mono text-muted`}>{fmtTokenPrice(p.expected ?? p.price)}</td>
+                        <td className={`${td} text-right font-mono text-chrome/90`}>{mcapText((p.expected ?? p.price) * supply)}</td>
+                        <td className={td}>
+                          <Tags tags={["you"]} />
+                        </td>
+                        <td className={td}>
+                          <ConfirmingBadge />
+                        </td>
+                      </tr>
+                    )),
                   ...tradeRows.slice(0, shown).map((t) => {
                   const route = t.viaIntent ? "intent" : t.venue === "batch-pool" ? "batch" : null;
                   return (
@@ -292,7 +332,9 @@ export function LiveTape({
                         </span>
                       </td>
                       <td className={td}>
-                        {route ? (
+                        {t.blockNumber >= PROVISIONAL_BLOCK ? (
+                          <ConfirmingBadge />
+                        ) : route ? (
                           <CruxBadge venue={route} />
                         ) : (
                           <span title="A direct swap on the Uniswap V2 pool" className="rounded-[3px] border border-line px-1.5 py-px font-mono text-[9.5px] uppercase tracking-[0.12em] text-dim">

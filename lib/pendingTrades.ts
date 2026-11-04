@@ -2,10 +2,10 @@ import { useSyncExternalStore } from "react";
 import type { Address } from "viem";
 
 /**
- * Trades this browser has sent that haven't filled yet: shown on the chart the moment Buy or Sell is pressed, as a
- * faint, outlined candle from the price now to the expected fill, labelled by a dashed line ("Buying $10…"), until it
- * fills, fails or is refunded. Never drawn like a real candle: a real candle is a trade that happened, and this one
- * hasn't yet. When it fills, the real (solid) candle takes its place.
+ * Trades this browser has just sent: on the chart the moment Buy or Sell is pressed, as a solid candle from the price
+ * now to the expected fill (priced from the pool as it stands), and at the top of the swaps list marked Confirming.
+ * The solver's own trade replaces it (pushed to every chart the moment it's sent); a failed or refunded trade takes it
+ * away at once.
  */
 export type PendingTrade = {
   id: number;
@@ -16,6 +16,9 @@ export type PendingTrade = {
   price: number;
   /** The expected average fill price (the quote it was signed against), if known. */
   expected?: number;
+  /** Its size, as far as known when it's sent: USDC (dollars) and whole tokens. */
+  usdc?: number;
+  tokens?: number;
   at: number;
 };
 

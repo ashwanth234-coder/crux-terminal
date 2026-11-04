@@ -18,7 +18,7 @@ import { cruxBatchFactoryAbi } from "@/contracts/abis/batchAuction";
 import { useLaunchMarket, type LaunchMarket } from "@/hooks/useLaunchMarket";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { useBuyingPower } from "@/hooks/useBuyingPower";
-import { tradeFromAccount } from "@/lib/account";
+import { signTrade, tradeFromAccount, type SignedTrade } from "@/lib/account";
 import type { LaunchV2Model } from "@/hooks/useLaunchV2";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import { LIVE_ORIGINS, originByKey, toUsdc6, type PayFrom } from "@/lib/crosschain";
@@ -34,7 +34,7 @@ import { cancelStanding, placeStanding, standingFloor, type StandingView } from 
 import { useStandingOrders } from "@/hooks/useStandingOrders";
 import { useCreatorVestingDays } from "@/hooks/useCreatorVesting";
 import { minReceived, sourceAsset, type OrderDraft, type Side } from "@/lib/order";
-import { placeOneClick } from "@/lib/session";
+import { placeOneClick, warmRelay } from "@/lib/session";
 import { SOLVER_MAX_IMPACT_PCT, bidRisk, tradeRisk } from "@/lib/risk";
 import { PAY_SOURCES } from "@/lib/tokens";
 import { useConnectModal } from "@/providers/Web3Provider";
@@ -838,7 +838,10 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
     clearPending.current?.();
     if (market.price === null) return;
     const label = side === "buy" ? `Buying $${fmtUsdc(input)}…` : `Selling ${fmtTokens(input)} ${symbol}…`;
-    clearPending.current = addPendingTrade({ token: market.token, side, label, price: market.price, ...(expected ? { expected } : {}) });
+    const at = expected ?? market.price;
+    const usdc = side === "buy" ? Number(input) / 1e6 : (Number(input) / 1e18) * at;
+    const tokens = side === "buy" ? (at > 0 ? usdc / at : undefined) : Number(input) / 1e18;
+    clearPending.current = addPendingTrade({ token: market.token, side, label, price: market.price, usdc, ...(tokens !== undefined ? { tokens } : {}), ...(expected ? { expected } : {}) });
   };
   // When the order resolves: off the chart, and on a fill the balances re-read at once (not on their 10 s timer).
   const resolved =
@@ -856,8 +859,8 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
     clearPending.current = null;
     if (resolved.startsWith("filled:")) {
       afterFill.current();
-      // The real candle usually lands with the fill; the faint one stays a moment longer so the chart never blanks.
-      setTimeout(() => clear?.(), 2_500);
+      // The solver's trade has been on the chart since it was sent: this one gives way to it now.
+      setTimeout(() => clear?.(), 300);
     } else {
       clear?.();
     }
@@ -1001,18 +1004,39 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   };
 
   /** Signs with the Crux account's login key (no pop-up) and has the relay open it from the account. */
+  // The trade the button would send right now (null when it can't): signed on press, sent on click.
+  const accountTradeFields = () =>
+    input && draft
+      ? {
+          tokenIn: side === "buy" ? TESTNET_USDC : market.token,
+          amountIn: input,
+          tokenOut: side === "buy" ? market.caip19 : launchCaip19(TESTNET_USDC),
+          // The same signed floor as the wallet flow: the quote less the slippage allowance.
+          minAmountOut: parseUnits(minReceived(draft).toFixed(6), side === "buy" ? market.decimals : 6),
+        }
+      : null;
+  const presigned = useRef<{ key: string; signed: Promise<SignedTrade> } | null>(null);
+  const tradeKey = (f: NonNullable<ReturnType<typeof accountTradeFields>>) => `${f.tokenIn}:${f.amountIn}:${f.tokenOut}:${f.minAmountOut}`;
+  /** Pointer down on Buy / Sell: the signature starts now, about 100 ms before the click lands. */
+  const pressTrade = () => {
+    warmRelay();
+    if (!viaAccount || disabled || !crux.sign || !crux.account) return;
+    const f = accountTradeFields();
+    if (!f) return;
+    const signed = signTrade(crux.sign, crux.account, f);
+    signed.catch(() => {}); // a press that never becomes a click
+    presigned.current = { key: tradeKey(f), signed };
+  };
   const accountTrade = async () => {
-    if (!input || !draft || !crux.sign || !crux.owner || !crux.account) return;
+    const f = accountTradeFields();
+    if (!f || !draft || !crux.sign || !crux.owner || !crux.account) return;
     setOneClickOrder({ kind: "sending" });
-    showPending(side, input, draft?.price);
+    showPending(side, f.amountIn, draft?.price);
+    // The press's signature when it's for exactly this trade (the quote can move between press and click).
+    const pre = presigned.current?.key === tradeKey(f) ? presigned.current.signed : undefined;
+    presigned.current = null;
     try {
-      const { orderId, filled, timing } = await tradeFromAccount(crux.sign, crux.owner, crux.account, {
-        tokenIn: side === "buy" ? TESTNET_USDC : market.token,
-        amountIn: input,
-        tokenOut: side === "buy" ? market.caip19 : launchCaip19(TESTNET_USDC),
-        // The same signed floor as the wallet flow: the quote less the slippage allowance.
-        minAmountOut: parseUnits(minReceived(draft).toFixed(6), side === "buy" ? market.decimals : 6),
-      });
+      const { orderId, filled, timing } = await tradeFromAccount(crux.sign, crux.owner, crux.account, f, pre);
       // How long each step took, for checking a buy's speed (browser console): click → signed → relay → … → candle.
       console.info("[crux] trade timing", Object.fromEntries(Object.entries(timing).map(([key, v]) => [key, v - timing.t_click])));
       // Usually filled by the time the relay answers: shown at once, and the balances re-read (the watch is for the rest).
@@ -1249,7 +1273,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
 
       {side === "buy" && payFrom === "base" && !viaAccount && <OneClickBar oneClick={oneClick} />}
 
-      <button type="button" disabled={(isConnected || viaAccount || solanaReady) && disabled} onClick={sign} className={buttonClass("primary", "md", "w-full rounded-xl font-semibold max-lg:hidden")}>
+      <button type="button" disabled={(isConnected || viaAccount || solanaReady) && disabled} onClick={sign} onPointerDown={pressTrade} onPointerEnter={warmRelay} className={buttonClass("primary", "md", "w-full rounded-xl font-semibold max-lg:hidden")}>
         {isConnected || viaAccount || viaSolana ? label : t("ticket.connect")} <ArrowUpRight />
         <SubmitKey />
       </button>
@@ -1278,7 +1302,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
           <div className="min-w-0 flex-1">
             <AmountField id={`${uid}-dock`} value={amount} onChange={setAmount} unit={side === "buy" ? "USDC" : symbol} compact />
           </div>
-          <button type="button" disabled={(isConnected || viaAccount || solanaReady) && disabled} onClick={sign} className={buttonClass("primary", "md", "shrink-0 rounded-xl px-4 font-semibold capitalize")}>
+          <button type="button" disabled={(isConnected || viaAccount || solanaReady) && disabled} onClick={sign} onPointerDown={pressTrade} onPointerEnter={warmRelay} className={buttonClass("primary", "md", "shrink-0 rounded-xl px-4 font-semibold capitalize")}>
             {viaSolana
               ? solana.payer
                 ? solanaPayee

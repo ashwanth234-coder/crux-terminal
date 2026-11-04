@@ -74,13 +74,25 @@ const json = (v: unknown) => JSON.stringify(v, (_, x) => (typeof x === "bigint" 
 export async function postRelay(path: string, body: unknown): Promise<Record<string, unknown>> {
   let res: Response;
   try {
-    res = await fetch(`${RELAY_URL}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: json(body) });
+    // text/plain keeps it a "simple" request: no CORS preflight round trip before it (the relay reads the body as JSON).
+    res = await fetch(`${RELAY_URL}${path}`, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, body: json(body) });
   } catch {
     throw new Error("Couldn't reach the Crux relay. Check your connection and try again.");
   }
   const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok || data.ok !== true) throw new Error(typeof data.error === "string" ? data.error : `The relay answered ${res.status}.`);
   return data;
+}
+
+let warmedAt = 0;
+/**
+ * Opens (or keeps open) the connection to the relay before a trade needs it: a trade then pays no DNS or TLS handshake.
+ * Cheap and throttled; called when a Buy or Sell button is hovered or pressed.
+ */
+export function warmRelay() {
+  if (Date.now() - warmedAt < 15_000) return;
+  warmedAt = Date.now();
+  void fetch(`${RELAY_URL}/v1/health`, { cache: "no-store" }).catch(() => (warmedAt = 0));
 }
 
 export type LoginStep = "approving" | "signing-session" | "signing-permit" | "submitting";
