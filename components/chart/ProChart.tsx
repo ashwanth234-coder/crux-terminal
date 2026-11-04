@@ -513,9 +513,6 @@ export function ProChart({
         lines.push({ price: at * k, color: look.color, title: look.title, style: 0 });
       }
     }
-    // A trade you just sent: dashed at the expected fill until it resolves, its price on the axis (the faint candle below
-    // carries its label: a title here would sit over the newest bar and hide it).
-    for (const p of pending) lines.push({ price: (p.expected ?? p.price) * k, color: p.side === "buy" ? "#5cc08c" : "#e5484d", title: "", style: 2 });
     engine.setPriceLines(lines);
 
     const times = candles.map((c) => c.time);
@@ -552,20 +549,29 @@ export function ProChart({
       return time === null ? [] : [{ time: time as Time, position: "aboveBar" as const, shape: "square" as const, color: m.color, text: m.text, size: 0.6 }];
     });
     engine.setMarkers([...bars, ...events].sort((a, b) => (a.time as number) - (b.time as number)));
-  }, [engine, candles, k, fmt, minMove, config.type, drawnStudies, config.alerts, settings, marksHidden, gradPrice, shownMarks, mine, last, standingOrders, auction.token, auction.settledAt, external, market.protectedUntil, vestDays, interval, pending]);
+  }, [engine, candles, k, fmt, minMove, config.type, drawnStudies, config.alerts, settings, marksHidden, gradPrice, shownMarks, mine, last, standingOrders, auction.token, auction.settledAt, external, market.protectedUntil, vestDays, interval]);
 
-  // Your newest trade in flight as a faint candle on the current bar (or the next one, once this bar's time is up),
-  // from the price now to its expected fill: it shows what's about to happen, and the real candle replaces it.
+  // Your newest trade the moment you press Buy or Sell: a candle on the current bar (or the next one, once this bar's
+  // time is up), from the price then to its expected fill. It goes the moment the chart's newest candle moves (the
+  // solver's trade, pushed as it's sent), so it never sits on top of the real one.
+  const pressedAt = useRef<{ id: number; time: number | null; close: number | null; trades: number | null } | null>(null);
   useEffect(() => {
     if (!engine) return;
     const p = pending.length ? pending[pending.length - 1] : null;
     if (!p) {
+      pressedAt.current = null;
+      engine.setPending(null, k);
+      return;
+    }
+    if (pressedAt.current?.id !== p.id) pressedAt.current = { id: p.id, time: last?.time ?? null, close: last?.close ?? null, trades: last?.trades ?? null };
+    const then = pressedAt.current;
+    if (last && (last.time !== then.time || last.close !== then.close || (last.trades ?? null) !== then.trades)) {
       engine.setPending(null, k);
       return;
     }
     const nowS = Math.floor(Date.now() / 1000);
     const time = last && nowS < last.time + interval ? last.time : Math.floor(nowS / interval) * interval;
-    engine.setPending({ time, open: last?.close ?? p.price, close: p.expected ?? p.price, label: p.label }, k);
+    engine.setPending({ time, open: last?.close ?? p.price, close: p.expected ?? p.price, side: p.side }, k);
   }, [engine, pending, last, interval, k]);
 
   useChartAlerts({ external, slot, crux, auction, symbol, interval, gradPrice, config, set, candles, last, studyCtx, fmt, k, flash, replaying });

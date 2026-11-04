@@ -111,7 +111,6 @@ export class ChartEngine {
   private mainLines: IPriceLine[] = [];
   /** The pending-trade candle's own series (lib/pendingTrades), made on first use. */
   private pending: ISeriesApi<"Candlestick"> | null = null;
-  private pendingMarkers: ISeriesMarkersPluginApi<Time> | null = null;
   private markers: ISeriesMarkersPluginApi<Time> | null = null;
   private markerData: SeriesMarker<Time>[] = [];
   /** Every drawing, painted on the price pane; it moves to the new main series when the style changes. */
@@ -460,37 +459,31 @@ export class ChartEngine {
    * the expected fill, priced from the pool as it stands. The solver's own trade replaces it (on every chart from the
    * moment it's sent); a failed trade takes it away. Raw prices (scaled by `k` here); null clears it.
    */
-  setPending(bar: { time: number; open: number; close: number; label: string } | null, k: number) {
+  setPending(bar: { time: number; open: number; close: number; side: "buy" | "sell" } | null, k: number) {
     if (!bar) {
       this.pending?.setData([]);
-      this.pendingMarkers?.setMarkers([]);
       return;
     }
     const { up: upSolid, down: downSolid } = palette(this.settings);
     const look = { priceScaleId: this.side, upColor: upSolid, downColor: downSolid, borderVisible: false, wickVisible: false, lastValueVisible: false, priceLineVisible: false };
     if (!this.pending) this.pending = this.chart.addSeries(this.lc.CandlestickSeries, look);
     else this.pending.applyOptions(look);
+    // A buy always draws up (green), a sell down (red): an average fill a hair either side of the last close mustn't
+    // flip its colour. At least MIN_PENDING_PX tall, so a tiny trade is still seen.
+    const up = bar.side === "buy";
     const open = bar.open * k;
-    let close = bar.close * k;
-    this.pending.setData([{ time: bar.time as UTCTimestamp, open, close, high: Math.max(open, close), low: Math.min(open, close) }]);
-    // A small trade barely moves the price: at least MIN_PENDING_PX tall, in its direction, so it's always seen.
+    let close = up ? Math.max(bar.close * k, open) : Math.min(bar.close * k, open);
+    const draw = () => this.pending!.setData([{ time: bar.time as UTCTimestamp, open, close, high: Math.max(open, close), low: Math.min(open, close) }]);
+    draw();
     const y0 = this.pending.priceToCoordinate(open);
     const y1 = this.pending.priceToCoordinate(close);
-    if (y0 !== null && y1 !== null && Math.abs(y1 - y0) < MIN_PENDING_PX) {
-      const up = close >= open;
+    if (y0 !== null && (y1 === null || Math.abs(y1 - y0) < MIN_PENDING_PX)) {
       const stretched = this.pending.coordinateToPrice(y0 + (up ? -MIN_PENDING_PX : MIN_PENDING_PX));
       if (stretched !== null) {
         close = stretched;
-        this.pending.setData([{ time: bar.time as UTCTimestamp, open, close, high: Math.max(open, close), low: Math.min(open, close) }]);
+        draw();
       }
     }
-    // Its label sits on the candle itself: a price line's title is drawn at the right edge, over the newest bar.
-    const up = close >= open;
-    const { up: upColor, down: downColor } = palette(this.settings);
-    this.pendingMarkers ??= this.lc.createSeriesMarkers(this.pending, []);
-    this.pendingMarkers.setMarkers([
-      { time: bar.time as UTCTimestamp, position: up ? "aboveBar" : "belowBar", shape: "circle", color: up ? upColor : downColor, text: bar.label, size: 0.5 },
-    ]);
   }
 
   /** Horizontal lines on the price pane (the clearing price, alerts), replaced as a set. */
