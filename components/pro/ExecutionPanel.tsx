@@ -28,7 +28,7 @@ import { StandingOrderForm, type OrderType } from "@/components/pro/StandingOrde
 import { useOrderRequests, type ChartOrderKind, type ChartOrderRequest } from "@/lib/chartOrders";
 import { slippageFor, useTradeSettings } from "@/hooks/useTradeSettings";
 import { USDC_DECIMALS, fmtTokens, fmtUsdc, formatRemaining, launchError, type TxStep } from "@/lib/launch";
-import { fmtTokenPrice, launchCaip19 } from "@/lib/launchTrade";
+import { fmtTokenPrice, launchCaip19, sellFor, solverQuote } from "@/lib/launchTrade";
 import { PRICE_DECIMALS, V3_TICK_STEP_PERCENT, fmtUsdcExact, graduationNeeds, maxDepositV3, parsePriceUsd, priceUsd, priceUsdPlain, usesTicks, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
 import { cancelStanding, placeStanding, standingFloor, type StandingView } from "@/lib/standing";
 import { useStandingOrders } from "@/hooks/useStandingOrders";
@@ -793,7 +793,14 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
     document.querySelector('[aria-label="Execution"]')?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, []);
   useOrderRequests(auction.token, onChartOrder);
-  const [amount, setAmount] = useState("");
+  // The box is in USDC both ways: a buy spends it, a sell brings it in (the tokens it takes are worked out from the
+  // pool). A % of the bag sells exactly that many tokens, the box showing what they bring.
+  const [amount, setAmountText] = useState("");
+  const [sellTokens, setSellTokens] = useState<bigint | null>(null);
+  const setAmount = (v: string) => {
+    setSellTokens(null);
+    setAmountText(v);
+  };
   const [order, setOrder] = useState<OrderDraft | null>(null);
   // Buys can pay with test USDC on Base Sepolia, or on Arbitrum Sepolia (escrowed there, filled here on Base).
   const [payFrom, setPayFrom] = useState<PayFrom>("base");
@@ -883,8 +890,9 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
         : null;
   const tokenBalance = viaAccount ? (accountTokens.data ?? null) : market.tokenBalance;
 
-  const decimals = side === "buy" ? 6 : market.decimals;
-  const input = parse(amount, decimals);
+  // What's typed is USDC; a sell's input is the tokens that bring it in (or, from a % button, exactly that share).
+  const typedUsdc = parse(amount, 6);
+  const input = side === "buy" ? typedUsdc : (sellTokens ?? (typedUsdc && market.reserves ? sellFor(typedUsdc, market.reserves) : null));
   const risk = input && market.reserves ? tradeRisk(side, input, market.reserves) : null;
 
   // The order exactly as IntentModal will sign it: same quote, and minReceived() is the signed floor.
@@ -1075,7 +1083,13 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
     else setOrder(draft);
   };
 
-  const pick = (v: bigint) => setAmount(formatUnits(v, decimals));
+  // A buy's value is USDC; a sell's is tokens (a share of the bag): the box shows the USDC it brings.
+  const usdcText = (tokens: bigint) => (market.reserves ? formatUnits(solverQuote("sell", tokens, market.reserves), 6) : "");
+  const pick = (v: bigint) => {
+    if (side === "buy") return setAmount(formatUnits(v, 6));
+    setAmountText(usdcText(v));
+    setSellTokens(v);
+  };
   // One-click trading (the gear's switch): a quick size places the order as soon as the ticket has priced it, which is
   // the next render, or at once when that size is already in the box. From a wallet it opens the review to confirm.
   // The latest submit, priced for whatever is in the box (refreshed after every render).
@@ -1086,9 +1100,8 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   const quick = (v: bigint) => {
     // Nothing to trade from yet (logged out, no wallet): a quick size only fills the box.
     if (!trade.instant || !(viaAccount || isConnected)) return pick(v);
-    const next = formatUnits(v, decimals);
     // Render the new size now, so the submit below sees the order priced for it.
-    flushSync(() => setAmount(next));
+    flushSync(() => pick(v));
     submitLatest.current();
   };
   const fraction = (v: bigint | null, n: number) => (v ? (v * BigInt(Math.round(n * 100))) / BigInt(10_000) : null);
@@ -1169,9 +1182,9 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
       <>
 
       <label htmlFor={`${uid}-amt`} className="sr-only">
-        {side === "buy" ? "USDC to spend" : `${symbol} to sell`}
+        {side === "buy" ? "USDC to spend" : `USDC to sell ${symbol} for`}
       </label>
-      <AmountField id={`${uid}-amt`} value={amount} onChange={setAmount} unit={side === "buy" ? "USDC" : symbol} />
+      <AmountField id={`${uid}-amt`} value={amount} onChange={setAmount} unit="USDC" />
       {/* Account-first: the CRUX Account is the default; external wallets (any chain) are one tap away. */}
       {crux.loggedIn && crux.account ? (
         <button
@@ -1300,7 +1313,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
       <MobileDock>
         <div className="flex items-center gap-2">
           <div className="min-w-0 flex-1">
-            <AmountField id={`${uid}-dock`} value={amount} onChange={setAmount} unit={side === "buy" ? "USDC" : symbol} compact />
+            <AmountField id={`${uid}-dock`} value={amount} onChange={setAmount} unit="USDC" compact />
           </div>
           <button type="button" disabled={(isConnected || viaAccount || solanaReady) && disabled} onClick={sign} onPointerDown={pressTrade} onPointerEnter={warmRelay} className={buttonClass("primary", "md", "shrink-0 rounded-xl px-4 font-semibold capitalize")}>
             {viaSolana

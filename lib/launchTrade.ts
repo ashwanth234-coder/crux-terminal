@@ -38,6 +38,12 @@ export function solverQuote(side: "buy" | "sell", input: bigint, r: PoolReserves
   return (out * (BPS - BigInt(SOLVER_SPREAD_BPS))) / BPS;
 }
 
+/** Tokens (base units) a sell needs to bring in `usdc` (base units) once the spread is taken; null if the pool is too thin. */
+export function sellFor(usdc: bigint, r: PoolReserves) {
+  const gross = (usdc * BPS + (BPS - BigInt(SOLVER_SPREAD_BPS)) - BigInt(1)) / (BPS - BigInt(SOLVER_SPREAD_BPS));
+  return amountIn(gross, r.token, r.usdc);
+}
+
 /** USDC (base units) a buy of `tokens` costs once the spread is taken; null if the pool is too thin. */
 export function buyCost(tokens: bigint, r: PoolReserves) {
   const gross = (tokens * BPS + (BPS - BigInt(SOLVER_SPREAD_BPS)) - BigInt(1)) / (BPS - BigInt(SOLVER_SPREAD_BPS));
