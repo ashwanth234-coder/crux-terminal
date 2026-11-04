@@ -2,8 +2,8 @@ import type { IChartApi, IPrimitivePaneRenderer, IPrimitivePaneView, ISeriesApi,
 
 type Target = Parameters<IPrimitivePaneRenderer["draw"]>[0];
 
-/** One trader badge: a filled circle above a candle with its label inside ("DB"), and a count bubble when more than one. */
-export type Badge = { time: number; high: number; label: string; count: number; side: "buy" | "sell" };
+/** One trader badge: a filled circle above a candle with its label inside ("DB"), one per kind and side whatever the count. */
+export type Badge = { time: number; high: number; label: string; side: "buy" | "sell" };
 
 /** Electric green for a buy, electric red for a sell: the fill, a darker ring round it, and a glow. */
 const LOOK = {
@@ -16,7 +16,7 @@ const GAP = 4;
 
 /**
  * Trade badges on the price pane, drawn like a trading terminal's: a small filled circle sitting above each candle
- * with its label inside (DB, DS, ...), one per kind of trader and side, a count bubble at its corner for several.
+ * with its label inside (DB, DS, ...), one per kind of trader and side however many trades it stands for.
  * Several kinds on one candle stack upwards. Prices are already in the chart's units.
  */
 export class BadgesPrimitive implements ISeriesPrimitive<Time> {
@@ -85,22 +85,6 @@ export class BadgesPrimitive implements ISeriesPrimitive<Time> {
         ctx.fillStyle = "#ffffff";
         ctx.fillText(b.label, x, y + 0.5);
         ctx.restore();
-        if (b.count > 1) {
-          const cx = x + R * 0.8;
-          const cy = y - R * 0.8;
-          ctx.beginPath();
-          ctx.arc(cx, cy, 5.5, 0, Math.PI * 2);
-          ctx.fillStyle = "#0b0d10";
-          ctx.fill();
-          ctx.lineWidth = 1;
-          ctx.strokeStyle = look.fill;
-          ctx.stroke();
-          ctx.font = "700 7px Inter, ui-sans-serif, system-ui, sans-serif";
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillStyle = "#f3f3f0";
-          ctx.fillText(b.count > 9 ? "9+" : String(b.count), cx, cy + 0.5);
-        }
       }
     });
   }

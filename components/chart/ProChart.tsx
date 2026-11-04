@@ -538,7 +538,7 @@ export function ProChart({
         const high = highOf.get(g.time);
         if (high === undefined) return [];
         const style = MARK_STYLE[g.who];
-        return [{ time: g.time, high: high * k, label: g.side === "buy" ? style.buy : style.sell, count: g.n, side: g.side }];
+        return [{ time: g.time, high: high * k, label: g.side === "buy" ? style.buy : style.sell, side: g.side }];
       }),
     );
     const milestones: { time: number; text: string; color: string }[] = [];
