@@ -42,6 +42,7 @@ import { ORIGIN_NAMES, SOON_MAINNET, SOON_NETWORKS } from "@/lib/networks";
 import { SOLANA_OPEN_SOL, SOLANA_RETURNED_SOL, solAmount } from "@/lib/solanaEscrow";
 import { LaunchSteps, stepOf } from "@/components/launch/LaunchSteps";
 import { firstBuyFailed } from "@/lib/firstBuy";
+import { addPendingTrade } from "@/lib/pendingTrades";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 /** The few seconds between the fair first minute and open trading, or before a new token is ready to trade. */
@@ -831,6 +832,30 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   const oneClick = useOneClick();
   const [oneClickOrder, setOneClickOrder] = useState<OneClickOrder | null>(null);
   useOrderWatch(oneClickOrder, setOneClickOrder);
+  // The trade on the chart from the moment it's sent (lib/pendingTrades), cleared when it resolves.
+  const clearPending = useRef<(() => void) | null>(null);
+  const showPending = (side: Side, input: bigint) => {
+    clearPending.current?.();
+    if (market.price === null) return;
+    const label = side === "buy" ? `Buying $${fmtUsdc(input)}…` : `Selling ${fmtTokens(input)} ${symbol}…`;
+    clearPending.current = addPendingTrade({ token: market.token, side, label, price: market.price });
+  };
+  // When the order resolves: off the chart, and on a fill the balances re-read at once (not on their 10 s timer).
+  const resolved =
+    oneClickOrder && oneClickOrder.kind !== "sending" && oneClickOrder.kind !== "open" ? `${oneClickOrder.kind}:${"orderId" in oneClickOrder ? oneClickOrder.orderId : ""}` : null;
+  const afterFill = useRef(() => {});
+  useLayoutEffect(() => {
+    afterFill.current = () => {
+      crux.refresh();
+      void accountTokens.refetch();
+    };
+  });
+  useEffect(() => {
+    if (!resolved) return;
+    clearPending.current?.();
+    clearPending.current = null;
+    if (resolved.startsWith("filled:")) afterFill.current();
+  }, [resolved]);
 
   const usdc = useReadContract({
     address: fromOrigin ? fromOrigin.usdc : TESTNET_USDC,
@@ -947,6 +972,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   const oneClickBuy = async () => {
     if (!address || !input || !draft || !oneClick.session) return;
     setOneClickOrder({ kind: "sending" });
+    showPending("buy", input);
     try {
       const orderId = await placeOneClick(oneClick.session, {
         user: address,
@@ -972,6 +998,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   const accountTrade = async () => {
     if (!input || !draft || !crux.sign || !crux.owner || !crux.account) return;
     setOneClickOrder({ kind: "sending" });
+    showPending(side, input);
     try {
       const orderId = await tradeFromAccount(crux.sign, crux.owner, crux.account, {
         tokenIn: side === "buy" ? TESTNET_USDC : market.token,

@@ -42,6 +42,7 @@ import { PATTERN_LABELS, TOOL_POINTS, defaultStop, isPattern, type DrawPart, typ
 import { OverlaysButton } from "./OverlaysBar";
 import { SymbolSwitch } from "./SymbolSwitch";
 import { requestOrderAt } from "@/lib/chartOrders";
+import { usePendingTrades } from "@/lib/pendingTrades";
 import { TemplatesButton } from "./Templates";
 import { DEFAULT_CONFIG, DEFAULT_SETTINGS, loadLayout, loadSettings, palette, saveSettings, type ChartSettings, type ScaleMode } from "./settings";
 import { SettingsModal } from "./SettingsModal";
@@ -144,6 +145,8 @@ export function ProChart({
   const { address: wallet } = useConnection();
   const crux = useCruxAccount();
   const { orders: standingOrders } = useStandingOrders();
+  // Your trades in flight: on the chart from the moment Buy is pressed, until they fill (lib/pendingTrades).
+  const pending = usePendingTrades(auction.token);
   const now = useNow();
   const frame = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
@@ -510,6 +513,8 @@ export function ProChart({
         lines.push({ price: at * k, color: look.color, title: look.title, style: 0 });
       }
     }
+    // A trade you just sent, dashed at the price it was placed at, until it fills: never a candle, it hasn't happened.
+    for (const p of pending) lines.push({ price: p.price * k, color: p.side === "buy" ? "#5cc08c" : "#e5484d", title: p.label, style: 2 });
     engine.setPriceLines(lines);
 
     const times = candles.map((c) => c.time);
@@ -546,7 +551,7 @@ export function ProChart({
       return time === null ? [] : [{ time: time as Time, position: "aboveBar" as const, shape: "square" as const, color: m.color, text: m.text, size: 0.6 }];
     });
     engine.setMarkers([...bars, ...events].sort((a, b) => (a.time as number) - (b.time as number)));
-  }, [engine, candles, k, fmt, minMove, config.type, drawnStudies, config.alerts, settings, marksHidden, gradPrice, shownMarks, mine, last, standingOrders, auction.token, auction.settledAt, external, market.protectedUntil, vestDays, interval]);
+  }, [engine, candles, k, fmt, minMove, config.type, drawnStudies, config.alerts, settings, marksHidden, gradPrice, shownMarks, mine, last, standingOrders, auction.token, auction.settledAt, external, market.protectedUntil, vestDays, interval, pending]);
 
   useChartAlerts({ external, slot, crux, auction, symbol, interval, gradPrice, config, set, candles, last, studyCtx, fmt, k, flash, replaying });
 

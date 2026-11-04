@@ -210,7 +210,7 @@ export function useOrderWatch(order: OneClickOrder | null, setOrder: (o: OneClic
       if (status === 2) setOrder({ kind: "filled", orderId });
       else if (status === 3) setOrder({ kind: "refunded", orderId });
     };
-    const t = setInterval(() => void tick(), 2_000);
+    const t = setInterval(() => void tick(), 400);
     void tick();
     return () => {
       stop = true;
@@ -230,7 +230,7 @@ export function OneClickOrderStatus({ order, to = "your wallet" }: { order: OneC
   return (
     <p role="status" className={`text-[11.5px] leading-snug ${order.kind === "error" ? "text-down" : order.kind === "filled" ? "text-up" : "text-muted"}`}>
       {order.kind === "sending" && (to === "your wallet" ? "Signed in this browser · opening it on Base…" : "Signed · opening it on Base…")}
-      {order.kind === "open" && <>Order {link(order.orderId)} open · Crux fills it in the next 10-second batch…</>}
+      {order.kind === "open" && <>Order {link(order.orderId)} open · filling…</>}
       {order.kind === "filled" && <>Filled · order {link(order.orderId)} delivered to {to}.</>}
       {order.kind === "refunded" && <>Order {link(order.orderId)} wasn&apos;t filled and was refunded to {to}.</>}
       {order.kind === "error" && order.message}
