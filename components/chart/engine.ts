@@ -111,6 +111,8 @@ export class ChartEngine {
   private mainLines: IPriceLine[] = [];
   /** The pending-trade candle's own series (lib/pendingTrades), made on first use. */
   private pending: ISeriesApi<"Candlestick"> | null = null;
+  /** Every period on the time axis, quiet ones (drawn blank) included: what the views count in. */
+  private slots = 0;
   private markers: ISeriesMarkersPluginApi<Time> | null = null;
   private markerData: SeriesMarker<Time>[] = [];
   /** Every drawing, painted on the price pane; it moves to the new main series when the style changes. */
@@ -304,6 +306,7 @@ export class ChartEngine {
 
   /** Candles (in USDC per token) shown in the chosen units: `k` multiplies prices (total supply for market cap). */
   setData(candles: Candle[], k: number, format: Formatter, minMove: number) {
+    this.slots = candles.length;
     const { up, down } = palette(this.settings);
     // A price or market cap is never below zero: the axis leaves the room under the candles (where volume sits) unlabelled.
     const priceFormat = { type: "custom" as const, formatter: (v: number) => (v < 0 ? "" : format(v)), minMove };
@@ -317,8 +320,12 @@ export class ChartEngine {
     };
     if (this.type === "candles" || this.type === "hollow" || this.type === "bars" || this.type === "hlc" || this.type === "heikin") {
       const cs = this.type === "heikin" ? heikinAshi(candles) : candles;
-      const snap = flat(4, (c, o) => o.push(c.open * k, c.high * k, c.low * k, c.close * k), cs);
-      this.mainData = syncSeries(this.main, this.mainData, snap, (i) => ({ time: t(cs[i]), open: snap.values[i * 4], high: snap.values[i * 4 + 1], low: snap.values[i * 4 + 2], close: snap.values[i * 4 + 3] }));
+      // A period with no trades keeps its place on the time axis but draws nothing (a run of flat bars read as a dotted line).
+      const quiet = (i: number) => candles[i].trades === 0 && candles[i].volume === 0;
+      const snap = flat(4, (c, o) => (c.trades === 0 && c.volume === 0 ? o.push(NaN, NaN, NaN, NaN) : o.push(c.open * k, c.high * k, c.low * k, c.close * k)), cs);
+      this.mainData = syncSeries(this.main, this.mainData, snap, (i) =>
+        quiet(i) ? { time: t(cs[i]) } : { time: t(cs[i]), open: snap.values[i * 4], high: snap.values[i * 4 + 1], low: snap.values[i * 4 + 2], close: snap.values[i * 4 + 3] },
+      );
     } else if (this.type === "highlow") {
       // One bar from low to high, coloured by the candle's direction.
       const snap = flat(3, (c, o) => o.push(c.low * k, c.high * k, dir(c)));
@@ -591,7 +598,7 @@ export class ChartEngine {
 
   /** Every bar in view (the bottom bar's All): fitted when they're too many for their normal width, else as fit(). */
   showAll() {
-    const n = this.main.data().length;
+    const n = this.slots;
     if (n > Math.floor((this.chart.timeScale().width() || 600) / 7)) this.chart.timeScale().fitContent();
     else this.fit();
   }
@@ -602,7 +609,7 @@ export class ChartEngine {
    * blowing each candle up to fill it.
    */
   fit() {
-    const n = this.main.data().length;
+    const n = this.slots;
     if (n === 0) return;
     const width = this.chart.timeScale().width() || 600;
     // Bars at a normal width (7 px); when there are too few to fill the pane at that width, wider (up to 24 px) so they

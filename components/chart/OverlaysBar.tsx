@@ -48,7 +48,7 @@ export function OverlaysButton({ settings, onChange, counts }: { settings: Chart
       {() => (
         <div className="flex flex-col gap-0.5 p-1">
           <p className="px-1.5 pb-1 text-[10px] uppercase tracking-[0.14em] text-dim">Mark on the chart</p>
-          <Check on={marks.mine} onClick={() => toggle("mine")} label={`My swaps${counts.mine ? ` (${counts.mine})` : ""}`} swatch="#5cc08c" />
+          <Check on={marks.mine} onClick={() => toggle("mine")} label={`My swaps${counts.mine ? ` (${counts.mine})` : ""}`} swatch="#00e676" />
           <Check on={marks.dev} onClick={() => toggle("dev")} label={`Whale / Dev swaps${counts.dev ? ` (${counts.dev})` : ""}`} swatch="#c792ea" />
           <Check on={marks.top} onClick={() => toggle("top")} label={`Top 10 holders${counts.top ? ` (${counts.top})` : ""}`} swatch="#ffd166" />
           <Check on={settings.clearingLine} onClick={() => onChange({ ...settings, clearingLine: !settings.clearingLine })} label="Batch floor" swatch="#f3f3f0" />

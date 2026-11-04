@@ -61,10 +61,10 @@ const SLOT_INTERVALS: (number | "auto")[] = ["auto", 60, 900, 3_600];
 /** How each kind of marked trader shows on the bars. */
 const MARK_STYLE: Record<MarkWho, { color: string; buy: string; sell: string }> = {
   focus: { color: "#ff9d6e", buy: "B", sell: "S" },
-  me: { color: "#5cc08c", buy: "B", sell: "S" },
-  dev: { color: "#c792ea", buy: "Dev", sell: "Dev" },
-  whale: { color: "#4cc9f0", buy: "W", sell: "W" },
-  top: { color: "#ffd166", buy: "T", sell: "T" },
+  me: { color: "#00e676", buy: "B", sell: "S" },
+  dev: { color: "#c792ea", buy: "DB", sell: "DS" },
+  whale: { color: "#4cc9f0", buy: "WB", sell: "WS" },
+  top: { color: "#ffd166", buy: "TB", sell: "TS" },
 };
 
 const compactUsd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 2 });
@@ -493,9 +493,10 @@ export function ProChart({
     const lines: { price: number; color: string; title: string; style?: number }[] = [];
     if (settings.clearingLine && !marksHidden && gradPrice > 0) lines.push({ price: gradPrice * k, color: "#f3f3f080", title: "Auction clear" });
     for (const a of config.alerts) lines.push({ price: a * k, color: "#ffd166", title: "Alert", style: 1 });
-    if (settings.marks.mine && !marksHidden && mine.balance > 0 && mine.entry !== null && last) {
-      const pct = (last.close / mine.entry - 1) * 100;
-      lines.push({ price: mine.entry * k, color: "#4cc9f0", title: `AVG ENTRY ${fmt(mine.entry * k)} · ${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%` });
+    // Your average entry while you hold: just the line, named, its price on the axis (the profit is in the position
+    // panel). Shown whether or not your swaps are marked on the candles.
+    if (!marksHidden && mine.balance > 0 && mine.entry !== null) {
+      lines.push({ price: mine.entry * k, color: "#4cc9f0", title: "Avg entry" });
     }
     // Your standing orders on this token, where they'd fire (a trailing stop where it stands now).
     if (settings.showOrders && !marksHidden) {
@@ -516,26 +517,33 @@ export function ProChart({
     engine.setPriceLines(lines);
 
     const times = candles.map((c) => c.time);
-    const bars: SeriesMarker<Time>[] = marksHidden
-      ? []
-      : shownMarks
-          .slice(-300)
-          .flatMap((m) => {
-            const time = barTime(times, m.time);
-            if (time === null) return [];
-            const style = MARK_STYLE[m.who];
-            return [
-              {
-                time: time as Time,
-                position: m.side === "buy" ? ("belowBar" as const) : ("aboveBar" as const),
-                shape: m.side === "buy" ? ("arrowUp" as const) : ("arrowDown" as const),
-                color: m.who === "me" ? (m.side === "buy" ? "#5cc08c" : "#e5484d") : style.color,
-                ...(m.who === "focus" ? { size: 1.4 } : {}),
-                text: m.side === "buy" ? style.buy : style.sell,
-              },
-            ];
-          })
-          .sort((a, b) => (a.time as number) - (b.time as number));
+    // One small badge per candle for each kind of trader and side ("DB", "DB 3"), on top of the candle: never a column
+    // of arrows, one per trade.
+    const grouped = new Map<string, { time: number; who: MarkWho; side: "buy" | "sell"; n: number }>();
+    if (!marksHidden) {
+      for (const m of shownMarks.slice(-300)) {
+        const time = barTime(times, m.time);
+        if (time === null) continue;
+        const key = `${time}:${m.who}:${m.side}`;
+        const g = grouped.get(key);
+        if (g) g.n++;
+        else grouped.set(key, { time, who: m.who, side: m.side, n: 1 });
+      }
+    }
+    const bars: SeriesMarker<Time>[] = [...grouped.values()]
+      .map((g) => {
+        const style = MARK_STYLE[g.who];
+        const label = g.side === "buy" ? style.buy : style.sell;
+        return {
+          time: g.time as Time,
+          position: "aboveBar" as const,
+          shape: "circle" as const,
+          color: g.who === "me" ? (g.side === "buy" ? "#00e676" : "#ff1744") : style.color,
+          size: 0.8,
+          text: g.n > 1 ? `${label} ${g.n}` : label,
+        };
+      })
+      .sort((a, b) => (a.time as number) - (b.time as number));
     const milestones: { time: number; text: string; color: string }[] = [];
     if (!external && !marksHidden && auction.settledAt > 0) {
       milestones.push({ time: auction.settledAt, text: "Graduated", color: "#f3f3f0" });

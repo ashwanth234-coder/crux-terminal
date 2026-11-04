@@ -77,7 +77,7 @@ export const DEFAULT_SETTINGS: ChartSettings = {
   seconds: true,
   palette: "crux",
   clearingLine: true,
-  marks: { mine: true, dev: true, top: false },
+  marks: { mine: false, dev: true, top: false },
   minUsd: 0,
   snap: true,
   cursor: "cross",
@@ -143,16 +143,20 @@ export function loadSettings(): ChartSettings {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return DEFAULT_SETTINGS;
-    const saved = JSON.parse(raw) as Partial<ChartSettings>;
-    return { ...DEFAULT_SETTINGS, ...saved, marks: { ...DEFAULT_SETTINGS.marks, ...saved.marks }, status: { ...DEFAULT_SETTINGS.status, ...saved.status } };
+    const saved = JSON.parse(raw) as Partial<ChartSettings> & { marksV?: number };
+    // Settings saved before your own swaps were off by default start with them off once (switch them on under Overlays).
+    const marks = { ...DEFAULT_SETTINGS.marks, ...saved.marks, ...(saved.marksV === MARKS_V ? {} : { mine: false }) };
+    return { ...DEFAULT_SETTINGS, ...saved, marks, status: { ...DEFAULT_SETTINGS.status, ...saved.status } };
   } catch {
     return DEFAULT_SETTINGS;
   }
 }
 
+const MARKS_V = 2;
+
 export function saveSettings(s: ChartSettings) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(s));
+    localStorage.setItem(KEY, JSON.stringify({ ...s, marksV: MARKS_V }));
   } catch {
     // Private mode or blocked storage: settings last for this visit only.
   }
@@ -227,7 +231,11 @@ export function saveLayout(token: string, config: ChartConfig, savedAt = Date.no
   }
 }
 
+/** The candles' default colours: electric green and red. */
+export const ELECTRIC_UP = "#00e676";
+export const ELECTRIC_DOWN = "#ff1744";
+
 export function palette(s: ChartSettings) {
-  const base = s.palette === "classic" ? { up: "#26a69a", down: "#ef5350" } : { up: "#5cc08c", down: "#e5484d" };
+  const base = s.palette === "classic" ? { up: "#26a69a", down: "#ef5350" } : { up: ELECTRIC_UP, down: ELECTRIC_DOWN };
   return { up: s.upColor || base.up, down: s.downColor || base.down };
 }
