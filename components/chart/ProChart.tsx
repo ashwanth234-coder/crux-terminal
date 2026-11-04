@@ -531,20 +531,16 @@ export function ProChart({
         else grouped.set(key, { time, who: m.who, side: m.side, n: 1 });
       }
     }
-    const bars: SeriesMarker<Time>[] = [...grouped.values()]
-      .map((g) => {
+    // Drawn as electric green (buy) or red (sell) discs with the label inside in white (badges.ts).
+    const highOf = new Map(candles.map((c) => [c.time, c.high]));
+    engine.setBadges(
+      [...grouped.values()].flatMap((g) => {
+        const high = highOf.get(g.time);
+        if (high === undefined) return [];
         const style = MARK_STYLE[g.who];
-        const label = g.side === "buy" ? style.buy : style.sell;
-        return {
-          time: g.time as Time,
-          position: "aboveBar" as const,
-          shape: "circle" as const,
-          color: g.who === "me" ? (g.side === "buy" ? "#00e676" : "#ff1744") : style.color,
-          size: 0.8,
-          text: g.n > 1 ? `${label} ${g.n}` : label,
-        };
-      })
-      .sort((a, b) => (a.time as number) - (b.time as number));
+        return [{ time: g.time, high: high * k, label: g.side === "buy" ? style.buy : style.sell, count: g.n, side: g.side }];
+      }),
+    );
     const milestones: { time: number; text: string; color: string }[] = [];
     if (!external && !marksHidden && auction.settledAt > 0) {
       milestones.push({ time: auction.settledAt, text: "Graduated", color: "#f3f3f0" });
@@ -557,7 +553,7 @@ export function ProChart({
       const time = barTime(times, m.time);
       return time === null ? [] : [{ time: time as Time, position: "belowBar" as const, shape: "square" as const, color: m.color, text: m.text, size: 0.6 }];
     });
-    engine.setMarkers([...bars, ...events].sort((a, b) => (a.time as number) - (b.time as number)));
+    engine.setMarkers(events.sort((a, b) => (a.time as number) - (b.time as number)));
   }, [engine, candles, k, fmt, minMove, config.type, drawnStudies, config.alerts, settings, marksHidden, gradPrice, shownMarks, mine, last, standingOrders, auction.token, auction.settledAt, external, market.protectedUntil, vestDays, interval]);
 
   // Your newest trade the moment you press Buy or Sell: a candle on the current bar (or the next one, once this bar's

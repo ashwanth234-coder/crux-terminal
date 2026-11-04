@@ -10,6 +10,7 @@ import type {
   Time,
   UTCTimestamp,
 } from "lightweight-charts";
+import { BadgesPrimitive, type Badge } from "./badges";
 import { heikinAshi, type Candle } from "@/lib/candles";
 import type { Study, StudyLine } from "@/lib/indicators";
 import { DrawingsPrimitive, type DrawPoint } from "./drawings";
@@ -113,6 +114,7 @@ export class ChartEngine {
   private pending: ISeriesApi<"Candlestick"> | null = null;
   /** How many candles the chart holds: what the opening view counts in. */
   private slots = 0;
+  private readonly badges = new BadgesPrimitive();
   private markers: ISeriesMarkersPluginApi<Time> | null = null;
   private markerData: SeriesMarker<Time>[] = [];
   /** Every drawing, painted on the price pane; it moves to the new main series when the style changes. */
@@ -155,6 +157,7 @@ export class ChartEngine {
     this.markers = lc.createSeriesMarkers(this.main, []);
     this.main.attachPrimitive(this.drawings);
     this.main.attachPrimitive(this.profile);
+    this.main.attachPrimitive(this.badges);
     this.applySettings(settings);
   }
 
@@ -296,9 +299,15 @@ export class ChartEngine {
     this.markers = this.lc.createSeriesMarkers(this.main, this.markerData);
     this.main.attachPrimitive(this.drawings);
     this.main.attachPrimitive(this.profile);
+    this.main.attachPrimitive(this.badges);
   }
 
-  /** Marks on the bars (B / S, D, W, T), kept across chart-style changes. */
+  /** Trader badges above the candles (DB, DS, ...), kept across chart-style changes. */
+  setBadges(badges: Badge[]) {
+    this.badges.set(badges);
+  }
+
+  /** Marks on the bars (milestones), kept across chart-style changes. */
   setMarkers(markers: SeriesMarker<Time>[]) {
     this.markerData = markers;
     this.markers?.setMarkers(markers);
