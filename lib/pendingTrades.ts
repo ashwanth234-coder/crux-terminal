@@ -3,10 +3,21 @@ import type { Address } from "viem";
 
 /**
  * Trades this browser has sent that haven't filled yet: shown on the chart the moment Buy or Sell is pressed, as a
- * dashed line at the price it was placed at ("Buying $10…"), until it fills, fails or is refunded. Never a candle: a
- * candle is a trade that happened, and this one hasn't yet.
+ * faint, outlined candle from the price now to the expected fill, labelled by a dashed line ("Buying $10…"), until it
+ * fills, fails or is refunded. Never drawn like a real candle: a real candle is a trade that happened, and this one
+ * hasn't yet. When it fills, the real (solid) candle takes its place.
  */
-export type PendingTrade = { id: number; token: Address; side: "buy" | "sell"; label: string; price: number; at: number };
+export type PendingTrade = {
+  id: number;
+  token: Address;
+  side: "buy" | "sell";
+  label: string;
+  /** The price when it was sent. */
+  price: number;
+  /** The expected average fill price (the quote it was signed against), if known. */
+  expected?: number;
+  at: number;
+};
 
 /** A pending trade that hasn't resolved by now is dropped from the chart (its order status says what happened). */
 const MAX_AGE_MS = 60_000;

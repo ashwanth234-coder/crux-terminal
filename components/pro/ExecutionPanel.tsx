@@ -834,11 +834,11 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   useOrderWatch(oneClickOrder, setOneClickOrder);
   // The trade on the chart from the moment it's sent (lib/pendingTrades), cleared when it resolves.
   const clearPending = useRef<(() => void) | null>(null);
-  const showPending = (side: Side, input: bigint) => {
+  const showPending = (side: Side, input: bigint, expected?: number) => {
     clearPending.current?.();
     if (market.price === null) return;
     const label = side === "buy" ? `Buying $${fmtUsdc(input)}…` : `Selling ${fmtTokens(input)} ${symbol}…`;
-    clearPending.current = addPendingTrade({ token: market.token, side, label, price: market.price });
+    clearPending.current = addPendingTrade({ token: market.token, side, label, price: market.price, ...(expected ? { expected } : {}) });
   };
   // When the order resolves: off the chart, and on a fill the balances re-read at once (not on their 10 s timer).
   const resolved =
@@ -852,9 +852,15 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   });
   useEffect(() => {
     if (!resolved) return;
-    clearPending.current?.();
+    const clear = clearPending.current;
     clearPending.current = null;
-    if (resolved.startsWith("filled:")) afterFill.current();
+    if (resolved.startsWith("filled:")) {
+      afterFill.current();
+      // The real candle usually lands with the fill; the faint one stays a moment longer so the chart never blanks.
+      setTimeout(() => clear?.(), 2_500);
+    } else {
+      clear?.();
+    }
   }, [resolved]);
 
   const usdc = useReadContract({
@@ -972,7 +978,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   const oneClickBuy = async () => {
     if (!address || !input || !draft || !oneClick.session) return;
     setOneClickOrder({ kind: "sending" });
-    showPending("buy", input);
+    showPending("buy", input, draft?.price);
     try {
       const orderId = await placeOneClick(oneClick.session, {
         user: address,
@@ -998,7 +1004,7 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
   const accountTrade = async () => {
     if (!input || !draft || !crux.sign || !crux.owner || !crux.account) return;
     setOneClickOrder({ kind: "sending" });
-    showPending(side, input);
+    showPending(side, input, draft?.price);
     try {
       const { orderId, filled } = await tradeFromAccount(crux.sign, crux.owner, crux.account, {
         tokenIn: side === "buy" ? TESTNET_USDC : market.token,

@@ -513,8 +513,8 @@ export function ProChart({
         lines.push({ price: at * k, color: look.color, title: look.title, style: 0 });
       }
     }
-    // A trade you just sent, dashed at the price it was placed at, until it fills: never a candle, it hasn't happened.
-    for (const p of pending) lines.push({ price: p.price * k, color: p.side === "buy" ? "#5cc08c" : "#e5484d", title: p.label, style: 2 });
+    // A trade you just sent: its label, dashed at the expected fill, until it resolves (the faint candle is below).
+    for (const p of pending) lines.push({ price: (p.expected ?? p.price) * k, color: p.side === "buy" ? "#5cc08c" : "#e5484d", title: p.label, style: 2 });
     engine.setPriceLines(lines);
 
     const times = candles.map((c) => c.time);
@@ -552,6 +552,20 @@ export function ProChart({
     });
     engine.setMarkers([...bars, ...events].sort((a, b) => (a.time as number) - (b.time as number)));
   }, [engine, candles, k, fmt, minMove, config.type, drawnStudies, config.alerts, settings, marksHidden, gradPrice, shownMarks, mine, last, standingOrders, auction.token, auction.settledAt, external, market.protectedUntil, vestDays, interval, pending]);
+
+  // Your newest trade in flight as a faint candle on the current bar (or the next one, once this bar's time is up),
+  // from the price now to its expected fill: it shows what's about to happen, and the real candle replaces it.
+  useEffect(() => {
+    if (!engine) return;
+    const p = pending.length ? pending[pending.length - 1] : null;
+    if (!p) {
+      engine.setPending(null, k);
+      return;
+    }
+    const nowS = Math.floor(Date.now() / 1000);
+    const time = last && nowS < last.time + interval ? last.time : Math.floor(nowS / interval) * interval;
+    engine.setPending({ time, open: last?.close ?? p.price, close: p.expected ?? p.price }, k);
+  }, [engine, pending, last, interval, k]);
 
   useChartAlerts({ external, slot, crux, auction, symbol, interval, gradPrice, config, set, candles, last, studyCtx, fmt, k, flash, replaying });
 

@@ -25,6 +25,9 @@ export type Formatter = (v: number) => string;
 
 const t = (c: Candle) => c.time as UTCTimestamp;
 
+/** `#rrggbb` with an alpha byte; any other colour (a name, rgb()) is returned as is. */
+const withAlpha = (color: string, alpha: string) => (/^#[0-9a-f]{6}$/i.test(color) ? `${color}${alpha}` : color);
+
 /** One point of a series as handed to lightweight-charts: a time and its values (or none, a gap). */
 type Point = { time: Time; [field: string]: unknown };
 
@@ -106,6 +109,8 @@ export class ChartEngine {
   private compareSeries: ISeriesApi<SeriesType>[] = [];
   private paneLines: IPriceLine[] = [];
   private mainLines: IPriceLine[] = [];
+  /** The pending-trade candle's own series (lib/pendingTrades), made on first use. */
+  private pending: ISeriesApi<"Candlestick"> | null = null;
   private markers: ISeriesMarkersPluginApi<Time> | null = null;
   private markerData: SeriesMarker<Time>[] = [];
   /** Every drawing, painted on the price pane; it moves to the new main series when the style changes. */
@@ -447,6 +452,36 @@ export class ChartEngine {
       s.setData(l.candles.map((c) => ({ time: t(c), value: c.close * k })));
       return s;
     });
+  }
+
+  /**
+   * A trade you've sent that hasn't filled: one faint, outlined candle on the current bar, from the price now to the
+   * expected fill, so it reads as about to happen, never as a trade. Raw prices (scaled by `k` here); null clears it.
+   */
+  setPending(bar: { time: number; open: number; close: number } | null, k: number) {
+    if (!bar) {
+      this.pending?.setData([]);
+      return;
+    }
+    if (!this.pending) {
+      const { up, down } = palette(this.settings);
+      this.pending = this.chart.addSeries(this.lc.CandlestickSeries, {
+        priceScaleId: this.side,
+        upColor: withAlpha(up, "2e"),
+        downColor: withAlpha(down, "2e"),
+        borderVisible: true,
+        borderUpColor: withAlpha(up, "b3"),
+        borderDownColor: withAlpha(down, "b3"),
+        wickVisible: false,
+        lastValueVisible: false,
+        priceLineVisible: false,
+      });
+    } else {
+      this.pending.applyOptions({ priceScaleId: this.side });
+    }
+    const open = bar.open * k;
+    const close = bar.close * k;
+    this.pending.setData([{ time: bar.time as UTCTimestamp, open, close, high: Math.max(open, close), low: Math.min(open, close) }]);
   }
 
   /** Horizontal lines on the price pane (the clearing price, alerts), replaced as a set. */
