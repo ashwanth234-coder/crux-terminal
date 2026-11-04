@@ -16,7 +16,7 @@ import { launchCaip19 } from "@/lib/launchTrade";
 import { placeStanding, standingFloor } from "@/lib/standing";
 import { slippageFor, useTradeSettings } from "@/hooks/useTradeSettings";
 import { LaunchSteps } from "./LaunchSteps";
-import { markFirstBuyFailed } from "@/lib/firstBuy";
+import { markFirstBuyFailed, markLaunchChecked } from "@/lib/firstBuy";
 import { simulateThenWrite } from "@/lib/preflight";
 import { VestingBadge } from "@/components/ui/VestingBadge";
 import { AntiSniperBadge } from "@/components/ui/AntiSniperBadge";
@@ -83,7 +83,7 @@ const FAIR_LAUNCH_CHOICES = [
  * launch never defaults to one wallet buying the whole sale.
  */
 const LAUNCH_SIZES = [
-  { key: "small", title: "Small", who: "Just you or a few friends", target: "3", walletCap: "100", window: "60" },
+  { key: "small", title: "Small", who: "Just you or a few friends", target: "3", walletCap: "100", window: "30" },
   { key: "community", title: "Community", who: "Your group chat or followers", target: "30", walletCap: "10", window: "300" },
   { key: "wide", title: "Wide", who: "A big audience, each buying a little", target: "90", walletCap: "2", window: "600" },
 ] as const;
@@ -442,6 +442,8 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     const { salted, token } = await mineFor(factory, launchParams(), crux.launchAccount);
     setPhase({ kind: "deploying", label: `Launching $${form.symbol} on Base: no gas needed…` });
     const auctionId = await launchFromAccountV8(crux.sign, crux.launchAccount, factory, salted, { instantUnlock: form.instantUnlock, antiSniper: form.antiSniper });
+    // The relay ran the copycat check before submitting it (it refuses a copy): the countdown can say it passed.
+    markLaunchChecked(token);
     if (firstBuy !== null && firstBuy > BigInt(0)) {
       setPhase({ kind: "deploying", label: `$${form.symbol} is launched. Placing your first buy…` });
       if (!(await placeFirstBuy(token, salted, firstBuy))) markFirstBuyFailed(token, firstBuy);
@@ -875,7 +877,8 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                           set("target", s.target);
                           set("walletCap", s.walletCap);
                           set("window", s.window);
-                          set("antiSniper", true);
+                          // The fair first minute stays off (the default); it's a Custom choice.
+                          set("antiSniper", false);
                           set("firstBuy", "");
                           // The launch sizes always vest; an instant unlock is a Custom choice.
                           set("instantUnlock", false);

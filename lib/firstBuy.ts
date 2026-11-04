@@ -23,3 +23,25 @@ export function firstBuyFailed(token: Address): bigint | null {
     return null;
   }
 }
+
+/**
+ * A launch this browser just made through the launch form, whose copycat check (ticker, artwork, X link) passed: the
+ * countdown says so. Launches made some other way show no such line (nothing here vouches for them).
+ */
+const checkedKey = (token: Address) => `crux.launchChecked.${token.toLowerCase()}`;
+
+export function markLaunchChecked(token: Address) {
+  try {
+    sessionStorage.setItem(checkedKey(token), "1");
+  } catch {
+    // Storage off: the countdown just won't list the check.
+  }
+}
+
+export function launchChecked(token: Address): boolean {
+  try {
+    return sessionStorage.getItem(checkedKey(token)) === "1";
+  } catch {
+    return false;
+  }
+}

@@ -41,7 +41,7 @@ import { useConnectModal } from "@/providers/Web3Provider";
 import { ORIGIN_NAMES, SOON_MAINNET, SOON_NETWORKS } from "@/lib/networks";
 import { SOLANA_OPEN_SOL, SOLANA_RETURNED_SOL, solAmount } from "@/lib/solanaEscrow";
 import { LaunchSteps, stepOf } from "@/components/launch/LaunchSteps";
-import { firstBuyFailed } from "@/lib/firstBuy";
+import { firstBuyFailed, launchChecked } from "@/lib/firstBuy";
 import { addPendingTrade } from "@/lib/pendingTrades";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
@@ -1417,7 +1417,7 @@ export function ExecutionPanel({
     return (
       <div className="p-3">
         {guide}
-        <OpensIn at={auction.startTime} />
+        <OpensIn at={auction.startTime} token={auction.token} vestDays={vestDays} />
         {unlocked && <div className="mt-3 px-1">{unlocked}</div>}
         <section aria-label="Buy" className="mt-3 px-1">
           <h2 className="mb-3 text-[14px] font-medium text-chrome">Buy {symbol}</h2>
@@ -1478,17 +1478,44 @@ function FirstBuyMissed({ token }: { token: Address }) {
   );
 }
 
-/** Before the opening, for a CRUX Account: when it opens, and that the account can queue its buy now. */
-function OpensIn({ at }: { at: number }) {
+/**
+ * Before the opening, for a CRUX Account: what's already done (a checklist that ticks as it happens) and when it opens.
+ * Only what's true is listed: the copycat check for a launch this browser made, the creator's lock when there is one,
+ * and this account's buy once it's queued.
+ */
+function OpensIn({ at, token, vestDays }: { at: number; token: Address; vestDays: number | null }) {
   const now = useNow();
+  const standing = useStandingOrders();
+  const [checked] = useState(() => (typeof window === "undefined" ? false : launchChecked(token)));
+  const mine = (standing.orders ?? []).filter((o) => o.atOpen && o.status === "open" && o.token.toLowerCase() === token.toLowerCase());
+  const queuedUsd = mine.reduce((sum, o) => sum + BigInt(o.amountIn), BigInt(0));
+  const done = [
+    checked && "Copycat check passed",
+    vestDays !== null && vestDays > 0 && `Creator's share locked for ${vestDays} days`,
+    queuedUsd > BigInt(0) && `Your $${fmtUsdc(queuedUsd)} buy is in`,
+  ].filter((x): x is string => Boolean(x));
   return (
     <section aria-label="Opens in" className="rounded-xl border border-line px-4 py-3">
+      {done.length > 0 && (
+        <ul className="mb-2.5 flex flex-col gap-1">
+          {done.map((d) => (
+            <li key={d} className="flex items-center gap-2 text-[12px] text-chrome">
+              <span className="text-up" aria-hidden="true">
+                ✓
+              </span>
+              {d}
+            </li>
+          ))}
+        </ul>
+      )}
       <p className="flex items-baseline justify-between gap-3">
         <span className="text-[13px] text-chrome">Opens in</span>
         <span className="font-mono text-[15px] text-signal">{formatRemaining(Math.max(0, at - now))}</span>
       </p>
       <p className="mt-1.5 text-[11.5px] leading-snug text-dim">
-        Buy now from your CRUX Account and you get in at the opening price, the same as everyone. No wallet needed.
+        {queuedUsd > BigInt(0)
+          ? "Nothing else to do: your buy goes in when it opens, at the same price as everyone."
+          : "Buy now from your CRUX Account and you get in at the opening price, the same as everyone. No wallet needed."}
       </p>
     </section>
   );

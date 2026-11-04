@@ -122,6 +122,7 @@ export function toAuctionV2(raw: {
 
 /** Batch windows offered at launch; the contract accepts anything from 30 seconds to 24 hours. */
 export const V2_WINDOWS = [
+  { seconds: 30, label: "30 sec" },
   { seconds: 60, label: "60 sec" },
   { seconds: 300, label: "5 min" },
   { seconds: 3_600, label: "1 hour" },
