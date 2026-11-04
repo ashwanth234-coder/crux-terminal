@@ -177,7 +177,20 @@ export type AccountTrade = { tokenIn: Address; amountIn: bigint; tokenOut: strin
  * Opens a trade from the account through the relay. The relay hands it to the solver as it lands and waits a few
  * seconds for the fill: `filled` true means the tokens are already in the account (no need to watch the order).
  */
-export async function tradeFromAccount(sign: AccountSigner, owner: Address, account: Address, t: AccountTrade): Promise<{ orderId: Hex; filled: boolean }> {
+/**
+ * Milliseconds since the epoch at each step of a trade (t_click … t_candle_pushed): the browser stamps the click and
+ * the signature, the relay and solver the rest, and the reply carries them all back.
+ */
+export type TradeTiming = Record<string, number>;
+
+export async function tradeFromAccount(
+  sign: AccountSigner,
+  owner: Address,
+  account: Address,
+  t: AccountTrade,
+): Promise<{ orderId: Hex; filled: boolean; timing: TradeTiming }> {
+  // Called straight from the Buy press: this is the click, to the millisecond.
+  const tClick = Date.now();
   const now = Math.floor(Date.now() / 1000);
   const message = {
     tokenIn: t.tokenIn,
@@ -191,9 +204,11 @@ export async function tradeFromAccount(sign: AccountSigner, owner: Address, acco
     deadline: deadline(),
   };
   const signature = await sign(typed(account, "Trade", message));
-  const data = await postRelay("/v1/account/trade", { owner, ...accountFields(account), trade: message, signature });
+  const sent = { t_click: tClick, t_signed: Date.now() };
+  const data = await postRelay("/v1/account/trade", { owner, ...accountFields(account), trade: message, signature, timing: sent });
   if (typeof data.orderId !== "string") throw new Error("The relay opened the trade but didn't return its order id.");
-  return { orderId: data.orderId as Hex, filled: data.filled === true };
+  const timing: TradeTiming = { ...sent, ...(data.timing && typeof data.timing === "object" ? (data.timing as TradeTiming) : {}), t_reply: Date.now() };
+  return { orderId: data.orderId as Hex, filled: data.filled === true, timing };
 }
 
 /** Binds the withdrawal address (instant while none is bound) or requests a change (takes effect after 48 hours). */

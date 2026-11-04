@@ -25,6 +25,9 @@ export type Formatter = (v: number) => string;
 
 const t = (c: Candle) => c.time as UTCTimestamp;
 
+/** The pending-trade candle's smallest height in pixels: a tiny buy still shows. */
+const MIN_PENDING_PX = 6;
+
 /** `#rrggbb` with an alpha byte; any other colour (a name, rgb()) is returned as is. */
 const withAlpha = (color: string, alpha: string) => (/^#[0-9a-f]{6}$/i.test(color) ? `${color}${alpha}` : color);
 
@@ -111,6 +114,7 @@ export class ChartEngine {
   private mainLines: IPriceLine[] = [];
   /** The pending-trade candle's own series (lib/pendingTrades), made on first use. */
   private pending: ISeriesApi<"Candlestick"> | null = null;
+  private pendingMarkers: ISeriesMarkersPluginApi<Time> | null = null;
   private markers: ISeriesMarkersPluginApi<Time> | null = null;
   private markerData: SeriesMarker<Time>[] = [];
   /** Every drawing, painted on the price pane; it moves to the new main series when the style changes. */
@@ -458,9 +462,10 @@ export class ChartEngine {
    * A trade you've sent that hasn't filled: one faint, outlined candle on the current bar, from the price now to the
    * expected fill, so it reads as about to happen, never as a trade. Raw prices (scaled by `k` here); null clears it.
    */
-  setPending(bar: { time: number; open: number; close: number } | null, k: number) {
+  setPending(bar: { time: number; open: number; close: number; label: string } | null, k: number) {
     if (!bar) {
       this.pending?.setData([]);
+      this.pendingMarkers?.setMarkers([]);
       return;
     }
     if (!this.pending) {
@@ -480,8 +485,26 @@ export class ChartEngine {
       this.pending.applyOptions({ priceScaleId: this.side });
     }
     const open = bar.open * k;
-    const close = bar.close * k;
+    let close = bar.close * k;
     this.pending.setData([{ time: bar.time as UTCTimestamp, open, close, high: Math.max(open, close), low: Math.min(open, close) }]);
+    // A small trade barely moves the price: at least MIN_PENDING_PX tall, in its direction, so it's always seen.
+    const y0 = this.pending.priceToCoordinate(open);
+    const y1 = this.pending.priceToCoordinate(close);
+    if (y0 !== null && y1 !== null && Math.abs(y1 - y0) < MIN_PENDING_PX) {
+      const up = close >= open;
+      const stretched = this.pending.coordinateToPrice(y0 + (up ? -MIN_PENDING_PX : MIN_PENDING_PX));
+      if (stretched !== null) {
+        close = stretched;
+        this.pending.setData([{ time: bar.time as UTCTimestamp, open, close, high: Math.max(open, close), low: Math.min(open, close) }]);
+      }
+    }
+    // Its label sits on the candle itself: a price line's title is drawn at the right edge, over the newest bar.
+    const up = close >= open;
+    const { up: upColor, down: downColor } = palette(this.settings);
+    this.pendingMarkers ??= this.lc.createSeriesMarkers(this.pending, []);
+    this.pendingMarkers.setMarkers([
+      { time: bar.time as UTCTimestamp, position: up ? "aboveBar" : "belowBar", shape: "circle", color: up ? upColor : downColor, text: bar.label, size: 0.5 },
+    ]);
   }
 
   /** Horizontal lines on the price pane (the clearing price, alerts), replaced as a set. */

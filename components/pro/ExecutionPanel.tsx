@@ -1006,13 +1006,15 @@ function TradeForm({ auction, symbol }: { auction: AuctionV2; symbol: string }) 
     setOneClickOrder({ kind: "sending" });
     showPending(side, input, draft?.price);
     try {
-      const { orderId, filled } = await tradeFromAccount(crux.sign, crux.owner, crux.account, {
+      const { orderId, filled, timing } = await tradeFromAccount(crux.sign, crux.owner, crux.account, {
         tokenIn: side === "buy" ? TESTNET_USDC : market.token,
         amountIn: input,
         tokenOut: side === "buy" ? market.caip19 : launchCaip19(TESTNET_USDC),
         // The same signed floor as the wallet flow: the quote less the slippage allowance.
         minAmountOut: parseUnits(minReceived(draft).toFixed(6), side === "buy" ? market.decimals : 6),
       });
+      // How long each step took, for checking a buy's speed (browser console): click → signed → relay → … → candle.
+      console.info("[crux] trade timing", Object.fromEntries(Object.entries(timing).map(([key, v]) => [key, v - timing.t_click])));
       // Usually filled by the time the relay answers: shown at once, and the balances re-read (the watch is for the rest).
       setOneClickOrder({ kind: filled ? "filled" : "open", orderId });
       setAmount("");

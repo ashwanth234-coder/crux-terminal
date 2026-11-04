@@ -513,8 +513,9 @@ export function ProChart({
         lines.push({ price: at * k, color: look.color, title: look.title, style: 0 });
       }
     }
-    // A trade you just sent: its label, dashed at the expected fill, until it resolves (the faint candle is below).
-    for (const p of pending) lines.push({ price: (p.expected ?? p.price) * k, color: p.side === "buy" ? "#5cc08c" : "#e5484d", title: p.label, style: 2 });
+    // A trade you just sent: dashed at the expected fill until it resolves, its price on the axis (the faint candle below
+    // carries its label: a title here would sit over the newest bar and hide it).
+    for (const p of pending) lines.push({ price: (p.expected ?? p.price) * k, color: p.side === "buy" ? "#5cc08c" : "#e5484d", title: "", style: 2 });
     engine.setPriceLines(lines);
 
     const times = candles.map((c) => c.time);
@@ -564,7 +565,7 @@ export function ProChart({
     }
     const nowS = Math.floor(Date.now() / 1000);
     const time = last && nowS < last.time + interval ? last.time : Math.floor(nowS / interval) * interval;
-    engine.setPending({ time, open: last?.close ?? p.price, close: p.expected ?? p.price }, k);
+    engine.setPending({ time, open: last?.close ?? p.price, close: p.expected ?? p.price, label: p.label }, k);
   }, [engine, pending, last, interval, k]);
 
   useChartAlerts({ external, slot, crux, auction, symbol, interval, gradPrice, config, set, candles, last, studyCtx, fmt, k, flash, replaying });
