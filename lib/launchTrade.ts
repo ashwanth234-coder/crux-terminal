@@ -56,6 +56,20 @@ export function midPrice(r: PoolReserves, tokenDecimals: number) {
   return Number(r.usdc) / 1e6 / (Number(r.token) / 10 ** tokenDecimals);
 }
 
+/**
+ * The pool's mid price just after the solver fills a trade of `input` (base units): where the real candle closes. The
+ * solver keeps its spread, so a buy puts that much less USDC into the pool; a sell's tokens all go in. Null if unknown.
+ */
+export function priceAfter(side: "buy" | "sell", input: bigint, r: PoolReserves, tokenDecimals: number) {
+  if (side === "buy") {
+    const poolIn = (input * (BPS - BigInt(SOLVER_SPREAD_BPS))) / BPS;
+    const out = amountOut(poolIn, r.usdc, r.token);
+    return out > ZERO ? midPrice({ usdc: r.usdc + poolIn, token: r.token - out }, tokenDecimals) : null;
+  }
+  const out = amountOut(input, r.token, r.usdc);
+  return out > ZERO ? midPrice({ usdc: r.usdc - out, token: r.token + input }, tokenDecimals) : null;
+}
+
 /** Prices far below a cent keep their digits, with long runs of zeros counted: $0.0₈5 rather than $0.000000005. */
 export function fmtTokenPrice(usd: number) {
   if (!Number.isFinite(usd) || usd <= 0) return "$0";

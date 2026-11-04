@@ -28,7 +28,7 @@ import { StandingOrderForm, type OrderType } from "@/components/pro/StandingOrde
 import { useOrderRequests, type ChartOrderKind, type ChartOrderRequest } from "@/lib/chartOrders";
 import { slippageFor, useTradeSettings } from "@/hooks/useTradeSettings";
 import { USDC_DECIMALS, fmtTokens, fmtUsdc, formatRemaining, launchError, type TxStep } from "@/lib/launch";
-import { fmtTokenPrice, launchCaip19, sellFor, solverQuote } from "@/lib/launchTrade";
+import { fmtTokenPrice, launchCaip19, priceAfter, sellFor, solverQuote } from "@/lib/launchTrade";
 import { PRICE_DECIMALS, V3_TICK_STEP_PERCENT, fmtUsdcExact, graduationNeeds, maxDepositV3, parsePriceUsd, priceUsd, priceUsdPlain, usesTicks, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
 import { cancelStanding, placeStanding, standingFloor, type StandingView } from "@/lib/standing";
 import { useStandingOrders } from "@/hooks/useStandingOrders";
@@ -431,7 +431,7 @@ function BidForm({
         <Presets items={presets} onPick={pick} />
       </div>
       {wholeOpening ? (
-        <p className="-mt-1.5 text-[11.5px] text-signal">
+        <p className="-mt-1.5 text-[11.5px] text-up">
           You&apos;ve got the whole opening ✓ Buy more once it&apos;s live{liveLeft > 0 ? ` in ${formatRemaining(liveLeft)}` : ""}.
         </p>
       ) : capLeft !== null && (
@@ -852,11 +852,14 @@ function TradeForm({ auction, symbol, handover = false }: { auction: AuctionV2; 
   useOrderWatch(oneClickOrder, setOneClickOrder);
   // The trade on the chart from the moment it's sent (lib/pendingTrades), cleared when it resolves.
   const clearPending = useRef<(() => void) | null>(null);
-  const showPending = (side: Side, input: bigint, expected?: number) => {
+  const showPending = (side: Side, input: bigint, avgFill?: number) => {
     clearPending.current?.();
     if (market.price === null) return;
+    // The candle ends where the real one will: the pool's price just after this trade (not the average fill, which
+    // carries the spread and drew it too tall on a narrow range).
+    const expected = (market.reserves && priceAfter(side, input, market.reserves, market.decimals)) ?? avgFill;
     const label = side === "buy" ? `Buying $${fmtUsdc(input)}…` : `Selling ${fmtTokens(input)} ${symbol}…`;
-    const at = expected ?? market.price;
+    const at = avgFill ?? market.price;
     const usdc = side === "buy" ? Number(input) / 1e6 : (Number(input) / 1e18) * at;
     const tokens = side === "buy" ? (at > 0 ? usdc / at : undefined) : Number(input) / 1e18;
     clearPending.current = addPendingTrade({ token: market.token, side, label, price: market.price, usdc, ...(tokens !== undefined ? { tokens } : {}), ...(expected ? { expected } : {}) });
@@ -877,8 +880,9 @@ function TradeForm({ auction, symbol, handover = false }: { auction: AuctionV2; 
     clearPending.current = null;
     if (resolved.startsWith("filled:")) {
       afterFill.current();
-      // The solver's trade has been on the chart since it was sent: this one gives way to it now.
-      setTimeout(() => clear?.(), 300);
+      // It stays until the real trade is on the chart (ProChart takes it away then), so the two never leave a gap; this
+      // only tidies up if that never shows, say on a chart that isn't open.
+      setTimeout(() => clear?.(), 10_000);
     } else {
       clear?.();
     }

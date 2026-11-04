@@ -3,9 +3,9 @@ import type { Address } from "viem";
 
 /**
  * Trades this browser has just sent: on the chart the moment Buy or Sell is pressed, as a solid candle from the price
- * now to the expected fill (priced from the pool as it stands), and at the top of the swaps list marked Confirming.
- * The solver's own trade replaces it (pushed to every chart the moment it's sent); a failed or refunded trade takes it
- * away at once.
+ * now to the pool's price just after it (worked out from the pool as it stands), and at the top of the swaps list marked
+ * Confirming. It stays until the solver's own trade is on the chart (pushed the moment it's sent), whatever the order
+ * status says first; a failed or refunded trade takes it away at once.
  */
 export type PendingTrade = {
   id: number;
@@ -14,7 +14,7 @@ export type PendingTrade = {
   label: string;
   /** The price when it was sent. */
   price: number;
-  /** The expected average fill price (the quote it was signed against), if known. */
+  /** The pool's price just after the trade (where the real candle will close), if known. */
   expected?: number;
   /** Its size, as far as known when it's sent: USDC (dollars) and whole tokens. */
   usdc?: number;
@@ -42,6 +42,13 @@ export function addPendingTrade(t: Omit<PendingTrade, "id" | "at">): () => void 
   };
   setTimeout(clear, MAX_AGE_MS);
   return clear;
+}
+
+/** Takes a pending trade away: the chart calls it the moment the real trade is on it, so the two never overlap or gap. */
+export function dropPendingTrade(id: number) {
+  if (!items.some((i) => i.id === id)) return;
+  items = items.filter((i) => i.id !== id);
+  emit();
 }
 
 const subscribe = (l: () => void) => {

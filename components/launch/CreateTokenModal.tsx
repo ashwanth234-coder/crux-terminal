@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { formatUnits, getAddress, keccak256, parseAbi, parseEventLogs, parseUnits, toHex, type Address, type Hex } from "viem";
 import { useConfig, useConnection, useReadContract, useSwitchChain } from "wagmi";
@@ -111,7 +111,8 @@ const INITIAL: Form = {
   batchAuction: true,
   instantUnlock: false,
   instantAck: false,
-  antiSniper: true,
+  // Off by default: open trading straight after the opening. The fair first minute stays one switch away.
+  antiSniper: false,
   startsIn: "10",
   startNow: true,
   firstBuy: "",
@@ -216,10 +217,11 @@ function metadataURI(f: Form) {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * "Start now": how far ahead the opening is set so the launch transaction lands before it (the contract needs a minute).
- * A launch from the account is submitted by the relay in seconds; a wallet's waits on its confirmation.
+ * "Start now": how far ahead the opening is set so the launch transaction lands before it (the contract needs 60 s).
+ * A launch from the account is submitted by the relay in seconds: 5 s over the minimum covers signing, the launch check,
+ * mining and a little clock drift. A wallet's waits on its confirmation.
  */
-const START_NOW_LEAD = { account: 90, wallet: V2_MIN_LEAD_SECONDS } as const;
+const START_NOW_LEAD = { account: 65, wallet: V2_MIN_LEAD_SECONDS } as const;
 /** The creator's first buy pays at most this many times the floor (the same automatic ceiling as any buy at open). */
 const FIRST_BUY_CAP_MULTIPLE = BigInt(10);
 /** A buy at open waits this long past the opening for the launch to trade, then expires unspent. */
@@ -345,6 +347,32 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     setError(null);
   };
 
+  // After a launch: straight to its page, the modal staying up ("Opening your token…") until that page is showing, so
+  // the page underneath never flashes in between.
+  // The navigation runs as a transition: `arrived` turns true in the same commit that shows the new page.
+  const [navigating, startNavigation] = useTransition();
+  const [arrived, setArrived] = useState(false);
+  const go = (href: string) => {
+    setPhase({ kind: "deploying", label: "Opening your token…" });
+    startNavigation(() => {
+      setArrived(true);
+      router.push(href);
+    });
+  };
+  useEffect(() => {
+    if (!arrived || navigating) return;
+    // Closed now; the form clears just after, out of this render.
+    onClose();
+    const t = setTimeout(() => {
+      setArrived(false);
+      setForm(INITIAL);
+      setTouched(false);
+      setPhase({ kind: "form" });
+      setError(null);
+    }, 0);
+    return () => clearTimeout(t);
+  }, [arrived, navigating, onClose]);
+
   // Closing (or a failed attempt) keeps every value the creator typed; only a successful launch clears the form.
   const close = () => {
     if (busy) return;
@@ -388,9 +416,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     const params = launchParams();
     setPhase({ kind: "deploying", label: "Launching on Base: no gas needed…" });
     const auctionId = await launchFromAccount(crux.sign, crux.launchAccount, factory, params, { instantUnlock: form.instantUnlock, antiSniper: form.antiSniper });
-    reset();
-    onClose();
-    router.push(`/launch/v7/${auctionId.toString()}`);
+    go(`/launch/v7/${auctionId.toString()}`);
   };
 
   /** The 5afe token salt for `creator` on CruxFactoryV8 (the wallet, or the Crux account of a gasless launch), checked. */
@@ -420,9 +446,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
       setPhase({ kind: "deploying", label: `$${form.symbol} is launched. Placing your first buy…` });
       if (!(await placeFirstBuy(token, salted, firstBuy))) markFirstBuyFailed(token, firstBuy);
     }
-    reset();
-    onClose();
-    router.push(`/launch/v8/${auctionId.toString()}`);
+    go(`/launch/v8/${auctionId.toString()}`);
   };
 
   /**
@@ -482,9 +506,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
       const receipt = await waitForTransactionReceipt(config, { hash: v8hash, chainId: TESTNET.id });
       const [created] = parseEventLogs({ abi: cruxBatchFactoryAbi, eventName: "AuctionCreated", logs: receipt.logs });
       if (!created) throw new Error("Deployed, but no AuctionCreated event was found in the receipt.");
-      reset();
-      onClose();
-      router.push(`/launch/v8/${created.args.auctionId.toString()}`);
+      go(`/launch/v8/${created.args.auctionId.toString()}`);
       return;
     }
     // V6/V7 record both creator choices; V4/V5 the vesting choice; V2/V3 always vest over 30 days.
@@ -513,9 +535,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     const receipt = await waitForTransactionReceipt(config, { hash, chainId: TESTNET.id });
     const [created] = parseEventLogs({ abi: cruxBatchFactoryAbi, eventName: "AuctionCreated", logs: receipt.logs });
     if (!created) throw new Error("Deployed, but no AuctionCreated event was found in the receipt.");
-    reset();
-    onClose();
-    router.push(`/launch/v${version}/${created.args.auctionId.toString()}`);
+    go(`/launch/v${version}/${created.args.auctionId.toString()}`);
   };
 
   const deploy = async () => {
@@ -553,9 +573,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     if (!created) throw new Error("Deployed, but no AuctionCreated event was found in the receipt.");
     // The batch window started with this block, so go straight to the auction:
     // the creator keeps as much of it as possible to deposit.
-    reset();
-    onClose();
-    router.push(`/launch/${created.args.auctionId.toString()}`);
+    go(`/launch/${created.args.auctionId.toString()}`);
   };
 
   const submit = async () => {

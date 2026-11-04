@@ -43,7 +43,7 @@ import { PATTERN_LABELS, TOOL_POINTS, defaultStop, isPattern, type DrawPart, typ
 import { OverlaysButton } from "./OverlaysBar";
 import { SymbolSwitch } from "./SymbolSwitch";
 import { requestOrderAt } from "@/lib/chartOrders";
-import { usePendingTrades } from "@/lib/pendingTrades";
+import { dropPendingTrade, usePendingTrades } from "@/lib/pendingTrades";
 import { TemplatesButton } from "./Templates";
 import { DEFAULT_CONFIG, DEFAULT_SETTINGS, loadLayout, loadSettings, palette, saveSettings, type ChartSettings, type ScaleMode } from "./settings";
 import { SettingsModal } from "./SettingsModal";
@@ -567,7 +567,9 @@ export function ProChart({
     if (pressedAt.current?.id !== p.id) pressedAt.current = { id: p.id, time: last?.time ?? null, close: last?.close ?? null, trades: last?.trades ?? null };
     const then = pressedAt.current;
     if (last && (last.time !== then.time || last.close !== then.close || (last.trades ?? null) !== then.trades)) {
+      // The real trade is on the chart: the pending one (and its Confirming row) goes now, not before.
       engine.setPending(null, k);
+      dropPendingTrade(p.id);
       return;
     }
     const nowS = Math.floor(Date.now() / 1000);
