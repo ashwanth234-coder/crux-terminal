@@ -173,7 +173,11 @@ const deadline = () => BigInt(Math.floor(Date.now() / 1000) + 120);
 export type AccountTrade = { tokenIn: Address; amountIn: bigint; tokenOut: string; minAmountOut: bigint };
 
 /** A buy or sell from the account, signed by the login key and opened by the relay. Returns the order id. */
-export async function tradeFromAccount(sign: AccountSigner, owner: Address, account: Address, t: AccountTrade): Promise<Hex> {
+/**
+ * Opens a trade from the account through the relay. The relay hands it to the solver as it lands and waits a few
+ * seconds for the fill: `filled` true means the tokens are already in the account (no need to watch the order).
+ */
+export async function tradeFromAccount(sign: AccountSigner, owner: Address, account: Address, t: AccountTrade): Promise<{ orderId: Hex; filled: boolean }> {
   const now = Math.floor(Date.now() / 1000);
   const message = {
     tokenIn: t.tokenIn,
@@ -189,7 +193,7 @@ export async function tradeFromAccount(sign: AccountSigner, owner: Address, acco
   const signature = await sign(typed(account, "Trade", message));
   const data = await postRelay("/v1/account/trade", { owner, ...accountFields(account), trade: message, signature });
   if (typeof data.orderId !== "string") throw new Error("The relay opened the trade but didn't return its order id.");
-  return data.orderId as Hex;
+  return { orderId: data.orderId as Hex, filled: data.filled === true };
 }
 
 /** Binds the withdrawal address (instant while none is bound) or requests a change (takes effect after 48 hours). */

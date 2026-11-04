@@ -125,7 +125,7 @@ export function Portfolio() {
       tokenOut: launchCaip19(TESTNET_USDC),
       minAmountOut: parseUnits(minReceived(draft).toFixed(6), 6),
     })
-      .then((orderId) => setAccountOrder({ kind: "open", orderId }))
+      .then(({ orderId, filled }) => setAccountOrder({ kind: filled ? "filled" : "open", orderId }))
       .catch((e: Error) => setAccountOrder({ kind: "error", message: e.message.split("\n")[0] }));
   };
 

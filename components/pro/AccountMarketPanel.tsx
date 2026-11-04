@@ -80,7 +80,7 @@ export function AccountMarketPanel({ market, onUseWallet }: { market: CuratedMar
     setError(null);
     setOpened(null);
     try {
-      const orderId = await tradeFromAccount(crux.sign, crux.owner, crux.account, {
+      const { orderId } = await tradeFromAccount(crux.sign, crux.owner, crux.account, {
         tokenIn: inToken,
         amountIn: input,
         tokenOut: `eip155:${TESTNET.id}/erc20:${side === "buy" ? market.token : TESTNET_USDC}`,
