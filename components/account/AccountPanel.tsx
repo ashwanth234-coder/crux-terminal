@@ -227,6 +227,8 @@ export function AccountPanel() {
       "sweep",
       async () => {
         const list = [TESTNET_USDC, ...held.map((h) => h.launch.v2!.token)];
+        // The wallet may still be on the chain it last deposited from.
+        if (chainId !== TESTNET.id) await switchChain({ chainId: TESTNET.id });
         await simulateThenWrite(config, wallet!, { address: account, abi: cruxAccountAbi, functionName: "emergencySweep", args: [list], chainId: TESTNET.id });
       },
       "Swept: everything in the account went to your bound wallet, and any pending change is cancelled.",
