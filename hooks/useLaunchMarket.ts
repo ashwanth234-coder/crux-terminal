@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { testOverride } from "@/lib/testOverrides";
+import { useFeedJoin } from "@/hooks/useFeed";
 import { erc20Abi, getAddress, keccak256, parseAbi, toHex, zeroAddress, type Address } from "viem";
 import { useConnection, useReadContracts } from "wagmi";
 import { batchPoolAbi, guardianAbi } from "@/lib/batchPool";
@@ -90,6 +92,22 @@ export function useLaunchMarket(token: Address, pair: Address): LaunchMarket {
     ],
     query: { enabled: batchPool !== null, refetchInterval: 10_000 },
   });
+  // The live price: the pool's newest trade from the shared feed, the price the chart's last candle closes at, the
+  // moment it's sent (not the pool read, every 15 s once listed, which left the header and quotes seconds behind the
+  // candle). Each trade also rereads the pool at once, so quotes price from the reserves as they now stand.
+  const [live, setLive] = useState<{ pair: Address; price: number } | null>(null);
+  const { refetch: refetchReads } = reads;
+  const { refetch: refetchPool } = pool;
+  useFeedJoin(pair !== zeroAddress ? pair : null, "trades", (f) => {
+    const newest = f.trades.reduce<(typeof f.trades)[number] | null>((n, t) => (!n || t.time >= n.time ? t : n), null);
+    if (newest && newest.price > 0) setLive({ pair, price: newest.price });
+    else if (f.removed.length > 0) setLive(null); // a trade taken back: the pool read says where the price is
+    if (newest || f.removed.length > 0) {
+      void refetchReads();
+      if (batchPool) void refetchPool();
+    }
+  });
+  const livePrice = live && live.pair === pair ? live.price : null;
   const poolState = pool.data?.[0]?.result;
   const until = pool.data?.[1]?.result;
   // A V6 launch with anti-sniper off never seeds the pool (seededAt 0): it trades on Uniswap from graduation.
@@ -130,7 +148,7 @@ export function useLaunchMarket(token: Address, pair: Address): LaunchMarket {
     caip19,
     decimals,
     reserves,
-    price: reserves ? midPrice(reserves, decimals) : null,
+    price: livePrice ?? (reserves ? midPrice(reserves, decimals) : null),
     listedForBuys: listed(dest),
     listedForSells: SETTLER_VERSION >= 3 ? SETTLER_DEPLOYED && inputToken?.result === true : listed(origin),
     tokenBalance: address && bal?.result !== undefined ? bal.result : null,

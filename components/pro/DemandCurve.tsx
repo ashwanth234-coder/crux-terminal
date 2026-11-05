@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Address } from "viem";
 import { useAuctionBids } from "@/hooks/useAuctionBids";
 import { curvePoints, curveRange, demandAt, type BookBid } from "@/lib/demand";
-import { pctDown, priceUsd, type AuctionV2, type BatchVersion } from "@/lib/launchV2";
+import { goesLiveForSure, graduationNeeds, maxDepositV3, pctDown, priceUsd, type AuctionV2, type BatchVersion } from "@/lib/launchV2";
 
 const PAD = { l: 52, r: 14, t: 18, b: 26 };
 const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
@@ -220,7 +220,9 @@ export function DemandCurve({
         {shownClearing
           ? `Demand covers the sale up to $${priceUsd(shownClearing)}: every filled bid pays that one price.`
           : book.length > 0
-            ? `Not clearing yet: demand at the floor covers ${pctDown(coverage)}% of the sale. Below 100% when the window closes, the launch cancels and everyone is refunded.`
+            ? goesLiveForSure(graduationNeeds(auction), maxDepositV3(auction))
+              ? `Demand at the floor covers ${pctDown(coverage)}% of the sale so far. Crux tops up the rest before the timer ends, so it goes live either way.`
+              : `Not clearing yet: demand at the floor covers ${pctDown(coverage)}% of the sale. Below 100% when the window closes, the launch cancels and everyone is refunded.`
             : "Each bid adds demand up to its limit price. The batch clears where demand meets the sale line."}
         {bids.data?.truncated && " Bids older than about three days aren't shown."}
       </p>

@@ -10,7 +10,7 @@ import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { cruxBatchFactoryAbi, cruxFactoryAbi, factoryV4Abi, factoryV6Abi, factoryV8Abi } from "@/contracts/abis/batchAuction";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import { BATCH_WINDOW_SECONDS, FACTORY, FACTORY_V7, LAUNCH_FACTORY, TESTNET_USDC } from "@/lib/intents";
-import { PRICE_DECIMALS, PRICE_DENOMINATOR, V2_FEE, V2_MIN_LEAD_SECONDS, V2_SPLIT, V2_WINDOWS, buyersNeeded, graduationNeeds, maxDepositV3, windowLabel } from "@/lib/launchV2";
+import { PRICE_DECIMALS, PRICE_DENOMINATOR, V2_FEE, V2_MIN_LEAD_SECONDS, V2_SPLIT, V2_WINDOWS, buyersNeeded, goesLiveForSure, graduationNeeds, maxDepositV3, windowLabel } from "@/lib/launchV2";
 import { fmtUsdc, launchError, previewHref } from "@/lib/launch";
 import { launchCaip19 } from "@/lib/launchTrade";
 import { placeStanding, standingFloor } from "@/lib/standing";
@@ -178,10 +178,12 @@ function exactRaise(supply: string, target: string, walletCap: string) {
 
 
 /** Under the first buy: whether it covers the launch's goal by itself, or what others still need to add. */
-function firstBuyHint(firstBuy: bigint | null, needs: bigint | null) {
+function firstBuyHint(firstBuy: bigint | null, needs: bigint | null, forSure: boolean) {
   if (firstBuy === null || firstBuy === BigInt(0) || needs === null)
-    return "Optional. Your launch needs no money from you: anyone's buys in the opening take it live. You can buy some yourself at the opening price, the same as everyone.";
-  if (firstBuy >= needs) return `Bought at the opening price, the same as everyone. It covers the ${cents(needs)} goal, so your launch goes live.`;
+    return forSure
+      ? "Optional. Your launch goes live even if nobody buys: Crux tops up the opening. You can buy some yourself at the opening price, the same as everyone."
+      : "Optional. Your launch needs no money from you: anyone's buys in the opening take it live. You can buy some yourself at the opening price, the same as everyone.";
+  if (firstBuy >= needs || forSure) return "Bought at the opening price, the same as everyone. Your launch goes live when the opening ends.";
   return `Bought at the opening price, the same as everyone. Others need to add ${cents(needs - firstBuy)} more during the opening, or everyone is refunded.`;
 }
 
@@ -777,7 +779,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
               id={id("firstBuy")}
               label="Your first buy (optional)"
               error={showErr("firstBuy")}
-              hint={firstBuyHint(firstBuyToSend, raise?.needs ?? null)}
+              hint={firstBuyHint(firstBuyToSend, raise?.needs ?? null, raise !== null && goesLiveForSure(raise.needs, raise.perWallet))}
             >
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-[14px] text-dim">$</span>

@@ -162,3 +162,14 @@ export function fmtUsdcExact(units: bigint): string {
 
 /** A share rounded down to one decimal, so a sale that is 99.99% covered never reads "100.0%". */
 export const pctDown = (v: number) => (Math.floor(v * 10) / 10).toFixed(1);
+
+/** The most the Crux solver puts into an opening to take it live (crux-solver BACKSTOP_MAX_USDC). */
+export const BACKSTOP_MAX_QUOTE = BigInt(3_000_000);
+
+/**
+ * Whether the Crux solver's backstop always takes this launch live: it tops up a short opening in its last seconds,
+ * within one buyer's cap and BACKSTOP_MAX_QUOTE. True for a Small launch ($1 goal, one buyer may fill it all).
+ */
+export function goesLiveForSure(needs: bigint, perBuyer: bigint): boolean {
+  return needs > BigInt(0) && needs <= BACKSTOP_MAX_QUOTE && perBuyer >= needs;
+}

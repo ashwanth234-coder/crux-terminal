@@ -27,8 +27,10 @@ import {
   V2_VESTING_DAYS,
   V3_TICK_STEP_PERCENT,
   fmtUsdcExact,
+  goesLiveForSure,
   graduationNeeds,
   marketCapUsd,
+  maxDepositV3,
   parsePriceUsd,
   phaseV2,
   priceUsd,
@@ -587,8 +589,8 @@ function SettingPrice({ auction, onSettle, wallet }: { auction: AuctionV2; onSet
         <KineticLoader className="text-signal" /> Setting the opening price…
       </p>
       <p className="mt-2 text-[12px] leading-relaxed text-muted">
-        This happens by itself and usually takes a few seconds. Everyone who bought gets the same price. If it fell short of its
-        goal, everyone gets a full refund instead.
+        This happens by itself and usually takes a few seconds. Everyone who bought gets the same price.
+        {goesLiveForSure(graduationNeeds(auction), maxDepositV3(auction)) ? "" : " If it fell short of its goal, everyone gets a full refund instead."}
       </p>
       {late && (
         <button type="button" onClick={onSettle} className="mt-4 text-[12px] text-dim underline decoration-line-2 underline-offset-2 hover:text-chrome">

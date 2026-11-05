@@ -29,7 +29,7 @@ import { useOrderRequests, type ChartOrderKind, type ChartOrderRequest } from "@
 import { slippageFor, useTradeSettings } from "@/hooks/useTradeSettings";
 import { USDC_DECIMALS, fmtTokens, fmtUsdc, formatRemaining, launchError, type TxStep } from "@/lib/launch";
 import { fmtTokenPrice, launchCaip19, priceAfter, sellFor, solverQuote } from "@/lib/launchTrade";
-import { PRICE_DECIMALS, V3_TICK_STEP_PERCENT, fmtUsdcExact, graduationNeeds, maxDepositV3, parsePriceUsd, priceUsd, priceUsdPlain, usesTicks, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
+import { PRICE_DECIMALS, V3_TICK_STEP_PERCENT, fmtUsdcExact, goesLiveForSure, graduationNeeds, maxDepositV3, parsePriceUsd, priceUsd, priceUsdPlain, usesTicks, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
 import { cancelStanding, placeStanding, standingFloor, type StandingView } from "@/lib/standing";
 import { useStandingOrders } from "@/hooks/useStandingOrders";
 import { useCreatorVestingDays } from "@/hooks/useCreatorVesting";
@@ -642,6 +642,11 @@ function momentum(a: AuctionV2, now: number, short: bigint): { text: string; ton
   const elapsed = Math.max(0, now - a.startTime);
   const left = Math.max(0, a.startTime + a.batchWindow - now);
   if (short === BigInt(0)) return { text: "Goal reached ✓ It goes live when the timer ends. Buying now still gets the same price.", tone: "good" };
+  // A small launch the Crux backstop always takes live: no "needs more" or refund talk, because it can't happen.
+  if (goesLiveForSure(graduationNeeds(a), maxDepositV3(a)))
+    return left === 0
+      ? { text: "Time's up: setting the opening price now.", tone: "plain" }
+      : { text: "Goes live when the timer ends, even if nobody else buys: Crux puts in the rest. Buying now gets the same opening price.", tone: "good" };
   if (left === 0) return { text: "Time's up: setting the opening price now. If it fell short of the goal, everyone gets a full refund.", tone: "plain" };
   // Buys placed before the start join in the first seconds: say so instead of a bare $0.
   if (elapsed < 15) return { text: "Starting… buys placed before the timer are joining now.", tone: "plain" };
@@ -710,7 +715,7 @@ function OpeningPot({ model, auction }: { model: LaunchV2Model; auction: Auction
         </div>
         <div>
           <dt className="text-dim">Goal</dt>
-          <dd className="whitespace-nowrap font-mono text-[13px] text-chrome">{short === BigInt(0) ? "reached ✓" : short < BigInt(10_000) ? `$${fmtUsdcExact(short)} to go` : `${wholeUsd.format(Math.ceil(Number(formatUnits(short, USDC_DECIMALS))))} to go`}</dd>
+          <dd className="whitespace-nowrap font-mono text-[13px] text-chrome">{short === BigInt(0) ? "reached ✓" : goesLiveForSure(needs, maxDepositV3(auction)) ? "covered ✓" : short < BigInt(10_000) ? `$${fmtUsdcExact(short)} to go` : `${wholeUsd.format(Math.ceil(Number(formatUnits(short, USDC_DECIMALS))))} to go`}</dd>
         </div>
       </dl>
     </div>
@@ -1426,7 +1431,13 @@ export function ExecutionPanel({
     return (
       <div className="p-3">
         {guide}
-        <OpensIn at={auction.startTime} token={auction.token} vestDays={vestDays} antiSniperSeconds={antiSniperSeconds} />
+        <OpensIn
+          at={auction.startTime}
+          token={auction.token}
+          vestDays={vestDays}
+          antiSniperSeconds={antiSniperSeconds}
+          forSure={goesLiveForSure(graduationNeeds(auction), maxDepositV3(auction))}
+        />
         {unlocked && <div className="mt-3 px-1">{unlocked}</div>}
         <section aria-label="Buy" className="mt-3 px-1">
           <h2 className="mb-3 text-[14px] font-medium text-chrome">Buy {symbol}</h2>
@@ -1492,7 +1503,19 @@ function FirstBuyMissed({ token }: { token: Address }) {
  * Only what's true is listed: the copycat check for a launch this browser made, the creator's lock when there is one,
  * and this account's buy once it's queued.
  */
-function OpensIn({ at, token, vestDays, antiSniperSeconds }: { at: number; token: Address; vestDays: number | null; antiSniperSeconds: number | null }) {
+function OpensIn({
+  at,
+  token,
+  vestDays,
+  antiSniperSeconds,
+  forSure,
+}: {
+  at: number;
+  token: Address;
+  vestDays: number | null;
+  antiSniperSeconds: number | null;
+  forSure: boolean;
+}) {
   const now = useNow();
   const standing = useStandingOrders();
   const [checked] = useState(() => (typeof window === "undefined" ? false : launchChecked(token)));
@@ -1505,6 +1528,7 @@ function OpensIn({ at, token, vestDays, antiSniperSeconds }: { at: number; token
     antiSniperSeconds !== null && antiSniperSeconds > 0 && `Fair first ${antiSniperSeconds >= 120 ? `${Math.round(antiSniperSeconds / 60)} minutes` : "minute"} after it goes live`,
     vestDays !== null && vestDays > 0 && `Creator's share locked for ${vestDays} days`,
     queuedUsd > BigInt(0) && `Your $${fmtUsdc(queuedUsd)} buy is in`,
+    forSure && "Goes live for sure: Crux tops up the opening",
   ].filter((x): x is string => Boolean(x));
   return (
     <section aria-label="Opens in" className="rounded-xl border border-line px-4 py-3">
