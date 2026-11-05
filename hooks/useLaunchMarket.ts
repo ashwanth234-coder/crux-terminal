@@ -69,7 +69,15 @@ export function useLaunchMarket(token: Address, pair: Address): LaunchMarket {
       // Sells escrow the token on the origin settler: V3 / V4 accept it when it's an allowed input token.
       { ...on, address: SETTLER, abi: registryAbi, functionName: "isInputToken", args: [token] },
     ],
-    query: { enabled: pair !== zeroAddress, refetchInterval: 15_000 },
+    query: {
+      enabled: pair !== zeroAddress,
+      // Every 2 s until the token is listed for buys (seconds after it goes live), so the Buy button opens the moment it
+      // can; then the usual 15 s.
+      refetchInterval: (q) => {
+        const dest = (q.state.data as { result?: unknown }[] | undefined)?.[2]?.result;
+        return typeof dest === "string" && dest.toLowerCase() === token.toLowerCase() ? 15_000 : 2_000;
+      },
+    },
   });
 
   const [t0, res, dest, origin, dec, bal, guardian, inputToken] = reads.data ?? [];
