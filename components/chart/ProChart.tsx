@@ -346,9 +346,11 @@ export function ProChart({
 
   const me = useMemo(() => [wallet, crux.account].filter((a): a is Address => Boolean(a)).map((a) => getAddress(a)), [wallet, crux.account]);
   // Who holds what (for the trade marks and your average entry) walks every trade and transfer: a busy launch's 100k
-  // trades cost ~100 ms, so it's refreshed every few seconds, not on every redraw.
-  const slowTrades = useThrottled(swapData, 3_000);
-  const slowTransfers = useThrottled(transfers.data, 3_000);
+  // trades cost ~100 ms, so there it's refreshed every few seconds, not on every redraw. A launch with a few thousand
+  // costs next to nothing: its marks follow each trade within a quarter second, with the candle.
+  const heavy = (swapData?.trades.length ?? 0) + (transfers.data?.items.length ?? 0) > 5_000;
+  const slowTrades = useThrottled(swapData, heavy ? 3_000 : 250);
+  const slowTransfers = useThrottled(transfers.data, heavy ? 3_000 : 250);
   const holders = useMemo(() => {
     if (!slowTransfers || !slowTrades) return [];
     return buildHolders(slowTransfers.items, slowTrades.trades, {
