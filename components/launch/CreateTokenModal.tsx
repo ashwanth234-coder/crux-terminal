@@ -868,8 +868,8 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             <fieldset className="rounded-xl border border-line p-4">
               <legend className="px-1 text-[13px] text-chrome">Who&apos;s buying?</legend>
               <p className="text-[11.5px] leading-snug text-dim">
-                This sets the goal your launch must raise to go live, how much each buyer can put in, and how long the opening lasts. If
-                it doesn&apos;t reach the goal, everyone gets their money back.
+                On testnet every launch is Small: a 30-second opening, and it always goes live (Crux tops up the opening). Bigger
+                launches arrive with V9, where no launch needs a goal at all.
               </p>
               <div role="radiogroup" aria-label="Launch size" className="mt-3 grid gap-2 sm:grid-cols-4">
                 {[...LAUNCH_SIZES, { key: "custom" as const, title: "Custom", who: "Set the numbers yourself", target: "", walletCap: "", window: "" }].map((s) => {
@@ -881,9 +881,14 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                       type="button"
                       role="radio"
                       aria-checked={active}
+                      // Testnet: only Small, the size Crux's backstop always takes live; the rest arrive with V9's
+                      // curve, where no launch needs a goal at all.
+                      disabled={s.key !== "small"}
+                      title={s.key !== "small" ? "Coming with V9: launches with no goal, that always go live" : undefined}
                       onClick={() => {
+                        if (s.key !== "small") return;
                         setSize(s.key);
-                        if (s.key !== "custom") {
+                        {
                           set("supply", DEFAULT_SUPPLY);
                           set("target", s.target);
                           set("walletCap", s.walletCap);
@@ -896,9 +901,14 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                           set("instantAck", false);
                         }
                       }}
-                      className={`rounded-lg border p-3 text-left transition-colors ${active ? "border-signal/70 bg-panel-2" : "border-line hover:border-line-2"}`}
+                      className={`rounded-lg border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${active ? "border-signal/70 bg-panel-2" : "border-line hover:border-line-2"}`}
                     >
-                      <span className={`block text-[13px] ${active ? "text-chrome" : "text-muted"}`}>{s.title}</span>
+                      <span className={`flex items-center justify-between gap-1 text-[13px] ${active ? "text-chrome" : "text-muted"}`}>
+                        {s.title}
+                        {s.key !== "small" && (
+                          <span className="rounded-[3px] border border-line-2 px-1 py-px font-mono text-[9px] uppercase tracking-[0.1em] text-dim">V9</span>
+                        )}
+                      </span>
                       <span className="mt-1 block text-[11.5px] leading-snug text-dim">{s.who}</span>
                       {r && (
                         <span className="mt-2 block font-mono text-[11px] leading-snug text-chrome/80">

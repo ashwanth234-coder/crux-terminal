@@ -9,6 +9,7 @@ import { useNow } from "@/hooks/useLaunchAuction";
 import { useLedger } from "@/hooks/useLedger";
 import { usePoolSwaps } from "@/hooks/usePoolSwaps";
 import { TESTNET_EXPLORER } from "@/lib/chains";
+import { CRUX_SOLVERS } from "@/lib/intents";
 import { isSystem } from "@/lib/holders";
 import { fmtTokens } from "@/lib/launch";
 import { fmtTokenPrice } from "@/lib/launchTrade";
@@ -378,7 +379,23 @@ export function LiveTape({
                         {ago(now, b.time)}
                       </a>
                     </td>
-                    <td className={`${td} text-chrome/90`}>{b.topUp ? "Top-up" : "Buy"}</td>
+                    <td className={`${td} text-chrome/90`}>
+                      {(() => {
+                        const crux = CRUX_SOLVERS.some((x) => x.toLowerCase() === b.account.toLowerCase());
+                        // The backstop deposits at the floor price; the solver's bids for queued buys carry their limits.
+                        if (crux && b.maxPrice === auction.floorPrice)
+                          return (
+                            <span
+                              className="whitespace-nowrap text-up"
+                              title="Crux added what was missing so this launch goes live. Half the opening's money seeds the pool, locked forever. Crux holds its tokens and doesn't sell them."
+                            >
+                              <span aria-hidden="true">🔒 </span>Crux seed
+                            </span>
+                          );
+                        if (crux) return <span title="Crux bidding the buys queued from CRUX Accounts, at the same price as everyone">Buys at open</span>;
+                        return b.topUp ? "Top-up" : "Buy";
+                      })()}
+                    </td>
                     <td className={`${td} text-right font-mono text-chrome/90`}>{usd(b.quoteAdded)}</td>
                     <td className={`${td} text-right font-mono text-muted`}>{usd(b.totalQuote)}</td>
                     <td className={`${td} text-right font-mono text-muted`}>{b.maxPrice >= noLimitAbove ? "Any" : `$${priceUsd(b.maxPrice)}`}</td>

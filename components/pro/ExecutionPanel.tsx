@@ -28,7 +28,7 @@ import { StandingOrderForm, type OrderType } from "@/components/pro/StandingOrde
 import { useOrderRequests, type ChartOrderKind, type ChartOrderRequest } from "@/lib/chartOrders";
 import { slippageFor, useTradeSettings } from "@/hooks/useTradeSettings";
 import { USDC_DECIMALS, fmtTokens, fmtUsdc, formatRemaining, launchError, type TxStep } from "@/lib/launch";
-import { fmtTokenPrice, launchCaip19, priceAfter, sellFor, solverQuote } from "@/lib/launchTrade";
+import { SOLVER_SPREAD_BPS, fmtTokenPrice, launchCaip19, priceAfter, sellFor, solverQuote } from "@/lib/launchTrade";
 import { PRICE_DECIMALS, V3_TICK_STEP_PERCENT, fmtUsdcExact, goesLiveForSure, graduationNeeds, maxDepositV3, parsePriceUsd, priceUsd, priceUsdPlain, usesTicks, type AuctionV2, type BatchVersion, type PhaseV2 } from "@/lib/launchV2";
 import { cancelStanding, placeStanding, standingFloor, type StandingView } from "@/lib/standing";
 import { useStandingOrders } from "@/hooks/useStandingOrders";
@@ -546,7 +546,7 @@ function BidForm({
 
 const QUEUED_STATUS: Record<StandingView["status"], string> = {
   open: "waiting for the open",
-  submitted: "buying now",
+  submitted: "arriving",
   // The keeper's release when the launch cancels (one the trader cancelled reads "cancelled").
   cancelled: "released",
   expired: "expired",
@@ -731,6 +731,26 @@ function OpeningPot({ model, auction }: { model: LaunchV2Model; auction: Auction
  * the liquidity to Uniswap, usually within seconds; after that, and for V2–V4 launches, it's the intent desk on the
  * Uniswap pool.
  */
+/**
+ * Just after a launch goes live: the account's buys at open, on their way (the solver delivers them from the opening's
+ * tokens within seconds). Shows what's coming at the opening price, so the balance doesn't look empty meanwhile.
+ */
+function AtOpenArriving({ auction, symbol }: { auction: AuctionV2; symbol: string }) {
+  const now = useNow();
+  const standing = useStandingOrders();
+  if (auction.settledAt === 0 || now - auction.settledAt > 45 || auction.clearingPrice === BigInt(0)) return null;
+  const mine = (standing.orders ?? []).filter((o) => o.atOpen && o.status === "submitted" && o.token.toLowerCase() === auction.token.toLowerCase());
+  if (mine.length === 0) return null;
+  const usdc = mine.reduce((sum, o) => sum + BigInt(o.amountIn), BigInt(0));
+  // Tokens at the opening's price, less the solver's spread (what each buy at open is filled with).
+  const tokens = (((usdc * BigInt(10) ** BigInt(36)) / auction.clearingPrice) * BigInt(10_000 - SOLVER_SPREAD_BPS)) / BigInt(10_000);
+  return (
+    <p role="status" className="mb-2 flex items-center gap-2 rounded-lg border border-up/30 bg-up/[0.06] px-3 py-2 text-[11.5px] text-chrome">
+      <KineticLoader className="text-up" /> Your opening buy (${fmtUsdc(usdc)}): about {fmtTokens(tokens)} {symbol} arriving in your account now.
+    </p>
+  );
+}
+
 function GraduatedDesk({ auction, symbol }: { auction: AuctionV2; symbol: string }) {
   const t = useT();
   const market = useLaunchMarket(auction.token, auction.pair);
@@ -745,6 +765,7 @@ function GraduatedDesk({ auction, symbol }: { auction: AuctionV2; symbol: string
           <KineticLoader className="text-signal" /> Open trading starts in a few seconds. Buy now and it fills as soon as it does.
         </p>
         <div className="mt-3" />
+        <AtOpenArriving auction={auction} symbol={symbol} />
         <TradeForm auction={auction} symbol={symbol} handover />
       </section>
     );
@@ -753,6 +774,7 @@ function GraduatedDesk({ auction, symbol }: { auction: AuctionV2; symbol: string
     return (
       <section aria-label="Trade on Crux" className="p-4">
         <h2 className="mb-3 text-[14px] font-medium text-chrome">{t("ticket.title")}</h2>
+        <AtOpenArriving auction={auction} symbol={symbol} />
         <TradeForm auction={auction} symbol={symbol} />
       </section>
     );
