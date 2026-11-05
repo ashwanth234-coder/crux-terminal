@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import { usePrivy, useSignTypedData, useWallets } from "@privy-io/react-auth";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCreateWallet, usePrivy, useSignTypedData, useWallets } from "@privy-io/react-auth";
 import { erc20Abi, getAddress, zeroAddress, type Address, type Hex } from "viem";
 import { useBytecode, useReadContract, useReadContracts } from "wagmi";
 import {
@@ -92,9 +92,24 @@ function loadV3(owner: Address): V3Account | null {
 /** The logged-in trader's Crux account (lib/account.ts): login state, addresses, protection and balance. */
 export function useCruxAccount(): CruxAccountState {
   const { ready, authenticated, login, logout, user } = usePrivy();
-  const { wallets } = useWallets();
+  const { ready: walletsReady, wallets } = useWallets();
   const { signTypedData } = useSignTypedData();
+  const { createWallet } = useCreateWallet();
   const embedded = wallets.find((w) => w.walletClientType === "privy");
+  // Privy creates the login key on login, but a new email sometimes sits without one ("Setting up your login key…"
+  // for minutes). If it still has none 2 s after login, create it here, once.
+  const hasKey = Boolean(user?.linkedAccounts.some((x) => x.type === "wallet" && "walletClientType" in x && x.walletClientType === "privy"));
+  const askedForKey = useRef(false);
+  useEffect(() => {
+    if (!ready || !authenticated || !walletsReady || embedded || hasKey || askedForKey.current) return;
+    const t = setTimeout(() => {
+      askedForKey.current = true;
+      void createWallet().catch(() => {
+        // It already has one (Privy finished meanwhile), or it failed: logging in again retries.
+      });
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [ready, authenticated, walletsReady, embedded, hasKey, createWallet]);
   const owner = authenticated && embedded ? getAddress(embedded.address) : null;
   const on = { chainId: TESTNET.id } as const;
 
