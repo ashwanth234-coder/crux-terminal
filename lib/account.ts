@@ -1,5 +1,6 @@
 import { getAddress, getContractAddress, isAddress, keccak256, parseAbi, type Address, type Hex } from "viem";
 import { TESTNET } from "@/lib/chains";
+import { searchV3Nonce } from "@/lib/mineV3";
 import { postRelay } from "@/lib/session";
 
 /**
@@ -57,7 +58,7 @@ const hexBytes = (hex: string) => {
 /**
  * The owner's 5afe account for that withdrawal address: the lowest nonce whose EIP-1167 clone at CREATE2 salt
  * keccak256(abi.encode(owner, withdrawalAddress, nonce)) ends in 5afe (crux-solver scripts/vanity.ts). About 65,536
- * tries; it yields to the page every few thousand so the form stays responsive.
+ * tries, a second or two.
  */
 export async function mineAccountV3(owner: Address, withdrawalAddress: Address): Promise<V3Account> {
   const salt = new Uint8Array(96);
@@ -68,21 +69,43 @@ export async function mineAccountV3(owner: Address, withdrawalAddress: Address):
   create2.set(hexBytes(ACCOUNT_FACTORY_V3), 1);
   const clone = `0x3d602d80600a3d3981f3363d3d373d3d3d363d73${ACCOUNT_IMPLEMENTATION_V3.slice(2).toLowerCase()}5af43d82803e903d91602b57fd5bf3` as Hex;
   create2.set(keccak256(clone, "bytes"), 53);
-  for (let nonce = BigInt(0); nonce < BigInt(5_000_000); nonce++) {
-    let n = nonce;
-    for (let i = 95; i >= 64; i--) {
-      salt[i] = Number(n & BigInt(0xff));
-      n >>= BigInt(8);
-    }
-    create2.set(keccak256(salt, "bytes"), 21);
-    const hash = keccak256(create2, "bytes");
-    if (hash[30] === 0x5a && hash[31] === 0xfe) {
-      const account = getAddress(`0x${[...hash.subarray(12)].map((b) => b.toString(16).padStart(2, "0")).join("")}`);
-      return { account, withdrawalAddress: getAddress(withdrawalAddress), nonce };
-    }
-    if (nonce % BigInt(4096) === BigInt(4095)) await new Promise((r) => setTimeout(r, 0));
+  const found = await mineOnPage(salt, create2);
+  if (found < 0) throw new Error("Couldn't find a 5afe address. Try again.");
+  salt.fill(0, 64);
+  let n = found;
+  for (let i = 95; i >= 88; i--) {
+    salt[i] = n % 256;
+    n = Math.floor(n / 256);
   }
-  throw new Error("Couldn't find a 5afe address. Try again.");
+  create2.set(keccak256(salt, "bytes"), 21);
+  const hash = keccak256(create2, "bytes");
+  const account = getAddress(`0x${[...hash.subarray(12)].map((b) => b.toString(16).padStart(2, "0")).join("")}`);
+  return { account, withdrawalAddress: getAddress(withdrawalAddress), nonce: BigInt(found) };
+}
+
+/**
+ * Searches in slices, yielding between them so the form stays responsive. The yield is a MessageChannel message, not
+ * setTimeout: a hidden tab (the user reading the email code) throttles timers to one a second or slower, which stretched
+ * this from a second or two to minutes.
+ */
+async function mineOnPage(salt: Uint8Array, create2: Uint8Array): Promise<number> {
+  const channel = typeof MessageChannel === "undefined" ? null : new MessageChannel();
+  const yieldToPage = () =>
+    new Promise<void>((resolve) => {
+      if (!channel) return void setTimeout(resolve, 0);
+      channel.port1.onmessage = () => resolve();
+      channel.port2.postMessage(null);
+    });
+  try {
+    for (let from = 0; from < 5_000_000; from += 8192) {
+      const nonce = searchV3Nonce(salt, create2, from, from + 8192);
+      if (nonce >= 0) return nonce;
+      await yieldToPage();
+    }
+    return -1;
+  } finally {
+    channel?.port1.close();
+  }
 }
 
 /**
