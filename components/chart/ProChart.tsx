@@ -411,6 +411,8 @@ export function ProChart({
           ),
     [marks, settings.minUsd, settings.marks, focus, replayEnd],
   );
+  /** Your trades' badges shown ahead of their marks (see the overlays effect). */
+  const ownBadges = useRef<{ id: number; time: number; side: "buy" | "sell"; who: MarkWho; high: number; until: number }[]>([]);
   const markCounts = useMemo(
     () => ({ mine: marks.filter((m) => m.who === "me").length, dev: marks.filter((m) => m.who === "dev" || m.who === "whale").length, top: marks.filter((m) => m.who === "top").length }),
     [marks],
@@ -522,16 +524,36 @@ export function ProChart({
         else grouped.set(key, { time, who: m.who, side: m.side, n: 1 });
       }
     }
+    // Your own trade's badge (DB / DS for the creator, B / S with "My trades" on) the moment you press Buy or Sell,
+    // on the instant candle, and kept on the real one until its mark arrives from the chain (a second or two later),
+    // so the badge appears with the candle instead of after it.
+    const nowMs = Date.now();
+    const p = pending.length ? pending[pending.length - 1] : null;
+    const isDev = me.some((a) => a.toLowerCase() === auction.creator.toLowerCase());
+    const ownWho: MarkWho | null = marksHidden || focus ? null : isDev && settings.marks.dev ? "dev" : settings.marks.mine ? "me" : null;
+    if (p && ownWho && !ownBadges.current.some((o) => o.id === p.id)) {
+      const nowS = Math.floor(nowMs / 1000);
+      const time = last && nowS < last.time + interval ? last.time : Math.floor(nowS / interval) * interval;
+      const open = last?.close ?? p.price;
+      ownBadges.current = [...ownBadges.current, { id: p.id, time, side: p.side, who: ownWho, high: Math.max(open, p.expected ?? p.price), until: nowMs + 20_000 }];
+    }
+    ownBadges.current = ownBadges.current.filter((o) => o.until > nowMs && !grouped.has(`${o.time}:${o.who}:${o.side}`));
     // Drawn as electric green (buy) or red (sell) discs with the label inside in white (badges.ts).
     const highOf = new Map(candles.map((c) => [c.time, c.high]));
-    engine.setBadges(
-      [...grouped.values()].flatMap((g) => {
+    engine.setBadges([
+      ...[...grouped.values()].flatMap((g) => {
         const high = highOf.get(g.time);
         if (high === undefined) return [];
         const style = MARK_STYLE[g.who];
         return [{ time: g.time, high: high * k, label: g.side === "buy" ? style.buy : style.sell, side: g.side }];
       }),
-    );
+      ...ownBadges.current.map((o) => {
+        const style = MARK_STYLE[o.who];
+        // On the instant candle's bar, or the real candle's if it landed in the next one.
+        const time = highOf.has(o.time) || !last || last.time <= o.time ? o.time : last.time;
+        return { time, high: Math.max(highOf.get(time) ?? 0, o.high) * k, label: o.side === "buy" ? style.buy : style.sell, side: o.side };
+      }),
+    ]);
     const milestones: { time: number; text: string; color: string }[] = [];
     if (!external && !marksHidden && auction.settledAt > 0) {
       milestones.push({ time: auction.settledAt, text: "Graduated", color: "#f3f3f0" });
@@ -552,7 +574,7 @@ export function ProChart({
       return [{ time: time as Time, position: "belowBar" as const, shape: "square" as const, color: m.color, text: crowded ? "" : m.text, size: 0.6 }];
     });
     engine.setMarkers(events.sort((a, b) => (a.time as number) - (b.time as number)));
-  }, [engine, candles, k, fmt, minMove, config.type, drawnStudies, config.alerts, settings, marksHidden, gradPrice, shownMarks, mine, last, standingOrders, auction.token, auction.settledAt, external, market.protectedUntil, vestDays, interval]);
+  }, [engine, candles, k, fmt, minMove, config.type, drawnStudies, config.alerts, settings, marksHidden, gradPrice, shownMarks, mine, last, standingOrders, auction.token, auction.settledAt, external, market.protectedUntil, vestDays, interval, pending, me, auction.creator, focus]);
 
   // Your newest trade the moment you press Buy or Sell: a candle on the current bar (or the next one, once this bar's
   // time is up), from the price then to its expected fill. It goes the moment the chart's newest candle moves (the

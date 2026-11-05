@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { testOverride } from "@/lib/testOverrides";
 import { useFeedJoin } from "@/hooks/useFeed";
+import { usePendingTrades } from "@/lib/pendingTrades";
 import { erc20Abi, getAddress, keccak256, parseAbi, toHex, zeroAddress, type Address } from "viem";
 import { useConnection, useReadContracts } from "wagmi";
 import { batchPoolAbi, guardianAbi } from "@/lib/batchPool";
@@ -108,6 +109,10 @@ export function useLaunchMarket(token: Address, pair: Address): LaunchMarket {
     }
   });
   const livePrice = live && live.pair === pair ? live.price : null;
+  // This browser's own trade, the moment it's pressed: the price it will print (the instant candle's close), so the
+  // header moves with the candle; the real trade replaces it a moment later at the same price.
+  const pendingHere = usePendingTrades(token);
+  const pendingPrice = pendingHere.length ? (pendingHere[pendingHere.length - 1].expected ?? null) : null;
   const poolState = pool.data?.[0]?.result;
   const until = pool.data?.[1]?.result;
   // A V6 launch with anti-sniper off never seeds the pool (seededAt 0): it trades on Uniswap from graduation.
@@ -148,7 +153,7 @@ export function useLaunchMarket(token: Address, pair: Address): LaunchMarket {
     caip19,
     decimals,
     reserves,
-    price: livePrice ?? (reserves ? midPrice(reserves, decimals) : null),
+    price: pendingPrice ?? livePrice ?? (reserves ? midPrice(reserves, decimals) : null),
     listedForBuys: listed(dest),
     listedForSells: SETTLER_VERSION >= 3 ? SETTLER_DEPLOYED && inputToken?.result === true : listed(origin),
     tokenBalance: address && bal?.result !== undefined ? bal.result : null,
