@@ -322,6 +322,12 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
       return null;
     }
   })();
+  // The per-buyer cap rounds up with the floor price ($1.000001 on a $1 goal): a first buy typed within a cent under it
+  // is the cap, so "$1" on a $1 launch takes it live instead of cancelling a millionth short.
+  const firstBuyToSend =
+    firstBuy !== null && perBuyer !== null && firstBuy > BigInt(0) && firstBuy < perBuyer && perBuyer - firstBuy < BigInt(10_000) && (crux.usdc === null || perBuyer <= crux.usdc)
+      ? perBuyer
+      : firstBuy;
   const errors = validate(form);
   if (firstBuyOn && form.firstBuy !== "" && firstBuy === null) errors.firstBuy = "Enter an amount in USDC, or 0 to skip.";
   else if (firstBuyOn && firstBuy !== null && firstBuy > BigInt(0)) {
@@ -449,7 +455,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
     markLaunchChecked(token);
     if (firstBuy !== null && firstBuy > BigInt(0)) {
       setPhase({ kind: "deploying", label: `$${form.symbol} is launched. Placing your first buy…` });
-      if (!(await placeFirstBuy(token, salted, firstBuy))) markFirstBuyFailed(token, firstBuy);
+      if (!(await placeFirstBuy(token, salted, firstBuyToSend ?? firstBuy))) markFirstBuyFailed(token, firstBuyToSend ?? firstBuy);
     }
     go(`/launch/v8/${auctionId.toString()}`);
   };
@@ -771,7 +777,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
               id={id("firstBuy")}
               label="Your first buy (optional)"
               error={showErr("firstBuy")}
-              hint={firstBuyHint(firstBuy, raise?.needs ?? null)}
+              hint={firstBuyHint(firstBuyToSend, raise?.needs ?? null)}
             >
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-[14px] text-dim">$</span>

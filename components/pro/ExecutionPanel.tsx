@@ -52,6 +52,9 @@ const pct = (v: number) => `${v >= 0 ? "−" : "+"}${Math.abs(v).toFixed(2)}%`;
 const usd6 = (units: bigint) => `$${Number(formatUnits(units, 6)).toLocaleString("en-US", { maximumFractionDigits: 6 })}`;
 const TEST_USDC_SOURCE = PAY_SOURCES.find((s) => s.id === "base-usdc") ?? PAY_SOURCES[0];
 
+/** An amount this close under a buyer's cap is taken as the cap itself (1 cent, in USDC base units). */
+const CAP_DUST = BigInt(10_000);
+
 function parse(value: string, decimals: number): bigint | null {
   try {
     const v = value ? parseUnits(value, decimals) : null;
@@ -214,7 +217,7 @@ function BidForm({
   const [payWith, setPayWith] = useState<"account" | "wallet">("account");
   const viaAccount = hasAccount && (scheduled || payWith === "account");
 
-  const parsed = parse(amount, USDC_DECIMALS);
+  const typed = parse(amount, USDC_DECIMALS);
   const rawLimit = limitOn ? parsePriceUsd(limit) : null;
   const limitTooLow = limitOn && limit !== "" && (!rawLimit || rawLimit < auction.floorPrice);
   // V3 rounds a limit down to its 1% step: show the price the contract will actually use.
@@ -251,6 +254,10 @@ function BidForm({
           ? model.maxDeposit - model.myBid.quote
           : BigInt(0);
   const balance = viaAccount ? crux.usdc : model.usdcBalance;
+  // The cap rounds up with the floor price ($1.000001 on a $1 goal): an amount typed within a cent under it means the
+  // cap, so "$1" on a $1 launch really reaches its goal instead of falling a millionth short and cancelling.
+  const parsed =
+    typed !== null && capLeft !== null && typed < capLeft && capLeft - typed < CAP_DUST && (balance === null || capLeft <= balance) ? capLeft : typed;
   const maxBid = balance === null ? null : capLeft !== null && capLeft < balance ? capLeft : balance;
   const overBalance = parsed !== null && balance !== null && parsed > balance;
   const overCap = parsed !== null && capLeft !== null && parsed > capLeft;
