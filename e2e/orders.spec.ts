@@ -261,7 +261,7 @@ test.describe("launch form", () => {
   });
 
 
-  test("launch size: Small is the default and graduates with one wallet; each size sets its opening length", async ({ page }) => {
+  test("launch size: Small ($1 goal, 30 s opening) is the only size on testnet; the rest come with V9", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("button", { name: /^launch$/i }).first().click();
     await page.getByRole("button", { name: /More options/ }).click({ timeout: 20_000 });
@@ -269,21 +269,20 @@ test.describe("launch form", () => {
     await expect(sizes).toBeVisible({ timeout: 20_000 });
     const small = sizes.getByRole("radio").filter({ hasText: "Small" });
     await expect(small).toHaveAttribute("aria-checked", "true");
-    await expect(small).toContainText("goal $3.00");
+    await expect(small).toContainText("goal $1.00");
     await expect(small).toContainText("1+ buyer");
-    await expect(small).toContainText("up to $3.00 each");
-    await expect(small).toContainText("60s open");
-    await expect(sizes.getByRole("radio").filter({ hasText: "Community" })).toContainText("5m open");
-    await expect(sizes.getByRole("radio").filter({ hasText: "Wide" })).toContainText("10m open");
-    // The raw fields and the opening length appear only for Custom.
+    await expect(small).toContainText("30s open");
+    // Every other size waits for V9 (no goal, always live): shown, badged, not selectable.
+    for (const name of ["Community", "Wide", "Custom"]) {
+      const r = sizes.getByRole("radio").filter({ hasText: name });
+      await expect(r).toBeDisabled();
+      await expect(r).toContainText("V9");
+    }
     await expect(page.getByLabel("Graduation target")).toHaveCount(0);
     await expect(page.getByRole("radiogroup", { name: "Fair-launch protection" })).toHaveCount(0);
-    await sizes.getByRole("radio").filter({ hasText: "Custom" }).click();
-    await expect(page.getByLabel("Graduation target")).toHaveValue("3");
-    await expect(page.getByRole("radiogroup", { name: "Fair-launch protection" })).toBeVisible();
   });
 
-  test("creator vesting: 30 days by default; an instant unlock is a Custom choice that must be confirmed", async ({ page }) => {
+  test("creator vesting: every testnet launch vests 30 days (instant unlock is a Custom choice, coming with V9)", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("button", { name: /^launch$/i }).first().click();
     await page.getByRole("button", { name: /More options/ }).click({ timeout: 20_000 });
@@ -291,14 +290,6 @@ test.describe("launch form", () => {
     await expect(sizes).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText("Creator allocation vested 30 days")).toBeVisible();
     await expect(page.getByRole("radiogroup", { name: "Creator vesting" })).toHaveCount(0);
-    await sizes.getByRole("radio").filter({ hasText: "Custom" }).click();
-    const vesting = page.getByRole("radiogroup", { name: "Creator vesting" });
-    await expect(vesting.getByRole("radio", { name: /30-day vesting/ })).toHaveAttribute("aria-checked", "true");
-    await vesting.getByRole("radio", { name: "Instant unlock" }).click();
-    await expect(page.getByText("Creator allocation unlocked at graduation")).toBeVisible();
-    await expect(page.getByRole("checkbox", { name: /I understand buyers will see/ })).not.toBeChecked();
-    // Back to a launch size: vesting again.
-    await sizes.getByRole("radio").filter({ hasText: "Small" }).click();
-    await expect(page.getByText("Creator allocation vested 30 days")).toBeVisible();
+    await expect(sizes.getByRole("radio").filter({ hasText: "Custom" })).toBeDisabled();
   });
 });
