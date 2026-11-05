@@ -223,10 +223,11 @@ const wallClockMs = () => Date.now();
 
 /**
  * "Start now": how far ahead the opening is set so the launch transaction lands before it (the contract needs 60 s).
- * A launch from the account is submitted by the relay in seconds: 5 s over the minimum covers signing, the launch check,
- * mining and a little clock drift. A wallet's waits on its confirmation.
+ * A launch from the account is submitted by the relay in seconds, but 5 s over the minimum wasn't enough: a laptop clock a
+ * few seconds behind the chain, or a first launch that deploys the account, got "The factory rejects these launch
+ * settings". 20 s over covers both. A wallet's waits on its confirmation.
  */
-const START_NOW_LEAD = { account: 65, wallet: V2_MIN_LEAD_SECONDS } as const;
+const START_NOW_LEAD = { account: 80, wallet: V2_MIN_LEAD_SECONDS } as const;
 /** The creator's first buy pays at most this many times the floor (the same automatic ceiling as any buy at open). */
 const FIRST_BUY_CAP_MULTIPLE = BigInt(10);
 /** A buy at open waits this long past the opening for the launch to trade, then expires unspent. */
