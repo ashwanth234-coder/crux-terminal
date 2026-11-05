@@ -17,7 +17,7 @@ const PILLARS = [
   {
     n: "03",
     title: "Every token, every chain.",
-    body: "Every launch has one deep pool on Base, and anyone can buy it from the chain they're on today: Arbitrum, Ethereum, BNB Chain or Solana.",
+    body: "Every launch has one deep pool on Base, and anyone can buy it from the chain they're on today: Ethereum, Solana, BNB Chain or Arbitrum.",
     tag: "Buy from any chain today",
   },
 ];

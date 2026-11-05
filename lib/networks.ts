@@ -20,10 +20,10 @@ export const SOON_MAINNET = "Coming at mainnet";
 
 export const NETWORKS: Network[] = [
   { key: "base", name: "Base", network: "Base Sepolia (testnet). Tokens, auctions and pools live here.", live: true, color: "#0052ff" },
-  { key: "arbitrum", name: "Arbitrum", network: "Arbitrum Sepolia (testnet)", live: true, color: "#28a0f0" },
   { key: "ethereum", name: "Ethereum", network: "Ethereum Sepolia (testnet)", live: true, color: "#627eea" },
-  { key: "bnb", name: "BNB Chain", network: "BNB Chain testnet", live: true, color: "#f0b90b" },
   { key: "solana", name: "Solana", network: "Solana devnet (USDC)", live: true, color: "#14f195" },
+  { key: "bnb", name: "BNB Chain", network: "BNB Chain testnet", live: true, color: "#f0b90b" },
+  { key: "arbitrum", name: "Arbitrum", network: "Arbitrum Sepolia (testnet)", live: true, color: "#28a0f0" },
   {
     key: "robinhood",
     name: "Robinhood Chain",
@@ -39,10 +39,10 @@ export const SOON_NETWORKS = NETWORKS.filter((n) => !n.live);
 /** "A, B and C". */
 export const listNames = (names: string[]) => (names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
 
-/** The live chains as a sentence fragment: "Base, Arbitrum, Ethereum, BNB Chain and Solana". */
+/** The live chains as a sentence fragment: "Base, Ethereum, Solana, BNB Chain and Arbitrum". */
 export const LIVE_NAMES = listNames(LIVE_NETWORKS.map((n) => n.name));
 
-/** The live chains you can pay from besides Base: "Arbitrum, Ethereum, BNB Chain and Solana". */
+/** The live chains you can pay from besides Base: "Ethereum, Solana, BNB Chain and Arbitrum". */
 export const ORIGIN_NAMES = listNames(LIVE_NETWORKS.filter((n) => n.key !== "base").map((n) => n.name));
 
 /** "Robinhood Chain: Mainnet ready". */

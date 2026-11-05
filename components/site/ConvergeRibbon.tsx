@@ -7,7 +7,7 @@ import { chainGlyph, type ChainKey } from "./ChainMarks";
 /**
  * The close's centrepiece: nine liquid-chrome strands in a glass capsule, loose and rippling on the left, converging
  * into one orange core on the right, beside Enter Crux: many routes, one execution. Five strands start at a chain's mark
- * (Ethereum, Arbitrum, BNB Chain, Solana, and Robinhood Chain dimmed as Mainnet ready) and the core is Base. The strands bend towards the
+ * (Ethereum, Solana, BNB Chain, Arbitrum, and Robinhood Chain dimmed as Mainnet ready) and the core is Base. The strands bend towards the
  * pointer like liquid metal, and the chrome bands shimmer as they move; entering or tapping the capsule sends an orange
  * pulse down every strand into the core, which flares. With no pointer they drift slowly. prefers-reduced-motion
  * draws them once, still. The capsule is black glass in both themes. SVG paths rebuilt per frame (9 x 97 points), only while on screen.
@@ -21,9 +21,9 @@ const SPARK = 0.14; // dash length, in path lengths
 /** Which strands leave from a chain's mark; the rest are unlabelled routes. */
 const ROUTES: [strand: number, chain: ChainKey][] = [
   [0, "ethereum"],
-  [2, "arbitrum"],
+  [2, "solana"],
   [4, "bnb"],
-  [6, "solana"],
+  [6, "arbitrum"],
   [8, "robinhood"],
 ];
 

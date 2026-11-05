@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: "Crux — One account. Every chain.",
   description:
-    "One CRUX Account, funded from Base, Arbitrum, Ethereum, BNB Chain or Solana, to launch and trade with no gas and no bridges. Fair one-price launch openings, liquidity locked forever. Testnet on Base Sepolia.",
+    "One CRUX Account, funded from Base, Ethereum, Solana, BNB Chain or Arbitrum, to launch and trade with no gas and no bridges. Every trade settles in one pool on Base. Fair one-price launch openings, liquidity locked forever. Testnet on Base Sepolia.",
   openGraph: {
     title: "Crux — One account. Every chain.",
     description: "Deposit from any chain. Launch and trade from one account. Fair from the first second.",

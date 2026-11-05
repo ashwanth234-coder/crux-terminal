@@ -4,7 +4,7 @@ import { Chapter } from "./Chapter";
 const STEPS = [
   {
     name: "Launch",
-    body: "Name it and launch for $0: no gas, no wallet pop-ups, a copycat check on the ticker. The creator's share is locked for 30 days.",
+    body: "Name it and launch it: no gas, no wallet pop-ups, a copycat check on the ticker. The creator's share is locked for 30 days.",
     fact: "Gas-free",
   },
   {
@@ -24,7 +24,7 @@ const TRUST = ["Creator vested 30 days", "LP burned", "One price at open", "Ever
 
 export function HowItWorks() {
   return (
-    <Chapter id="protocol" title="How a launch works." intro="Three steps, each running on Base Sepolia today and source-verified on Basescan.">
+    <Chapter id="protocol" title="How a launch works." intro="Three steps, each a contract on Base Sepolia today, source-verified on Basescan.">
       <ol className="border-t border-line">
         {STEPS.map((s, i) => (
           <li key={s.name} className="grid gap-2 border-b border-line py-7 md:grid-cols-12 md:items-baseline md:gap-6">
