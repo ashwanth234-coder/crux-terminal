@@ -3,7 +3,7 @@ import type { Address } from "viem";
 
 /**
  * Trades this browser has just sent: on the chart the moment Buy or Sell is pressed, as a solid candle from the price
- * now to the pool's price just after it (worked out from the pool as it stands), and at the top of the swaps list marked
+ * now to the price it will print (its swap's average price on the pool as it stands), and at the top of the swaps list marked
  * Confirming. It stays until the solver's own trade is on the chart (pushed the moment it's sent), whatever the order
  * status says first; a failed or refunded trade takes it away at once.
  */
@@ -14,7 +14,7 @@ export type PendingTrade = {
   label: string;
   /** The price when it was sent. */
   price: number;
-  /** The pool's price just after the trade (where the real candle will close), if known. */
+  /** The price the trade will print on the chart (its swap's average price on the pool), if known. */
   expected?: number;
   /** Its size, as far as known when it's sent: USDC (dollars) and whole tokens. */
   usdc?: number;

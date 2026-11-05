@@ -863,8 +863,8 @@ function TradeForm({ auction, symbol, handover = false }: { auction: AuctionV2; 
   const showPending = (side: Side, input: bigint, avgFill?: number) => {
     clearPending.current?.();
     if (market.price === null) return;
-    // The candle ends where the real one will: the pool's price just after this trade (not the average fill, which
-    // carries the spread and drew it too tall on a narrow range).
+    // The candle ends where the real one will: the trade's average price on the pool, the price a candle is drawn from
+    // (not the buyer's fill, which carries the spread, nor the pool's price after it, far higher on a thin pool).
     const expected = (market.reserves && priceAfter(side, input, market.reserves, market.decimals)) ?? avgFill;
     const label = side === "buy" ? `Buying $${fmtUsdc(input)}…` : `Selling ${fmtTokens(input)} ${symbol}…`;
     const at = avgFill ?? market.price;
