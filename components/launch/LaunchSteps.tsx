@@ -6,7 +6,7 @@ import type { PhaseV2 } from "@/lib/launchV2";
  */
 const STEPS = [
   { title: "Opens soon", note: "Buy now to get in at the start" },
-  { title: "Fair opening", note: "One minute, one price for everyone" },
+  { title: "Fair opening", note: "Short window, one price for everyone" },
   { title: "Live", note: "Buy and sell any time" },
 ] as const;
 

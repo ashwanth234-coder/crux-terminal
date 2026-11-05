@@ -85,8 +85,8 @@ export function LaunchesFeed() {
             Every launch, <span className="text-steel">one price.</span>
           </h1>
           <p className="mt-4 max-w-[34rem] text-[14px] leading-relaxed text-muted">
-            Each token sells its sale supply (60% on V2 and V3) in one batch window. Every filled bid clears at the same uniform
-            price, so arriving first inside the window buys nothing. Base Sepolia testnet.
+            Every launch opens with a short fair opening: everyone who buys in it pays the same price, so being first buys nothing.
+            Then it trades live on Base, buyable from any chain. Base Sepolia testnet.
           </p>
         </div>
         <LaunchTokenButton className={buttonClass("primary", "md", "font-semibold")} />

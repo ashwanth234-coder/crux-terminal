@@ -4,23 +4,23 @@ import { Chapter } from "./Chapter";
 const STEPS = [
   {
     name: "Launch",
-    body: "Pick a size and you're live, gas-free from your CRUX Account. The creator's share vests over 30 days.",
+    body: "Name it and launch for $0: no gas, no wallet pop-ups, a copycat check on the ticker. The creator's share is locked for 30 days.",
     fact: "Gas-free",
   },
   {
-    name: "A one-minute fair opening",
-    body: "Everyone who buys in the opening pays the same price, and the first trading minute clears the same way. Bots get no head start.",
+    name: "A 30-second fair opening",
+    body: "Everyone who buys in the opening pays the same price, so being first buys nothing. Bots and snipers get no head start, and every launch goes live.",
     fact: "One price",
   },
   {
     name: "It trades everywhere",
-    body: "Half the raise seeds a pool on Base with its LP burned, buyable from any chain through Crux. If the opening doesn't fill, everyone is refunded.",
+    body: "It goes live on one Uniswap pool on Base with its liquidity locked forever, and anyone can buy it from the chain they're on through Crux. Trades land on the chart in under a second.",
     fact: "LP burned",
   },
 ];
 
 /** Promises every launch keeps, enforced on-chain (vesting by the Crux launch form). */
-const TRUST = ["Creator vested 30 days", "LP burned", "One price at open", "Refund if it doesn't fill", "Withdrawals only to your wallet"];
+const TRUST = ["Creator vested 30 days", "LP burned", "One price at open", "Every launch goes live", "Withdrawals only to your wallet"];
 
 export function HowItWorks() {
   return (

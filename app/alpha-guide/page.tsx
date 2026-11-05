@@ -10,7 +10,7 @@ import { SOLANA_KEPT_SOL, SOLANA_MIN_SOL, SOLANA_OPEN_SOL, SOLANA_RETURNED_SOL, 
 export const metadata: Metadata = {
   title: "Alpha tester guide · Crux",
   description:
-    "How to test Crux on Base Sepolia: wallet and CRUX Account setup, deposits from any chain, launching and buying in the 60-second fair launch, buy at open, trading graduated tokens, refunds and the alpha's trust model.",
+    "How to test Crux on Base Sepolia: wallet and CRUX Account setup, deposits from any chain, launching and buying in the 30-second fair opening, buy at open, trading graduated tokens, refunds and the alpha's trust model.",
 };
 
 /** Set NEXT_PUBLIC_ALPHA_FEEDBACK_URL (Telegram, Discord or a form) to show a feedback button. */
@@ -124,7 +124,7 @@ export default function AlphaGuidePage() {
               <span className="block text-steel">Base Sepolia testnet.</span>
             </h1>
             <p className="mt-6 max-w-[40rem] text-[16px] leading-relaxed text-chrome/70">
-              Everything you need to launch a token, buy into its 60-second fair launch and trade it after, from a wallet or a gasless
+              Everything you need to launch a token, buy into its 30-second fair opening and trade it after, from a wallet or a gasless
               CRUX Account funded from any chain. Every token here is a test token with no value.
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
@@ -142,9 +142,9 @@ export default function AlphaGuidePage() {
             </p>
             <ul className="space-y-2.5">
               <li>
-                {b("Fair launches.")} A launch opens with a 60-second window (5 minutes if the creator picks it) where every buyer pays
-                one opening price, then trades in 60-second batches at one price each before moving to Uniswap. Bots get no
-                first-block edge.
+                {b("Fair launches.")} A launch opens with a 30-second window where every buyer pays one opening price, then trades
+                live on Uniswap on Base. Bots get no first-block edge, and every launch goes live: if the opening falls short of its
+                small goal, Crux tops it up (shown as {b("Crux seed")} in the bids).
               </li>
               <li>
                 {b("One amount, one Buy.")} You enter USDC and press Buy. A max price is set for you (10x the projected price);
@@ -241,12 +241,13 @@ export default function AlphaGuidePage() {
                 <>Click {b("Launch")} in the top bar and log in with your CRUX Account.</>,
                 <>Type a name and a ticker.</>,
                 <>
-                  {b("Your first buy")} is filled in for you ($3 on the default size, or what your account holds). It&apos;s bought at the
-                  opening price like everyone else&apos;s, and on the default size it covers the goal, so your launch goes live.
+                  {b("Your first buy")} is optional and empty by default: your launch needs no money from you. If you buy, it&apos;s at
+                  the opening price like everyone else&apos;s.
                 </>,
                 <>
-                  Press {b("Launch $TICKER")}: no gas. It opens about a minute later. Everything else (description, image, how many
-                  buyers you expect, a later start) is under {b("More options")}. Share the launch link with the cohort.
+                  Press {b("Launch $TICKER")}: no gas. It opens about a minute later; the countdown lists what&apos;s already checked
+                  (copycat check, one price for everyone, the creator&apos;s 30-day lock). Description, image and a later start are under{" "}
+                  {b("More options")}. Share the launch link with the cohort.
                 </>,
               ]}
             />
@@ -255,9 +256,8 @@ export default function AlphaGuidePage() {
             <Steps
               items={[
                 <>
-                  Open the launch link. The steps at the top show where it is: {b("Opens soon")}, then the one-minute{" "}
-                  {b("Fair opening")}, then {b("Live")}. During the opening, {b("Raised so far")} shows the money in, the buyers and how
-                  much is left to the goal.
+                  Open the launch link. The steps at the top show where it is: {b("Opens soon")}, then the 30-second{" "}
+                  {b("Fair opening")}, then {b("Live")}. During the opening, {b("Raised so far")} shows the money in and the buyers.
                 </>,
                 <>
                   Type an amount in {b("How much to spend")} and press {b("Buy")}, any time before it goes live. From a CRUX Account
@@ -269,18 +269,16 @@ export default function AlphaGuidePage() {
                   higher, nothing is spent.
                 </>,
                 <>
-                  When the minute ends, the price is set by itself in a few seconds and the token goes {b("Live")}. A CRUX Account gets
-                  its tokens automatically; a wallet presses {b("Collect my tokens")}. If the goal wasn&apos;t reached, nobody pays:
-                  wallets press {b("Get my $… back")}, and a CRUX Account&apos;s buy is cancelled without spending anything.
+                  When the opening ends, the price is set by itself in a few seconds and the token goes {b("Live")}. A CRUX Account
+                  gets its tokens within seconds; a wallet presses {b("Collect my tokens")}.
                 </>,
               ]}
             />
 
             <Callout title="The anti-sniper guarantee">
               Arriving first buys nothing. Whether you buy in the first second or the last, everyone in the opening pays the same
-              price, and per-wallet caps stop one address from taking the sale. The first trading minute after the open clears the
-              same way, in one 60-second batch. Buys are public on-chain while the window is open (not sealed), so set your own max
-              price if you care about the ceiling.
+              price, so a bot gains nothing by racing. Buys are public on-chain while the window is open (not sealed), so set your
+              own max price if you care about the ceiling.
             </Callout>
             <p className="text-[14px] text-chrome/65">
               On graduation, 30% of supply and half the raise seed a Uniswap V2 pool whose LP tokens go to 0x…dEaD, locked forever.
@@ -308,8 +306,8 @@ export default function AlphaGuidePage() {
                   order fills.
                 </>,
                 <>
-                  Within about a minute, Crux&apos;s next batch swaps in the token&apos;s Uniswap V2 pool and delivers to your wallet;
-                  everyone in that batch pays the same price. The screen shows {b("Filled")}.
+                  From a CRUX Account it fills in about a second, and the candle shows on the chart at once; from a wallet, within
+                  about a minute. The screen shows {b("Filled")}.
                 </>,
               ]}
             />

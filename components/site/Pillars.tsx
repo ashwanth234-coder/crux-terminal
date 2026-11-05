@@ -17,7 +17,7 @@ const PILLARS = [
   {
     n: "03",
     title: "Every token, every chain.",
-    body: "Anyone can buy a Crux launch from the chain they're on today. Tokens native on every chain arrive with mainnet.",
+    body: "Every launch has one deep pool on Base, and anyone can buy it from the chain they're on today: Arbitrum, Ethereum, BNB Chain or Solana.",
     tag: "Buy from any chain today",
   },
 ];

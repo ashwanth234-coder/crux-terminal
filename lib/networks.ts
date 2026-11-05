@@ -16,7 +16,7 @@ export type Network = {
   color: string;
 };
 
-export const SOON_MAINNET = "Mainnet ready";
+export const SOON_MAINNET = "Coming at mainnet";
 
 export const NETWORKS: Network[] = [
   { key: "base", name: "Base", network: "Base Sepolia (testnet). Tokens, auctions and pools live here.", live: true, color: "#0052ff" },

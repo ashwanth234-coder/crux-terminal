@@ -16,7 +16,7 @@ export function Hero() {
             Every chain.
           </h1>
           <p className="mt-6 max-w-lg text-[16px] leading-relaxed text-muted md:mt-8 md:text-[18px]">
-            Deposit from Base, Arbitrum, Ethereum, BNB Chain or Solana. Launch and trade from one account: no gas, no bridges, no
+            Launch a token for $0 and trade it from Base, Arbitrum, Ethereum, BNB Chain or Solana, all from one account: no gas, no bridges, no
             wallet pop-ups.
           </p>
           <div className="mt-9 flex flex-wrap items-center gap-x-8 gap-y-4 md:mt-12">
