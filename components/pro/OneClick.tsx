@@ -221,6 +221,16 @@ export function useOrderWatch(order: OneClickOrder | null, setOrder: (o: OneClic
 
 /** The last one-click order's state, under the Buy button. */
 export function OneClickOrderStatus({ order, to = "your wallet" }: { order: OneClickOrder | null; to?: string }) {
+  // An order still open after 15 s (the price moved past its minimum, say) said only "filling…" until it expired: say
+  // why it waits and what happens if it can't fill.
+  const openId = order?.kind === "open" ? order.orderId : null;
+  const [slowFor, setSlowFor] = useState<Hex | null>(null);
+  useEffect(() => {
+    if (!openId) return;
+    const t = setTimeout(() => setSlowFor(openId), 15_000);
+    return () => clearTimeout(t);
+  }, [openId]);
+  const slow = openId !== null && slowFor === openId;
   if (!order) return null;
   const link = (id: Hex) => (
     <a href={`${TESTNET_EXPLORER}/address/${SETTLER}#events`} target="_blank" rel="noopener noreferrer" className="font-mono underline decoration-line-2">
@@ -230,7 +240,15 @@ export function OneClickOrderStatus({ order, to = "your wallet" }: { order: OneC
   return (
     <p role="status" className={`text-[11.5px] leading-snug ${order.kind === "error" ? "text-down" : order.kind === "filled" ? "text-up" : "text-muted"}`}>
       {order.kind === "sending" && (to === "your wallet" ? "Signed in this browser · opening it on Base…" : "Signed · opening it on Base…")}
-      {order.kind === "open" && <>Order {link(order.orderId)} open · filling…</>}
+      {order.kind === "open" &&
+        (slow ? (
+          <>
+            Order {link(order.orderId)} still open: it only fills at or better than your minimum. If it can&apos;t, it&apos;s refunded to {to} when the
+            order expires.
+          </>
+        ) : (
+          <>Order {link(order.orderId)} open · filling…</>
+        ))}
       {order.kind === "filled" && <>Filled · order {link(order.orderId)} delivered to {to}.</>}
       {order.kind === "refunded" && <>Order {link(order.orderId)} wasn&apos;t filled and was refunded to {to}.</>}
       {order.kind === "error" && order.message}

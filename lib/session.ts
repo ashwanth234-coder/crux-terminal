@@ -70,15 +70,27 @@ export function forgetSession(owner: Address, token: Address = TESTNET_USDC) {
 
 const json = (v: unknown) => JSON.stringify(v, (_, x) => (typeof x === "bigint" ? x.toString() : x));
 
+/** How long a relay request may take: a launch that first deploys the account takes the longest (two transactions). */
+const RELAY_TIMEOUT_MS = 45_000;
+
 /** POSTs to the relay; throws its plain-language error when it turns the request away. */
 export async function postRelay(path: string, body: unknown): Promise<Record<string, unknown>> {
   let res: Response;
+  // A relay (or its RPC) that hangs left the button on "sending" for good. After this long the user is told, and told
+  // it may still land: each signature is a new order, so trying again blindly could trade twice.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), RELAY_TIMEOUT_MS);
   try {
     // text/plain keeps it a "simple" request: no CORS preflight round trip before it (the relay reads the body as JSON).
-    res = await fetch(`${RELAY_URL}${path}`, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, body: json(body) });
+    res = await fetch(`${RELAY_URL}${path}`, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, body: json(body), signal: ctrl.signal });
   } catch {
+    clearTimeout(timer);
+    if (ctrl.signal.aborted) {
+      throw new Error(`The Crux relay didn't answer within ${RELAY_TIMEOUT_MS / 1000} seconds. It may still go through: check your orders or balance before trying again.`);
+    }
     throw new Error("Couldn't reach the Crux relay. Check your connection and try again.");
   }
+  clearTimeout(timer);
   const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok || data.ok !== true) throw new Error(typeof data.error === "string" ? data.error : `The relay answered ${res.status}.`);
   return data;
