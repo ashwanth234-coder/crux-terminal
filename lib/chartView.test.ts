@@ -21,3 +21,9 @@ test("withLatestTrades: a trade the candles don't count yet moves the newest can
   assert.equal(candles.length, 1, "the input isn't changed");
   assert.equal(withLatestTrades(candles, [t(50, 2)], 1), candles, "nothing new: the same array");
 });
+
+test("openingInterval: a token under an hour old opens on 1s; an older one on the finest that fits ~200 candles", async () => {
+  const { openingInterval } = await import("./chartView.ts");
+  assert.equal(openingInterval(1_000, 1_000 + 35 * 60), 1, "35 minutes old: every trade its own candle");
+  assert.equal(openingInterval(1_000, 1_000 + 3 * 3_600), 60, "3 hours old: 1m");
+});

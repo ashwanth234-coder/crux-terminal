@@ -4,9 +4,9 @@ type Target = Parameters<IPrimitivePaneRenderer["draw"]>[0];
 
 /**
  * One trader badge: a filled circle with its label inside ("DB"), a buy's under its candle's low and a sell's over its
- * high, one per kind and side per candle; `count` > 1 shows how many trades it stands for.
+ * high, one per kind and side per candle however many trades it stands for.
  */
-export type Badge = { time: number; high: number; low: number; label: string; side: "buy" | "sell"; count?: number };
+export type Badge = { time: number; high: number; low: number; label: string; side: "buy" | "sell" };
 
 /** Electric green for a buy, electric red for a sell: the fill, a darker ring round it, and a glow. */
 const LOOK = {
@@ -92,16 +92,6 @@ export class BadgesPrimitive implements ISeriesPrimitive<Time> {
         ctx.fillStyle = "#ffffff";
         ctx.fillText(b.label, x, y + 0.5);
         ctx.restore();
-        // How many trades it stands for, small beside it.
-        if (b.count && b.count > 1) {
-          ctx.save();
-          ctx.font = "700 8px Inter, ui-sans-serif, system-ui, sans-serif";
-          ctx.textAlign = "left";
-          ctx.textBaseline = "middle";
-          ctx.fillStyle = look.fill;
-          ctx.fillText(`×${b.count}`, x + R + 2, y + 0.5);
-          ctx.restore();
-        }
       }
     });
   }
