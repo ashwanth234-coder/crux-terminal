@@ -1,4 +1,16 @@
-import type { Candle } from "./candles";
+import { autoInterval, type Candle } from "./candles.ts";
+
+/** Under this age a token's chart opens on 1-second candles: every trade its own candle, as trading terminals do. */
+export const YOUNG_TOKEN_SECONDS = 3_600;
+
+/**
+ * The timeframe "Auto" opens a chart on, picked once when the page opens and kept while it's open (recomputing it as
+ * the clock moved switched the timeframe under someone watching): 1s for a token under an hour old, else the finest
+ * that keeps its history within about `maxCandles` candles.
+ */
+export function openingInterval(launchTime: number, now: number, maxCandles = 200): number {
+  return now - launchTime < YOUNG_TOKEN_SECONDS ? 1 : autoInterval(launchTime, now, maxCandles);
+}
 
 /**
  * The fewest prices in view, as a share of the price: the auto scale shows at least this range around what's in view.

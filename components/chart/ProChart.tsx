@@ -15,8 +15,8 @@ import { barTime, markTrades, type MarkWho } from "@/lib/chartMarks";
 import { buildHolders } from "@/lib/holders";
 import { CRUX_SOLVERS, PREVIOUS_SETTLERS, SETTLER } from "@/lib/intents";
 import { EMPTY_CONTEXT, computeInstance, flowByCandle, holdersByCandle, paramsOf, poolByCandle, top10ByCandle, type StudyContext, type StudyId } from "@/lib/indicators";
-import { INTERVALS, autoInterval, toCandles, type Candle, type Fill } from "@/lib/candles";
-import { withLatestTrades } from "@/lib/chartView";
+import { INTERVALS, toCandles, type Candle, type Fill } from "@/lib/candles";
+import { openingInterval, withLatestTrades } from "@/lib/chartView";
 import { useThrottled } from "@/hooks/useThrottled";
 import { useFeedCandles } from "@/hooks/useFeed";
 import type { FeedCandle } from "@/lib/feed";
@@ -232,7 +232,10 @@ export function ProChart({
   // The shared feed's candles (crux-solver feedhub.ts): made once on the server for every viewer and kept current by
   // its frames, so the page neither reads the chain nor buckets trades. A pool it doesn't serve (another DEX's), or
   // while it's down, falls back to bucketing the trades here.
-  const feed = useFeedCandles(external ? null : auction.pair, config.interval);
+  // "Auto" picks a timeframe once, when the chart opens (1s for a young token), and keeps it while the page is open.
+  const [autoPick] = useState(() => openingInterval(auction.settledAt, Math.floor(Date.now() / 1000)));
+  const pickedInterval = config.interval === "auto" ? autoPick : config.interval;
+  const feed = useFeedCandles(external ? null : auction.pair, pickedInterval);
   const feedLive = feed.usable;
   const feedCandles = useThrottled(feedLive ? feed.candles : null, 250);
   // The opening, the token's first trade (lib/openingTrade): a launch whose only activity is its opening still draws.
@@ -251,8 +254,7 @@ export function ProChart({
   }, [swapData, feedLive, opening]);
   // A loop, not Math.min(...): spreading a long history's times overflows the call stack.
   const first = fills.length ? fills.reduce((m, f) => (f.time < m ? f.time : m), fills[0].time) : auction.settledAt;
-  const interval =
-    config.interval !== "auto" ? config.interval : feedLive ? feed.interval! : autoInterval(Math.min(first, auction.settledAt), now ?? auction.settledAt, 200);
+  const interval = pickedInterval;
   // Only periods that traded get a candle, side by side as trading terminals draw a thin token: quiet hours aren't
   // stretches of empty axis (or rows of flat bars). Each candle still opens at the previous one's close.
   // The newest MAX_CANDLES traded periods, counted, not a clock window: on a 1-second chart a token that last traded an
