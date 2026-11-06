@@ -2,7 +2,8 @@ import { getAddress, parseAbi, parseAbiItem, zeroAddress, type Address } from "v
 import { batchPoolAbi, guardianAbi } from "@/lib/batchPool";
 import { CRUX_SOLVERS, TESTNET_USDC } from "@/lib/intents";
 import { logClient, type ReadLogs } from "@/lib/logs";
-import { fillToTrade, swapToTrade, type PoolTrade } from "@/lib/tradeDecode";
+import { curveToTrade, fillToTrade, swapToTrade, type PoolTrade } from "@/lib/tradeDecode";
+import { curveV9Abi, v9CurveOf } from "@/lib/v9";
 import { logTimeMs } from "@/lib/logTime";
 import { externalPoolOf, externalTradeReader } from "@/lib/externalPools";
 
@@ -95,6 +96,22 @@ export function poolTradeReader(pair: Address, tokenDecimals = 18): ReadLogs<Poo
       ),
       timeMs: logTimeMs(l),
     }));
-    return [...swaps, ...fills].sort((a, b) => (a.blockNumber === b.blockNumber ? a.logIndex - b.logIndex : a.blockNumber < b.blockNumber ? -1 : 1));
+    // V9: the curve's trades before graduation, credited to their recipient (never the router).
+    const curve = v9CurveOf(pair);
+    const curveTrades = curve
+      ? (await logClient.getLogs({ address: curve, events: curveV9Abi.filter((x) => x.type === "event" && (x.name === "Buy" || x.name === "Sell")), fromBlock, toBlock })).map((l) => {
+          const a = l.args as { recipient: Address; usdcIn?: bigint; tokensOut?: bigint; tokensIn?: bigint; usdcOut?: bigint };
+          const isBuy = l.eventName === "Buy";
+          return {
+            ...curveToTrade({ isBuy, usdc: isBuy ? a.usdcIn! : a.usdcOut!, tokens: isBuy ? a.tokensOut! : a.tokensIn!, recipient: a.recipient }, tokenDecimals, CRUX_SOLVERS, {
+              txHash: l.transactionHash,
+              blockNumber: l.blockNumber,
+              logIndex: l.logIndex,
+            }),
+            timeMs: logTimeMs(l),
+          };
+        })
+      : [];
+    return [...swaps, ...fills, ...curveTrades].sort((a, b) => (a.blockNumber === b.blockNumber ? a.logIndex - b.logIndex : a.blockNumber < b.blockNumber ? -1 : 1));
   };
 }
