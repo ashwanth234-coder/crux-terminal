@@ -302,6 +302,7 @@ export class ChartEngine {
     this.markers?.detach();
     this.main.detachPrimitive(this.drawings);
     this.main.detachPrimitive(this.profile);
+    this.main.detachPrimitive(this.badges);
     this.chart.removeSeries(this.main);
     for (const s of this.extras) this.chart.removeSeries(s);
     this.extras = [];
@@ -593,7 +594,14 @@ export class ChartEngine {
    * the plotting area's (the time scale spans exactly the plotting area).
    */
   axisWidth(): number {
-    const own = this.chart.priceScale(this.side).width();
+    // Read during a render: a price scale not laid out yet (the left one, right after switching to it or on a load
+    // with it saved) throws "Value is null" in the chart library, which took the whole page down. Measure instead.
+    let own = 0;
+    try {
+      own = this.chart.priceScale(this.side).width();
+    } catch {
+      own = 0;
+    }
     if (own > 0) return own;
     return Math.max(0, this.host.clientWidth - this.chart.timeScale().width());
   }
@@ -630,7 +638,11 @@ export class ChartEngine {
   }
 
   isAutoScale() {
-    return this.chart.priceScale(this.side).options().autoScale;
+    try {
+      return this.chart.priceScale(this.side).options().autoScale;
+    } catch {
+      return true;
+    }
   }
 
   /** Every bar in view (the bottom bar's All): fitted when they're too many for their normal width, else as fit(). */
