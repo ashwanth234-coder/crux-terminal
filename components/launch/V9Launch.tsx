@@ -203,9 +203,24 @@ function TradePanel({ token, curve, symbol, phase }: { token: Address; curve: Ad
         : { address: ROUTER_V9, abi: routerV9Abi, functionName: "quoteSell", args: [token, amountIn], chainId: TESTNET.id },
     ],
   });
-  const out = (quote.data?.[0]?.result as readonly bigint[] | undefined)?.[0] ?? BigInt(0);
+  const openingReads = useReadContracts({
+    allowFailure: true,
+    query: { enabled: opening, refetchInterval: 3_000 },
+    contracts: [{ address: curve, abi: curveV9Abi, functionName: "openingTotal", chainId: TESTNET.id }],
+  });
+  const openingTotal = (openingReads.data?.[0]?.result as bigint | undefined) ?? BigInt(0);
+  const openingQuote = useReadContracts({
+    allowFailure: true,
+    query: { enabled: opening && amountIn > BigInt(0), refetchInterval: 3_000 },
+    contracts: [{ address: curve, abi: curveV9Abi, functionName: "quoteBuy", args: [openingTotal + amountIn], chainId: TESTNET.id }],
+  });
+  const openingAll = (openingQuote.data?.[0]?.result as readonly bigint[] | undefined)?.[0] ?? BigInt(0);
+  // Its share of what the opening would buy if nobody else joins: more deposits only raise the one price.
+  const shareIfAlone = openingTotal + amountIn > BigInt(0) ? (openingAll * amountIn) / (openingTotal + amountIn) : BigInt(0);
+  const out = opening ? shareIfAlone : ((quote.data?.[0]?.result as readonly bigint[] | undefined)?.[0] ?? BigInt(0));
   const split = side === "buy" ? (quote.data?.[0]?.result as readonly bigint[] | undefined) : undefined;
-  const minOut = (out * (BigInt(10_000) - SLIPPAGE_BPS)) / BigInt(10_000);
+  // A buy at open signs half its share-if-alone: it fills unless the opening's price ends up over twice today's.
+  const minOut = opening ? out / BigInt(2) : (out * (BigInt(10_000) - SLIPPAGE_BPS)) / BigInt(10_000);
 
   const mine = useReadContracts({
     allowFailure: true,
@@ -247,6 +262,7 @@ function TradePanel({ token, curve, symbol, phase }: { token: Address; curve: Ad
           tokenOut: launchCaip19(side === "buy" ? token : TESTNET_USDC),
           minAmountOut: minOut,
         });
+        if (opening) return "In the fair opening from your CRUX Account: your tokens arrive when it ends, at its one price.";
         return res.filled ? `Filled from your CRUX Account.` : `Order placed from your CRUX Account: it fills in seconds.`;
       }
       if (!address) throw new Error("Connect a wallet first.");
@@ -310,7 +326,7 @@ function TradePanel({ token, curve, symbol, phase }: { token: Address; curve: Ad
         </div>
       )}
 
-      {!opening && accountReady && (
+      {accountReady && (
         <div className="mt-3 flex gap-3 text-[12px]">
           {(["account", "wallet"] as const).map((f) => (
             <label key={f} className="flex items-center gap-1.5 text-muted">
@@ -333,6 +349,12 @@ function TradePanel({ token, curve, symbol, phase }: { token: Address; curve: Ad
         <span className="font-mono text-[12px] text-dim">{side === "buy" || opening ? "USDC" : `$${symbol}`}</span>
       </label>
 
+      {opening && out > BigInt(0) && (
+        <p className="mt-2 text-[12px] leading-snug text-muted">
+          About {fmtOut(out)} if nobody else joins · everyone pays one price when it ends
+          {via === "account" && ` · fills unless that price is over twice today's (at least ${fmtOut(minOut)}); otherwise refunded`}
+        </p>
+      )}
       {!opening && out > BigInt(0) && (
         <p className="mt-2 text-[12px] leading-snug text-muted">
           About {fmtOut(out)} · at least {fmtOut(minOut)} (10% slippage)
@@ -342,8 +364,8 @@ function TradePanel({ token, curve, symbol, phase }: { token: Address; curve: Ad
 
       <button
         type="button"
-        disabled={busy !== null || amountIn === BigInt(0) || (!opening && out === BigInt(0))}
-        onClick={() => void (opening ? deposit() : trade())}
+        disabled={busy !== null || amountIn === BigInt(0) || out === BigInt(0)}
+        onClick={() => void (opening && via === "wallet" ? deposit() : trade())}
         className={`${buttonClass("primary", "md", "rounded-lg")} mt-3 w-full`}
       >
         {busy ?? (opening ? "Deposit into the opening" : side === "buy" ? `Buy $${symbol}` : `Sell $${symbol}`)}
@@ -355,7 +377,7 @@ function TradePanel({ token, curve, symbol, phase }: { token: Address; curve: Ad
         </button>
       )}
       {note && <p className={`mt-2 text-[12px] leading-snug ${note.ok ? "text-up" : "text-down"}`}>{note.text}</p>}
-      {opening && <p className="mt-2 text-[11.5px] text-dim">Deposits come from a wallet. CRUX Account trading opens when the opening ends.</p>}
+      {opening && via === "wallet" && <p className="mt-2 text-[11.5px] text-dim">From a wallet: claim your tokens here when the opening ends.</p>}
     </section>
   );
 }

@@ -45,6 +45,7 @@ export const curveV9Abi = parseAbi([
   "function creatorVesting() view returns (uint64)",
   "function creatorClaimable() view returns (uint256)",
   "function deposit(uint256 amount, address recipient)",
+  "function quoteBuy(uint256 usdcIn) view returns (uint256 tokensOut, uint256 usdcUsed, uint256 fee)",
   "function claimOpening(address recipient) returns (uint256 tokens, uint256 refund)",
   "function claimCreator() returns (uint256)",
   "event Buy(address indexed payer, address indexed recipient, uint256 usdcIn, uint256 fee, uint256 tokensOut, uint256 realUsdcAfter, uint256 reserveTokenAfter)",

@@ -2,6 +2,7 @@ import { connection } from "next/server";
 import { checkLaunch, conflictLine, normalizeTicker, type GuardLaunch } from "@/lib/antiVamp";
 import { artworkOf } from "@/lib/artwork";
 import { readLaunches } from "@/lib/launchFeed";
+import { readV9Launches } from "@/lib/v9Launches";
 import { MAX_IMAGE_DATA_URI } from "@/lib/tokenMeta";
 
 /**
@@ -33,8 +34,10 @@ export async function POST(request: Request) {
   if (!normalizeTicker(symbol)) return json({ error: "symbol is required" }, 400);
 
   let launches;
+  let v9Launches;
   try {
-    launches = await readLaunches();
+    // V9 launches count too (when V9 is on): a V9 ticker can't copy a V8 one, nor another V9 one.
+    [launches, v9Launches] = await Promise.all([readLaunches(), readV9Launches()]);
   } catch {
     return json({ error: "Couldn't read Base Sepolia right now. Retry shortly." }, 503);
   }
@@ -54,7 +57,23 @@ export async function POST(request: Request) {
           art: image && l.phase !== "cancelled" && l.metadata.image ? await artworkOf(l.metadata.image) : null,
         }),
       ),
-    ),
+    ).then(async (v8) => [
+      ...v8,
+      // A V9 launch is never cancelled: it holds its ticker, artwork and X account for good, as a graduated one does.
+      ...(await Promise.all(
+        v9Launches.map(
+          async (l): Promise<GuardLaunch> => ({
+            symbol: l.symbol,
+            token: l.token,
+            href: `/launch/v9/${l.id}`,
+            phase: "graduated",
+            closesAt: 0,
+            x: l.metadata.links.x,
+            art: image && l.metadata.image ? await artworkOf(l.metadata.image) : null,
+          }),
+        ),
+      )),
+    ]),
   ]);
   const conflicts = checkLaunch({ symbol, x, art }, guarded, now);
   const artwork = !image ? "none" : !art ? "unreadable" : conflicts.some((c) => c.kind.startsWith("artwork")) ? "matched" : "unique";
