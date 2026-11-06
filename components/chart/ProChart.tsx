@@ -567,7 +567,7 @@ export function ProChart({
         const c = barOf.get(g.time);
         if (c === undefined) return [];
         const style = MARK_STYLE[g.who];
-        return [{ time: g.time, high: c.high * k, low: c.low * k, label: g.side === "buy" ? style.buy : style.sell, side: g.side, count: g.n }];
+        return [{ time: g.time, high: c.high * k, low: c.low * k, label: g.side === "buy" ? style.buy : style.sell, side: g.side }];
       }),
       ...ownBadges.current.map((o) => {
         const style = MARK_STYLE[o.who];
