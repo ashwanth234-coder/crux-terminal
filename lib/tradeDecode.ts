@@ -17,10 +17,11 @@ export type PoolTrade = {
   to: Address;
   viaIntent: boolean;
   /**
-   * Where it traded: the Uniswap V2 pair, or (V5 / V6, during the anti-sniper window) the batch pool; a token that
-   * isn't a Crux launch can also trade on a Uniswap V3 pool (lib/externalPools).
+   * Where it traded: the Uniswap V2 pair, or (V5 / V6, during the anti-sniper window) the batch pool, or (V9, before
+   * graduation) the launch's CruxCurveV9; a token that isn't a Crux launch can also trade on a Uniswap V3 pool
+   * (lib/externalPools).
    */
-  venue: "uniswap-v2" | "uniswap-v3" | "batch-pool";
+  venue: "uniswap-v2" | "uniswap-v3" | "batch-pool" | "curve";
   /** Batch-pool fills only: the batch it cleared in. */
   batch?: number;
   txHash: Hex;
@@ -86,6 +87,29 @@ export function fillToTrade(
     viaIntent: isSolver(args.owner, solver),
     venue: "batch-pool",
     batch: Number(args.batch),
+    ...at,
+  };
+}
+
+/**
+ * A V9 curve Buy or Sell, as a trade. `usdc` is what the trader paid (a buy, fee included) or received (a sell, after
+ * the fee). `to` is the event's recipient, the trader (or the Crux solver filling an order for one), never
+ * CruxRouterV9, which only passes trades through.
+ */
+export function curveToTrade(
+  args: { isBuy: boolean; usdc: bigint; tokens: bigint; recipient: Address },
+  tokenDecimals: number,
+  solver: Solvers,
+  at: Positioned,
+): Omit<PoolTrade, "time"> {
+  return {
+    side: args.isBuy ? "buy" : "sell",
+    usdc: args.usdc,
+    tokens: args.tokens,
+    price: priceOf(args.usdc, args.tokens, tokenDecimals),
+    to: args.recipient,
+    viaIntent: isSolver(args.recipient, solver),
+    venue: "curve",
     ...at,
   };
 }
