@@ -71,7 +71,21 @@ const MARK_STYLE: Record<MarkWho, { color: string; buy: string; sell: string }> 
 
 const compactUsd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 2 });
 
-const css = (name: string, fallback: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+/**
+ * A site colour token as #rrggbb. The chart adds a transparency suffix to some (`${chrome}33`), which needs the full
+ * six digits: the site's "#fff" became "#fff33", an invalid colour that threw in the area styles. #rgb is expanded and
+ * rgb() converted; anything else falls back.
+ */
+export function hex6(value: string, fallback: string): string {
+  const v = value.trim();
+  if (/^#[0-9a-f]{6}$/i.test(v)) return v;
+  const short = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(v);
+  if (short) return `#${short[1]}${short[1]}${short[2]}${short[2]}${short[3]}${short[3]}`;
+  const rgb = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i.exec(v);
+  if (rgb) return `#${[rgb[1], rgb[2], rgb[3]].map((n) => Math.min(255, Number(n)).toString(16).padStart(2, "0")).join("")}`;
+  return fallback;
+}
+const css = (name: string, fallback: string) => hex6(getComputedStyle(document.documentElement).getPropertyValue(name), fallback);
 /** The chart's colours from the site's tokens, so it follows the light / dark switch. */
 const chartTheme = () => ({
   bg: css("--color-void", "#000000"),
@@ -541,21 +555,32 @@ export function ProChart({
       const open = last?.close ?? p.price;
       ownBadges.current = [...ownBadges.current, { id: p.id, time, side: p.side, who: ownWho, high: Math.max(open, p.expected ?? p.price), until: nowMs + 20_000 }];
     }
-    ownBadges.current = ownBadges.current.filter((o) => o.until > nowMs && !grouped.has(`${o.time}:${o.who}:${o.side}`));
+    // An instant badge goes as soon as its trade's real mark is on the chart: on its candle or the next (the instant
+    // candle and the mined one can fall either side of a period boundary), so the same trade never shows twice.
+    const hasReal = (o: { time: number; who: MarkWho; side: "buy" | "sell" }) =>
+      [o.time - interval, o.time, o.time + interval].some((t) => grouped.has(`${t}:${o.who}:${o.side}`));
+    ownBadges.current = ownBadges.current.filter((o) => o.until > nowMs && !hasReal(o));
     // Drawn as electric green (buy) or red (sell) discs with the label inside in white (badges.ts).
-    const highOf = new Map(candles.map((c) => [c.time, c.high]));
+    const barOf = new Map(candles.map((c) => [c.time, c]));
     engine.setBadges([
       ...[...grouped.values()].flatMap((g) => {
-        const high = highOf.get(g.time);
-        if (high === undefined) return [];
+        const c = barOf.get(g.time);
+        if (c === undefined) return [];
         const style = MARK_STYLE[g.who];
-        return [{ time: g.time, high: high * k, label: g.side === "buy" ? style.buy : style.sell, side: g.side }];
+        return [{ time: g.time, high: c.high * k, low: c.low * k, label: g.side === "buy" ? style.buy : style.sell, side: g.side, count: g.n }];
       }),
       ...ownBadges.current.map((o) => {
         const style = MARK_STYLE[o.who];
         // On the instant candle's bar, or the real candle's if it landed in the next one.
-        const time = highOf.has(o.time) || !last || last.time <= o.time ? o.time : last.time;
-        return { time, high: Math.max(highOf.get(time) ?? 0, o.high) * k, label: o.side === "buy" ? style.buy : style.sell, side: o.side };
+        const time = barOf.has(o.time) || !last || last.time <= o.time ? o.time : last.time;
+        const c = barOf.get(time);
+        return {
+          time,
+          high: Math.max(c?.high ?? 0, o.high) * k,
+          low: (c ? Math.min(c.low, o.high) : o.high) * k,
+          label: o.side === "buy" ? style.buy : style.sell,
+          side: o.side,
+        };
       }),
     ]);
     const milestones: { time: number; text: string; color: string }[] = [];
