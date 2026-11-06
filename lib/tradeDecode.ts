@@ -27,6 +27,8 @@ export type PoolTrade = {
   blockNumber: bigint;
   logIndex: number;
   time: number;
+  /** The block's time in milliseconds (Base Denim's blockTimestampMs), when the node sent it. */
+  timeMs?: number;
 };
 
 export type Positioned = { txHash: Hex; blockNumber: bigint; logIndex: number };

@@ -27,6 +27,15 @@ const PAGE = 25;
 const PROVISIONAL_BLOCK = BigInt(9_000_000_000);
 
 /** A trade that's on its way to the chain, not mined yet: sent by you, or by the solver a moment ago. */
+/** A trade's exact time for its tooltip, to the millisecond when its block has one. */
+function exactTime(t: { time: number; timeMs?: number }) {
+  const d = new Date(t.timeMs ?? t.time * 1000);
+  const clock = d.toLocaleTimeString("en-GB", { hour12: false });
+  return t.timeMs !== undefined
+    ? `${d.toLocaleDateString()} ${clock}.${String(d.getMilliseconds()).padStart(3, "0")} (Base block time)`
+    : `${d.toLocaleDateString()} ${clock}`;
+}
+
 function ConfirmingBadge() {
   return (
     <span
@@ -43,9 +52,11 @@ const usd = (units: bigint) => `$${Number(formatUnits(units, 6)).toLocaleString(
 const usdCompact = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 2 });
 const mcapText = (v: number) => (v < 1_000 ? `$${v.toFixed(2)}` : usdCompact.format(v));
 
-function ago(now: number | null, t: number) {
+function ago(now: number | null, t: number, tMs?: number) {
   if (now === null) return "…";
   const s = Math.max(0, now - t);
+  // Base seals a block every 200 ms (Denim) and dates it to the millisecond: a fresh trade shows tenths of a second.
+  if (tMs !== undefined && s < 10) return `${(Math.max(0, Date.now() - tMs) / 1000).toFixed(1)}s`;
   if (s < 60) return `${s}s`;
   if (s < 3600) return `${Math.floor(s / 60)}m`;
   if (s < 86_400) return `${Math.floor(s / 3600)}h`;
@@ -311,8 +322,8 @@ export function LiveTape({
                   return (
                     <tr key={`${t.txHash}-${t.logIndex}-${t.usdc}`} className={`hover:bg-tint/[0.02] ${t.side === "buy" ? "bg-up/[0.025]" : "bg-down/[0.025]"}`}>
                       <td className={`${td} font-mono text-dim`}>
-                        <a href={`${TESTNET_EXPLORER}/tx/${t.txHash}`} target="_blank" rel="noopener noreferrer" className="hover:text-chrome" title={new Date(t.time * 1000).toLocaleString()}>
-                          {ago(now, t.time)}
+                        <a href={`${TESTNET_EXPLORER}/tx/${t.txHash}`} target="_blank" rel="noopener noreferrer" className="hover:text-chrome" title={exactTime(t)}>
+                          {ago(now, t.time, t.timeMs)}
                         </a>
                       </td>
                       <td className={td}>

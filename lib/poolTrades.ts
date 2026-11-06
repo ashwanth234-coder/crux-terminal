@@ -3,6 +3,7 @@ import { batchPoolAbi, guardianAbi } from "@/lib/batchPool";
 import { CRUX_SOLVERS, TESTNET_USDC } from "@/lib/intents";
 import { logClient, type ReadLogs } from "@/lib/logs";
 import { fillToTrade, swapToTrade, type PoolTrade } from "@/lib/tradeDecode";
+import { logTimeMs } from "@/lib/logTime";
 import { externalPoolOf, externalTradeReader } from "@/lib/externalPools";
 
 export type { PoolTrade };
@@ -68,17 +69,18 @@ export function poolTradeReader(pair: Address, tokenDecimals = 18): ReadLogs<Poo
       readBatchPool(pair),
     ]);
     const fills = batch
-      ? (await logClient.getLogs({ address: batch.pool, event: ORDER_FILLED, args: { token: batch.token }, fromBlock, toBlock })).map((l) =>
-          fillToTrade(
+      ? (await logClient.getLogs({ address: batch.pool, event: ORDER_FILLED, args: { token: batch.token }, fromBlock, toBlock })).map((l) => ({
+          ...fillToTrade(
             { batch: l.args.batch!, owner: l.args.owner!, isBuy: l.args.isBuy!, amountIn: l.args.amountIn!, amountOut: l.args.amountOut! },
             tokenDecimals,
             CRUX_SOLVERS,
             { txHash: l.transactionHash, blockNumber: l.blockNumber, logIndex: l.logIndex },
           ),
-        )
+          timeMs: logTimeMs(l),
+        }))
       : [];
-    const swaps = logs.map((l) =>
-      swapToTrade(
+    const swaps = logs.map((l) => ({
+      ...swapToTrade(
         {
           amount0In: l.args.amount0In!,
           amount1In: l.args.amount1In!,
@@ -91,7 +93,8 @@ export function poolTradeReader(pair: Address, tokenDecimals = 18): ReadLogs<Poo
         CRUX_SOLVERS,
         { txHash: l.transactionHash, blockNumber: l.blockNumber, logIndex: l.logIndex },
       ),
-    );
+      timeMs: logTimeMs(l),
+    }));
     return [...swaps, ...fills].sort((a, b) => (a.blockNumber === b.blockNumber ? a.logIndex - b.logIndex : a.blockNumber < b.blockNumber ? -1 : 1));
   };
 }

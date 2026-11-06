@@ -6,7 +6,7 @@ import { erc20Abi, formatUnits, parseUnits, zeroAddress, type Address } from "vi
 import { useConnection, useReadContract, useReadContracts } from "wagmi";
 import { buttonClass } from "@/components/ui/Button";
 import { IntentModal } from "@/components/terminal/IntentModal";
-import { OneClickOrderStatus, useOrderWatch, type OneClickOrder } from "@/components/pro/OneClick";
+import { OneClickOrderStatus, sendTime, sentOrder, useOrderWatch, type OneClickOrder } from "@/components/pro/OneClick";
 import { Shell } from "@/components/launch/LaunchView";
 import { cruxBatchFactoryAbi } from "@/contracts/abis/batchAuction";
 import { useAllLaunches, type LaunchSummary } from "@/hooks/useLaunches";
@@ -118,6 +118,7 @@ export function Portfolio() {
     if (!crux.sign || !crux.owner || !crux.account || !draft.asset) return;
     const { sign, owner, account } = crux;
     const token = draft.asset.address;
+    const sentAt = sendTime();
     setAccountOrder({ kind: "sending" });
     tradeFromAccount(sign, owner, account, {
       tokenIn: token,
@@ -125,7 +126,7 @@ export function Portfolio() {
       tokenOut: launchCaip19(TESTNET_USDC),
       minAmountOut: parseUnits(minReceived(draft).toFixed(6), 6),
     })
-      .then(({ orderId, filled }) => setAccountOrder({ kind: filled ? "filled" : "open", orderId }))
+      .then(({ orderId, filled }) => setAccountOrder(sentOrder(orderId, filled, sentAt)))
       .catch((e: Error) => setAccountOrder({ kind: "error", message: e.message.split("\n")[0] }));
   };
 

@@ -194,12 +194,30 @@ export function OneClickBar({ oneClick }: { oneClick: OneClick }) {
   );
 }
 
-export type OneClickOrder = { kind: "sending" } | { kind: "open"; orderId: Hex } | { kind: "filled"; orderId: Hex } | { kind: "refunded"; orderId: Hex } | { kind: "error"; message: string };
+/**
+ * `sentAt` is performance.now() when the order was sent; `ms` is how long it took from then until the fill was seen on
+ * Base (this device's clock, checked every 400 ms, so it never reads faster than it was).
+ */
+export type OneClickOrder =
+  | { kind: "sending" }
+  | { kind: "open"; orderId: Hex; sentAt?: number }
+  | { kind: "filled"; orderId: Hex; ms?: number }
+  | { kind: "refunded"; orderId: Hex }
+  | { kind: "error"; message: string };
+
+/** The moment an order is sent, for sentOrder (called from click handlers). */
+export const sendTime = () => performance.now();
+
+/** The order after it's sent: filled (with how long it took) or still open. */
+export function sentOrder(orderId: Hex, filled: boolean, sentAt: number): OneClickOrder {
+  return filled ? { kind: "filled", orderId, ms: performance.now() - sentAt } : { kind: "open", orderId, sentAt };
+}
 
 /** Follows a one-click order on the settler until it settles (filled) or is refunded. */
 export function useOrderWatch(order: OneClickOrder | null, setOrder: (o: OneClickOrder) => void) {
   const config = useConfig();
   const orderId = order?.kind === "open" ? order.orderId : null;
+  const sentAt = order?.kind === "open" ? order.sentAt : undefined;
   useEffect(() => {
     if (!orderId) return;
     let stop = false;
@@ -207,7 +225,7 @@ export function useOrderWatch(order: OneClickOrder | null, setOrder: (o: OneClic
       const escrow = await readContract(config, { chainId: TESTNET.id, address: SETTLER as Address, abi: cruxSettlerAbi, functionName: "escrows", args: [orderId] }).catch(() => null);
       const status = escrow ? Number(escrow[4]) : 0;
       if (stop) return;
-      if (status === 2) setOrder({ kind: "filled", orderId });
+      if (status === 2) setOrder({ kind: "filled", orderId, ms: sentAt !== undefined ? performance.now() - sentAt : undefined });
       else if (status === 3) setOrder({ kind: "refunded", orderId });
     };
     const t = setInterval(() => void tick(), 400);
@@ -216,7 +234,7 @@ export function useOrderWatch(order: OneClickOrder | null, setOrder: (o: OneClic
       stop = true;
       clearInterval(t);
     };
-  }, [orderId, config, setOrder]);
+  }, [orderId, sentAt, config, setOrder]);
 }
 
 /** The last one-click order's state, under the Buy button. */
@@ -232,6 +250,7 @@ export function OneClickOrderStatus({ order, to = "your wallet" }: { order: OneC
   }, [openId]);
   const slow = openId !== null && slowFor === openId;
   if (!order) return null;
+  const took = order.kind === "filled" ? (order.ms ?? null) : null;
   const link = (id: Hex) => (
     <a href={`${TESTNET_EXPLORER}/address/${SETTLER}#events`} target="_blank" rel="noopener noreferrer" className="font-mono underline decoration-line-2">
       {`${id.slice(0, 6)}…${id.slice(-4)}`}
@@ -249,7 +268,12 @@ export function OneClickOrderStatus({ order, to = "your wallet" }: { order: OneC
         ) : (
           <>Order {link(order.orderId)} open · filling…</>
         ))}
-      {order.kind === "filled" && <>Filled · order {link(order.orderId)} delivered to {to}.</>}
+      {order.kind === "filled" && (
+        <>
+          Filled{took !== null && <span title="From your click until the fill was seen on Base"> in {(took / 1000).toFixed(took < 10_000 ? 2 : 1)} s</span>} · order{" "}
+          {link(order.orderId)} delivered to {to}.
+        </>
+      )}
       {order.kind === "refunded" && <>Order {link(order.orderId)} wasn&apos;t filled and was refunded to {to}.</>}
       {order.kind === "error" && order.message}
     </p>

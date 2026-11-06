@@ -15,7 +15,7 @@ const OFF = Boolean(process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC) || process.env.NEX
 type Json = {
   scannedTo: string;
   trades: (Omit<PoolTrade, "usdc" | "tokens" | "blockNumber"> & { usdc: string; tokens: string; blockNumber: string })[];
-  transfers: { kind: "transfer" | "claim"; from: Address; to: Address; value: string; txHash: Hex; blockNumber: string; logIndex: number; time: number }[];
+  transfers: { kind: "transfer" | "claim"; from: Address; to: Address; value: string; txHash: Hex; blockNumber: string; logIndex: number; time: number; timeMs?: number }[];
 };
 
 export type History = { scannedTo: bigint; trades: PoolTrade[]; transfers: TokenTransfer[] };

@@ -11,7 +11,7 @@ import { SolanaIntentModal, type SolanaOrderRequest } from "@/components/termina
 import { useSolanaPayer } from "@/hooks/useSolanaPayer";
 import { useT } from "@/providers/I18nProvider";
 import { BatchOrderForm } from "@/components/pro/BatchOrderForm";
-import { OneClickBar, OneClickOrderStatus, useOneClick, useOrderWatch, type OneClickOrder } from "@/components/pro/OneClick";
+import { OneClickBar, OneClickOrderStatus, sendTime, sentOrder, useOneClick, useOrderWatch, type OneClickOrder } from "@/components/pro/OneClick";
 import { PresetKey, SubmitKey, useExecutionHotkeys } from "@/components/pro/hotkeys";
 import { ProtectionRow, RiskPreview, type RiskRow } from "@/components/pro/RiskPreview";
 import { cruxBatchFactoryAbi } from "@/contracts/abis/batchAuction";
@@ -1040,6 +1040,7 @@ function TradeForm({ auction, symbol, handover = false }: { auction: AuctionV2; 
   /** Signs in this browser with the session key and has the relay open it: no wallet popup. */
   const oneClickBuy = async () => {
     if (!address || !input || !draft || !oneClick.session) return;
+    const sentAt = sendTime();
     setOneClickOrder({ kind: "sending" });
     showPending("buy", input, draft?.price);
     try {
@@ -1054,7 +1055,7 @@ function TradeForm({ auction, symbol, handover = false }: { auction: AuctionV2; 
         minOutputAmount: parseUnits(minReceived(draft).toFixed(6), market.decimals),
         destinationChainId: TESTNET.id,
       });
-      setOneClickOrder({ kind: "open", orderId });
+      setOneClickOrder(sentOrder(orderId, false, sentAt));
       setAmount("");
       void oneClick.refresh();
       backToAccount();
@@ -1090,6 +1091,7 @@ function TradeForm({ auction, symbol, handover = false }: { auction: AuctionV2; 
   const accountTrade = async () => {
     const f = accountTradeFields();
     if (!f || !draft || !crux.sign || !crux.owner || !crux.account) return;
+    const sentAt = sendTime();
     setOneClickOrder({ kind: "sending" });
     showPending(side, f.amountIn, draft?.price);
     // The press's signature when it's for exactly this trade (the quote can move between press and click).
@@ -1100,7 +1102,7 @@ function TradeForm({ auction, symbol, handover = false }: { auction: AuctionV2; 
       // How long each step took, for checking a buy's speed (browser console): click → signed → relay → … → candle.
       console.info("[crux] trade timing", Object.fromEntries(Object.entries(timing).map(([key, v]) => [key, v - timing.t_click])));
       // Usually filled by the time the relay answers: shown at once, and the balances re-read (the watch is for the rest).
-      setOneClickOrder({ kind: filled ? "filled" : "open", orderId });
+      setOneClickOrder(sentOrder(orderId, filled, sentAt));
       setAmount("");
       crux.refresh();
     } catch (e) {

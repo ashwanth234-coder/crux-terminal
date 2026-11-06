@@ -1,4 +1,4 @@
-import { createConfig, http, type CreateConnectorFn } from "wagmi";
+import { createConfig, fallback, http, type CreateConnectorFn } from "wagmi";
 import { arbitrumSepolia, base, baseSepolia, bsc, bscTestnet, sepolia } from "wagmi/chains";
 import { coinbaseWallet } from "wagmi/connectors/coinbaseWallet";
 import { injected } from "wagmi/connectors/injected";
@@ -41,7 +41,15 @@ export const wagmiConfig = createConfig({
     // cache, then the chain's public RPC.
     [baseSepolia.id]: process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC
       ? http(process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC)
-      : cachedReads(http(undefined, { batch: { batchSize: 50, wait: 16 } })),
+      : // When the relay's cache can't answer: the chain's public RPC, then two others, so one throttled node doesn't
+        // stall a page.
+        cachedReads(
+          fallback(
+            [undefined, "https://base-sepolia-rpc.publicnode.com", "https://base-sepolia.gateway.tenderly.co"].map((u) =>
+              http(u, { batch: { batchSize: 50, wait: 16 }, timeout: 10_000, retryCount: 1 }),
+            ),
+          ),
+        ),
     [arbitrumSepolia.id]: http(process.env.NEXT_PUBLIC_ARBITRUM_SEPOLIA_RPC || "https://arbitrum-sepolia-rpc.publicnode.com"),
     [sepolia.id]: http(process.env.NEXT_PUBLIC_SEPOLIA_RPC || "https://ethereum-sepolia-rpc.publicnode.com"),
     [bscTestnet.id]: http(process.env.NEXT_PUBLIC_BSC_TESTNET_RPC || "https://bsc-testnet-rpc.publicnode.com"),

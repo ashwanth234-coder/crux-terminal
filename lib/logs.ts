@@ -2,6 +2,7 @@ import { cachedReads } from "./readCache";
 import { createPublicClient, fallback, http, type Hex } from "viem";
 import { baseSepolia } from "viem/chains";
 
+import { blockTimeMs } from "@/lib/logTime";
 // sepolia.base.org caps eth_getLogs at 200 blocks; publicnode allows 50k per call, Tenderly is the fallback.
 const LOGS_RPCS = [process.env.NEXT_PUBLIC_BASE_SEPOLIA_LOGS_RPC, "https://base-sepolia-rpc.publicnode.com", "https://base-sepolia.gateway.tenderly.co"].filter(
   (u): u is string => Boolean(u),
@@ -77,11 +78,16 @@ const byPosition = (a: Positioned, b: Positioned) => (a.blockNumber === b.blockN
 
 /** Unix time of each block read so far. A block's time doesn't change, so each is read once per page load. */
 const blockTimes = new Map<bigint, number>();
+/** The same in milliseconds, when the node sent Denim's timestampMs. */
+const blockTimesMs = new Map<bigint, number>();
 async function blockTime(blockNumber: bigint) {
   let t = blockTimes.get(blockNumber);
   if (t === undefined) {
-    t = Number((await blockClient.getBlock({ blockNumber })).timestamp);
+    const b = await blockClient.getBlock({ blockNumber });
+    t = Number(b.timestamp);
     blockTimes.set(blockNumber, t);
+    const ms = blockTimeMs(b);
+    if (ms !== undefined) blockTimesMs.set(blockNumber, ms);
   }
   return t;
 }
@@ -93,8 +99,20 @@ async function readRanges<T extends Positioned>(from: bigint, head: bigint, read
     chunks.push(...(await Promise.all(ranges.slice(i, i + SCAN_CONCURRENCY).map(([fromBlock, toBlock]) => read(fromBlock, toBlock)))));
   }
   const items = chunks.flat();
+  // Denim logs carry their block's time (in ms): those blocks need no getBlock call, which kept the scan waiting on
+  // one read per block and spent the RPC's rate limit.
+  for (const i of items) {
+    const ms = (i as { timeMs?: number }).timeMs;
+    if (ms !== undefined && !blockTimes.has(i.blockNumber)) {
+      blockTimes.set(i.blockNumber, Math.floor(ms / 1000));
+      blockTimesMs.set(i.blockNumber, ms);
+    }
+  }
   await Promise.all([...new Set(items.map((i) => i.blockNumber))].map(blockTime));
-  return items.map((i) => ({ ...i, time: blockTimes.get(i.blockNumber)! }) as T);
+  return items.map((i) => {
+    const ms = (i as { timeMs?: number }).timeMs ?? blockTimesMs.get(i.blockNumber);
+    return { ...i, time: blockTimes.get(i.blockNumber)!, ...(ms !== undefined ? { timeMs: ms } : {}) } as T;
+  });
 }
 
 /**
