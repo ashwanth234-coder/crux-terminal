@@ -1,3 +1,4 @@
+import { widenRange } from "@/lib/chartView";
 import type {
   IChartApi,
   IPriceLine,
@@ -37,6 +38,13 @@ type Point = { time: Time; [field: string]: unknown };
  * these is cheap; the points themselves are only built for the bars actually sent.
  */
 type Snapshot = { times: number[]; values: number[]; width: number };
+
+type AutoscaleInfo = { priceRange: { minValue: number; maxValue: number } | null; margins?: unknown } | null;
+function minRangeAutoscale(original: () => AutoscaleInfo): AutoscaleInfo {
+  const r = original();
+  if (!r?.priceRange) return r;
+  return { ...r, priceRange: widenRange(r.priceRange) };
+}
 
 const sameNum = (a: number, b: number) => a === b || (a !== a && b !== b);
 
@@ -78,8 +86,13 @@ function syncSeries(series: ISeriesApi<SeriesType>, prev: Snapshot | undefined, 
     if (pt) data.push(pt);
   }
   series.setData(data as never);
+  // A redraw of data already shown (ChartEngine.setData puts the view back where it was).
+  if (prev) redrewAll = true;
   return next;
 }
+
+/** Set by syncSeries when it replaced a series' data wholesale instead of updating its newest bars. */
+let redrewAll = false;
 
 /** Axis labels for unitless studies: RSI's 0–100 to one place, flows and counts compact. */
 const unitless = (v: number) => (Math.abs(v) >= 1_000 ? new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(v) : v.toFixed(Math.abs(v) >= 100 ? 0 : 1));
@@ -220,7 +233,7 @@ export class ChartEngine {
   private addMain(type: ChartType): ISeriesApi<SeriesType> {
     const series = this.addMainSeries(type);
     const s = this.settings;
-    series.applyOptions({ priceScaleId: this.side, priceLineVisible: s.lastPriceLine });
+    series.applyOptions({ priceScaleId: this.side, priceLineVisible: s.lastPriceLine, autoscaleInfoProvider: minRangeAutoscale });
     if (type === "candles" || type === "heikin" || type === "hollow") {
       const { up, down } = palette(s);
       series.applyOptions({ wickVisible: s.wicks, ...(type !== "hollow" ? { borderVisible: s.borders, borderUpColor: up, borderDownColor: down } : {}) } as never);
@@ -315,6 +328,25 @@ export class ChartEngine {
 
   /** Candles (in USDC per token) shown in the chosen units: `k` multiplies prices (total supply for market cap). */
   setData(candles: Candle[], k: number, format: Formatter, minMove: number) {
+    // A full redraw (an older bar changed: a trade shown at once, then replaced by its mined one) mustn't move the
+    // view: the same bar width, and the newest bar still at the right edge for someone watching it. Left alone,
+    // setData kept the old bar numbers, so the candles slid sideways and squeezed on a live trade.
+    const ts = this.chart.timeScale();
+    const spacing = ts.options().barSpacing;
+    const following = ts.scrollPosition() >= -1;
+    redrewAll = false;
+    this.restoreViewAfter(() => this.fillData(candles, k, format, minMove), spacing, following);
+  }
+
+  private restoreViewAfter(fill: () => void, spacing: number, following: boolean) {
+    fill();
+    if (!redrewAll) return;
+    const ts = this.chart.timeScale();
+    ts.applyOptions({ barSpacing: spacing });
+    if (following) ts.scrollToPosition(ts.options().rightOffset, false);
+  }
+
+  private fillData(candles: Candle[], k: number, format: Formatter, minMove: number) {
     this.slots = candles.length;
     const { up, down } = palette(this.settings);
     // A price or market cap is never below zero: the axis leaves the room under the candles (where volume sits) unlabelled.

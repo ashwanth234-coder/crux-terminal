@@ -16,6 +16,7 @@ import { buildHolders } from "@/lib/holders";
 import { CRUX_SOLVERS, PREVIOUS_SETTLERS, SETTLER } from "@/lib/intents";
 import { EMPTY_CONTEXT, computeInstance, flowByCandle, holdersByCandle, paramsOf, poolByCandle, top10ByCandle, type StudyContext, type StudyId } from "@/lib/indicators";
 import { INTERVALS, autoInterval, toCandles, type Candle, type Fill } from "@/lib/candles";
+import { withLatestTrades } from "@/lib/chartView";
 import { useThrottled } from "@/hooks/useThrottled";
 import { useFeedCandles } from "@/hooks/useFeed";
 import type { FeedCandle } from "@/lib/feed";
@@ -261,12 +262,15 @@ export function ProChart({
           kept.unshift({ time: at, open: opening.price, high: opening.price, low: opening.price, close: opening.price, volume, trades: 1 });
         }
       }
-      return kept;
+      // Trades reach the page a moment before the candle frame that counts them (two feed messages), so a trade's mark
+      // showed before its candle moved. A trade newer than the newest candle's last update moves that candle (or opens
+      // the next) now; the feed's own candle replaces it a moment later with the same prices.
+      return withLatestTrades(kept, swapData?.trades ?? [], interval);
     }
     // Every trade bucketed (only periods that traded become candles), then the newest MAX_CANDLES.
     const all = toCandles(fills, interval, gradPrice > 0 ? gradPrice : null);
     return all.length > MAX_CANDLES ? all.slice(-MAX_CANDLES) : all;
-  }, [fills, feedCandles, feed.firstTime, interval, gradPrice, opening]);
+  }, [fills, feedCandles, feed.firstTime, interval, gradPrice, opening, swapData]);
   // Bar replay: the chart as it stood at `index`, played forward a candle at a time. Off: every candle, live.
   const [replay, setReplay] = useState<{ index: number | null; playing: boolean; speed: number } | null>(null);
   const replayIndex = replay?.index ?? null;
