@@ -6,7 +6,7 @@ const PARTS = [
   {
     n: "01",
     title: "One pool, not five.",
-    body: "Each launch gets exactly one Uniswap pool on Base, with its liquidity burned. A buyer on Solana and a buyer on Base trade against the same depth at the same price.",
+    body: "Each launch trades on its own USDC curve, then graduates to exactly one Uniswap pool on Base, with its liquidity burned. A buyer on Solana and a buyer on Base trade against the same depth at the same price.",
     tag: "Uniswap · Base",
   },
   {
@@ -24,8 +24,8 @@ const PARTS = [
   {
     n: "04",
     title: "Fairness in the contract.",
-    body: "Every opening is a one-price batch auction on Base: everyone in the window pays the same price, so there is no first block to snipe. The creator's tokens vest on-chain.",
-    tag: "Batch auction · On-chain vesting",
+    body: "A launch can open with a one-minute fair opening: everyone in it pays the same price, so there is no first block to snipe. The creator's tokens vest on-chain, and the curve's graduation and fee split are enforced by the contracts.",
+    tag: "Fair opening · On-chain vesting",
   },
 ];
 
@@ -33,8 +33,8 @@ const PARTS = [
 const FACTS = [
   { value: "5", label: "chains pay in" },
   { value: "1", label: "pool per token, on Base" },
-  { value: "~1 s", label: "typical fill" },
-  { value: "2 s", label: "batch window" },
+  { value: "~3 s", label: "typical account fill" },
+  { value: "30%", label: "of the fee to creators" },
 ];
 
 /** The architecture in four parts: every chain pays in, Base is where it all settles. */

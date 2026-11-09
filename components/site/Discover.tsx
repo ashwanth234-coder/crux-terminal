@@ -1,5 +1,7 @@
 "use client";
 
+import { TokenTable } from "@/components/launch/TokenList";
+import { V9_ON } from "@/lib/v9";
 import Link from "next/link";
 import { ArrowRight, ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { StatusTag } from "@/components/ui/StatusTag";
@@ -84,6 +86,23 @@ function Empty({ title, body, action = false }: { title: string; body: string; a
 
 /** The real launch list from the deployed factories, newest and open first. */
 export function Discover() {
+  if (V9_ON) return <LiveLaunches />;
+  return <BatchDiscover />;
+}
+
+/** The homepage's live markets: the newest launches, each opening its terminal. */
+function LiveLaunches() {
+  return (
+    <Chapter id="discover" title="Live markets." intro="Every Crux launch, read from Base Sepolia as you look.">
+      <TokenTable limit={6} />
+      <Link href="/discover" className="mt-4 inline-block text-[13px] text-chrome underline decoration-line-2 hover:text-signal">
+        See every launch →
+      </Link>
+    </Chapter>
+  );
+}
+
+function BatchDiscover() {
   const now = useNow();
   const configured = Boolean(FACTORY || FACTORY_V2 || FACTORY_V3 || FACTORY_V4 || FACTORY_V5);
   const { total, launches, loading, error } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7, FACTORY_V8);

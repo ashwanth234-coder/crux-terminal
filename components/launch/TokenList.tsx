@@ -22,14 +22,6 @@ type Launch = { token: Address; curve: Address; pair: Address; creator: Address 
  * how far it is to graduation or its pool's liquidity, and its age. Each row opens the token's terminal.
  */
 export function TokenList() {
-  const count = useReadContracts({ query: { refetchInterval: 10_000 }, contracts: [{ address: FACTORY_V9, abi: factoryV9Abi, functionName: "launchCount", chainId: TESTNET.id }] });
-  const n = Number((count.data?.[0]?.result as bigint | undefined) ?? BigInt(0));
-  const ids = Array.from({ length: n }, (_, i) => BigInt(n - 1 - i)).slice(0, 100);
-  const launches = useReadContracts({
-    query: { enabled: n > 0, staleTime: Infinity },
-    contracts: ids.map((id) => ({ address: FACTORY_V9, abi: factoryV9Abi, functionName: "getLaunch", args: [id], chainId: TESTNET.id }) as const),
-  });
-
   return (
     <>
       <Header />
@@ -43,6 +35,24 @@ export function TokenList() {
             Launch a token
           </Link>
         </div>
+        <TokenTable />
+      </main>
+    </>
+  );
+}
+
+/** The launches table, newest first (`limit` rows at most): Discover, and the homepage's live markets. */
+export function TokenTable({ limit = 100 }: { limit?: number }) {
+  const count = useReadContracts({ query: { refetchInterval: 10_000 }, contracts: [{ address: FACTORY_V9, abi: factoryV9Abi, functionName: "launchCount", chainId: TESTNET.id }] });
+  const n = Number((count.data?.[0]?.result as bigint | undefined) ?? BigInt(0));
+  const ids = Array.from({ length: n }, (_, i) => BigInt(n - 1 - i)).slice(0, limit);
+  const launches = useReadContracts({
+    query: { enabled: n > 0, staleTime: Infinity },
+    contracts: ids.map((id) => ({ address: FACTORY_V9, abi: factoryV9Abi, functionName: "getLaunch", args: [id], chainId: TESTNET.id }) as const),
+  });
+
+  return (
+    <>
         {!V9_ON ? (
           <p className="mt-6 text-muted">Launches aren&apos;t live on this site yet.</p>
         ) : count.isPending ? (
@@ -70,7 +80,6 @@ export function TokenList() {
             </table>
           </div>
         )}
-      </main>
     </>
   );
 }

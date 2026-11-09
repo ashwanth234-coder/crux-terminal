@@ -4,27 +4,27 @@ import { Chapter } from "./Chapter";
 const STEPS = [
   {
     name: "Launch",
-    body: "Name it and launch it: no gas, no wallet pop-ups, a copycat check on the ticker. The creator's share is locked for 30 days.",
-    fact: "Gas-free",
+    body: "Name it and launch it: free, no gas, no wallet pop-ups, a copycat check on the ticker, and an address ending in 5afe. The creator's 2.4% vests over 30 days by default, and creators earn 30% of the 1% trading fee, in USDC.",
+    fact: "Free to launch",
   },
   {
-    name: "A 30-second fair opening",
-    body: "Everyone who buys in the opening pays the same price, so being first buys nothing. Bots and snipers get no head start, and every launch goes live.",
-    fact: "One price",
+    name: "An optional fair opening",
+    body: "With the opening on, everyone who buys in the first minute pays the same price, so being first buys nothing and snipers get no head start. Then it trades on its own curve, priced in USDC, from the first second.",
+    fact: "One price at open",
   },
   {
-    name: "It trades everywhere",
-    body: "It goes live on one Uniswap pool on Base with its liquidity locked forever, and anyone can buy it from the chain they're on through Crux. Trades land on the chart in under a second.",
+    name: "It graduates to Uniswap",
+    body: "When its curve reaches its target, it graduates to one Uniswap pool on Base, with the pool's liquidity burned. Anyone can buy it from the chain they're on through Crux.",
     fact: "LP burned",
   },
 ];
 
 /** Promises every launch keeps, enforced on-chain (vesting by the Crux launch form). */
-const TRUST = ["Creator vested 30 days", "LP burned", "One price at open", "Every launch goes live", "Withdrawals only to your wallet"];
+const TRUST = ["Creator vests 30 days by default", "LP burned at graduation", "Optional one-price opening", "Priced in USDC", "Withdrawals only to your wallet"];
 
 export function HowItWorks() {
   return (
-    <Chapter id="protocol" title="How a launch works." intro="Three steps, each a contract on Base Sepolia today, source-verified on Basescan.">
+    <Chapter id="protocol" title="How a launch works." intro="Three steps, each a contract live on Base Sepolia today.">
       <ol className="border-t border-line">
         {STEPS.map((s, i) => (
           <li key={s.name} className="grid gap-2 border-b border-line py-7 md:grid-cols-12 md:items-baseline md:gap-6">
