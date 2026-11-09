@@ -17,6 +17,7 @@ import { tradeFromAccount } from "@/lib/account";
 import { launchCaip19 } from "@/lib/launchTrade";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import type { AuctionV2 } from "@/lib/launchV2";
+import { compactZeros } from "@/lib/priceText";
 import { FACTORY_V9, ROUTER_V9, V9_ON, curvePrice, curveV9Abi, factoryV9Abi, phaseV9, registerV9Curve, routerV9Abi, type PhaseV9 } from "@/lib/v9";
 
 const usd = (v: bigint) => Number(formatUnits(v, 6)).toLocaleString("en-US", { maximumFractionDigits: 2 });
@@ -33,6 +34,9 @@ function useNowSeconds() {
 }
 
 /** /launch/v9/[id]: one V9 launch, through its fair opening, its curve and its Uniswap pool. */
+
+/** A token's price as the terminal writes it: "0.0₇938", not "9.38e-8" (plain digits, its zeros counted). */
+const PRICE_TEXT = new Intl.NumberFormat("en-US", { maximumSignificantDigits: 3 });
 
 /** The pool price is quoted for this many tokens (a whole token is worth less than one USDC unit). */
 const PRICE_LOT_TOKENS = 1_000_000;
@@ -142,7 +146,7 @@ function V9Launch({ id }: { id: bigint }) {
       </div>
 
       <dl className="mt-6 grid grid-cols-2 gap-4 border-y border-line py-4 md:grid-cols-4">
-        <Stat label="Price" value={price > 0 ? `$${price.toPrecision(3)}` : "…"} />
+        <Stat label="Price" value={price > 0 ? `$${compactZeros(PRICE_TEXT.format(price))}` : "…"} />
         <Stat label="Market cap" value={mcap > 0 ? `$${mcap.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "…"} />
         <Stat label={graduated ? "Graduated with" : "Raised on the curve"} value={`$${usd(graduated ? threshold : realUsdc)} of $${usd(threshold)}`} />
         <Stat label="Creator tokens" value={vesting === 0 ? "Unlocked (creator's choice)" : `Vest over ${Math.round(vesting / 86_400)} days`} />
