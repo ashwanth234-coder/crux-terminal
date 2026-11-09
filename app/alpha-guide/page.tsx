@@ -10,7 +10,7 @@ import { SOLANA_KEPT_SOL, SOLANA_MIN_SOL, SOLANA_OPEN_SOL, SOLANA_RETURNED_SOL, 
 export const metadata: Metadata = {
   title: "Alpha tester guide · Crux",
   description:
-    "How to test Crux on Base Sepolia: wallet and CRUX Account setup, deposits from any chain, launching and buying in the 30-second fair opening, buy at open, trading graduated tokens, refunds and the alpha's trust model.",
+    "How to test Crux on Base Sepolia: wallet and CRUX Account setup, deposits from any chain, launching a token on its USDC curve with an optional fair opening, trading it before and after it graduates to Uniswap, standing orders, refunds and the alpha's trust model.",
 };
 
 /** Set NEXT_PUBLIC_ALPHA_FEEDBACK_URL (Telegram, Discord or a form) to show a feedback button. */
@@ -23,8 +23,8 @@ const SECTIONS = [
   { id: "overview", title: "Overview" },
   { id: "setup", title: "Network & wallet" },
   { id: "account", title: "Your CRUX Account" },
-  { id: "auction", title: "Launch & buy" },
-  { id: "trading", title: "Trade graduated tokens" },
+  { id: "auction", title: "Launch a token" },
+  { id: "trading", title: "Trade" },
   { id: "troubleshooting", title: "Troubleshooting & refunds" },
   { id: "trust", title: "Trust disclosures" },
   { id: "feedback", title: "Feedback" },
@@ -32,8 +32,13 @@ const SECTIONS = [
 
 /** The live testnet contracts (Base Sepolia unless a link says otherwise). */
 const CONTRACTS: { name: string; address: string; href?: string }[] = [
-  { name: "CruxFactoryV8 (launches, token addresses ending in 5afe)", address: "0xdB9f226fb44D5E8d25e2aACA4f7080c83011CfB5" },
-  { name: "CruxFactoryV7 (earlier launches)", address: "0xeacB98371D5597c20A9ECDf6f09726817489722e" },
+  { name: "CruxFactoryV9 (launches: token and curve, addresses ending in 5afe)", address: "0x4a28e8B20e312fB67c71Fa6e2F085520d3DEd8e7" },
+  { name: "CruxRouterV9 (trades on the curve or the pool; the 1% fee and its split)", address: "0x86A518410EFfa9cAEbf92BD87DEe08678bA39682" },
+  { name: "CruxV9ListingAdapter (lists launches for Crux orders)", address: "0x086025304A4876603538Dc2dc3826329BD3d671E" },
+  { name: "Example: $MT, a graduated launch (token)", address: "0xFDEB957b4bb701768dF0f4Ff17227796cf155Afe" },
+  { name: "Example: $MT's curve (CruxCurveV9)", address: "0x49Ab768b8E01374Ba5678055fD8fbd56f2a22719" },
+  { name: "Example: $MT's Uniswap V2 pool (LP burned to 0x…dEaD)", address: "0xbc02813a2BDecB1bEF62401e44D8748cF4429FF6" },
+  { name: "CruxFactoryV8 and V7 (earlier batch launches, still tradeable)", address: "0xdB9f226fb44D5E8d25e2aACA4f7080c83011CfB5" },
   { name: "CruxSettlerV4 (holds orders until they fill)", address: "0x399147a5960A120A3b8b89A33a30500a561145D9" },
   { name: "CruxDestinationSettlerV2 (fills)", address: "0x62e5ed6BC2f604fad76152045559805c11D1cdf4" },
   { name: "CruxLister (automatic listing)", address: "0xCC99DaBf30b73978be799957717a2f7600cb39BF" },
@@ -124,8 +129,8 @@ export default function AlphaGuidePage() {
               <span className="block text-steel">Base Sepolia testnet.</span>
             </h1>
             <p className="mt-6 max-w-[40rem] text-[16px] leading-relaxed text-chrome/70">
-              Everything you need to launch a token, buy into its 30-second fair opening and trade it after, from a wallet or a gasless
-              CRUX Account funded from any chain. Every token here is a test token with no value.
+              Everything you need to launch a token, trade it on its USDC curve and after it graduates to Uniswap, from a wallet or a
+              gasless CRUX Account funded from any chain. Every token here is a test token with no value.
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
               {["Base Sepolia · 84532", "Test tokens only", "Unaudited contracts"].map((t) => (
@@ -142,13 +147,13 @@ export default function AlphaGuidePage() {
             </p>
             <ul className="space-y-2.5">
               <li>
-                {b("Fair launches.")} A launch opens with a 30-second window where every buyer pays one opening price, then trades
-                live on Uniswap on Base. Bots get no first-block edge, and every launch goes live: if the opening falls short of its
-                small goal, Crux tops it up (shown as {b("Crux seed")} in the bids).
+                {b("Fair launches.")} Launching is free. Each token trades on its own bonding curve priced in USDC from the first
+                second, and can start with an optional one-minute fair opening where every buyer pays one price, so bots get no
+                first-block edge. At its target it graduates to one Uniswap V2 pool on Base, with the pool&apos;s liquidity burned.
               </li>
               <li>
-                {b("One amount, one Buy.")} You enter USDC and press Buy. A max price is set for you (10x the projected price);
-                you can set your own under ⚙️ Advanced. Each wallet&apos;s deposit is capped by the creator.
+                {b("Creators earn.")} Every trade pays a 1% fee in USDC: 30% to the token&apos;s creator, 70% to Crux. The
+                creator&apos;s 2.4% of supply vests over 30 days by default.
               </li>
               <li>
                 {b("A CRUX Account.")} Log in with email or Google, deposit test USDC from any chain, and trade, launch and buy at open
@@ -156,9 +161,8 @@ export default function AlphaGuidePage() {
               </li>
             </ul>
             <p>
-              {b("Chains.")} Tokens, auctions and pools live on Base Sepolia. You can deposit and trade from {LIVE_NAMES} (testnets;
-              Solana devnet), and nothing has to be bridged. {SOON_LINE}. A wallet pays into the opening from Base Sepolia; a CRUX
-              Account queues a buy at open, which Crux bids in the opening for it.
+              {b("Chains.")} Tokens, curves and pools live on Base Sepolia. You can deposit and trade from {LIVE_NAMES} (testnets;
+              Solana devnet), and nothing has to be bridged. {SOON_LINE}.
             </p>
             <p>Use it like you would a real product, try to break it, and tell us what confused you.</p>
           </Section>
@@ -218,8 +222,9 @@ export default function AlphaGuidePage() {
                   bar: click it to open the account page, and bind your withdrawal wallet when asked.
                 </>,
                 <>
-                  Under {b("Deposit")}, pick the chain your test USDC is on: {b("Base Sepolia")}, Arbitrum Sepolia, Ethereum Sepolia,
-                  BNB Chain testnet or Solana devnet. Enter an amount and press {b("Deposit")}.
+                  Under {b("Deposit")}, pick the chain your test USDC is on in {b("Deposit from")} (each shows your balance there):{" "}
+                  {b("Base Sepolia")}, Arbitrum Sepolia, Ethereum Sepolia, BNB Chain testnet or Solana devnet. Enter an amount and press{" "}
+                  {b("Deposit")}.
                 </>,
                 <>
                   From Base Sepolia it&apos;s one transfer, with no fee, and arrives at once. From another chain your wallet escrows the
@@ -227,100 +232,81 @@ export default function AlphaGuidePage() {
                   chain&apos;s gas token (Solana: about {SOLANA_MIN_SOL} devnet SOL).
                 </>,
                 <>
-                  You can also send test USDC on {b("Base Sepolia")} straight to the account address shown under the Base choice. Only
-                  on Base Sepolia: USDC sent to that address on any other chain doesn&apos;t reach the account.
+                  You can also send test USDC on {b("Base Sepolia")} straight to your account address ({b("Copy")} at the top of
+                  Deposit), from an exchange or another wallet. Only on Base Sepolia: USDC sent to that address on any other chain
+                  doesn&apos;t reach the account.
                 </>,
               ]}
             />
           </Section>
 
-          <Section id="auction" title="4. Workflow 1: the fair launch">
-            <p>{b("Launch a token")} (creators):</p>
+          <Section id="auction" title="4. Workflow 1: launch a token">
             <Steps
               items={[
-                <>Click {b("Launch")} in the top bar and log in with your CRUX Account.</>,
-                <>Type a name and a ticker.</>,
+                <>Click {b("Launch")} in the top bar and log in with your CRUX Account (or connect a wallet).</>,
+                <>Type a name and a ticker; a description, an image URL and your X account are optional.</>,
                 <>
-                  {b("Your first buy")} is optional and empty by default: your launch needs no money from you. If you buy, it&apos;s at
-                  the opening price like everyone else&apos;s.
+                  Leave {b("60-second fair opening")} on (recommended) or turn it off. With it on, everyone who buys in the first minute
+                  pays one price, set when it ends: arriving first buys nothing.
                 </>,
                 <>
-                  Press {b("Launch $TICKER")}: no gas. It opens about a minute later; the countdown lists what&apos;s already checked
-                  (copycat check, one price for everyone, the creator&apos;s 30-day lock). Description, image and a later start are under{" "}
-                  {b("More options")}. Share the launch link with the cohort.
+                  Your creator tokens (2.4% of supply) vest over 30 days. Under {b("Custom")} you can unlock them at once instead: buyers
+                  then see the launch flagged.
+                </>,
+                <>
+                  Press {b("Launch")}. From a CRUX Account there&apos;s no gas and no pop-up. The token&apos;s address ends in{" "}
+                  <code className="font-mono text-[13.5px] text-chrome">5afe</code>, and a copycat check stops a ticker, image or X
+                  account that copies an existing launch.
                 </>,
               ]}
             />
-
-            <p>{b("Buy")} (everyone):</p>
-            <Steps
-              items={[
-                <>
-                  Open the launch link. The steps at the top show where it is: {b("Opens soon")}, then the 30-second{" "}
-                  {b("Fair opening")}, then {b("Live")}. During the opening, {b("Raised so far")} shows the money in and the buyers.
-                </>,
-                <>
-                  Type an amount in {b("How much to spend")} and press {b("Buy")}, any time before it goes live. From a CRUX Account
-                  there&apos;s no gas and no pop-up; from a wallet (pick {b("Wallet")}), the first time asks twice: approve, then buy.
-                  Everyone in the opening pays the same price. Your buy shows under the button, where you can cancel it until then.
-                </>,
-                <>
-                  Optional, under {b("⚙️ Advanced")}: {b("Set my own max price")} instead of the automatic 10x. If the opening price is
-                  higher, nothing is spent.
-                </>,
-                <>
-                  When the opening ends, the price is set by itself in a few seconds and the token goes {b("Live")}. A CRUX Account
-                  gets its tokens within seconds; a wallet presses {b("Collect my tokens")}.
-                </>,
-              ]}
-            />
-
-            <Callout title="The anti-sniper guarantee">
-              Arriving first buys nothing. Whether you buy in the first second or the last, everyone in the opening pays the same
-              price, so a bot gains nothing by racing. Buys are public on-chain while the window is open (not sealed), so set your
-              own max price if you care about the ceiling.
+            <Callout title="How a token's price moves">
+              Before graduation a token trades on its own constant-product curve, priced in USDC: buys raise the price, sells lower
+              it. When the USDC on the curve reaches its target ({b("$10")} on testnet; {b("$10,000")} planned for mainnet), it
+              graduates to one Uniswap V2 pool on Base, at the curve&apos;s last price, with the pool&apos;s LP tokens sent to
+              0x…dEaD (burned) and the curve&apos;s leftover tokens burned. A buy that crosses the target is split automatically:
+              part on the curve, the rest in the new pool, in one transaction.
             </Callout>
             <p className="text-[14px] text-chrome/65">
-              On graduation, 30% of supply and half the raise seed a Uniswap V2 pool whose LP tokens go to 0x…dEaD, locked forever.
-              Creators receive 70% of the 1% protocol fee at once; their share of the raise and their 10% of supply vest over 30 days,
-              by default ({b("🛡️ Creator vested 30D")}). A creator can choose an instant unlock under Custom instead: the launch then
-              shows a red {b("Instant unlock")} badge and the buy box warns that the creator can take their share at graduation.
+              Fees: 1% of every trade, in USDC, on the curve and in the pool: 30% to the creator, 70% to Crux. Creators see what
+              they&apos;ve earned and pay it out under {b("Account → Manage → Creator rewards")}.
             </p>
           </Section>
 
-          <Section id="trading" title="5. Workflow 2: trading graduated tokens">
+          <Section id="trading" title="5. Workflow 2: trade">
             <Steps
               items={[
                 <>
-                  Open {b("Terminal")} in the top navigation on a graduated token ($V3, $QC2 or a new one), or open a graduated
-                  launch&apos;s page and use {b("Trade on Crux")}.
+                  Open {b("Terminal")} in the top bar (it opens the newest token) or pick a token on {b("Discover")}. The token bar
+                  shows its price, market cap, liquidity or how far it is to graduation, holders and age.
                 </>,
                 <>
-                  Choose Buy or Sell and enter a small amount (or tap {b("$0.01")} / {b("$0.05")}). Read the {b("Risk preview")}: what
-                  you receive, the minimum signed into your order, the slippage and the cost of selling straight back.
+                  In the trade panel choose {b("Buy")} or {b("Sell")} and type an amount in {b("USDC")}. For a sell,{" "}
+                  {b("25%")} / {b("50%")} / {b("Max")} pick a share of what you hold. The line under the box says what you get and
+                  the minimum signed into the order (10% slippage).
                 </>,
                 <>
-                  Logged in, the order pays from your {b("CRUX Account")} by default: press {b("Buy now · CRUX Account")}, with no gas
-                  and no pop-up. From a wallet, click {b("Sign order")}: approve the exact amount, sign the order (the signature itself
-                  is free), then submit it; approving and submitting each cost a little test ETH. The settler holds the funds until the
-                  order fills.
+                  Logged in, the order pays from your {b("CRUX Account")}: no gas, no pop-up. From a wallet, approve once, then
+                  confirm the trade.
                 </>,
                 <>
-                  From a CRUX Account it fills in about a second, and the candle shows on the chart at once; from a wallet, within
-                  about a minute. The screen shows {b("Filled")}.
+                  From a CRUX Account it fills in about 3 to 6 seconds; the trade then shows on the chart and in the tape below it
+                  (Swaps, Holders &amp; PnL, Top traders, My orders).
+                </>,
+                <>
+                  {b("Standing orders")}: the order-type menu has {b("Buy the dip")}, {b("Take profit")}, {b("Stop loss")},{" "}
+                  {b("Trailing stop")} and {b("Take profit + stop loss")}. Sign once; the keeper sends it from your CRUX Account when the
+                  price gets there, with the page closed.
                 </>,
               ]}
             />
-            <Callout tone="warn" title="Keep trades tiny: $0.01 to $0.05">
-              Testnet pools hold only a few dollars ($V3 about $1.50, $QC2 about $3). A $0.02 buy already moves the price 1 to 2%.
-              Bigger orders get heavy slippage by design of an AMM, and Crux skips orders that would move a pool more than
-              10% in one batch. Your order&apos;s minimum-received limit protects you: if it can&apos;t be met, nothing fills and
-              you refund.
+            <Callout tone="warn" title="Keep trades small">
+              Testnet curves and pools hold only a few dollars, so a $1 trade can move the price by a quarter or more. Your
+              order&apos;s minimum-received limit protects you: if it can&apos;t be met, nothing fills and you get your money back.
             </Callout>
             <p className="text-[14px] text-chrome/65">
-              A token marked {b("not listed")} graduated moments ago: the keeper lists every graduation of a Crux factory
-              automatically, usually within seconds. Fees: a 0.30% Crux spread plus Uniswap&apos;s 0.3% pool fee, both included in
-              the quote.
+              What a trade costs: the 1% fee above, plus, after graduation, Uniswap&apos;s 0.3% pool fee; a CRUX Account trade also
+              includes Crux&apos;s 0.3% spread. All are in the quote you see before you trade.
             </p>
             <Callout title="Paying from another chain">
               In the order form, tap a source under {b("Buying power")}: {ORIGIN_NAMES}, or a {b("Crux account")}. {SOON_LINE}.
@@ -413,7 +399,7 @@ export default function AlphaGuidePage() {
               {[
                 "Your wallet address",
                 "The transaction hash (Basescan link)",
-                "The auction or page URL",
+                "The token page URL",
                 "What you expected vs. what happened",
                 "A screenshot",
                 "Browser and wallet (e.g. Chrome + MetaMask)",
