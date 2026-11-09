@@ -151,7 +151,7 @@ function V9Launch({ id }: { id: bigint }) {
 
       <div className="mt-8 grid gap-6 lg:grid-cols-12">
         <div className="min-h-[420px] min-w-0 rounded-xl border border-line lg:col-span-8">
-          <ProChart auction={auction} symbol={symbol} name={name ?? null} factory={FACTORY_V9} id={`v9-${id.toString()}`} />
+          <ProChart auction={auction} symbol={symbol} name={name ?? null} factory={FACTORY_V9} id={id.toString()} />
         </div>
         <div className="flex flex-col gap-4 lg:col-span-4">
           <TradePanel token={l.token} curve={l.curve} symbol={symbol} phase={phase} />
