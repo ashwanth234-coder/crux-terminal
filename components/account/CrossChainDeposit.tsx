@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { encodeAbiParameters, erc20Abi, formatUnits, keccak256, parseAbi, parseUnits, toHex, zeroAddress, type Address } from "viem";
-import { useConfig, useConnection, useReadContract } from "wagmi";
+import { useConfig, useConnection, useReadContract, useReadContracts } from "wagmi";
 import { getConnection, signTypedData, simulateContract, switchChain, waitForTransactionReceipt, writeContract } from "wagmi/actions";
 import { buttonClass } from "@/components/ui/Button";
 import { SolanaIntentModal, type SolanaOrderRequest } from "@/components/terminal/SolanaIntentModal";
@@ -103,6 +103,24 @@ export function CrossChainDeposit({
     args: [wallet ?? zeroAddress],
     query: { enabled: Boolean(wallet && origin), refetchInterval: 20_000 },
   });
+
+  // The wallet's USDC on every deposit chain, shown in the chain menu (where the money is, at a glance).
+  const originBalances = useReadContracts({
+    allowFailure: true,
+    query: { enabled: Boolean(wallet), refetchInterval: 30_000 },
+    contracts: ORIGINS.map((o) => ({ chainId: o.chain.id, address: o.usdc, abi: erc20Abi, functionName: "balanceOf", args: [wallet ?? zeroAddress] }) as const),
+  });
+  const balanceOf = (k: string): string | null => {
+    const v =
+      k === BASE
+        ? base.balance
+        : k === SOLANA
+          ? (solana.usdc ?? undefined)
+          : (originBalances.data?.[ORIGINS.findIndex((o) => o.key === k)]?.result as bigint | undefined);
+    if (v === undefined) return null;
+    const d = k === BASE || k === SOLANA ? 6 : (ORIGINS.find((o) => o.key === k)?.decimals ?? 6);
+    return `$${Number(formatUnits(v, d)).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  };
 
   // An EVM chain needs the wallet connected; Solana connects its own wallet in the review step.
   const needsWallet = !wallet && !fromSolana;
@@ -209,25 +227,52 @@ export function CrossChainDeposit({
 
   return (
     <div>
-      <p className="text-[12px] text-dim">Deposit test USDC from</p>
-      <div role="radiogroup" aria-label="Deposit from" className="mt-2 flex flex-wrap gap-1.5 text-[11.5px]">
-        {CHOICES.map((o) => (
-          <button
-            key={o.key}
-            type="button"
-            role="radio"
-            aria-checked={key === o.key}
-            onClick={() => {
-              setKey(o.key);
-              setAmount("");
-              setStep({ kind: "idle" });
-            }}
-            className={`h-7 rounded-[4px] border px-2.5 transition-colors ${key === o.key ? "border-chrome/60 text-chrome" : "border-line-2 text-muted hover:text-chrome"}`}
-          >
-            {o.name}
-          </button>
-        ))}
+      {/* The account's address, to send to from an exchange or another wallet: Base Sepolia only, said right next to it. */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="text-[12px] text-dim">Your account</span>
+        <code className="font-mono text-[12.5px] text-chrome" title={account}>
+          {short(account)}
+        </code>
+        <button
+          type="button"
+          onClick={() => {
+            void navigator.clipboard?.writeText(account).then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            });
+          }}
+          className="rounded-[4px] border border-line-2 px-2 py-0.5 text-[11px] text-muted hover:text-chrome"
+        >
+          {copied ? "Copied" : "Copy"}
+        </button>
+        <span className="text-[11px] text-signal">Base Sepolia only</span>
       </div>
+
+      <label className="relative mt-3 block">
+        <span className="text-[12px] text-dim">Deposit from</span>
+        <select
+          value={key}
+          onChange={(e) => {
+            setKey(e.target.value);
+            setAmount("");
+            setStep({ kind: "idle" });
+          }}
+          className="mt-1 h-10 w-full appearance-none rounded-lg border border-line-2 bg-void/60 pl-3 pr-8 text-[13px] text-chrome outline-none focus:border-chrome/50"
+        >
+          {CHOICES.map((o) => {
+            const b = balanceOf(o.key);
+            return (
+              <option key={o.key} value={o.key}>
+                {o.name}
+                {b ? ` · ${b}` : ""}
+              </option>
+            );
+          })}
+        </select>
+        <span className="pointer-events-none absolute bottom-3 right-3 text-[10px] text-dim" aria-hidden="true">
+          ▾
+        </span>
+      </label>
       {needsWallet ? (
         <button type="button" onClick={openConnect} className={buttonClass("outline", "sm", "mt-2")}>
           Connect a wallet to deposit from {fromBase ? BASE_NAME : origin?.name}
@@ -290,24 +335,13 @@ export function CrossChainDeposit({
       )}
       {fromBase && (
         <details className="mt-3 rounded-lg border border-line px-3 py-2.5">
-          {/* Collapsed: most people deposit with the box above. On mainnet this is how an exchange withdrawal arrives. */}
-          <summary className="cursor-pointer text-[11.5px] text-dim hover:text-chrome">Other ways to deposit: send USDC on Base Sepolia to your account&apos;s address</summary>
-          <div className="mt-1.5 flex items-center gap-2">
-            <code className="min-w-0 flex-1 break-all font-mono text-[12px] text-chrome">{account}</code>
-            <button
-              type="button"
-              onClick={() => {
-                void navigator.clipboard?.writeText(account).then(() => {
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 1500);
-                });
-              }}
-              className={buttonClass("outline", "sm", "shrink-0")}
-            >
-              {copied ? "Copied" : "Copy"}
-            </button>
-          </div>
-          <p className="mt-1.5 text-[11px] leading-snug text-signal">Base Sepolia only: USDC sent to this address on any other chain doesn&apos;t reach your account. Use the chain picker above instead.</p>
+          <summary className="cursor-pointer text-[11.5px] text-dim hover:text-chrome">Sending from an exchange or another wallet?</summary>
+          <p className="mt-1.5 text-[11.5px] leading-snug text-muted">
+            Send test USDC on <span className="text-chrome">Base Sepolia</span> to your account address above (Copy). It arrives as soon as the transfer lands.
+          </p>
+          <p className="mt-1 text-[11px] leading-snug text-signal">
+            USDC sent to that address on any other chain doesn&apos;t reach your account. From another chain, pick it in &ldquo;Deposit from&rdquo; instead.
+          </p>
         </details>
       )}
       <SolanaIntentModal
