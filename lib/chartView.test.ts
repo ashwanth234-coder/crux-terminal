@@ -27,3 +27,15 @@ test("openingInterval: a token under an hour old opens on 1s; an older one on th
   assert.equal(openingInterval(1_000, 1_000 + 35 * 60), 1, "35 minutes old: every trade its own candle");
   assert.equal(openingInterval(1_000, 1_000 + 3 * 3_600), 60, "3 hours old: 1m");
 });
+
+test("trades chart at the price they leave: a big sell then a buy draws the buy green, not red", async () => {
+  const { withLatestTrades, chartPrice } = await import("./chartView.ts");
+  // After a sell from $69 to $13 (average $39), a buy takes it from $13 to $35 (average $27).
+  const sell = { time: 60, price: 39, priceAfter: 13, blockNumber: BigInt(1) };
+  const buy = { time: 120, price: 27, priceAfter: 35, blockNumber: BigInt(2) };
+  const base = [{ time: 0, open: 69, high: 69, low: 69, close: 69, volume: 0, trades: 1 }];
+  const out = withLatestTrades(base, [buy, sell], 60);
+  assert.equal(out[1].close, 13, "the sell's candle closes where it left the price");
+  assert.ok(out[2].close > out[2].open, "the buy's candle is green");
+  assert.equal(chartPrice({ price: 5 }), 5, "without priceAfter: the average");
+});

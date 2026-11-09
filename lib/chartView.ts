@@ -33,26 +33,38 @@ export function widenRange(r: { minValue: number; maxValue: number }): { minValu
  * in that candle's period, or opens the next candle from the last close. Volume is left to the feed's candle, which
  * arrives a moment later. `trades` is newest first; only those after the newest candle's start are looked at.
  */
-export function withLatestTrades(candles: Candle[], trades: readonly { time: number; price: number; blockNumber: bigint }[], interval: number): Candle[] {
+export function withLatestTrades(
+  candles: Candle[],
+  trades: readonly { time: number; price: number; priceAfter?: number; blockNumber: bigint }[],
+  interval: number,
+): Candle[] {
   if (candles.length === 0 || trades.length === 0) return candles;
   const last = candles[candles.length - 1];
   const fresh = [];
   for (const t of trades) {
     if (t.time < last.time) break;
-    if (t.price > 0) fresh.push(t);
+    if (chartPrice(t) > 0) fresh.push(t);
   }
   if (fresh.length === 0) return candles;
   const out = candles.slice();
   // Oldest first, so the newest trade sets the close.
   for (const t of fresh.reverse()) {
+    const p = chartPrice(t);
     const bucket = Math.floor(t.time / interval) * interval;
     const tail = out[out.length - 1];
     if (bucket === tail.time) {
-      out[out.length - 1] = { ...tail, high: Math.max(tail.high, t.price), low: Math.min(tail.low, t.price), close: t.price };
+      out[out.length - 1] = { ...tail, high: Math.max(tail.high, p), low: Math.min(tail.low, p), close: p };
     } else if (bucket > tail.time) {
-      out.push({ time: bucket, open: tail.close, high: Math.max(tail.close, t.price), low: Math.min(tail.close, t.price), close: t.price, volume: 0, trades: 0 });
+      out.push({ time: bucket, open: tail.close, high: Math.max(tail.close, p), low: Math.min(tail.close, p), close: p, volume: 0, trades: 0 });
     }
   }
   return out;
 }
+
+/**
+ * The price a trade is charted at: where it left the market (the pool's or curve's price once it landed), as trading
+ * terminals chart it, or its average fill price when that isn't known. On a small pool the two differ a lot: a sell
+ * from $69 to $13 averages $39, and charting averages drew the next buy (from $13 to $35, average $27) as a red candle.
+ */
+export const chartPrice = (t: { price: number; priceAfter?: number }) => (t.priceAfter !== undefined && t.priceAfter > 0 ? t.priceAfter : t.price);
 

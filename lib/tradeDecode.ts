@@ -11,8 +11,14 @@ export type PoolTrade = {
   side: "buy" | "sell";
   usdc: bigint;
   tokens: bigint;
-  /** USDC per whole token at this fill (incl. Uniswap's fee). */
+  /** USDC per whole token at this fill (incl. Uniswap's fee): the trade's average price. */
   price: number;
+  /**
+   * USDC per whole token right after the trade (the pool's or curve's reserves once it landed), when the log said
+   * them. Charts draw this: on a small pool a big trade's average sits far from where it leaves the price (a sell
+   * from $69 to $13 averages $39), so a following buy drew a red candle though the price rose.
+   */
+  priceAfter?: number;
   /** Who received the output: the trader for a direct swap, the Crux solver for an intent fill. */
   to: Address;
   viaIntent: boolean;
@@ -42,13 +48,20 @@ export const priceOf = (usdc: bigint, tokens: bigint, tokenDecimals: number) =>
 export type Solvers = Address | readonly Address[];
 const isSolver = (a: Address, solver: Solvers) => (typeof solver === "string" ? [solver] : solver).some((s) => getAddress(s) === getAddress(a));
 
-/** A Uniswap V2 Swap on a token / USDC pair, as a trade. `solver` marks the Crux solver's intent fills. */
+/** Reserves right after a trade: USDC and tokens, in base units. */
+export type ReservesAfter = { usdc: bigint; tokens: bigint };
+
+/**
+ * A Uniswap V2 Swap on a token / USDC pair, as a trade. `solver` marks the Crux solver's intent fills. `after`: the
+ * pair's reserves from the Sync it emits just before the Swap, for the price it leaves.
+ */
 export function swapToTrade(
   args: { amount0In: bigint; amount1In: bigint; amount0Out: bigint; amount1Out: bigint; to: Address },
   usdcIs0: boolean,
   tokenDecimals: number,
   solver: Solvers,
   at: Positioned,
+  after?: ReservesAfter,
 ): Omit<PoolTrade, "time"> {
   const usdcIn = usdcIs0 ? args.amount0In : args.amount1In;
   const usdcOut = usdcIs0 ? args.amount0Out : args.amount1Out;
@@ -62,6 +75,7 @@ export function swapToTrade(
     usdc,
     tokens,
     price: priceOf(usdc, tokens, tokenDecimals),
+    ...(after ? { priceAfter: priceOf(after.usdc, after.tokens, tokenDecimals) } : {}),
     to: args.to,
     viaIntent: isSolver(args.to, solver),
     venue: "uniswap-v2",
@@ -94,19 +108,22 @@ export function fillToTrade(
 /**
  * A V9 curve Buy or Sell, as a trade. `usdc` is what the trader paid (a buy, fee included) or received (a sell, after
  * the fee). `to` is the event's recipient, the trader (or the Crux solver filling an order for one), never
- * CruxRouterV9, which only passes trades through.
+ * CruxRouterV9, which only passes trades through. `after`: the curve's USDC side (virtual plus real) and token
+ * reserve once the trade landed (its event's realUsdcAfter and reserveTokenAfter), for the price it leaves.
  */
 export function curveToTrade(
   args: { isBuy: boolean; usdc: bigint; tokens: bigint; recipient: Address },
   tokenDecimals: number,
   solver: Solvers,
   at: Positioned,
+  after?: ReservesAfter,
 ): Omit<PoolTrade, "time"> {
   return {
     side: args.isBuy ? "buy" : "sell",
     usdc: args.usdc,
     tokens: args.tokens,
     price: priceOf(args.usdc, args.tokens, tokenDecimals),
+    ...(after ? { priceAfter: priceOf(after.usdc, after.tokens, tokenDecimals) } : {}),
     to: args.recipient,
     viaIntent: isSolver(args.recipient, solver),
     venue: "curve",

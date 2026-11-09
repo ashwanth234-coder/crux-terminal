@@ -16,7 +16,7 @@ import { buildHolders } from "@/lib/holders";
 import { CRUX_SOLVERS, PREVIOUS_SETTLERS, SETTLER } from "@/lib/intents";
 import { EMPTY_CONTEXT, computeInstance, flowByCandle, holdersByCandle, paramsOf, poolByCandle, top10ByCandle, type StudyContext, type StudyId } from "@/lib/indicators";
 import { INTERVALS, toCandles, type Candle, type Fill } from "@/lib/candles";
-import { openingInterval, withLatestTrades } from "@/lib/chartView";
+import { chartPrice, openingInterval, withLatestTrades } from "@/lib/chartView";
 import { useThrottled } from "@/hooks/useThrottled";
 import { useFeedCandles } from "@/hooks/useFeed";
 import type { FeedCandle } from "@/lib/feed";
@@ -249,7 +249,7 @@ export function ProChart({
     if (lead) out[0] = { time: opening!.time, price: opening!.price, usdc: opening!.usdc };
     for (let i = 0; i < trades.length; i++) {
       const t = trades[trades.length - 1 - i];
-      out[i + lead] = { time: t.time, price: t.price, usdc: t.usdc };
+      out[i + lead] = { time: t.time, price: chartPrice(t), usdc: t.usdc };
     }
     return out;
   }, [swapData, feedLive, opening]);

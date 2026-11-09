@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { formatUnits, maxUint256, parseUnits, zeroAddress, type Address } from "viem";
+import { formatUnits, maxUint256, parseAbi, parseUnits, zeroAddress, type Address } from "viem";
 import { useConfig, useConnection, useReadContracts, useSwitchChain } from "wagmi";
 import { readContract, waitForTransactionReceipt } from "wagmi/actions";
 import { erc20Abi } from "viem";
@@ -40,6 +40,7 @@ const PRICE_TEXT = new Intl.NumberFormat("en-US", { maximumSignificantDigits: 3 
 
 /** The pool price is quoted for this many tokens (a whole token is worth less than one USDC unit). */
 const PRICE_LOT_TOKENS = 1_000_000;
+const pairPriceAbi = parseAbi(["function getReserves() view returns (uint112, uint112, uint32)", "function token0() view returns (address)"]);
 const PRICE_LOT = BigInt(PRICE_LOT_TOKENS) * BigInt(10) ** BigInt(18);
 export function V9LaunchRoute() {
   const { id: raw } = useParams<{ id: string }>();
@@ -83,6 +84,8 @@ function V9Launch({ id }: { id: bigint }) {
       { address: curve, abi: curveV9Abi, functionName: "launchedAt", chainId: TESTNET.id },
       { address: curve, abi: curveV9Abi, functionName: "creatorVesting", chainId: TESTNET.id },
       { address: ROUTER_V9, abi: routerV9Abi, functionName: "quoteSell", args: [token, PRICE_LOT], chainId: TESTNET.id },
+      { address: l?.pair ?? zeroAddress, abi: pairPriceAbi, functionName: "getReserves", chainId: TESTNET.id },
+      { address: l?.pair ?? zeroAddress, abi: pairPriceAbi, functionName: "token0", chainId: TESTNET.id },
     ],
   });
   const r = (i: number) => reads.data?.[i]?.result;
@@ -97,14 +100,25 @@ function V9Launch({ id }: { id: bigint }) {
   const launchedAt = Number((r(8) as bigint | undefined) ?? BigInt(0));
   const vesting = Number((r(9) as bigint | undefined) ?? BigInt(0));
   const sellOne = r(10) as readonly [bigint, bigint] | undefined;
+  const reserves = r(11) as readonly [bigint, bigint, number] | undefined;
+  const token0 = r(12) as Address | undefined;
 
   if (launch.isLoading) return <Shell><p className="text-muted">Reading the launch…</p></Shell>;
   if (!l) return <Shell><p className="text-muted">No V9 launch #{id.toString()} on Base Sepolia.</p></Shell>;
 
   const phase = phaseV9({ graduated, openingEnds, realUsdc, threshold }, now);
   // Before graduation the curve's spot price; after, what one token sells for in the pool (fees included).
-  // Quoted for a million tokens: one whole token sells for under a millionth of a dollar, which rounds to 0 USDC units.
-  const price = graduated ? (sellOne ? Number(formatUnits(sellOne[0] + sellOne[1], 6)) / PRICE_LOT_TOKENS : 0) : curvePrice(spot);
+  // After graduation, the pool's own price (USDC reserve / token reserve), the same number the chart closes on; the
+  // router's sell quote for a million tokens (fee and impact included) only when the reserves aren't read yet.
+  const poolSpot =
+    reserves && token0 && l
+      ? (() => {
+          const [tok, usd] = token0.toLowerCase() === l.token.toLowerCase() ? [reserves[0], reserves[1]] : [reserves[1], reserves[0]];
+          return tok > BigInt(0) ? Number(formatUnits(usd, 6)) / Number(formatUnits(tok, 18)) : 0;
+        })()
+      : 0;
+  const quoted = sellOne ? Number(formatUnits(sellOne[0] + sellOne[1], 6)) / PRICE_LOT_TOKENS : 0;
+  const price = graduated ? poolSpot || quoted : curvePrice(spot);
   const mcap = price * Number(formatUnits(supply, 18));
   const progress = graduated ? 100 : Math.min(100, Number((realUsdc * BigInt(10_000)) / threshold) / 100);
   const auction: AuctionV2 = {
