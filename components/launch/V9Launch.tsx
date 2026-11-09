@@ -234,6 +234,44 @@ function TradePanel({ token, curve, symbol, phase }: { token: Address; curve: Ad
   });
   const myDeposit = (mine.data?.[0]?.result as bigint | undefined) ?? BigInt(0);
 
+  // What the trader holds where this trade pays from (their CRUX Account or wallet), and what all their tokens sell
+  // for: a sell is typed in tokens, and a whole token is worth well under a cent.
+  const holder = via === "account" ? crux.account : address;
+  const held = useReadContracts({
+    allowFailure: true,
+    query: { enabled: Boolean(holder), refetchInterval: 5_000 },
+    contracts: [
+      { address: token, abi: erc20Abi, functionName: "balanceOf", args: [holder ?? zeroAddress], chainId: TESTNET.id },
+      { address: TESTNET_USDC, abi: erc20Abi, functionName: "balanceOf", args: [holder ?? zeroAddress], chainId: TESTNET.id },
+    ],
+  });
+  const tokensHeld = (held.data?.[0]?.result as bigint | undefined) ?? BigInt(0);
+  const usdcHeld = (held.data?.[1]?.result as bigint | undefined) ?? BigInt(0);
+  const heldValue = useReadContracts({
+    allowFailure: true,
+    query: { enabled: side === "sell" && tokensHeld > BigInt(0) && !opening, refetchInterval: 10_000 },
+    contracts: [{ address: ROUTER_V9, abi: routerV9Abi, functionName: "quoteSell", args: [token, tokensHeld], chainId: TESTNET.id }],
+  });
+  const tokensHeldUsd = (heldValue.data?.[0]?.result as readonly bigint[] | undefined)?.[0];
+  const selling = side === "sell" && !opening;
+  const overHeld = holder !== undefined && held.data !== undefined && amountIn > (selling ? tokensHeld : usdcHeld);
+  const quoted = quote.data !== undefined && !quote.isFetching;
+  const tokensText = (v: bigint) => Number(formatUnits(v, 18)).toLocaleString("en-US", { maximumFractionDigits: 0 });
+  // Why the button is off, in words (it used to grey out silently).
+  const reason =
+    amountIn === BigInt(0)
+      ? null
+      : overHeld
+        ? selling
+          ? `You hold ${tokensText(tokensHeld)} $${symbol}${via === "account" ? " in your CRUX Account" : ""}.`
+          : `Not enough USDC${via === "account" ? " in your CRUX Account" : ""} ($${usd(usdcHeld)}).`
+        : !opening && quoted && out === BigInt(0)
+          ? selling
+            ? `That's worth less than $0.000001: this box counts $${symbol} tokens, not dollars. Use 25%, 50% or Max.`
+            : "Too small to buy anything."
+          : null;
+  const setShare = (pct: number) => setAmount(formatUnits((tokensHeld * BigInt(pct)) / BigInt(100), 18));
+
   const onBase = async () => {
     if (chainId !== TESTNET.id) await switchChain({ chainId: TESTNET.id });
   };
@@ -354,6 +392,25 @@ function TradePanel({ token, curve, symbol, phase }: { token: Address; curve: Ad
         <span className="font-mono text-[12px] text-dim">{side === "buy" || opening ? "USDC" : `$${symbol}`}</span>
       </label>
 
+      {holder && held.data !== undefined && (
+        <div className="mt-2 flex items-center justify-between gap-2 text-[11.5px] text-dim">
+          <span>
+            {selling
+              ? `You hold ${tokensText(tokensHeld)} $${symbol}${tokensHeldUsd !== undefined ? ` (about $${usd(tokensHeldUsd)})` : ""}`
+              : `USDC: $${usd(usdcHeld)}`}
+          </span>
+          {selling && tokensHeld > BigInt(0) && (
+            <span className="flex gap-1">
+              {[25, 50, 100].map((pct) => (
+                <button key={pct} type="button" onClick={() => setShare(pct)} className="rounded-[4px] border border-line-2 px-1.5 py-0.5 text-muted hover:text-chrome">
+                  {pct === 100 ? "Max" : `${pct}%`}
+                </button>
+              ))}
+            </span>
+          )}
+        </div>
+      )}
+
       {opening && out > BigInt(0) && (
         <p className="mt-2 text-[12px] leading-snug text-muted">
           About {fmtOut(out)} if nobody else joins · everyone pays one price when it ends
@@ -369,12 +426,14 @@ function TradePanel({ token, curve, symbol, phase }: { token: Address; curve: Ad
 
       <button
         type="button"
-        disabled={busy !== null || amountIn === BigInt(0) || out === BigInt(0)}
+        disabled={busy !== null || amountIn === BigInt(0) || out === BigInt(0) || overHeld}
         onClick={() => void (opening && via === "wallet" ? deposit() : trade())}
         className={`${buttonClass("primary", "md", "rounded-lg")} mt-3 w-full`}
       >
         {busy ?? (opening ? "Deposit into the opening" : side === "buy" ? `Buy $${symbol}` : `Sell $${symbol}`)}
       </button>
+
+      {reason && !busy && <p className="mt-2 text-[12px] leading-snug text-down">{reason}</p>}
 
       {myDeposit > BigInt(0) && !opening && (
         <button type="button" disabled={busy !== null} onClick={() => void claim()} className={`${buttonClass("outline", "sm", "rounded-lg")} mt-2 w-full`}>
