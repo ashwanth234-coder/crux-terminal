@@ -111,7 +111,7 @@ export function CreatorRewards({ bare = false }: { bare?: boolean } = {}) {
   return (
     <section className={bare ? "" : "rounded-xl border border-line p-5 sm:p-6"}>
       {!bare && <h2 className="text-[12px] font-medium uppercase tracking-[0.18em] text-dim">Creator rewards</h2>}
-      <p className={`${bare ? "" : "mt-1 "}text-[12.5px] leading-snug text-muted`}>Tokens you launched on Crux V9: you earn 30% of the 1% fee on every trade, paid in USDC.</p>
+      <p className={`${bare ? "" : "mt-1 "}text-[12.5px] leading-snug text-muted`}>Tokens you launched on Crux: you earn 30% of the 1% fee on every trade, paid in USDC.</p>
       {launches.isPending && n > 0 ? (
         <p className="mt-3 text-[12.5px] text-dim">Reading your launches…</p>
       ) : mine.length === 0 ? (
@@ -125,7 +125,7 @@ export function CreatorRewards({ bare = false }: { bare?: boolean } = {}) {
             return (
               <div key={x.l!.token}>
                 <Link href={`/launch/v9/${x.id}`} className="text-[13px] text-chrome hover:text-signal">
-                  ${symbol} <span className="text-dim">· V9 #{x.id.toString()}</span>
+                  ${symbol}
                 </Link>
                 <div className="mt-2">
                   <CreatorPanel token={x.l!.token} curve={x.l!.curve} creator={x.l!.creator} symbol={symbol} />

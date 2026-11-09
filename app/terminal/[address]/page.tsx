@@ -6,6 +6,7 @@ import { getAddress, isAddress } from "viem";
 import { Notice } from "@/components/launch/LaunchView";
 import { ExternalTerminalRoute } from "@/components/pro/ExternalTerminal";
 import { readLaunches } from "@/lib/launchFeed";
+import { readV9Launches } from "@/lib/v9Launches";
 
 export const metadata: Metadata = {
   title: "Terminal · Crux",
@@ -30,7 +31,10 @@ async function Resolve({ params }: { params: Promise<{ address: string }> }) {
   let href: string | null = null;
   try {
     const a = address.toLowerCase();
-    const hit = (await readLaunches()).find((l) => l.token.toLowerCase() === a || l.pool?.toLowerCase() === a);
+    // A curve launch first (the current kind), then an earlier batch launch (still tradeable from its own page).
+    const nine = (await readV9Launches().catch(() => [])).find((l) => l.token.toLowerCase() === a);
+    if (nine) href = `/launch/v9/${nine.id}`;
+    const hit = nine ? undefined : (await readLaunches()).find((l) => l.token.toLowerCase() === a || l.pool?.toLowerCase() === a);
     if (hit) href = `/launch/v${hit.version}/${hit.auctionId}`;
   } catch {
     // The launch feed is unreachable: treat it as an outside token; its pool is found in the browser.

@@ -1,7 +1,9 @@
 "use client";
 
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
+import Link from "next/link";
 import { useLaunchModal } from "@/providers/LaunchProvider";
+import { V9_ON } from "@/lib/v9";
 
 export function LaunchTokenButton({
   className = "",
@@ -15,6 +17,14 @@ export function LaunchTokenButton({
   icon?: boolean;
 }) {
   const { openLaunch } = useLaunchModal();
+  // Launches are curve launches now: the button opens their form.
+  if (V9_ON) {
+    return (
+      <Link href="/launch/v9/new" onClick={onOpen} className={className || buttonClass("outline", "md")}>
+        {label} {icon && <ArrowUpRight />}
+      </Link>
+    );
+  }
   return (
     <button
       type="button"

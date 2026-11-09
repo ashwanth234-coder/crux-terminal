@@ -113,6 +113,7 @@ export function LiveTape({
   version,
   focus,
   onFocus,
+  curve = false,
 }: {
   factory: Address;
   id: string;
@@ -123,16 +124,18 @@ export function LiveTape({
   version: BatchVersion;
   focus: Address | null;
   onFocus: (a: Address | null) => void;
+  /** A curve launch (no batch auction): trades, holders, top traders and orders only, from its first trade. */
+  curve?: boolean;
 }) {
   const { address } = useConnection();
   const crux = useCruxAccount();
   const now = useNow();
-  const [tab, setTab] = useState<Tab>(graduated ? "trades" : "bids");
-  const tabs: Tab[] = graduated ? ["trades", "holders", "traders", "orders", "bids", "trust"] : ["bids", "trust"];
+  const [tab, setTab] = useState<Tab>(graduated || curve ? "trades" : "bids");
+  const tabs: Tab[] = curve ? ["trades", "holders", "traders", "orders"] : graduated ? ["trades", "holders", "traders", "orders", "bids", "trust"] : ["bids", "trust"];
   const [shown, setShown] = useState(PAGE);
   const [minUsd, setMinUsd] = useState(0);
   const [side, setSide] = useState<"all" | "buy" | "sell">("all");
-  const bids = useAuctionBids(factory, auction, BigInt(id), live);
+  const bids = useAuctionBids(factory, auction, BigInt(id), live && !curve);
   const swaps = usePoolSwaps(auction.pair, auction.settledAt, graduated);
   const pending = usePendingTrades(auction.token);
   const { holders, market } = useLedger(factory, id, auction);

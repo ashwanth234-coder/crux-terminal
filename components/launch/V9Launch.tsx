@@ -7,16 +7,19 @@ import { useConfig, useConnection, useReadContracts, useSwitchChain } from "wagm
 import { readContract, waitForTransactionReceipt } from "wagmi/actions";
 import { erc20Abi } from "viem";
 import { Header } from "@/components/site/Header";
-import { ProChart } from "@/components/chart/ProChart";
+import { ChartGrid } from "@/components/chart/ChartGrid";
+import { TerminalShell } from "@/components/pro/TerminalShell";
+import { LiveTape } from "@/components/pro/LiveTape";
+import { Momentum } from "@/components/pro/Momentum";
+import { V9TokenBar } from "@/components/launch/V9TokenBar";
 import { buttonClass } from "@/components/ui/Button";
-import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
+import { TESTNET } from "@/lib/chains";
 import { TESTNET_USDC } from "@/lib/intents";
 import { simulateThenWrite } from "@/lib/preflight";
 import { tradeFromAccount } from "@/lib/account";
 import { launchCaip19 } from "@/lib/launchTrade";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import type { AuctionV2 } from "@/lib/launchV2";
-import { compactZeros } from "@/lib/priceText";
 import { tokensForUsdc } from "@/lib/sellAmount";
 import { CreatorNote } from "@/components/launch/V9Creator";
 import { StandingOrderForm, type OrderType } from "@/components/pro/StandingOrderForm";
@@ -24,7 +27,6 @@ import { FACTORY_V9, ROUTER_V9, V9_ON, curvePrice, curveV9Abi, factoryV9Abi, pha
 
 const usd = (v: bigint) => Number(formatUnits(v, 6)).toLocaleString("en-US", { maximumFractionDigits: 2 });
 const SLIPPAGE_BPS = BigInt(1_000); // 10%, the terminal's default
-const PHASE_LABEL: Record<PhaseV9, string> = { opening: "Fair opening", curve: "Trading on its curve", graduating: "Graduating", graduated: "On Uniswap" };
 
 function useNowSeconds() {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
@@ -37,8 +39,6 @@ function useNowSeconds() {
 
 /** /launch/v9/[id]: one V9 launch, through its fair opening, its curve and its Uniswap pool. */
 
-/** A token's price as the terminal writes it: "0.0₇938", not "9.38e-8" (plain digits, its zeros counted). */
-const PRICE_TEXT = new Intl.NumberFormat("en-US", { maximumSignificantDigits: 3 });
 
 /** The pool price is quoted for this many tokens (a whole token is worth less than one USDC unit). */
 const PRICE_LOT_TOKENS = 1_000_000;
@@ -63,6 +63,8 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 function V9Launch({ id }: { id: bigint }) {
   const now = useNowSeconds();
+  // A trader picked in the tape: the tape and the chart's marks filter to that wallet.
+  const [focus, setFocus] = useState<Address | null>(null);
   const launch = useReadContracts({ contracts: [{ address: FACTORY_V9, abi: factoryV9Abi, functionName: "getLaunch", args: [id], chainId: TESTNET.id }] });
   const l = launch.data?.[0]?.result as { token: Address; curve: Address; pair: Address; creator: Address } | undefined;
   useEffect(() => {
@@ -121,8 +123,6 @@ function V9Launch({ id }: { id: bigint }) {
       : 0;
   const quoted = sellOne ? Number(formatUnits(sellOne[0] + sellOne[1], 6)) / PRICE_LOT_TOKENS : 0;
   const price = graduated ? poolSpot || quoted : curvePrice(spot);
-  const mcap = price * Number(formatUnits(supply, 18));
-  const progress = graduated ? 100 : Math.min(100, Number((realUsdc * BigInt(10_000)) / threshold) / 100);
   const auction: AuctionV2 = {
     token: l.token,
     creator: l.creator,
@@ -141,58 +141,47 @@ function V9Launch({ id }: { id: bigint }) {
     clearingPrice: BigInt(0),
   };
 
+  const poolUsdc = graduated && reserves && token0 ? (token0.toLowerCase() === l.token.toLowerCase() ? reserves[1] : reserves[0]) : null;
+  const sym = `$${symbol}`;
+
+  // The pro terminal (as for every launch): token bar; chart and execution side by side; trades, holders, top traders
+  // and your orders below. Phones stack them: bar, chart, execution, tape.
   return (
-    <Shell>
-      <div className="flex flex-wrap items-baseline justify-between gap-4">
-        <div>
-          <h1 className="font-display text-[clamp(1.8rem,3.4vw,2.6rem)] text-bright">
-            {name ?? "…"} <span className="text-muted">${symbol}</span>
-          </h1>
-          <p className="mt-1 font-mono text-[11.5px] text-dim">
-            <a href={`${TESTNET_EXPLORER}/token/${l.token}`} target="_blank" rel="noopener noreferrer" className="hover:text-chrome">
-              {l.token}
-            </a>{" "}
-            · V9 #{id.toString()} · Base Sepolia testnet
-          </p>
-        </div>
-        <span className="rounded-[4px] border border-line-2 px-3 py-1 font-mono text-[11px] uppercase tracking-[0.14em] text-chrome">
-          {PHASE_LABEL[phase]}
-          {phase === "opening" && ` · ${openingEnds - now}s`}
-        </span>
-      </div>
+    <TerminalShell>
+      <V9TokenBar
+        id={id}
+        auction={auction}
+        symbol={symbol}
+        name={name ?? null}
+        phase={phase}
+        price={price}
+        realUsdc={realUsdc}
+        threshold={threshold}
+        poolUsdc={poolUsdc}
+        vestingSeconds={vesting}
+        openingLeft={Math.max(0, openingEnds - now)}
+        now={now}
+      />
+      <div className="grid flex-1 grid-cols-[minmax(0,1fr)] gap-px bg-line max-lg:pb-28 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] lg:grid-rows-[minmax(0,1fr)_minmax(190px,28%)]">
+        <section aria-label="Chart" className="bg-void p-1.5 max-lg:h-[72svh] max-lg:min-h-[460px] lg:col-start-1 lg:row-start-1 lg:min-h-0">
+          {launchedAt > 0 ? (
+            <ChartGrid auction={auction} symbol={sym} name={name ?? null} factory={FACTORY_V9} id={id.toString()} focus={focus} onFocus={setFocus} />
+          ) : (
+            <p className="p-4 text-[12.5px] text-muted">Loading the chart…</p>
+          )}
+        </section>
 
-      <dl className="mt-6 grid grid-cols-2 gap-4 border-y border-line py-4 md:grid-cols-4">
-        <Stat label="Price" value={price > 0 ? `$${compactZeros(PRICE_TEXT.format(price))}` : "…"} />
-        <Stat label="Market cap" value={mcap > 0 ? `$${mcap.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "…"} />
-        <Stat label={graduated ? "Graduated with" : "Raised on the curve"} value={`$${usd(graduated ? threshold : realUsdc)} of $${usd(threshold)}`} />
-        <Stat label="Creator tokens" value={vesting === 0 ? "Unlocked (creator's choice)" : `Vest over ${Math.round(vesting / 86_400)} days`} />
-      </dl>
-      <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-line" aria-label="Progress to graduation">
-        <div className="h-full bg-up transition-[width]" style={{ width: `${progress}%` }} />
-      </div>
-      <p className="mt-1.5 text-[11.5px] text-dim">
-        {graduated ? "Graduated: trading on its Uniswap pool on Base, liquidity burned." : `Graduates into a Uniswap pool on Base at $${usd(threshold)} (testnet scale; mainnet $10,000).`}
-      </p>
-
-      <div className="mt-8 grid gap-6 lg:grid-cols-12">
-        <div className="min-h-[420px] min-w-0 rounded-xl border border-line lg:col-span-8">
-          {launchedAt > 0 ? <ProChart auction={auction} symbol={symbol} name={name ?? null} factory={FACTORY_V9} id={id.toString()} /> : <p className="p-4 text-[12.5px] text-muted">Loading the chart…</p>}
-        </div>
-        <div className="flex flex-col gap-4 lg:col-span-4">
+        <aside aria-label="Execution" className="flex flex-col gap-3 bg-panel p-3 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:overflow-y-auto">
           <TradePanel token={l.token} curve={l.curve} symbol={symbol} phase={phase} price={price} supply={Number(formatUnits(supply, 18))} />
+          {launchedAt > 0 && <Momentum auction={auction} symbol={symbol} />}
           <CreatorNote creator={l.creator} symbol={symbol} />
-        </div>
-      </div>
-    </Shell>
-  );
-}
+        </aside>
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-dim">{label}</dt>
-      <dd className="mt-1 text-[15px] text-chrome">{value}</dd>
-    </div>
+        <section aria-label="Trades, holders and orders" className="min-h-[260px] bg-void p-3 lg:col-start-1 lg:row-start-2">
+          <LiveTape factory={FACTORY_V9} id={id.toString()} auction={auction} graduated live={false} symbol={sym} version={8} focus={focus} onFocus={setFocus} curve />
+        </section>
+      </div>
+    </TerminalShell>
   );
 }
 

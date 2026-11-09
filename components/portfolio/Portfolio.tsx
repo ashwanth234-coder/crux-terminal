@@ -243,13 +243,13 @@ export function Portfolio() {
             {v9.holdings.length > 0 && (
               <section aria-labelledby="v9-h">
                 <h2 id="v9-h" className="mb-3 text-[12px] font-medium uppercase tracking-[0.18em] text-dim">
-                  V9 tokens
+                  Launch tokens
                 </h2>
                 <ul className="divide-y divide-line rounded-xl border border-line">
                   {v9.holdings.map((h) => (
                     <li key={h.token} className="flex items-center justify-between gap-3 px-4 py-3">
                       <Link href={`/launch/v9/${h.id}`} className="text-[13px] text-chrome hover:text-signal">
-                        ${h.symbol} <span className="text-dim">· V9 #{h.id.toString()}</span>
+                        ${h.symbol}
                       </Link>
                       <span className="text-right font-mono text-[12.5px] text-muted">
                         {Number(fmtUnits(h.balance, 18)).toLocaleString("en-US", { maximumFractionDigits: 0 })}

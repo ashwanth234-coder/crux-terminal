@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { LaunchesFeed } from "@/components/launch/LaunchesFeed";
+import { TokenList } from "@/components/launch/TokenList";
+import { V9_ON } from "@/lib/v9";
 
 export const metadata: Metadata = {
   title: "Launches · Crux",
@@ -7,5 +9,5 @@ export const metadata: Metadata = {
 };
 
 export default function LaunchesPage() {
-  return <LaunchesFeed />;
+  return V9_ON ? <TokenList /> : <LaunchesFeed />;
 }

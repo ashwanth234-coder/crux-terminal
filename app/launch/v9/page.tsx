@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { V9List } from "@/components/launch/V9Create";
+import { TokenList } from "@/components/launch/TokenList";
 
-export const metadata: Metadata = { title: "V9 launches · Crux", description: "Crux V9 launches on Base Sepolia testnet: tokens trading on their curve, then on Uniswap pools on Base." };
+export const metadata: Metadata = { title: "Discover · Crux", description: "Every token launched on Crux on Base Sepolia testnet: on its curve, in its fair opening, or trading on Uniswap." };
 
-export default function LaunchV9ListPage() {
-  return <V9List />;
+export default function LaunchTokenListPage() {
+  return <TokenList />;
 }

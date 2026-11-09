@@ -107,7 +107,7 @@ export function V9Create() {
           // another event
         }
       }
-      throw new Error("Launched, but couldn't read its number. Find it under V9 launches.");
+      throw new Error("Launched, but couldn't read its number. Find it under Discover.");
     } catch (e) {
       const msg = (e as Error).message ?? String(e);
       setError(/rejected|denied|cancel/i.test(msg) ? "Cancelled in the wallet. Nothing changed." : msg.split("\n")[0]);
@@ -121,7 +121,7 @@ export function V9Create() {
     <>
       <Header />
       <main className="mx-auto max-w-xl px-4 pb-16 pt-24">
-        <h1 className="font-display text-[clamp(1.8rem,3.4vw,2.4rem)] text-bright">Launch a token (V9)</h1>
+        <h1 className="font-display text-[clamp(1.8rem,3.4vw,2.4rem)] text-bright">Launch a token</h1>
         <p className="mt-2 text-[13.5px] leading-relaxed text-muted">
           Your token trades on its own curve from the first second (after an optional fair opening), then graduates into a Uniswap pool on Base
           {threshold ? ` at $${Number(threshold) / 1e6}` : ""} with its liquidity burned. Free to launch. Base Sepolia testnet.
@@ -196,7 +196,7 @@ export function V9Create() {
           {error && <p className="text-[12.5px] text-down">{error}</p>}
           <p className="text-[12px] text-dim">
             <Link href="/launch/v9" className="underline decoration-line-2 hover:text-chrome">
-              See V9 launches
+              See every launch
             </Link>
           </p>
         </div>

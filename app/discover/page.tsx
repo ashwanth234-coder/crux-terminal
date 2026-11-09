@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { LaunchesFeed } from "@/components/launch/LaunchesFeed";
+import { TokenList } from "@/components/launch/TokenList";
+import { V9_ON } from "@/lib/v9";
 
 export const metadata: Metadata = {
   title: "Discover · Crux",
-  description: "Crux leaderboards and every token launch on Base Sepolia testnet: top memecoins, smart-money traders, live batch auctions and graduations.",
+  description: "Every token launched on Crux on Base Sepolia testnet: on its curve, in its fair opening, or trading on Uniswap.",
 };
 
 export default function DiscoverPage() {
-  return <LaunchesFeed />;
+  return V9_ON ? <TokenList /> : <LaunchesFeed />;
 }
