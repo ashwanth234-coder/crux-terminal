@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { formatUnits, maxUint256, parseAbi, parseUnits, zeroAddress, type Address } from "viem";
 import { useConfig, useConnection, useReadContracts, useSwitchChain } from "wagmi";
@@ -19,6 +18,8 @@ import { useCruxAccount } from "@/hooks/useCruxAccount";
 import type { AuctionV2 } from "@/lib/launchV2";
 import { compactZeros } from "@/lib/priceText";
 import { tokensForUsdc } from "@/lib/sellAmount";
+import { CreatorNote } from "@/components/launch/V9Creator";
+import { StandingOrderForm, type OrderType } from "@/components/pro/StandingOrderForm";
 import { FACTORY_V9, ROUTER_V9, V9_ON, curvePrice, curveV9Abi, factoryV9Abi, phaseV9, registerV9Curve, routerV9Abi, type PhaseV9 } from "@/lib/v9";
 
 const usd = (v: bigint) => Number(formatUnits(v, 6)).toLocaleString("en-US", { maximumFractionDigits: 2 });
@@ -178,8 +179,8 @@ function V9Launch({ id }: { id: bigint }) {
           {launchedAt > 0 ? <ProChart auction={auction} symbol={symbol} name={name ?? null} factory={FACTORY_V9} id={id.toString()} /> : <p className="p-4 text-[12.5px] text-muted">Loading the chart…</p>}
         </div>
         <div className="flex flex-col gap-4 lg:col-span-4">
-          <TradePanel token={l.token} curve={l.curve} symbol={symbol} phase={phase} />
-          <CreatorPanel token={l.token} curve={l.curve} creator={l.creator} symbol={symbol} />
+          <TradePanel token={l.token} curve={l.curve} symbol={symbol} phase={phase} price={price} supply={Number(formatUnits(supply, 18))} />
+          <CreatorNote creator={l.creator} symbol={symbol} />
         </div>
       </div>
     </Shell>
@@ -196,12 +197,15 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 /** Buy or sell from the CRUX Account (gasless, the relay) or the wallet (CruxRouterV9); deposit during a fair opening. */
-function TradePanel({ token, curve, symbol, phase }: { token: Address; curve: Address; symbol: string; phase: PhaseV9 }) {
+function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Address; curve: Address; symbol: string; phase: PhaseV9; price: number; supply: number }) {
   const config = useConfig();
   const { address, chainId } = useConnection();
   const { mutateAsync: switchChain } = useSwitchChain();
   const crux = useCruxAccount();
   const [side, setSide] = useState<"buy" | "sell">("buy");
+  // Market, or a standing order (buy the dip; stop loss, take profit, trailing, both) that the keeper sends from the
+  // CRUX Account when the price gets there, with this page closed.
+  const [orderType, setOrderType] = useState<OrderType>("market");
   const [from, setFrom] = useState<"account" | "wallet">("account");
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -243,25 +247,38 @@ function TradePanel({ token, curve, symbol, phase }: { token: Address; curve: Ad
   // first guess in proportion to what the whole holding sells for, then corrected by what that guess sells for (a
   // smaller sale moves the price less, so it returns a little more per token).
   const [picked, setPicked] = useState<bigint | null>(null);
-  const [sellTokens, setSellTokens] = useState<bigint>(BigInt(0));
+  // Only the quoted case is found in an effect (it reads the chain); the others follow from what's on screen.
+  const solveKey = `${usdIn}:${tokensHeld}:${tokensHeldUsd ?? ""}`;
+  const needsQuote = selling && picked === null && usdIn > BigInt(0) && tokensHeld > BigInt(0) && tokensHeldUsd !== undefined && usdIn < tokensHeldUsd;
+  const [solved, setSolved] = useState<{ key: string; tokens: bigint } | null>(null);
   useEffect(() => {
-    if (!selling) return;
-    if (picked !== null) return void setSellTokens(picked);
-    if (usdIn === BigInt(0) || tokensHeld === BigInt(0) || !tokensHeldUsd) return void setSellTokens(BigInt(0));
-    if (usdIn >= tokensHeldUsd) return void setSellTokens(usdIn === tokensHeldUsd ? tokensHeld : tokensHeld + BigInt(1));
+    if (!needsQuote || !tokensHeldUsd) return;
     let live = true;
     const t = setTimeout(async () => {
       const tokens = await tokensForUsdc(usdIn, tokensHeld, tokensHeldUsd, async (t) => {
         const [got] = (await readContract(config, { chainId: TESTNET.id, address: ROUTER_V9, abi: routerV9Abi, functionName: "quoteSell", args: [token, t] })) as readonly bigint[];
         return got;
       });
-      if (live) setSellTokens(tokens);
+      if (live) setSolved({ key: solveKey, tokens });
     }, 250);
     return () => {
       live = false;
       clearTimeout(t);
     };
-  }, [selling, picked, usdIn, tokensHeld, tokensHeldUsd, config, token]);
+  }, [needsQuote, solveKey, usdIn, tokensHeld, tokensHeldUsd, config, token]);
+  const sellTokens = !selling
+    ? BigInt(0)
+    : picked !== null
+      ? picked
+      : usdIn === BigInt(0) || tokensHeld === BigInt(0) || !tokensHeldUsd
+        ? BigInt(0)
+        : usdIn >= tokensHeldUsd
+          ? usdIn === tokensHeldUsd
+            ? tokensHeld
+            : tokensHeld + BigInt(1) // more than the holding: shown as over the balance
+          : solved?.key === solveKey
+            ? solved.tokens
+            : BigInt(0);
   const amountIn = selling ? sellTokens : usdIn;
 
   const quote = useReadContracts({
@@ -416,6 +433,7 @@ function TradePanel({ token, curve, symbol, phase }: { token: Address; curve: Ad
                 setSide(s);
                 setPicked(null);
                 setAmount("");
+                setOrderType("market");
               }}
               className={`h-8 flex-1 rounded-[4px] border text-[13px] ${side === s ? (s === "buy" ? "border-up/60 text-up" : "border-down/60 text-down") : "border-line-2 text-muted"}`}
             >
@@ -436,6 +454,53 @@ function TradePanel({ token, curve, symbol, phase }: { token: Address; curve: Ad
         </div>
       )}
 
+      {!opening && (
+        <label className="relative mt-3 block">
+          <span className="sr-only">Order type</span>
+          <select
+            value={orderType}
+            onChange={(e) => {
+              const t = e.target.value as OrderType;
+              setOrderType(t);
+              // Standing orders run from the CRUX Account (the keeper sends them with this page closed).
+              if (t !== "market") setFrom("account");
+            }}
+            className="h-10 w-full appearance-none rounded-lg border border-line-2 bg-transparent pl-3 pr-7 text-[13px] text-chrome outline-none focus:border-chrome/50"
+          >
+            <option value="market">Market: {side === "buy" ? "buy" : "sell"} now</option>
+            {side === "buy" ? (
+              <option value="dip">Buy the dip</option>
+            ) : (
+              <>
+                <option value="takeProfit">Take profit</option>
+                <option value="stopLoss">Stop loss</option>
+                <option value="trailing">Trailing stop</option>
+                <option value="bracket">Take profit + stop loss</option>
+              </>
+            )}
+          </select>
+          <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-dim" aria-hidden="true">
+            ▾
+          </span>
+        </label>
+      )}
+
+      {!opening && orderType !== "market" ? (
+        <div className="mt-3">
+          <StandingOrderForm
+            type={orderType}
+            crux={crux}
+            token={token}
+            decimals={18}
+            symbol={symbol}
+            price={price > 0 ? price : null}
+            supply={supply}
+            tokenBalance={via === "account" ? tokensHeld : null}
+            reserves={null}
+          />
+        </div>
+      ) : (
+      <>
       <label className="mt-3 flex items-center gap-2 rounded-lg border border-line-2 px-3 py-2">
         <input
           inputMode="decimal"
@@ -493,6 +558,8 @@ function TradePanel({ token, curve, symbol, phase }: { token: Address; curve: Ad
       </button>
 
       {reason && !busy && <p className="mt-2 text-[12px] leading-snug text-down">{reason}</p>}
+      </>
+      )}
 
       {myDeposit > BigInt(0) && !opening && (
         <button type="button" disabled={busy !== null} onClick={() => void claim()} className={`${buttonClass("outline", "sm", "rounded-lg")} mt-2 w-full`}>
@@ -501,77 +568,6 @@ function TradePanel({ token, curve, symbol, phase }: { token: Address; curve: Ad
       )}
       {note && <p className={`mt-2 text-[12px] leading-snug ${note.ok ? "text-up" : "text-down"}`}>{note.text}</p>}
       {opening && via === "wallet" && <p className="mt-2 text-[11.5px] text-dim">From a wallet: claim your tokens here when the opening ends.</p>}
-    </section>
-  );
-}
-
-/** What the creator has earned (curve fees, then router fees after graduation) and their vested tokens, with claims. */
-function CreatorPanel({ token, curve, creator, symbol }: { token: Address; curve: Address; creator: Address; symbol: string }) {
-  const config = useConfig();
-  const { address, chainId } = useConnection();
-  const { mutateAsync: switchChain } = useSwitchChain();
-  const crux = useCruxAccount();
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
-  const reads = useReadContracts({
-    allowFailure: true,
-    query: { refetchInterval: 10_000 },
-    contracts: [
-      { address: ROUTER_V9, abi: routerV9Abi, functionName: "creatorEarnings", args: [token], chainId: TESTNET.id },
-      { address: curve, abi: curveV9Abi, functionName: "creatorClaimable", chainId: TESTNET.id },
-    ],
-  });
-  const earnings = reads.data?.[0]?.result as readonly [bigint, bigint] | undefined;
-  const claimable = (reads.data?.[1]?.result as bigint | undefined) ?? BigInt(0);
-  const isCreator = [address, crux.account].some((a) => a && a.toLowerCase() === creator.toLowerCase());
-
-  const send = async (fn: "claimAllCreatorFees" | "claimCreator") => {
-    if (!address) return setNote("Connect a wallet to send the claim (it pays the creator, whoever sends it).");
-    setBusy(true);
-    setNote(null);
-    try {
-      if (chainId !== TESTNET.id) await switchChain({ chainId: TESTNET.id });
-      const hash =
-        fn === "claimAllCreatorFees"
-          ? await simulateThenWrite(config, address, { chainId: TESTNET.id, address: ROUTER_V9, abi: routerV9Abi, functionName: "claimAllCreatorFees", args: [token] })
-          : await simulateThenWrite(config, address, { chainId: TESTNET.id, address: curve, abi: curveV9Abi, functionName: "claimCreator", args: [] });
-      await waitForTransactionReceipt(config, { chainId: TESTNET.id, hash });
-      setNote(fn === "claimAllCreatorFees" ? "Fees paid to the creator." : "Vested tokens sent to the creator.");
-      void reads.refetch();
-    } catch (e) {
-      setNote(((e as Error).message ?? String(e)).split("\n")[0]);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <section className="rounded-xl border border-line p-4 text-[12.5px]">
-      <h2 className="text-[14px] font-medium text-chrome">Creator {isCreator && <span className="text-up">· you</span>}</h2>
-      <p className="mt-1 font-mono text-[11px] text-dim">
-        <Link href={`${TESTNET_EXPLORER}/address/${creator}`} target="_blank" className="hover:text-chrome">
-          {creator.slice(0, 6)}…{creator.slice(-4)}
-        </Link>
-      </p>
-      <dl className="mt-3 grid grid-cols-2 gap-3">
-        <div>
-          <dt className="text-dim">Fees earned (30% of 1%)</dt>
-          <dd className="mt-0.5 text-chrome">${earnings ? usd(earnings[1]) : "…"}</dd>
-        </div>
-        <div>
-          <dt className="text-dim">Unclaimed</dt>
-          <dd className="mt-0.5 text-chrome">${earnings ? usd(earnings[0]) : "…"}</dd>
-        </div>
-      </dl>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" disabled={busy || !earnings || earnings[0] === BigInt(0)} onClick={() => void send("claimAllCreatorFees")} className={buttonClass("outline", "sm", "rounded-lg")}>
-          Pay out fees
-        </button>
-        <button type="button" disabled={busy || claimable === BigInt(0)} onClick={() => void send("claimCreator")} className={buttonClass("outline", "sm", "rounded-lg")}>
-          Claim vested {claimable > BigInt(0) ? `${Number(formatUnits(claimable, 18)).toLocaleString("en-US", { maximumFractionDigits: 0 })} $${symbol}` : `$${symbol}`}
-        </button>
-      </div>
-      {note && <p className="mt-2 text-muted">{note}</p>}
     </section>
   );
 }

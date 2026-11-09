@@ -24,6 +24,8 @@ import { fmtTokens, fmtUsdc, formatRemaining } from "@/lib/launch";
 import { simulateThenWrite } from "@/lib/preflight";
 import { useConnectModal } from "@/providers/Web3Provider";
 import { useT } from "@/providers/I18nProvider";
+import { CreatorRewards } from "@/components/launch/V9Creator";
+import { V9_ON } from "@/lib/v9";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
@@ -499,6 +501,8 @@ export function AccountPanel() {
           )}
         </Card>
       </div>
+
+      {V9_ON && <CreatorRewards />}
 
       <p className="text-[11.5px] leading-relaxed text-dim">
         How it&apos;s protected: your login key signs every trade and withdrawal, and Crux&apos;s relay submits them. The account contract only lets
