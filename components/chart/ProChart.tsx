@@ -233,7 +233,8 @@ export function ProChart({
   // its frames, so the page neither reads the chain nor buckets trades. A pool it doesn't serve (another DEX's), or
   // while it's down, falls back to bucketing the trades here.
   // "Auto" picks a timeframe once, when the chart opens (1s for a young token), and keeps it while the page is open.
-  const [autoPick] = useState(() => openingInterval(auction.settledAt, Math.floor(Date.now() / 1000)));
+  // A launch time not read yet (0) would look decades old and pick 1D: treat it as new instead.
+  const [autoPick] = useState(() => (auction.settledAt > 0 ? openingInterval(auction.settledAt, Math.floor(Date.now() / 1000)) : 1));
   const pickedInterval = config.interval === "auto" ? autoPick : config.interval;
   const feed = useFeedCandles(external ? null : auction.pair, pickedInterval);
   const feedLive = feed.usable;

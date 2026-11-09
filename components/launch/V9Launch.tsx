@@ -33,6 +33,10 @@ function useNowSeconds() {
 }
 
 /** /launch/v9/[id]: one V9 launch, through its fair opening, its curve and its Uniswap pool. */
+
+/** The pool price is quoted for this many tokens (a whole token is worth less than one USDC unit). */
+const PRICE_LOT_TOKENS = 1_000_000;
+const PRICE_LOT = BigInt(PRICE_LOT_TOKENS) * BigInt(10) ** BigInt(18);
 export function V9LaunchRoute() {
   const { id: raw } = useParams<{ id: string }>();
   const id = /^\d+$/.test(raw ?? "") ? BigInt(raw) : null;
@@ -74,7 +78,7 @@ function V9Launch({ id }: { id: bigint }) {
       { address: curve, abi: curveV9Abi, functionName: "spotPrice", chainId: TESTNET.id },
       { address: curve, abi: curveV9Abi, functionName: "launchedAt", chainId: TESTNET.id },
       { address: curve, abi: curveV9Abi, functionName: "creatorVesting", chainId: TESTNET.id },
-      { address: ROUTER_V9, abi: routerV9Abi, functionName: "quoteSell", args: [token, BigInt(10) ** BigInt(18)], chainId: TESTNET.id },
+      { address: ROUTER_V9, abi: routerV9Abi, functionName: "quoteSell", args: [token, PRICE_LOT], chainId: TESTNET.id },
     ],
   });
   const r = (i: number) => reads.data?.[i]?.result;
@@ -95,7 +99,8 @@ function V9Launch({ id }: { id: bigint }) {
 
   const phase = phaseV9({ graduated, openingEnds, realUsdc, threshold }, now);
   // Before graduation the curve's spot price; after, what one token sells for in the pool (fees included).
-  const price = graduated ? (sellOne ? Number(formatUnits(sellOne[0] + sellOne[1], 6)) : 0) : curvePrice(spot);
+  // Quoted for a million tokens: one whole token sells for under a millionth of a dollar, which rounds to 0 USDC units.
+  const price = graduated ? (sellOne ? Number(formatUnits(sellOne[0] + sellOne[1], 6)) / PRICE_LOT_TOKENS : 0) : curvePrice(spot);
   const mcap = price * Number(formatUnits(supply, 18));
   const progress = graduated ? 100 : Math.min(100, Number((realUsdc * BigInt(10_000)) / threshold) / 100);
   const auction: AuctionV2 = {
@@ -151,7 +156,7 @@ function V9Launch({ id }: { id: bigint }) {
 
       <div className="mt-8 grid gap-6 lg:grid-cols-12">
         <div className="min-h-[420px] min-w-0 rounded-xl border border-line lg:col-span-8">
-          <ProChart auction={auction} symbol={symbol} name={name ?? null} factory={FACTORY_V9} id={id.toString()} />
+          {launchedAt > 0 ? <ProChart auction={auction} symbol={symbol} name={name ?? null} factory={FACTORY_V9} id={id.toString()} /> : <p className="p-4 text-[12.5px] text-muted">Loading the chart…</p>}
         </div>
         <div className="flex flex-col gap-4 lg:col-span-4">
           <TradePanel token={l.token} curve={l.curve} symbol={symbol} phase={phase} />
