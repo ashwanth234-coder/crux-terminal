@@ -18,6 +18,7 @@ import { launchCaip19 } from "@/lib/launchTrade";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import type { AuctionV2 } from "@/lib/launchV2";
 import { compactZeros } from "@/lib/priceText";
+import { tokensForUsdc } from "@/lib/sellAmount";
 import { FACTORY_V9, ROUTER_V9, V9_ON, curvePrice, curveV9Abi, factoryV9Abi, phaseV9, registerV9Curve, routerV9Abi, type PhaseV9 } from "@/lib/v9";
 
 const usd = (v: bigint) => Number(formatUnits(v, 6)).toLocaleString("en-US", { maximumFractionDigits: 2 });
@@ -209,13 +210,59 @@ function TradePanel({ token, curve, symbol, phase }: { token: Address; curve: Ad
   const via = from === "account" && accountReady ? "account" : "wallet";
   const opening = phase === "opening";
 
-  const amountIn = useMemo(() => {
+  // What the trader holds where this trade pays from (their CRUX Account or wallet), and what all their tokens sell
+  // for: a sell is typed in USDC, and its tokens are worked out from these.
+  const holder = via === "account" ? crux.account : address;
+  const held = useReadContracts({
+    allowFailure: true,
+    query: { enabled: Boolean(holder), refetchInterval: 5_000 },
+    contracts: [
+      { address: token, abi: erc20Abi, functionName: "balanceOf", args: [holder ?? zeroAddress], chainId: TESTNET.id },
+      { address: TESTNET_USDC, abi: erc20Abi, functionName: "balanceOf", args: [holder ?? zeroAddress], chainId: TESTNET.id },
+    ],
+  });
+  const tokensHeld = (held.data?.[0]?.result as bigint | undefined) ?? BigInt(0);
+  const usdcHeld = (held.data?.[1]?.result as bigint | undefined) ?? BigInt(0);
+  const heldValue = useReadContracts({
+    allowFailure: true,
+    query: { enabled: side === "sell" && tokensHeld > BigInt(0) && !opening, refetchInterval: 10_000 },
+    contracts: [{ address: ROUTER_V9, abi: routerV9Abi, functionName: "quoteSell", args: [token, tokensHeld], chainId: TESTNET.id }],
+  });
+  const tokensHeldUsd = (heldValue.data?.[0]?.result as readonly bigint[] | undefined)?.[0];
+  const selling = side === "sell" && !opening;
+
+  // Every amount is typed in USDC: a buy spends it; a sell asks for about that much back.
+  const usdIn = useMemo(() => {
     try {
-      return amount ? parseUnits(amount, side === "buy" || opening ? 6 : 18) : BigInt(0);
+      return amount ? parseUnits(amount, 6) : BigInt(0);
     } catch {
       return BigInt(0);
     }
-  }, [amount, side, opening]);
+  }, [amount]);
+  // A sell's tokens: picked as a share of the holding (25% / 50% / Max), or found for the USDC typed. Two quotes: a
+  // first guess in proportion to what the whole holding sells for, then corrected by what that guess sells for (a
+  // smaller sale moves the price less, so it returns a little more per token).
+  const [picked, setPicked] = useState<bigint | null>(null);
+  const [sellTokens, setSellTokens] = useState<bigint>(BigInt(0));
+  useEffect(() => {
+    if (!selling) return;
+    if (picked !== null) return void setSellTokens(picked);
+    if (usdIn === BigInt(0) || tokensHeld === BigInt(0) || !tokensHeldUsd) return void setSellTokens(BigInt(0));
+    if (usdIn >= tokensHeldUsd) return void setSellTokens(usdIn === tokensHeldUsd ? tokensHeld : tokensHeld + BigInt(1));
+    let live = true;
+    const t = setTimeout(async () => {
+      const tokens = await tokensForUsdc(usdIn, tokensHeld, tokensHeldUsd, async (t) => {
+        const [got] = (await readContract(config, { chainId: TESTNET.id, address: ROUTER_V9, abi: routerV9Abi, functionName: "quoteSell", args: [token, t] })) as readonly bigint[];
+        return got;
+      });
+      if (live) setSellTokens(tokens);
+    }, 250);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [selling, picked, usdIn, tokensHeld, tokensHeldUsd, config, token]);
+  const amountIn = selling ? sellTokens : usdIn;
 
   const quote = useReadContracts({
     allowFailure: true,
@@ -252,27 +299,7 @@ function TradePanel({ token, curve, symbol, phase }: { token: Address; curve: Ad
   });
   const myDeposit = (mine.data?.[0]?.result as bigint | undefined) ?? BigInt(0);
 
-  // What the trader holds where this trade pays from (their CRUX Account or wallet), and what all their tokens sell
-  // for: a sell is typed in tokens, and a whole token is worth well under a cent.
-  const holder = via === "account" ? crux.account : address;
-  const held = useReadContracts({
-    allowFailure: true,
-    query: { enabled: Boolean(holder), refetchInterval: 5_000 },
-    contracts: [
-      { address: token, abi: erc20Abi, functionName: "balanceOf", args: [holder ?? zeroAddress], chainId: TESTNET.id },
-      { address: TESTNET_USDC, abi: erc20Abi, functionName: "balanceOf", args: [holder ?? zeroAddress], chainId: TESTNET.id },
-    ],
-  });
-  const tokensHeld = (held.data?.[0]?.result as bigint | undefined) ?? BigInt(0);
-  const usdcHeld = (held.data?.[1]?.result as bigint | undefined) ?? BigInt(0);
-  const heldValue = useReadContracts({
-    allowFailure: true,
-    query: { enabled: side === "sell" && tokensHeld > BigInt(0) && !opening, refetchInterval: 10_000 },
-    contracts: [{ address: ROUTER_V9, abi: routerV9Abi, functionName: "quoteSell", args: [token, tokensHeld], chainId: TESTNET.id }],
-  });
-  const tokensHeldUsd = (heldValue.data?.[0]?.result as readonly bigint[] | undefined)?.[0];
-  const selling = side === "sell" && !opening;
-  const overHeld = holder !== undefined && held.data !== undefined && amountIn > (selling ? tokensHeld : usdcHeld);
+  const overHeld = holder !== undefined && held.data !== undefined && (selling ? amountIn > tokensHeld : amountIn > usdcHeld);
   const quoted = quote.data !== undefined && !quote.isFetching;
   const tokensText = (v: bigint) => Number(formatUnits(v, 18)).toLocaleString("en-US", { maximumFractionDigits: 0 });
   // Why the button is off, in words (it used to grey out silently).
@@ -281,14 +308,20 @@ function TradePanel({ token, curve, symbol, phase }: { token: Address; curve: Ad
       ? null
       : overHeld
         ? selling
-          ? `You hold ${tokensText(tokensHeld)} $${symbol}${via === "account" ? " in your CRUX Account" : ""}.`
+          ? `Your $${symbol}${via === "account" ? " in your CRUX Account" : ""} sells for about $${usd(tokensHeldUsd ?? BigInt(0))}. Try that or less, or press Max.`
           : `Not enough USDC${via === "account" ? " in your CRUX Account" : ""} ($${usd(usdcHeld)}).`
         : !opening && quoted && out === BigInt(0)
           ? selling
-            ? `That's worth less than $0.000001: this box counts $${symbol} tokens, not dollars. Use 25%, 50% or Max.`
+            ? "Too small to sell: try a larger amount."
             : "Too small to buy anything."
           : null;
-  const setShare = (pct: number) => setAmount(formatUnits((tokensHeld * BigInt(pct)) / BigInt(100), 18));
+  // A share of the holding: its tokens exactly, and the box shows what they sell for.
+  const setShare = async (pct: number) => {
+    const t = (tokensHeld * BigInt(pct)) / BigInt(100);
+    setPicked(t);
+    const [got] = (await readContract(config, { chainId: TESTNET.id, address: ROUTER_V9, abi: routerV9Abi, functionName: "quoteSell", args: [token, t] })) as readonly bigint[];
+    setAmount(Number(formatUnits(got, 6)).toFixed(2));
+  };
 
   const onBase = async () => {
     if (chainId !== TESTNET.id) await switchChain({ chainId: TESTNET.id });
@@ -306,6 +339,7 @@ function TradePanel({ token, curve, symbol, phase }: { token: Address; curve: Ad
     try {
       setNote({ ok: true, text: await fn() });
       setAmount("");
+      setPicked(null);
     } catch (e) {
       const msg = (e as Error).message ?? String(e);
       setNote({ ok: false, text: /rejected|denied|cancel/i.test(msg) ? "Cancelled in the wallet. Nothing changed." : msg.split("\n")[0] });
@@ -378,7 +412,11 @@ function TradePanel({ token, curve, symbol, phase }: { token: Address; curve: Ad
               type="button"
               role="tab"
               aria-selected={side === s}
-              onClick={() => setSide(s)}
+              onClick={() => {
+                setSide(s);
+                setPicked(null);
+                setAmount("");
+              }}
               className={`h-8 flex-1 rounded-[4px] border text-[13px] ${side === s ? (s === "buy" ? "border-up/60 text-up" : "border-down/60 text-down") : "border-line-2 text-muted"}`}
             >
               {s === "buy" ? "Buy" : "Sell"}
@@ -402,12 +440,15 @@ function TradePanel({ token, curve, symbol, phase }: { token: Address; curve: Ad
         <input
           inputMode="decimal"
           value={amount}
-          onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))}
+          onChange={(e) => {
+            setPicked(null);
+            setAmount(e.target.value.replace(/[^\d.]/g, ""));
+          }}
           placeholder="0.00"
-          aria-label={side === "buy" || opening ? "Amount in USDC" : `Amount in ${symbol}`}
+          aria-label="Amount in USDC"
           className="w-full bg-transparent font-mono text-[16px] text-chrome outline-none"
         />
-        <span className="font-mono text-[12px] text-dim">{side === "buy" || opening ? "USDC" : `$${symbol}`}</span>
+        <span className="font-mono text-[12px] text-dim">USDC</span>
       </label>
 
       {holder && held.data !== undefined && (
@@ -420,7 +461,7 @@ function TradePanel({ token, curve, symbol, phase }: { token: Address; curve: Ad
           {selling && tokensHeld > BigInt(0) && (
             <span className="flex gap-1">
               {[25, 50, 100].map((pct) => (
-                <button key={pct} type="button" onClick={() => setShare(pct)} className="rounded-[4px] border border-line-2 px-1.5 py-0.5 text-muted hover:text-chrome">
+                <button key={pct} type="button" onClick={() => void setShare(pct)} className="rounded-[4px] border border-line-2 px-1.5 py-0.5 text-muted hover:text-chrome">
                   {pct === 100 ? "Max" : `${pct}%`}
                 </button>
               ))}
@@ -437,7 +478,7 @@ function TradePanel({ token, curve, symbol, phase }: { token: Address; curve: Ad
       )}
       {!opening && out > BigInt(0) && (
         <p className="mt-2 text-[12px] leading-snug text-muted">
-          About {fmtOut(out)} · at least {fmtOut(minOut)} (10% slippage)
+          {selling ? `Sells ${tokensText(amountIn)} $${symbol} · about ${fmtOut(out)}` : `About ${fmtOut(out)}`} · at least {fmtOut(minOut)} (10% slippage)
           {split && split[1] > BigInt(0) && split[2] > BigInt(0) && " · this buy reaches graduation: part on the curve, the rest in the new pool, in one transaction"}
         </p>
       )}
