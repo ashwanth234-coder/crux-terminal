@@ -10,6 +10,8 @@ import { OneClickOrderStatus, sendTime, sentOrder, useOrderWatch, type OneClickO
 import { Shell } from "@/components/launch/LaunchView";
 import { cruxBatchFactoryAbi } from "@/contracts/abis/batchAuction";
 import { useAllLaunches, type LaunchSummary } from "@/hooks/useLaunches";
+import { useV9Holdings } from "@/hooks/useV9Holdings";
+import { formatUnits as fmtUnits } from "viem";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { tradeFromAccount } from "@/lib/account";
 import { DESTINATION_SETTLER, useLaunchMarket } from "@/hooks/useLaunchMarket";
@@ -61,6 +63,8 @@ export function Portfolio() {
   const address = viaAccount ? crux.account! : wallet;
   const isConnected = Boolean(address);
   const { launches, loading } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7, FACTORY_V8);
+  // V9 tokens (curve launches): their own list below, with what each sells for now.
+  const v9 = useV9Holdings(address);
   const batch = useMemo(
     () => launches.filter((l): l is Position["launch"] => l.v2 !== null && l.version !== 1 && batchFactory(l.version as BatchVersion) !== null),
     [launches],
@@ -235,6 +239,28 @@ export function Portfolio() {
                 <OneClickOrderStatus order={accountOrder} to="your Crux account" />
               </div>
             </section>
+
+            {v9.holdings.length > 0 && (
+              <section aria-labelledby="v9-h">
+                <h2 id="v9-h" className="mb-3 text-[12px] font-medium uppercase tracking-[0.18em] text-dim">
+                  V9 tokens
+                </h2>
+                <ul className="divide-y divide-line rounded-xl border border-line">
+                  {v9.holdings.map((h) => (
+                    <li key={h.token} className="flex items-center justify-between gap-3 px-4 py-3">
+                      <Link href={`/launch/v9/${h.id}`} className="text-[13px] text-chrome hover:text-signal">
+                        ${h.symbol} <span className="text-dim">· V9 #{h.id.toString()}</span>
+                      </Link>
+                      <span className="text-right font-mono text-[12.5px] text-muted">
+                        {Number(fmtUnits(h.balance, 18)).toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                        <span className="ml-3 text-chrome">{h.value !== null ? `$${Number(fmtUnits(h.value, 6)).toLocaleString("en-US", { maximumFractionDigits: 2 })}` : "…"}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-[11.5px] text-dim">Value: what each would sell for now. Trade them on their page.</p>
+              </section>
+            )}
 
             {claims.length > 0 && (
               <section aria-labelledby="claims-h">

@@ -26,6 +26,8 @@ import { useConnectModal } from "@/providers/Web3Provider";
 import { useT } from "@/providers/I18nProvider";
 import { CreatorRewards } from "@/components/launch/V9Creator";
 import { V9_ON } from "@/lib/v9";
+import { useV9Holdings } from "@/hooks/useV9Holdings";
+import Link from "next/link";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
@@ -57,6 +59,10 @@ export function AccountPanel() {
   const [notice, setNotice] = useState<string | null>(null);
   const [to, setTo] = useState("");
   const [changing, setChanging] = useState(false);
+  // The Manage card: withdraw, the withdrawal address, creator rewards.
+  const [tab, setTab] = useState<"withdraw" | "address" | "creator">("withdraw");
+  // V9 tokens in the account: the emergency sweep takes them out too.
+  const v9 = useV9Holdings(a.account);
   const [amount, setAmount] = useState("");
   // The connected wallet's test USDC, for depositing straight from it (no token import in the wallet needed).
   const walletUsdc = useReadContract({
@@ -68,8 +74,8 @@ export function AccountPanel() {
     query: { enabled: Boolean(wallet), refetchInterval: 15_000 },
   });
 
-  // Launch tokens the account holds: shown, and swept along with USDC.
-  const { launches, loading: launchesLoading } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7, FACTORY_V8);
+  // Launch tokens the account holds: swept along with USDC (they're listed on the Portfolio page).
+  const { launches } = useAllLaunches(FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7, FACTORY_V8);
   const tokens = useMemo(() => launches.filter((l) => l.v2 && l.v2.status === 1), [launches]);
   const balances = useReadContracts({
     contracts: tokens.map((l) => ({ chainId: TESTNET.id, address: l.v2!.token, abi: erc20Abi, functionName: "balanceOf" as const, args: [a.account ?? zeroAddress] as const })),
@@ -228,7 +234,8 @@ export function AccountPanel() {
     run(
       "sweep",
       async () => {
-        const list = [TESTNET_USDC, ...held.map((h) => h.launch.v2!.token)];
+        // Every token the account holds, V9 included (a sweep that left them behind wouldn't rescue them).
+        const list = [TESTNET_USDC, ...held.map((h) => h.launch.v2!.token), ...v9.holdings.map((h) => h.token)];
         // The wallet may still be on the chain it last deposited from.
         if (chainId !== TESTNET.id) await switchChain({ chainId: TESTNET.id });
         await simulateThenWrite(config, wallet!, { address: account, abi: cruxAccountAbi, functionName: "emergencySweep", args: [list], chainId: TESTNET.id });
@@ -319,7 +326,9 @@ export function AccountPanel() {
             {wallet && (
               <>
                 {walletTokens.length > 0 && (
-                  <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4">
+                  <details className="mt-4 border-t border-line pt-4">
+                    <summary className="cursor-pointer text-[12px] text-muted hover:text-chrome">Move tokens from your wallet to this account ({walletTokens.length})</summary>
+                    <div className="mt-3 flex flex-wrap gap-2">
                     {walletTokens.map((h) => (
                       <button
                         key={h.launch.v2!.token}
@@ -341,7 +350,8 @@ export function AccountPanel() {
                         Send {fmtTokens(h.balance)} ${h.launch.symbol ?? "token"} to your account
                       </button>
                     ))}
-                  </div>
+                    </div>
+                  </details>
                 )}
               </>
             )}
@@ -354,12 +364,73 @@ export function AccountPanel() {
               Deposits sent before then are already yours.
             </p>
           )}
-          <a href={`${TESTNET_EXPLORER}/address/${account}`} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-[11.5px] text-dim underline decoration-line-2 hover:text-chrome">
-            View on Basescan
-          </a>
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11.5px]">
+            <Link href="/portfolio" className="text-chrome underline decoration-line-2 hover:text-signal">
+              Your holdings are in Portfolio →
+            </Link>
+            <a href={`${TESTNET_EXPLORER}/address/${account}`} target="_blank" rel="noopener noreferrer" className="text-dim underline decoration-line-2 hover:text-chrome">
+              View on Basescan
+            </a>
+          </div>
         </Card>
 
-        <Card title="Withdrawal address">
+        <Card title="Manage">
+          <div className="-mt-1 mb-4 flex gap-1 rounded-lg border border-line p-1 text-[12px]" role="tablist">
+            {([["withdraw", "Withdraw"], ["address", "Withdrawal address"], ...(V9_ON ? [["creator", "Creator rewards"]] : [])] as [typeof tab, string][]).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                role="tab"
+                aria-selected={tab === k}
+                onClick={() => setTab(k)}
+                className={`h-8 flex-1 rounded-[5px] px-2 transition-colors ${tab === k ? "bg-tint/[0.08] text-chrome" : "text-muted hover:text-chrome"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {tab === "withdraw" && (
+            <>
+          <p className="text-[12.5px] text-muted">{bound ? <>Test USDC to <span className="font-mono text-chrome">{short(bound)}</span>, the only place it can go. Free: Crux pays the gas.</> : (
+            <>
+              Set where withdrawals go first:{" "}
+              <button type="button" onClick={() => setTab("address")} className="text-chrome underline decoration-line-2 hover:text-signal">
+                add your withdrawal address
+              </button>
+              .
+            </>
+          )}</p>
+          <div className="mt-3 flex items-center gap-2 rounded-lg border border-line bg-void/60 px-3 py-2.5 focus-within:border-line-2">
+            <span className="font-mono text-dim">$</span>
+            <label htmlFor="withdraw-amount" className="sr-only">USDC to withdraw</label>
+            <input
+              id="withdraw-amount"
+              inputMode="decimal"
+              autoComplete="off"
+              placeholder="0.00"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+              className="w-full min-w-0 bg-transparent font-mono text-[18px] text-chrome outline-none placeholder:text-dim"
+            />
+            <button type="button" disabled={!a.usdc} onClick={() => a.usdc && setAmount(formatUnits(a.usdc, 6))} className="shrink-0 text-[11px] uppercase tracking-[0.14em] text-muted hover:text-chrome disabled:opacity-40">
+              Max
+            </button>
+          </div>
+          <button
+            type="button"
+            disabled={!bound || !units || overBalance || busy !== null}
+            onClick={() => run("withdraw", async () => {
+              await withdrawFromAccount(sign, owner, account, TESTNET_USDC, units!);
+              setAmount("");
+            }, `Withdrew $${fmtUsdc(units!)} to ${short(bound!)}.`)}
+            className={buttonClass("primary", "md", "mt-3 w-full font-semibold")}
+          >
+            {busy === "withdraw" ? "Withdrawing…" : overBalance ? "More than the account holds" : "Withdraw"}
+          </button>
+            </>
+          )}
+          {tab === "address" && (
+            <>
           {!bound ? (
             <>
               <p className="text-[12.5px] leading-relaxed text-muted">
@@ -431,7 +502,19 @@ export function AccountPanel() {
                   Change address (48-hour wait)
                 </button>
               )}
-              <div className="mt-5 border-t border-line pt-4">
+            </>
+          )}
+            </>
+          )}
+          {tab === "creator" && V9_ON && <CreatorRewards bare />}
+        </Card>
+      </div>
+
+      {bound && (
+        // The emergency exit, out of the way until it's needed: open on its own while an address change is pending.
+        <details open={Boolean(pending)} className="rounded-xl border border-line px-5 py-4">
+          <summary className="cursor-pointer text-[12px] font-medium uppercase tracking-[0.18em] text-dim hover:text-chrome">Emergency</summary>
+          <div className="mt-3">
                 <p className="text-[12px] leading-relaxed text-dim">
                   Emergency exit: connected as {short(bound)}, you can cancel any pending change and pull everything out of the account to that
                   wallet in one transaction (you pay its gas).
@@ -446,63 +529,9 @@ export function AccountPanel() {
                   </button>
                 )}
               </div>
-            </>
-          )}
-        </Card>
+        </details>
+      )}
 
-        <Card title="Withdraw">
-          <p className="text-[12.5px] text-muted">{bound ? <>Test USDC to <span className="font-mono text-chrome">{short(bound)}</span>, the only place it can go. Free: Crux pays the gas.</> : "Bind a withdrawal address first."}</p>
-          <div className="mt-3 flex items-center gap-2 rounded-lg border border-line bg-void/60 px-3 py-2.5 focus-within:border-line-2">
-            <span className="font-mono text-dim">$</span>
-            <label htmlFor="withdraw-amount" className="sr-only">USDC to withdraw</label>
-            <input
-              id="withdraw-amount"
-              inputMode="decimal"
-              autoComplete="off"
-              placeholder="0.00"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
-              className="w-full min-w-0 bg-transparent font-mono text-[18px] text-chrome outline-none placeholder:text-dim"
-            />
-            <button type="button" disabled={!a.usdc} onClick={() => a.usdc && setAmount(formatUnits(a.usdc, 6))} className="shrink-0 text-[11px] uppercase tracking-[0.14em] text-muted hover:text-chrome disabled:opacity-40">
-              Max
-            </button>
-          </div>
-          <button
-            type="button"
-            disabled={!bound || !units || overBalance || busy !== null}
-            onClick={() => run("withdraw", async () => {
-              await withdrawFromAccount(sign, owner, account, TESTNET_USDC, units!);
-              setAmount("");
-            }, `Withdrew $${fmtUsdc(units!)} to ${short(bound!)}.`)}
-            className={buttonClass("primary", "md", "mt-3 w-full font-semibold")}
-          >
-            {busy === "withdraw" ? "Withdrawing…" : overBalance ? "More than the account holds" : "Withdraw"}
-          </button>
-        </Card>
-
-        <Card title="Holdings">
-          {/* Still reading the launches or their balances: say so, not "nothing yet" (a fresh fill would look lost). */}
-          {held.length === 0 && (launchesLoading || (tokens.length > 0 && balances.isPending)) ? (
-            <p className="text-[12.5px] text-dim">Reading your holdings…</p>
-          ) : held.length === 0 ? (
-            <p className="text-[12.5px] text-dim">No launch tokens in this account yet. Buy from any token page while logged in.</p>
-          ) : (
-            <ul className="divide-y divide-line">
-              {held.map((h) => (
-                <li key={h.launch.href} className="flex items-center justify-between gap-3 py-2">
-                  <a href={h.launch.href} className="text-[13px] text-chrome hover:text-signal">
-                    ${h.launch.symbol ?? "TOKEN"}
-                  </a>
-                  <span className="font-mono text-[12.5px] text-muted">{fmtTokens(h.balance)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      </div>
-
-      {V9_ON && <CreatorRewards />}
 
       <p className="text-[11.5px] leading-relaxed text-dim">
         How it&apos;s protected: your login key signs every trade and withdrawal, and Crux&apos;s relay submits them. The account contract only lets

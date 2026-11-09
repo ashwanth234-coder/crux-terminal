@@ -89,7 +89,7 @@ export function CreatorPanel({ token, curve, creator, symbol }: { token: Address
  * Creator rewards on the CRUX Account page: every V9 token this account (or the connected wallet) created, each with
  * its fees (30% of the 1% trading fee) and vested tokens to claim.
  */
-export function CreatorRewards() {
+export function CreatorRewards({ bare = false }: { bare?: boolean } = {}) {
   const crux = useCruxAccount();
   const { address } = useConnection();
   const count = useReadContracts({ query: { refetchInterval: 30_000 }, contracts: [{ address: FACTORY_V9, abi: factoryV9Abi, functionName: "launchCount", chainId: TESTNET.id }] });
@@ -109,9 +109,9 @@ export function CreatorRewards() {
   });
   if (me.length === 0) return null;
   return (
-    <section className="rounded-xl border border-line p-5 sm:p-6">
-      <h2 className="text-[12px] font-medium uppercase tracking-[0.18em] text-dim">Creator rewards</h2>
-      <p className="mt-1 text-[12.5px] leading-snug text-muted">Tokens you launched on Crux V9: you earn 30% of the 1% fee on every trade, paid in USDC.</p>
+    <section className={bare ? "" : "rounded-xl border border-line p-5 sm:p-6"}>
+      {!bare && <h2 className="text-[12px] font-medium uppercase tracking-[0.18em] text-dim">Creator rewards</h2>}
+      <p className={`${bare ? "" : "mt-1 "}text-[12.5px] leading-snug text-muted`}>Tokens you launched on Crux V9: you earn 30% of the 1% fee on every trade, paid in USDC.</p>
       {launches.isPending && n > 0 ? (
         <p className="mt-3 text-[12.5px] text-dim">Reading your launches…</p>
       ) : mine.length === 0 ? (

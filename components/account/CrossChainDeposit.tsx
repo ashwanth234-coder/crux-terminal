@@ -289,8 +289,9 @@ export function CrossChainDeposit({
         </p>
       )}
       {fromBase && (
-        <div className="mt-3 rounded-lg border border-line px-3 py-2.5">
-          <p className="text-[11.5px] text-dim">Or send test USDC on Base Sepolia straight to your account</p>
+        <details className="mt-3 rounded-lg border border-line px-3 py-2.5">
+          {/* Collapsed: most people deposit with the box above. On mainnet this is how an exchange withdrawal arrives. */}
+          <summary className="cursor-pointer text-[11.5px] text-dim hover:text-chrome">Other ways to deposit: send USDC on Base Sepolia to your account&apos;s address</summary>
           <div className="mt-1.5 flex items-center gap-2">
             <code className="min-w-0 flex-1 break-all font-mono text-[12px] text-chrome">{account}</code>
             <button
@@ -307,7 +308,7 @@ export function CrossChainDeposit({
             </button>
           </div>
           <p className="mt-1.5 text-[11px] leading-snug text-signal">Base Sepolia only: USDC sent to this address on any other chain doesn&apos;t reach your account. Use the chain picker above instead.</p>
-        </div>
+        </details>
       )}
       <SolanaIntentModal
         request={solanaRequest}
