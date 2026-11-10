@@ -13,12 +13,37 @@ import { TESTNET } from "@/lib/chains";
 import { simulateThenWrite } from "@/lib/preflight";
 import { mineTokenSalt } from "@/lib/tokenSalt";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
+import { postRelay } from "@/lib/session";
 import { FACTORY_V9, V9_ON, curveV9Abi, factoryV9Abi, launchFromAccountV9, type V9LaunchParams } from "@/lib/v9";
 
 const metadataOf = (o: { name: string; description: string; image: string; x: string }) => {
   const json = JSON.stringify({ name: o.name, description: o.description, image: o.image, links: o.x ? { x: o.x } : {} });
   return `data:application/json;base64,${btoa(unescape(encodeURIComponent(json)))}`;
 };
+
+/**
+ * A picked file as a small square image (256 px, centre-cropped, WebP or JPEG), as base64: what the relay keeps for a token image.
+ * A big photo becomes a few KB, so it uploads in a blink.
+ */
+async function squareImage(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  const side = Math.min(bitmap.width, bitmap.height);
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 256;
+  canvas.getContext("2d")!.drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, 256, 256);
+  bitmap.close();
+  // WebP where the browser can make it (Safari can't: JPEG there).
+  for (const [type, quality] of [["image/webp", 0.85], ["image/webp", 0.6], ["image/jpeg", 0.85], ["image/jpeg", 0.6]] as const) {
+    const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, type, quality));
+    if (blob && blob.type === type && blob.size <= 38 * 1024) {
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      let bin = "";
+      for (const b of bytes) bin += String.fromCharCode(b);
+      return btoa(bin);
+    }
+  }
+  throw new Error("Couldn't shrink this picture. Try another one.");
+}
 
 /** The anti-copycat check the relay runs, run here too for a wallet launch (the factory itself doesn't check). */
 async function checkCopycat(symbol: string, image: string, x: string): Promise<string | null> {
@@ -42,6 +67,24 @@ export function V9Create() {
   const [symbol, setSymbol] = useState("");
   const [description, setDescription] = useState("");
   const [image, setImage] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const upload = async (file: File | undefined) => {
+    if (!file) return;
+    setUploadError(null);
+    if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) return setUploadError("Use a PNG, JPEG, WebP or GIF image.");
+    if (file.size > 15 * 1024 * 1024) return setUploadError("That file is over 15 MB. Pick a smaller one.");
+    setUploading(true);
+    try {
+      const data = await squareImage(file);
+      const res = await postRelay("/v1/images", { data });
+      setImage(String(res.url));
+    } catch (e) {
+      setUploadError((e as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  };
   const [x, setX] = useState("");
   const [fairOpening, setFairOpening] = useState(true);
   const [custom, setCustom] = useState(false);
@@ -140,10 +183,39 @@ export function V9Create() {
             Description <span className="text-dim">(optional)</span>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className={field} />
           </label>
-          <label className="block text-muted">
-            Image URL <span className="text-dim">(optional, https)</span>
-            <input value={image} onChange={(e) => setImage(e.target.value)} className={field} />
-          </label>
+          <div className="text-muted">
+            Image <span className="text-dim">(optional)</span>
+            <div className="mt-1 flex items-center gap-3">
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line-2 text-[10px] text-dim">
+                {/^https:\/\//.test(image) ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- the creator's own picture, any host
+                  <img src={image} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  "None"
+                )}
+              </span>
+              <label className="inline-flex h-9 cursor-pointer items-center rounded-lg border border-line-2 px-3 text-[12.5px] text-chrome transition-colors hover:border-chrome/50 has-[:disabled]:opacity-50">
+                {uploading ? "Uploading…" : image ? "Change picture" : "Upload picture"}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  disabled={uploading}
+                  onChange={(e) => (void upload(e.target.files?.[0]), (e.target.value = ""))}
+                  className="sr-only"
+                />
+              </label>
+              {image && !uploading && (
+                <button type="button" onClick={() => setImage("")} className="text-[12px] underline decoration-line-2 hover:text-chrome">
+                  Remove
+                </button>
+              )}
+            </div>
+            {uploadError && <p className="mt-1 text-[12px] text-down">{uploadError}</p>}
+            <label className="mt-2 block text-[12px] text-dim">
+              or paste an image link (https)
+              <input value={image} onChange={(e) => setImage(e.target.value)} placeholder="https://…" className={field} />
+            </label>
+          </div>
           <label className="block text-muted">
             X account <span className="text-dim">(optional)</span>
             <input value={x} onChange={(e) => setX(e.target.value)} className={field} />

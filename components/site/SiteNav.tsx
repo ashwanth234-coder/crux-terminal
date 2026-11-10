@@ -18,6 +18,9 @@ const ROW =
  * its mobile menu, the launch pages and the pro terminal. Launch opens the token launch
  * modal. The link for the page you are on is marked current and set in Signal Orange.
  */
+/** The launch form (/launch/v9/new): Launch is the current tab there, not Terminal. */
+const isLaunchForm = (pathname: string) => /^\/launch(\/v9)?\/new\/?$/.test(pathname);
+
 export function SiteNav({ variant, onNavigate, hide = [] }: { variant: "inline" | "rows"; onNavigate?: () => void; hide?: string[] }) {
   const pathname = usePathname();
   const t = useT();
@@ -31,6 +34,7 @@ export function SiteNav({ variant, onNavigate, hide = [] }: { variant: "inline" 
               onOpen={onNavigate}
               label={t(`nav.${link.label}`)}
               icon={variant === "rows"}
+              current={isLaunchForm(pathname)}
               className={variant === "inline" ? INLINE : ROW}
             />
           ) : link.href === TERMINAL_HREF ? (
@@ -38,7 +42,7 @@ export function SiteNav({ variant, onNavigate, hide = [] }: { variant: "inline" 
             <a
               href={link.href}
               onClick={onNavigate}
-              aria-current={pathname.startsWith("/launch/") ? "page" : undefined}
+              aria-current={pathname.startsWith("/launch/") && !isLaunchForm(pathname) ? "page" : undefined}
               className={variant === "inline" ? INLINE : ROW}
             >
               {t(`nav.${link.label}`)}

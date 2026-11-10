@@ -10,17 +10,20 @@ export function LaunchTokenButton({
   onOpen,
   label = "Launch Token",
   icon = true,
+  current = false,
 }: {
   className?: string;
   onOpen?: () => void;
   label?: string;
   icon?: boolean;
+  /** Marked as the page you're on (the nav's Launch on the launch form). */
+  current?: boolean;
 }) {
   const { openLaunch } = useLaunchModal();
   // Launches are curve launches now: the button opens their form.
   if (V9_ON) {
     return (
-      <Link href="/launch/v9/new" onClick={onOpen} className={className || buttonClass("outline", "md")}>
+      <Link href="/launch/v9/new" onClick={onOpen} aria-current={current ? "page" : undefined} className={className || buttonClass("outline", "md")}>
         {label} {icon && <ArrowUpRight />}
       </Link>
     );
