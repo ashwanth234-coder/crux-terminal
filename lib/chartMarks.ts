@@ -66,6 +66,37 @@ export function markTrades(transfers: TokenTransfer[], ctx: MarkContext, priceAt
   return out;
 }
 
+/** How far after a sell's transfer its pool trade (and so its candle) can land: an account sell's tokens go to escrow
+ *  at the click, and the solver sells them into the pool a few seconds later. */
+export const SELL_LAG_SECONDS = 30;
+
+/**
+ * The candle a trade's badge goes on. A buy's tokens arrive after its pool trade: the latest candle at or before it.
+ * A sell's tokens leave first (to escrow, at the click) and its pool trade lands seconds later: the first candle at or
+ * after it within SELL_LAG_SECONDS, the red candle the sale made (it sat on the candle before, often a green one).
+ */
+export function markBarTime(
+  times: number[],
+  time: number,
+  side: "buy" | "sell",
+  isDown?: (candleTime: number) => boolean,
+  interval?: number,
+): number | null {
+  const at = barTime(times, time);
+  if (side !== "sell") return at;
+  // The transfer's own candle, if one covers it (a wallet sale straight into the pool lands there).
+  const own = at !== null && (interval === undefined || time < at + interval) ? at : null;
+  if (own !== null && isDown?.(own)) return own;
+  // Otherwise the candles that start soon after it: an account sale's tokens went to escrow at the click and the sale
+  // lands seconds later. A sale pushes the price down, so the first red one (a quick buy in between made a green one).
+  const soon = times.filter((t) => t > time && t <= time + SELL_LAG_SECONDS);
+  const down = isDown ? soon.find(isDown) : soon[0];
+  if (down !== undefined) return down;
+  // No sale nearby (escrow for a standing order, a refund): the transfer's own candle, or no badge at all, never one
+  // pinned on an older, unrelated candle.
+  return own;
+}
+
 /** The latest candle time at or before `time` (candle times ascending), so a mark sits on an existing bar. */
 export function barTime(times: number[], time: number): number | null {
   let lo = 0;

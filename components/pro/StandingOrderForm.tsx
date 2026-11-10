@@ -5,7 +5,7 @@ import { formatUnits, parseUnits, type Address, type Hex } from "viem";
 import { buttonClass } from "@/components/ui/Button";
 import { TradeSettingsButton } from "@/components/pro/TradeSettingsButton";
 import type { CruxAccountState } from "@/hooks/useCruxAccount";
-import { slippageFor, useTradeSettings } from "@/hooks/useTradeSettings";
+import { saveTradeSettings, useTradeSettings } from "@/hooks/useTradeSettings";
 import { useStandingOrders } from "@/hooks/useStandingOrders";
 import { TESTNET_USDC } from "@/lib/intents";
 import { fmtTokens } from "@/lib/launch";
@@ -22,6 +22,10 @@ const LIFETIMES = [
   { label: "7 days", seconds: 7 * 86_400 },
   { label: "30 days", seconds: 30 * 86_400 },
 ];
+/** Prices in plain digits ("0.00000001992"), never "1.992e-8": what people type. */
+const PLAIN_PRICE = new Intl.NumberFormat("en-US", { maximumSignificantDigits: 4, useGrouping: false });
+/** Standing orders' slippage choices (their own setting, 10% by default). */
+const STANDING_SLIPPAGES = [500, 1_000, 1_500, 2_500];
 const pctText = (p: number) => `${p > 0 ? "+" : ""}${p.toFixed(Math.abs(p) >= 100 ? 0 : 2)}%`;
 
 /** Where each kind starts, and how far its slider reaches (percent from the current price). */
@@ -54,10 +58,11 @@ function Trigger({
   trailing?: boolean;
 }) {
   const uid = useId();
-  const [mcap, setMcap] = useState(false);
+  // A token worth well under a cent is set by market cap ($22), not price (0.0000000199): easier to type and to read.
+  const [mcap, setMcap] = useState(price > 0 && price < 0.0001);
   const target = price * (1 + (trailing ? -pct : pct) / 100);
   const [text, setText] = useState<string | null>(null);
-  const shown = text ?? (mcap ? (target * supply).toFixed(2) : target.toPrecision(4));
+  const shown = text ?? (mcap ? (target * supply).toFixed(2) : PLAIN_PRICE.format(target));
   return (
     <div className="rounded-lg border border-line bg-void/60 px-3 py-2">
       <div className="flex items-center justify-between gap-2">
@@ -93,7 +98,7 @@ function Trigger({
                 if (n > 0 && price > 0) setPct(Math.round(((mcap ? n / supply : n) / price - 1) * 10_000) / 100);
               }}
               onBlur={() => setText(null)}
-              className="w-28 bg-transparent text-right outline-none"
+              className="w-32 rounded-[4px] border border-line-2 bg-transparent px-1.5 py-0.5 text-right outline-none focus:border-chrome/60"
             />
           </span>
         )}
@@ -112,7 +117,7 @@ function Trigger({
           }}
           className="h-1 flex-1 accent-[var(--color-signal)]"
         />
-        <span className="flex w-20 items-center rounded-[4px] border border-line-2 px-1.5">
+        <span className="flex w-20 items-center rounded-[4px] border border-line-2 px-1.5 focus-within:border-chrome/60">
           <input
             inputMode="decimal"
             aria-label={`${label}, percent from now`}
@@ -216,7 +221,7 @@ export function StandingOrderForm({
         ? (tokenBalance * BigInt(Math.round(share * 100))) / BigInt(10_000)
         : BigInt(0);
   const triggerOf = (k: StandingKind) => (price ?? 0) * (1 + (k === "trailing" ? -pcts.trailing : pcts[k]) / 100);
-  const floors = kinds.map((k) => (price ? standingFloor(side, amountIn, triggerOf(k), decimals, slippageFor(settings, side)) : BigInt(0)));
+  const floors = kinds.map((k) => (price ? standingFloor(side, amountIn, triggerOf(k), decimals, settings.standingSlippageBps) : BigInt(0)));
   const overBalance = side === "buy" && crux.usdc !== null && amountIn > crux.usdc;
   const impact = reserves && amountIn > BigInt(0) ? (tradeRisk(side, amountIn, reserves)?.poolImpactPct ?? null) : null;
   const tooBig = impact !== null && impact > SOLVER_MAX_IMPACT_PCT;
@@ -338,6 +343,21 @@ export function StandingOrderForm({
       )}
 
       <div className="flex items-center justify-between text-[11px] text-dim">
+        <span title="How far under the trigger it may fill when the price moves fast (its own setting, apart from trades)">Slippage</span>
+        <span className="flex gap-1">
+          {STANDING_SLIPPAGES.map((bps) => (
+            <button
+              key={bps}
+              type="button"
+              onClick={() => saveTradeSettings({ ...settings, standingSlippageBps: bps })}
+              className={`h-6 rounded-[4px] border px-2 font-mono ${settings.standingSlippageBps === bps ? "border-chrome/60 text-chrome" : "border-line-2 text-muted hover:text-chrome"}`}
+            >
+              {bps / 100}%
+            </button>
+          ))}
+        </span>
+      </div>
+      <div className="flex items-center justify-between text-[11px] text-dim">
         <span>Valid for</span>
         <span className="flex gap-1">
           {LIFETIMES.map((l) => (
@@ -366,7 +386,7 @@ export function StandingOrderForm({
             </div>
           ))}
           <p className="px-3 py-1.5 text-[10.5px] leading-snug text-dim">
-            The minimum is the trigger price less the 0.6% pool fee and spread and your {(slippageFor(settings, side) / 100).toFixed(1)}% {side} slippage. If the price gaps past it, the
+            The minimum is the trigger price less the 0.6% pool fee and spread and your {(settings.standingSlippageBps / 100).toFixed(0)}% order slippage. If the price gaps past it, the
             order refunds to your account instead of filling worse.
             {side === "sell" && kinds.some((k) => k === "stopLoss" || k === "trailing") && " The keeper decides when a stop sells; it can never sell under the minimum."}
           </p>

@@ -11,7 +11,7 @@ import { DESTINATION_SETTLER, useLaunchMarket } from "@/hooks/useLaunchMarket";
 import { useTokenTransfers } from "@/hooks/useTokenTransfers";
 import { useStandingOrders } from "@/hooks/useStandingOrders";
 import { useCreatorVestingDays } from "@/hooks/useCreatorVesting";
-import { barTime, markTrades, type MarkWho } from "@/lib/chartMarks";
+import { SELL_LAG_SECONDS, barTime, markBarTime, markTrades, type MarkWho } from "@/lib/chartMarks";
 import { buildHolders } from "@/lib/holders";
 import { CRUX_SOLVERS, PREVIOUS_SETTLERS, SETTLER } from "@/lib/intents";
 import { EMPTY_CONTEXT, computeInstance, flowByCandle, holdersByCandle, paramsOf, poolByCandle, top10ByCandle, type StudyContext, type StudyId } from "@/lib/indicators";
@@ -253,8 +253,6 @@ export function ProChart({
     }
     return out;
   }, [swapData, feedLive, opening]);
-  // A loop, not Math.min(...): spreading a long history's times overflows the call stack.
-  const first = fills.length ? fills.reduce((m, f) => (f.time < m ? f.time : m), fills[0].time) : auction.settledAt;
   const interval = pickedInterval;
   // Only periods that traded get a candle, side by side as trading terminals draw a thin token: quiet hours aren't
   // stretches of empty axis (or rows of flat bars). Each candle still opens at the previous one's close.
@@ -532,12 +530,15 @@ export function ProChart({
     engine.setPriceLines(lines);
 
     const times = candles.map((c) => c.time);
+    // A sell's badge goes on the red candle its sale made (markBarTime).
+    const downAt = new Set(candles.filter((c) => c.close < c.open).map((c) => c.time));
+    const isDown = (time: number) => downAt.has(time);
     // One small badge per candle for each kind of trader and side ("DB", "DB 3"), on top of the candle: never a column
     // of arrows, one per trade.
     const grouped = new Map<string, { time: number; who: MarkWho; side: "buy" | "sell"; n: number }>();
     if (!marksHidden) {
       for (const m of shownMarks.slice(-300)) {
-        const time = barTime(times, m.time);
+        const time = markBarTime(times, m.time, m.side, isDown, interval);
         if (time === null) continue;
         const key = `${time}:${m.who}:${m.side}`;
         const g = grouped.get(key);
@@ -560,8 +561,11 @@ export function ProChart({
     }
     // An instant badge goes as soon as its trade's real mark is on the chart: on its candle or the next (the instant
     // candle and the mined one can fall either side of a period boundary), so the same trade never shows twice.
+    // A sell's real mark can land up to SELL_LAG_SECONDS later (its pool trade follows the click).
     const hasReal = (o: { time: number; who: MarkWho; side: "buy" | "sell" }) =>
-      [o.time - interval, o.time, o.time + interval].some((t) => grouped.has(`${t}:${o.who}:${o.side}`));
+      [...grouped.values()].some(
+        (g) => g.who === o.who && g.side === o.side && g.time >= o.time - interval && g.time <= o.time + (o.side === "sell" ? SELL_LAG_SECONDS : interval),
+      );
     ownBadges.current = ownBadges.current.filter((o) => o.until > nowMs && !hasReal(o));
     // Drawn as electric green (buy) or red (sell) discs with the label inside in white (badges.ts).
     const barOf = new Map(candles.map((c) => [c.time, c]));
