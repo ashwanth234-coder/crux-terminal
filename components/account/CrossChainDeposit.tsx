@@ -5,6 +5,7 @@ import { encodeAbiParameters, erc20Abi, formatUnits, keccak256, parseAbi, parseU
 import { useConfig, useConnection, useReadContract, useReadContracts } from "wagmi";
 import { getConnection, signTypedData, simulateContract, switchChain, waitForTransactionReceipt, writeContract } from "wagmi/actions";
 import { buttonClass } from "@/components/ui/Button";
+import { Menu } from "@/components/ui/Menu";
 import { SolanaIntentModal, type SolanaOrderRequest } from "@/components/terminal/SolanaIntentModal";
 import { useExactApproval } from "@/hooks/useExactApproval";
 import { useSolanaPayer } from "@/hooks/useSolanaPayer";
@@ -248,31 +249,20 @@ export function CrossChainDeposit({
         <span className="text-[11px] text-signal">Base Sepolia only</span>
       </div>
 
-      <label className="relative mt-3 block">
-        <span className="text-[12px] text-dim">Deposit from</span>
-        <select
+      <div className="mt-3">
+        <p className="text-[12px] text-dim">Deposit from</p>
+        <Menu<string>
+          className="mt-1"
+          label="Deposit from"
           value={key}
-          onChange={(e) => {
-            setKey(e.target.value);
+          onChange={(k) => {
+            setKey(k);
             setAmount("");
             setStep({ kind: "idle" });
           }}
-          className="mt-1 h-10 w-full appearance-none rounded-lg border border-line-2 bg-void/60 pl-3 pr-8 text-[13px] text-chrome outline-none focus:border-chrome/50"
-        >
-          {CHOICES.map((o) => {
-            const b = balanceOf(o.key);
-            return (
-              <option key={o.key} value={o.key}>
-                {o.name}
-                {b ? ` · ${b}` : ""}
-              </option>
-            );
-          })}
-        </select>
-        <span className="pointer-events-none absolute bottom-3 right-3 text-[10px] text-dim" aria-hidden="true">
-          ▾
-        </span>
-      </label>
+          options={CHOICES.map((o) => ({ value: o.key, label: o.name, hint: balanceOf(o.key) ?? undefined }))}
+        />
+      </div>
       {needsWallet ? (
         <button type="button" onClick={openConnect} className={buttonClass("outline", "sm", "mt-2")}>
           Connect a wallet to deposit from {fromBase ? BASE_NAME : origin?.name}

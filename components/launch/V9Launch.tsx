@@ -12,6 +12,7 @@ import { TerminalShell } from "@/components/pro/TerminalShell";
 import { LiveTape } from "@/components/pro/LiveTape";
 import { Momentum } from "@/components/pro/Momentum";
 import { V9TokenBar } from "@/components/launch/V9TokenBar";
+import { Menu } from "@/components/ui/Menu";
 import { buttonClass } from "@/components/ui/Button";
 import { TESTNET } from "@/lib/chains";
 import { TESTNET_USDC } from "@/lib/intents";
@@ -27,6 +28,9 @@ import { FACTORY_V9, ROUTER_V9, V9_ON, curvePrice, curveV9Abi, factoryV9Abi, pha
 
 const usd = (v: bigint) => Number(formatUnits(v, 6)).toLocaleString("en-US", { maximumFractionDigits: 2 });
 const SLIPPAGE_BPS = BigInt(1_000); // 10%, the terminal's default
+/** One-click amounts: quick buys in USDC, quick sells as a share of the holding. */
+const QUICK_BUYS = [1, 5, 10, 25];
+const QUICK_SELLS = [25, 50, 100];
 
 function useNowSeconds() {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
@@ -318,16 +322,9 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
           : `Not enough USDC${via === "account" ? " in your CRUX Account" : ""} ($${usd(usdcHeld)}).`
         : !opening && quoted && out === BigInt(0)
           ? selling
-            ? "Too small to sell: try a larger amount."
+            ? "Too small to sell: try a larger amount, or a quick sell."
             : "Too small to buy anything."
           : null;
-  // A share of the holding: its tokens exactly, and the box shows what they sell for.
-  const setShare = async (pct: number) => {
-    const t = (tokensHeld * BigInt(pct)) / BigInt(100);
-    setPicked(t);
-    const [got] = (await readContract(config, { chainId: TESTNET.id, address: ROUTER_V9, abi: routerV9Abi, functionName: "quoteSell", args: [token, t] })) as readonly bigint[];
-    setAmount(Number(formatUnits(got, 6)).toFixed(2));
-  };
 
   const onBase = async () => {
     if (chainId !== TESTNET.id) await switchChain({ chainId: TESTNET.id });
@@ -353,6 +350,31 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
       setBusy(null);
     }
   };
+
+  /** One tap from the CRUX Account: a fresh quote for exactly `amount` (USDC for a buy, tokens for a sell), signed with a
+   *  minimum 10% under it, sent through the relay. Nothing to type, no pop-up. */
+  const quick = (label: string, amount: bigint) =>
+    run(`${label}…`, async () => {
+      if (!accountReady) throw new Error("Log in to trade in one click from your CRUX Account.");
+      if (amount <= BigInt(0)) throw new Error("Nothing to sell yet.");
+      const buy = side === "buy";
+      const [got] = (await readContract(config, {
+        chainId: TESTNET.id,
+        address: ROUTER_V9,
+        abi: routerV9Abi,
+        functionName: buy ? "quoteBuy" : "quoteSell",
+        args: [token, amount],
+      })) as readonly bigint[];
+      if (got === BigInt(0)) throw new Error("Too small to trade.");
+      const res = await tradeFromAccount(crux.sign!, crux.owner!, crux.account!, {
+        tokenIn: buy ? TESTNET_USDC : token,
+        amountIn: amount,
+        tokenOut: launchCaip19(buy ? token : TESTNET_USDC),
+        minAmountOut: (got * (BigInt(10_000) - SLIPPAGE_BPS)) / BigInt(10_000),
+      });
+      const what = buy ? `Bought $${usd(amount)} of $${symbol}` : `Sold about $${usd(got)} of $${symbol}`;
+      return res.filled ? `${what}.` : `${what}: order placed, it fills in seconds.`;
+    });
 
   const trade = () =>
     run("Sending…", async () => {
@@ -444,34 +466,65 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
       )}
 
       {!opening && (
-        <label className="relative mt-3 block">
-          <span className="sr-only">Order type</span>
-          <select
-            value={orderType}
-            onChange={(e) => {
-              const t = e.target.value as OrderType;
-              setOrderType(t);
-              // Standing orders run from the CRUX Account (the keeper sends them with this page closed).
-              if (t !== "market") setFrom("account");
-            }}
-            className="h-10 w-full appearance-none rounded-lg border border-line-2 bg-transparent pl-3 pr-7 text-[13px] text-chrome outline-none focus:border-chrome/50"
-          >
-            <option value="market">Market: {side === "buy" ? "buy" : "sell"} now</option>
-            {side === "buy" ? (
-              <option value="dip">Buy the dip</option>
-            ) : (
-              <>
-                <option value="takeProfit">Take profit</option>
-                <option value="stopLoss">Stop loss</option>
-                <option value="trailing">Trailing stop</option>
-                <option value="bracket">Take profit + stop loss</option>
-              </>
-            )}
-          </select>
-          <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-dim" aria-hidden="true">
-            ▾
-          </span>
-        </label>
+        <Menu<OrderType>
+          className="mt-3"
+          label="Order type"
+          value={orderType}
+          onChange={(t) => {
+            setOrderType(t);
+            // Standing orders run from the CRUX Account (the keeper sends them with this page closed).
+            if (t !== "market") setFrom("account");
+          }}
+          options={
+            side === "buy"
+              ? [
+                  { value: "market", label: "Market: buy now" },
+                  { value: "dip", label: "Buy the dip" },
+                ]
+              : [
+                  { value: "market", label: "Market: sell now" },
+                  { value: "takeProfit", label: "Take profit" },
+                  { value: "stopLoss", label: "Stop loss" },
+                  { value: "trailing", label: "Trailing stop" },
+                  { value: "bracket", label: "Take profit + stop loss" },
+                ]
+          }
+        />
+      )}
+
+      {!opening && orderType === "market" && via === "account" && (
+        // One tap trades from the CRUX Account at a fresh quote, with a minimum 10% under it: no typing, no pop-up.
+        <div className="mt-3">
+          <p className="text-[11px] uppercase tracking-[0.14em] text-dim">{side === "buy" ? "Quick buy · one click" : "Quick sell · one click"}</p>
+          <div className="mt-1.5 grid grid-cols-4 gap-1.5">
+            {side === "buy"
+              ? QUICK_BUYS.map((d) => {
+                  const units = BigInt(d) * BigInt(1_000_000);
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      disabled={busy !== null || (held.data !== undefined && usdcHeld < units)}
+                      onClick={() => void quick(`Buying $${d} of $${symbol}`, units)}
+                      className="h-9 rounded-lg border border-up/40 font-mono text-[12.5px] text-up transition-colors hover:border-up hover:bg-up/[0.06] disabled:opacity-35"
+                    >
+                      ${d}
+                    </button>
+                  );
+                })
+              : QUICK_SELLS.map((pct) => (
+                  <button
+                    key={pct}
+                    type="button"
+                    disabled={busy !== null || tokensHeld === BigInt(0)}
+                    onClick={() => void quick(`Selling ${pct}% of your $${symbol}`, (tokensHeld * BigInt(pct)) / BigInt(100))}
+                    className={`h-9 rounded-lg border border-down/40 font-mono text-[12.5px] text-down transition-colors hover:border-down hover:bg-down/[0.06] disabled:opacity-35 ${pct === 100 ? "col-span-2" : ""}`}
+                  >
+                    {pct === 100 ? "100% · all" : `${pct}%`}
+                  </button>
+                ))}
+          </div>
+        </div>
       )}
 
       {!opening && orderType !== "market" ? (
@@ -512,15 +565,6 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
               ? `You hold ${tokensText(tokensHeld)} $${symbol}${tokensHeldUsd !== undefined ? ` (about $${usd(tokensHeldUsd)})` : ""}`
               : `USDC: $${usd(usdcHeld)}`}
           </span>
-          {selling && tokensHeld > BigInt(0) && (
-            <span className="flex gap-1">
-              {[25, 50, 100].map((pct) => (
-                <button key={pct} type="button" onClick={() => void setShare(pct)} className="rounded-[4px] border border-line-2 px-1.5 py-0.5 text-muted hover:text-chrome">
-                  {pct === 100 ? "Max" : `${pct}%`}
-                </button>
-              ))}
-            </span>
-          )}
         </div>
       )}
 
