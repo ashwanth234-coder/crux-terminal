@@ -2,7 +2,7 @@ import { getAddress, parseAbi, parseAbiItem, zeroAddress, type Address } from "v
 import { batchPoolAbi, guardianAbi } from "@/lib/batchPool";
 import { CRUX_SOLVERS, TESTNET_USDC } from "@/lib/intents";
 import { logClient, type ReadLogs } from "@/lib/logs";
-import { curveToTrade, fillToTrade, swapToTrade, type PoolTrade } from "@/lib/tradeDecode";
+import { curveToTrade, fillToTrade, openingClaimToTrade, settlementFromState, swapToTrade, type OpeningSettlement, type PoolTrade } from "@/lib/tradeDecode";
 import { curveV9Abi, v9CurveOf } from "@/lib/v9";
 import { logTimeMs } from "@/lib/logTime";
 import { externalPoolOf, externalTradeReader } from "@/lib/externalPools";
@@ -56,6 +56,30 @@ export function readBatchPool(pair: Address) {
     batchPools.set(pair, known);
   }
   return known;
+}
+
+/** V9 fair openings: the one buy, and each depositor's claim of their share (their buy at its one price). */
+const OPENING_CLAIMED = parseAbiItem("event OpeningClaimed(address indexed recipient, uint256 tokens, uint256 refund)");
+const OPENING_VIEWS = parseAbi([
+  "function openingUsed() view returns (uint256)",
+  "function openingTokens() view returns (uint256)",
+  "function k() view returns (uint256)",
+  "function virtualUsdc() view returns (uint256)",
+]);
+/** Per curve: its opening's settlement and virtual USDC from its stored values, read once (fixed once settled). */
+const openingOf = new Map<string, Promise<{ settled: OpeningSettlement | null; virtualUsdc: bigint } | null>>();
+function curveOpening(curve: Address) {
+  const key = curve.toLowerCase();
+  let p = openingOf.get(key);
+  if (!p) {
+    const read = (functionName: "openingUsed" | "openingTokens" | "k" | "virtualUsdc") =>
+      logClient.readContract({ address: curve, abi: OPENING_VIEWS, functionName }) as Promise<bigint>;
+    p = Promise.all([read("openingUsed"), read("openingTokens"), read("k"), read("virtualUsdc")])
+      .then(([used, tokens, k, virtualUsdc]) => ({ settled: settlementFromState({ used, tokens, k, virtualUsdc }), virtualUsdc }))
+      .catch(() => (openingOf.delete(key), null));
+    openingOf.set(key, p);
+  }
+  return p;
 }
 
 /** Reads one block range of a pair's trades (for lib/logs scanLogs), oldest first. */
@@ -112,6 +136,19 @@ export function poolTradeReader(pair: Address, tokenDecimals = 18): ReadLogs<Poo
           };
         })
       : [];
-    return [...swaps, ...fills, ...curveTrades].sort((a, b) => (a.blockNumber === b.blockNumber ? a.logIndex - b.logIndex : a.blockNumber < b.blockNumber ? -1 : 1));
+    // V9: fair-opening claims, as their depositors' buys at the opening's one price.
+    const claims = curve ? await logClient.getLogs({ address: curve, event: OPENING_CLAIMED, fromBlock, toBlock }) : [];
+    const opening = curve && claims.length ? await curveOpening(curve) : null;
+    const claimTrades = opening?.settled
+      ? claims.flatMap((l) => {
+          const t = openingClaimToTrade({ recipient: l.args.recipient!, tokens: l.args.tokens! }, opening.settled!, opening.virtualUsdc, tokenDecimals, CRUX_SOLVERS, {
+            txHash: l.transactionHash,
+            blockNumber: l.blockNumber,
+            logIndex: l.logIndex,
+          });
+          return t ? [{ ...t, timeMs: logTimeMs(l) }] : [];
+        })
+      : [];
+    return [...swaps, ...fills, ...curveTrades, ...claimTrades].sort((a, b) => (a.blockNumber === b.blockNumber ? a.logIndex - b.logIndex : a.blockNumber < b.blockNumber ? -1 : 1));
   };
 }
