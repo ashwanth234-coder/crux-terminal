@@ -89,6 +89,13 @@ export function V9TokenBar({
                 {p.label}
                 {phase === "opening" && ` · ${openingLeft}s`}
               </span>
+              {/* The launch's safety terms, as badges a buyer sees first. */}
+              <span
+                title={vestingSeconds === 0 ? "The creator unlocked their 2.4% at launch: they can sell straight away" : "The creator's 2.4% of supply unlocks gradually over this period"}
+                className={`inline-flex shrink-0 items-center rounded-[3px] border px-1.5 py-[3px] font-mono text-[9.5px] uppercase leading-none tracking-[0.16em] ${vestingSeconds === 0 ? "border-down/60 text-down" : "border-up/50 text-up"}`}
+              >
+                {vestingSeconds === 0 ? "Creator unlocked" : `Creator locked ${Math.round(vestingSeconds / 86_400)}d`}
+              </span>
             </div>
             <div className="mt-1 flex items-center gap-2 text-[11.5px] text-muted">
               {name && <span className="truncate">{name}</span>}
@@ -154,6 +161,13 @@ export function V9TokenBar({
         <div className="mt-2.5 h-1 w-full overflow-hidden rounded-full bg-line" aria-label={`${progress.toFixed(0)}% of the way to graduation`}>
           <div className="h-full bg-up transition-[width]" style={{ width: `${progress}%` }} />
         </div>
+      )}
+      {phase === "opening" && (
+        <p className="mt-3 rounded-[4px] border border-signal/40 bg-signal/[0.06] px-3 py-2 text-[12.5px] text-chrome">
+          <span className="font-mono text-signal">Fair opening · {openingLeft}s left.</span> Everyone who buys now, the creator included, pays the
+          same price, and the tokens are shared in proportion to what each put in, so bots can&apos;t snipe the first block. Trading on the curve
+          starts when the timer ends.
+        </p>
       )}
     </div>
   );
