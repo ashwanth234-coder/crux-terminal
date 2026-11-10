@@ -130,3 +130,51 @@ export function curveToTrade(
     ...at,
   };
 }
+
+/** V9: a fair opening's settlement (its OpeningSettled event): the USDC it used (fee included), the fee, the tokens. */
+export type OpeningSettlement = { used: bigint; fee: bigint; tokens: bigint };
+
+/**
+ * A V9 fair-opening claim (OpeningClaimed) as a buy: the recipient's tokens at the opening's one price (USDC used over
+ * tokens bought, fee included), credited to the recipient. `priceAfter` is the curve's price once the opening
+ * settled. The opening is always the curve's first buy, so with k = virtualUsdc × curveSupply its USDC side is then
+ * virtualUsdc + net and its token side virtualUsdc × tokens / net. Null for an empty opening or claim.
+ */
+export function openingClaimToTrade(
+  args: { recipient: Address; tokens: bigint },
+  settled: OpeningSettlement,
+  virtualUsdc: bigint | undefined,
+  tokenDecimals: number,
+  solver: Solvers,
+  at: Positioned,
+): Omit<PoolTrade, "time"> | null {
+  const zero = BigInt(0);
+  if (settled.tokens === zero || args.tokens === zero || settled.used === zero) return null;
+  const net = settled.used - settled.fee;
+  return {
+    side: "buy",
+    usdc: (args.tokens * settled.used) / settled.tokens,
+    tokens: args.tokens,
+    price: priceOf(settled.used, settled.tokens, tokenDecimals),
+    ...(virtualUsdc !== undefined && virtualUsdc > zero && net > zero ? { priceAfter: priceOf(virtualUsdc + net, (virtualUsdc * settled.tokens) / net, tokenDecimals) } : {}),
+    to: args.recipient,
+    viaIntent: isSolver(args.recipient, solver),
+    venue: "curve",
+    ...at,
+  };
+}
+
+/**
+ * An opening's settlement from the curve's stored values (openingUsed, openingTokens, k, virtualUsdc), so no event
+ * needs finding. The opening is the curve's first buy: its token side after is k / (virtualUsdc + net), so
+ * net = k / (curveSupply − tokens) − virtualUsdc with curveSupply = k / virtualUsdc, and the fee is what's left of used.
+ * Null when nothing was bought.
+ */
+export function settlementFromState(s: { used: bigint; tokens: bigint; k: bigint; virtualUsdc: bigint }): OpeningSettlement | null {
+  const zero = BigInt(0);
+  if (s.used === zero || s.tokens === zero || s.virtualUsdc === zero) return null;
+  const supply = s.k / s.virtualUsdc;
+  if (supply <= s.tokens) return null;
+  const net = s.k / (supply - s.tokens) - s.virtualUsdc;
+  return { used: s.used, fee: net > zero && net < s.used ? s.used - net : zero, tokens: s.tokens };
+}

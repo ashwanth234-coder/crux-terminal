@@ -93,6 +93,8 @@ export function buildLedger(transfers: TokenTransfer[], swapsNewestFirst: PoolTr
   // One clear pays many batch fills in one transaction: match each payout to its owner's fill.
   const batchFill = new Map(swapsNewestFirst.filter((s) => s.venue === "batch-pool").map((s) => [`${s.txHash}:${s.to.toLowerCase()}`, s]));
   const solverBuys = swapsNewestFirst.filter((s) => s.viaIntent && s.side === "buy");
+  // A wallet's own curve buy or fair-opening claim: its trade in the same transaction, credited to it.
+  const buyByTx = new Map(swapsNewestFirst.filter((s) => s.side === "buy" && s.venue === "curve").map((s) => [`${s.txHash}:${s.to.toLowerCase()}`, s]));
   const solverPriceAt = (block: bigint) => solverBuys.find((s) => s.blockNumber <= block)?.price ?? null;
   const claimTxs = new Set(transfers.filter((t) => t.kind === "claim").map((t) => t.txHash));
   const oldestFirst = [...swapsNewestFirst].reverse();
@@ -196,6 +198,10 @@ export function buildLedger(transfers: TokenTransfer[], swapsNewestFirst: PoolTr
     } else if (solvers.includes(fromKey) || fromKey === key(ctx.destinationSettler)) {
       price = solverPriceAt(t.blockNumber);
       if (price !== null) r.approx = true;
+    }
+    if (price === null) {
+      const own = buyByTx.get(`${t.txHash}:${key(t.to)}`);
+      if (own) price = own.price;
     }
     if (price !== null && price > 0) {
       r.pricedQty += qty;
