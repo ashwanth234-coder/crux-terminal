@@ -69,3 +69,33 @@ test("a mark sits on the latest bar at or before its time", () => {
   assert.equal(barTime(times, 50), 100, "before the first bar: the first bar");
   assert.equal(barTime([], 5), null);
 });
+
+test("markBarTime: a sell's badge goes on the candle its sale made, after its escrow transfer; a buy's stays put", async () => {
+  const { markBarTime } = await import("./chartMarks.ts");
+  // 1-second candles: a buy's candle at 100, then the account sell clicked at 101 whose pool sale lands at 106.
+  const times = [100, 106];
+  assert.equal(markBarTime(times, 101, "sell"), 106, "on the red candle the sale made, not the green one before it");
+  assert.equal(markBarTime(times, 101, "buy"), 100, "a buy keeps the latest candle at or before it");
+  // No candle soon after (the sale fell in the same candle, on a longer timeframe): the transfer's own candle.
+  assert.equal(markBarTime([0, 300], 120, "sell"), 0);
+  assert.equal(markBarTime([100, 200], 101, "sell"), 100, "a later candle beyond the lag isn't the sale's");
+});
+
+test("markBarTime: with a quick buy between the click and the sale, the sell's badge skips the green candle", async () => {
+  const { markBarTime } = await import("./chartMarks.ts");
+  // The sell clicked at 101; a quick buy's green candle at 103; the sale's red candle at 106.
+  const down = new Set([106]);
+  assert.equal(markBarTime([100, 103, 106], 101, "sell", (t) => down.has(t)), 106);
+  // No red candle soon after (on a longer timeframe the sale shares the click's candle): the click's own candle.
+  assert.equal(markBarTime([0, 300], 120, "sell", () => false), 0);
+});
+
+test("markBarTime: an escrow transfer with no sale nearby gets no badge, never one on an older candle", async () => {
+  const { markBarTime } = await import("./chartMarks.ts");
+  const down = new Set([5_000]);
+  // $MT: a creator escrow on the 1s chart, the latest candle 75 minutes earlier, no sale within 30 s.
+  assert.equal(markBarTime([5_000, 20_000], 9_619, "sell", (t) => down.has(t), 1), null);
+  // A wallet sale straight into the pool: its own (red) candle, even with another red candle seconds later.
+  const red = new Set([200, 205]);
+  assert.equal(markBarTime([200, 205], 200, "sell", (t) => red.has(t), 1), 200);
+});

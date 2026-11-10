@@ -16,6 +16,11 @@ export type TradeSettings = {
   sellPresets: number[];
   /** A quick size places the order straight away (from a Crux account or a one-click session) instead of filling the box. */
   instant: boolean;
+  /**
+   * Standing orders' own slippage (take profit, stop loss, trailing, buy the dip), basis points: kept apart from the
+   * trade setting, which traders often loosen (a 50% sell slippage let a take profit fill half under its trigger).
+   */
+  standingSlippageBps: number;
 };
 
 const KEY = "crux:trade-settings:v1";
@@ -26,6 +31,7 @@ export const DEFAULT_TRADE_SETTINGS: TradeSettings = {
   sellSlippageBps: DEFAULT_SLIPPAGE_BPS,
   buyPresets: [10, 20, 50, 100],
   sellPresets: [25, 50, 75, 100],
+  standingSlippageBps: 1_000,
   instant: true,
 };
 /** The widest allowance the ticket will sign (the relay's price guard refuses anything looser). */
@@ -56,6 +62,7 @@ function read(): TradeSettings {
       buyPresets: four(raw?.buyPresets, (n) => Number.isFinite(n) && n > 0, DEFAULT_TRADE_SETTINGS.buyPresets),
       sellPresets: four(raw?.sellPresets, (n) => Number.isFinite(n) && n > 0 && n <= 100, DEFAULT_TRADE_SETTINGS.sellPresets),
       instant: typeof raw?.instant === "boolean" ? raw.instant : true,
+      standingSlippageBps: clampBps(raw?.standingSlippageBps, 1_000),
     };
   } catch {
     cached = DEFAULT_TRADE_SETTINGS;

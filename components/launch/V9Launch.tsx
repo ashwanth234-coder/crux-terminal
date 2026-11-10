@@ -13,6 +13,8 @@ import { LiveTape } from "@/components/pro/LiveTape";
 import { Momentum } from "@/components/pro/Momentum";
 import { V9TokenBar } from "@/components/launch/V9TokenBar";
 import { Menu } from "@/components/ui/Menu";
+import { TradeSettingsButton } from "@/components/pro/TradeSettingsButton";
+import { useTradeSettings } from "@/hooks/useTradeSettings";
 import { buttonClass } from "@/components/ui/Button";
 import { TESTNET } from "@/lib/chains";
 import { TESTNET_USDC } from "@/lib/intents";
@@ -28,9 +30,6 @@ import { FACTORY_V9, ROUTER_V9, V9_ON, curvePrice, curveV9Abi, factoryV9Abi, pha
 
 const usd = (v: bigint) => Number(formatUnits(v, 6)).toLocaleString("en-US", { maximumFractionDigits: 2 });
 const SLIPPAGE_BPS = BigInt(1_000); // 10%, the terminal's default
-/** One-click amounts: quick buys in USDC, quick sells as a share of the holding. */
-const QUICK_BUYS = [1, 5, 10, 25];
-const QUICK_SELLS = [25, 50, 100];
 
 function useNowSeconds() {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
@@ -199,6 +198,8 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
   // Market, or a standing order (buy the dip; stop loss, take profit, trailing, both) that the keeper sends from the
   // CRUX Account when the price gets there, with this page closed.
   const [orderType, setOrderType] = useState<OrderType>("market");
+  // The one-click sizes: your four quick-buy dollar amounts and quick-sell shares, edited with the gear beside them.
+  const settings = useTradeSettings();
   const [from, setFrom] = useState<"account" | "wallet">("account");
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -495,11 +496,14 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
       {!opening && orderType === "market" && via === "account" && (
         // One tap trades from the CRUX Account at a fresh quote, with a minimum 10% under it: no typing, no pop-up.
         <div className="mt-3">
-          <p className="text-[11px] uppercase tracking-[0.14em] text-dim">{side === "buy" ? "Quick buy · one click" : "Quick sell · one click"}</p>
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] uppercase tracking-[0.14em] text-dim">{side === "buy" ? "Quick buy · one click" : "Quick sell · one click"}</p>
+            <TradeSettingsButton side={side} />
+          </div>
           <div className="mt-1.5 grid grid-cols-4 gap-1.5">
             {side === "buy"
-              ? QUICK_BUYS.map((d) => {
-                  const units = BigInt(d) * BigInt(1_000_000);
+              ? settings.buyPresets.map((d) => {
+                  const units = parseUnits(String(d), 6);
                   return (
                     <button
                       key={d}
@@ -512,15 +516,15 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
                     </button>
                   );
                 })
-              : QUICK_SELLS.map((pct) => (
+              : settings.sellPresets.map((pct) => (
                   <button
                     key={pct}
                     type="button"
                     disabled={busy !== null || tokensHeld === BigInt(0)}
-                    onClick={() => void quick(`Selling ${pct}% of your $${symbol}`, (tokensHeld * BigInt(pct)) / BigInt(100))}
-                    className={`h-9 rounded-lg border border-down/40 font-mono text-[12.5px] text-down transition-colors hover:border-down hover:bg-down/[0.06] disabled:opacity-35 ${pct === 100 ? "col-span-2" : ""}`}
+                    onClick={() => void quick(`Selling ${pct}% of your $${symbol}`, (tokensHeld * BigInt(Math.round(pct * 100))) / BigInt(10_000))}
+                    className="h-9 rounded-lg border border-down/40 font-mono text-[12.5px] text-down transition-colors hover:border-down hover:bg-down/[0.06] disabled:opacity-35"
                   >
-                    {pct === 100 ? "100% · all" : `${pct}%`}
+                    {pct >= 100 ? "All" : `${pct}%`}
                   </button>
                 ))}
           </div>
