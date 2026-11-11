@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { encodeAbiParameters, erc20Abi, formatUnits, keccak256, parseAbi, parseUnits, toHex, zeroAddress, type Address } from "viem";
 import { useConfig, useConnection, useReadContract, useReadContracts } from "wagmi";
 import { getConnection, signTypedData, simulateContract, switchChain, waitForTransactionReceipt, writeContract } from "wagmi/actions";
@@ -11,6 +11,7 @@ import { useExactApproval } from "@/hooks/useExactApproval";
 import { useSolanaPayer } from "@/hooks/useSolanaPayer";
 import { useConnectModal } from "@/providers/Web3Provider";
 import { TESTNET } from "@/lib/chains";
+import { RELAY_URL } from "@/lib/session";
 import { CROSS_CHAIN_ORIGINS, toUsdc6, type CrossChainOrigin } from "@/lib/crosschain";
 import { feeHeadroom } from "@/lib/fees";
 import { TESTNET_USDC, orderNonce } from "@/lib/intents";
@@ -62,6 +63,33 @@ const CHOICES: { key: string; name: string }[] = [{ key: BASE, name: BASE_NAME }
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
 type Step = { kind: "idle" } | { kind: "busy"; label: string } | { kind: "opened"; origin: Origin; hash: `0x${string}` } | { kind: "error"; message: string };
+
+/** Whole dollars, rounded down: a limit is never shown above what it is. */
+const capText = (units6: bigint) => (Number(units6 / BigInt(10_000)) / 100).toLocaleString("en-US", { maximumFractionDigits: 0 });
+
+/**
+ * How much a deposit from another chain can be right now: what Crux holds on Base to pay it (the relay's
+ * /v1/health), read every 20 seconds while a non-Base chain is picked. Undefined while unknown.
+ */
+function useDepositCapacity(enabled: boolean): bigint | undefined {
+  const [cap, setCap] = useState<bigint | undefined>(undefined);
+  useEffect(() => {
+    if (!enabled) return;
+    let live = true;
+    const read = () =>
+      fetch(`${RELAY_URL}/v1/health`, { cache: "no-store" })
+        .then((r) => r.json())
+        .then((j: { depositUsdc?: string }) => live && setCap(j.depositUsdc !== undefined ? BigInt(j.depositUsdc) : undefined))
+        .catch(() => {});
+    void read();
+    const t = setInterval(read, 20_000);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, [enabled]);
+  return enabled ? cap : undefined;
+}
 
 /**
  * Every way into the Crux account, in one box: pick the chain, enter the amount, Deposit. From Base Sepolia it's one
@@ -136,6 +164,10 @@ export function CrossChainDeposit({
   })();
   const held = fromBase ? base.balance : fromSolana ? (solana.usdc ?? undefined) : originBalance.data;
   const over = units !== null && held !== undefined && units > held;
+  // A deposit from another chain is paid on Base from Crux's own USDC: never one bigger than that can cover now.
+  const capacity = useDepositCapacity(!fromBase);
+  const units6 = units === null ? null : fromSolana || !origin ? units : toUsdc6(units, origin.decimals);
+  const overCapacity = !fromBase && units6 !== null && capacity !== undefined && units6 > capacity;
   const busy = step.kind === "busy" || (fromBase && base.busy);
 
   /** Solana: the review modal connects the wallet if needed, checks USDC and SOL, and escrows the order. */
@@ -282,7 +314,7 @@ export function CrossChainDeposit({
             className="w-full min-w-0 bg-transparent font-mono text-[15px] text-chrome outline-none placeholder:text-dim"
           />
         </div>
-        <button type="button" disabled={!units || over || busy} onClick={() => void deposit()} className={buttonClass("primary", "sm", "shrink-0 font-semibold")}>
+        <button type="button" disabled={!units || over || overCapacity || busy} onClick={() => void deposit()} className={buttonClass("primary", "sm", "shrink-0 font-semibold")}>
           {busy ? "Depositing…" : "Deposit"}
         </button>
       </div>
@@ -309,6 +341,13 @@ export function CrossChainDeposit({
             ? `Solana wallet: ${solana.usdc !== null ? `$${Number(formatUnits(solana.usdc, 6)).toFixed(2)}` : "…"} devnet USDC (free at faucet.circle.com). `
             : "Connect a Solana wallet in the next step. Devnet USDC is free at faucet.circle.com. "}
           Arrives in your Crux account on Base in about a minute, no fee. Needs a little devnet SOL for network fees.
+        </p>
+      )}
+      {!fromBase && capacity !== undefined && (
+        <p className={`mt-1 text-[11.5px] ${overCapacity ? "text-down" : "text-dim"}`}>
+          {overCapacity
+            ? `Instant deposits from other chains are up to $${capText(capacity)} right now. Deposit less, or split it.`
+            : `Instant deposits from other chains: up to $${capText(capacity)} right now.`}
         </p>
       )}
       {step.kind === "busy" && <p role="status" className="mt-1.5 text-[12px] text-muted">{step.label}</p>}
