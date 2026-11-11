@@ -207,6 +207,20 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
   const accountReady = Boolean(crux.account && crux.sign && crux.owner);
   const via = from === "account" && accountReady ? "account" : "wallet";
   const opening = phase === "opening";
+  // Between the opening's end and its settlement (the solver or keeper settles it within seconds) nothing can be
+  // priced yet: say so, rather than "too small".
+  const settledRead = useReadContracts({
+    allowFailure: true,
+    query: { enabled: phase === "curve" || phase === "graduating", refetchInterval: 2_000 },
+    contracts: [{ address: curve, abi: curveV9Abi, functionName: "openingSettled", chainId: TESTNET.id }],
+  });
+  const settling = (phase === "curve" || phase === "graduating") && settledRead.data?.[0]?.result === false;
+  // A message from the opening ("your tokens arrive when it ends") is stale once it has ended.
+  const [wasOpening, setWasOpening] = useState(opening);
+  if (wasOpening !== opening) {
+    setWasOpening(opening);
+    if (!opening) setNote(null);
+  }
 
   // What the trader holds where this trade pays from (their CRUX Account or wallet), and what all their tokens sell
   // for: a sell is typed in USDC, and its tokens are worked out from these.
@@ -312,6 +326,8 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
 
   const overHeld = holder !== undefined && held.data !== undefined && (selling ? amountIn > tokensHeld : amountIn > usdcHeld);
   const quoted = quote.data !== undefined && !quote.isFetching;
+  // The price read itself failing (a node down for a moment) is not a zero quote.
+  const quoteFailed = quote.isError || quote.data?.[0]?.status === "failure";
   const tokensText = (v: bigint) => Number(formatUnits(v, 18)).toLocaleString("en-US", { maximumFractionDigits: 0 });
   // Why the button is off, in words (it used to grey out silently).
   const reason =
@@ -321,7 +337,11 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
         ? selling
           ? `Your $${symbol}${via === "account" ? " in your CRUX Account" : ""} sells for about $${usd(tokensHeldUsd ?? BigInt(0))}. Try that or less, or press Max.`
           : `Not enough USDC${via === "account" ? " in your CRUX Account" : ""} ($${usd(usdcHeld)}).`
-        : !opening && quoted && out === BigInt(0)
+        : settling
+          ? "The fair opening just ended and is being settled: trading opens in a few seconds."
+          : !opening && quoteFailed
+            ? "Couldn't get a price just now: retrying…"
+          : !opening && quoted && out === BigInt(0)
           ? selling
             ? "Too small to sell: try a larger amount, or a quick sell."
             : "Too small to buy anything."
@@ -366,7 +386,7 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
         functionName: buy ? "quoteBuy" : "quoteSell",
         args: [token, amount],
       })) as readonly bigint[];
-      if (got === BigInt(0)) throw new Error("Too small to trade.");
+      if (got === BigInt(0)) throw new Error(settling ? "The fair opening just ended and is being settled: try again in a few seconds." : "Too small to trade.");
       const res = await tradeFromAccount(crux.sign!, crux.owner!, crux.account!, {
         tokenIn: buy ? TESTNET_USDC : token,
         amountIn: amount,
