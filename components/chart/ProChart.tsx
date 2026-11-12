@@ -254,7 +254,10 @@ export function ProChart({
     const t = setTimeout(() => setIdleAfter(lastPressed), Math.max(0, lastPressed + TRADING_CANDLES_MS - Date.now()));
     return () => clearTimeout(t);
   }, [lastPressed]);
-  const trading = !external && (pending.length > 0 || (lastPressed > 0 && idleAfter !== lastPressed));
+  // A timeframe (or range) you pick yourself wins until your next trade: the 1s view used to override every pick for a
+  // minute after trading, so the menu and the range buttons seemed to do nothing.
+  const [pickedAt, setPickedAt] = useState(0);
+  const trading = !external && lastPressed > pickedAt && (pending.length > 0 || (lastPressed > 0 && idleAfter !== lastPressed));
   const pickedInterval = trading ? 1 : config.interval === "auto" ? autoPick : config.interval;
   const feed = useFeedCandles(external ? null : auction.pair, pickedInterval);
   const feedLive = feed.usable;
@@ -933,6 +936,7 @@ export function ProChart({
   };
   const onRange = (seconds: number) => {
     if (!engine) return;
+    if (trading) setPickedAt(Date.now()); // back to your timeframe first: a range on the 1s view showed nothing new
     if (seconds === 0 || now === null) engine.showAll();
     else engine.showRange(now - seconds, now);
   };
@@ -1249,6 +1253,8 @@ export function ProChart({
       <Toolbar
         config={config}
         set={set}
+        liveInterval={trading ? pickedInterval : undefined}
+        onPickInterval={() => setPickedAt(Date.now())}
         undo={undo}
         redo={redo}
         canUndo={canUndo}

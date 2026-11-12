@@ -58,6 +58,8 @@ export function Toolbar({
   templatesSlot,
   overlaysSlot,
   layoutSlot,
+  liveInterval,
+  onPickInterval,
 }: {
   config: ChartConfig;
   set: (fn: (c: ChartConfig) => ChartConfig) => void;
@@ -88,6 +90,10 @@ export function Toolbar({
   overlaysSlot?: ReactNode;
   /** The multi-chart layout picker. */
   layoutSlot?: ReactNode;
+  /** The interval the chart actually shows when it isn't the chosen one (1s while you trade): the button says so. */
+  liveInterval?: number;
+  /** A timeframe was picked from the menu (it wins over the 1s-while-trading view, even if it's the one already set). */
+  onPickInterval?: () => void;
 }) {
   const type = TYPES.find((t) => t.id === config.type) ?? TYPES[0];
   const [query, setQuery] = useState("");
@@ -127,9 +133,18 @@ export function Toolbar({
         <Popover
           width="w-48"
           button={(open, toggle) => (
-            <Tool label={`Timeframe: ${config.interval === "auto" ? "Auto" : longLabel(config.interval)}`} active={open} onClick={toggle} className="px-2">
+            <Tool
+              label={`Timeframe: ${liveInterval !== undefined ? `${longLabel(liveInterval)} while you trade` : config.interval === "auto" ? "Auto" : longLabel(config.interval)}`}
+              active={open}
+              onClick={toggle}
+              className="px-2"
+            >
               <span className="flex items-center gap-1 font-mono text-[11.5px] text-chrome">
-                {config.interval === "auto" ? "Auto" : (INTERVALS.find((i) => i.seconds === config.interval)?.label ?? "Auto")}
+                {liveInterval !== undefined
+                  ? (INTERVALS.find((i) => i.seconds === liveInterval)?.label ?? `${liveInterval}s`)
+                  : config.interval === "auto"
+                    ? "Auto"
+                    : (INTERVALS.find((i) => i.seconds === config.interval)?.label ?? "Auto")}
                 {Icon.chevron}
               </span>
             </Tool>
@@ -143,6 +158,7 @@ export function Toolbar({
                 aria-checked={config.interval === "auto"}
                 onClick={() => {
                   set((c) => ({ ...c, interval: "auto" }));
+                  onPickInterval?.();
                   close();
                 }}
                 className={`w-full rounded-[3px] px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-tint/[0.05] ${config.interval === "auto" ? "text-signal" : "text-chrome/85"}`}
@@ -160,6 +176,7 @@ export function Toolbar({
                       aria-checked={config.interval === i.seconds}
                       onClick={() => {
                         set((c) => ({ ...c, interval: i.seconds }));
+                        onPickInterval?.();
                         close();
                       }}
                       className={`flex w-full items-center justify-between rounded-[3px] px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-tint/[0.05] ${config.interval === i.seconds ? "text-signal" : "text-chrome/85"}`}
