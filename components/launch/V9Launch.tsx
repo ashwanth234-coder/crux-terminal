@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { formatUnits, maxUint256, parseAbi, parseUnits, zeroAddress, type Address } from "viem";
 import { useConfig, useConnection, useReadContracts, useSwitchChain } from "wagmi";
@@ -357,6 +357,8 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
     const hash = await simulateThenWrite(config, address!, { chainId: TESTNET.id, address: erc20, abi: erc20Abi, functionName: "approve", args: [spender, maxUint256] });
     await waitForTransactionReceipt(config, { chainId: TESTNET.id, hash });
   };
+  /** When this page's last trade finished: a quote read before then is from the price before it. */
+  const lastTradeAt = useRef(0);
   const run = async (what: string, fn: () => Promise<string>) => {
     setNote(null);
     setBusy(what);
@@ -367,9 +369,26 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
     } catch (e) {
       const msg = (e as Error).message ?? String(e);
       setNote({ ok: false, text: /rejected|denied|cancel/i.test(msg) ? "Cancelled in the wallet. Nothing changed." : msg.split("\n")[0] });
+      // The relay refused it because the price moved: show the new price straight away (the amount is still typed).
+      if (/price has moved/i.test(msg)) void quote.refetch();
     } finally {
+      lastTradeAt.current = Date.now();
       setBusy(null);
     }
+  };
+
+  /**
+   * The minimum to sign, from a quote no older than 2 s and newer than this page's last trade. After a trade the box
+   * empties and its quote stops refreshing, so typing the same amount again showed (and signed) the price from before
+   * that trade: seen live, a second buy signed a minimum 15% over the price the first buy had left, and sat unfilled.
+   */
+  const freshMinOut = async () => {
+    if (opening) return minOut; // the opening's floor is half its share-if-alone, not a live price
+    const current = quote.dataUpdatedAt > lastTradeAt.current && Date.now() - quote.dataUpdatedAt < 2_000;
+    const data = current ? quote.data : (await quote.refetch()).data;
+    const got = (data?.[0]?.result as readonly bigint[] | undefined)?.[0] ?? BigInt(0);
+    if (got === BigInt(0)) throw new Error("Couldn't get a fresh price just now: try again in a moment.");
+    return (got * (BigInt(10_000) - SLIPPAGE_BPS)) / BigInt(10_000);
   };
 
   /** One tap from the CRUX Account: a fresh quote for exactly `amount` (USDC for a buy, tokens for a sell), signed with a
@@ -400,11 +419,12 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
   const trade = () =>
     run("Sending…", async () => {
       if (via === "account") {
+        const min = await freshMinOut();
         const res = await tradeFromAccount(crux.sign!, crux.owner!, crux.account!, {
           tokenIn: side === "buy" ? TESTNET_USDC : token,
           amountIn,
           tokenOut: launchCaip19(side === "buy" ? token : TESTNET_USDC),
-          minAmountOut: minOut,
+          minAmountOut: min,
         });
         if (opening) return "In the fair opening from your CRUX Account: your tokens arrive when it ends, at its one price.";
         return res.filled ? `Filled from your CRUX Account.` : `Order placed from your CRUX Account: it fills in seconds.`;
@@ -412,6 +432,8 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
       if (!address) throw new Error("Connect a wallet first.");
       await onBase();
       await approve(side === "buy" ? TESTNET_USDC : token, ROUTER_V9, amountIn);
+      // Priced after the approval (which can take a while in the wallet), not before it.
+      const min = await freshMinOut();
       setBusy("Confirm in your wallet…");
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
       const hash = await simulateThenWrite(config, address, {
@@ -419,7 +441,7 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
         address: ROUTER_V9,
         abi: routerV9Abi,
         functionName: side === "buy" ? "buy" : "sell",
-        args: [token, amountIn, minOut, address, deadline],
+        args: [token, amountIn, min, address, deadline],
       });
       await waitForTransactionReceipt(config, { chainId: TESTNET.id, hash });
       return side === "buy" ? `Bought $${symbol}.` : `Sold $${symbol}.`;
