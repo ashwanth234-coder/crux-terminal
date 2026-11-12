@@ -21,6 +21,7 @@ import { TESTNET_USDC } from "@/lib/intents";
 import { simulateThenWrite } from "@/lib/preflight";
 import { tradeFromAccount } from "@/lib/account";
 import { addPendingTrade, updatePendingTrade, usePendingTrades } from "@/lib/pendingTrades";
+import { timingMark, timingPrint, timingStart } from "@/lib/tradeTiming";
 import { launchCaip19 } from "@/lib/launchTrade";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import type { AuctionV2 } from "@/lib/launchV2";
@@ -431,18 +432,18 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
    * trades stack), and kept within 3× either way. Sizing it from the minimum's quote, which counts trades ahead that
    * had often already landed, drew one candle 8× too tall and rescaled the whole chart for a moment.
    */
-  const showPending = (buy: boolean, amountIn: bigint) => {
-    const none: { size: (got: bigint) => void; settle: (ok: boolean) => void } = { size: () => {}, settle: () => {} };
+  const showPending = (buy: boolean, amountIn: bigint, clickAt: number) => {
+    const none: { id: number; size: (got: bigint) => void; settle: (ok: boolean) => void } = { id: -1, size: () => {}, settle: () => {} };
     if (opening || !(price > 0)) return none;
     const ahead = pendingRef.current[pendingRef.current.length - 1];
     const before = ahead?.expected && ahead.expected > 0 ? ahead.expected : price;
-    const clear = addPendingTrade({
-      token,
-      side: buy ? "buy" : "sell",
-      label: buy ? `Buying $${usd(amountIn)}…` : `Selling ${tokensText(amountIn)} $${symbol}…`,
-      price: before,
-    });
+    const label = buy ? `Buying $${usd(amountIn)}…` : `Selling ${tokensText(amountIn)} $${symbol}…`;
+    const clear = addPendingTrade({ token, side: buy ? "buy" : "sell", label, price: before });
+    // Click-to-candle timing in DevTools (lib/tradeTiming): printed when its real candle is drawn.
+    timingStart(clear.id, label, clickAt);
+    timingMark(clear.id, "pendingAdded");
     return {
+      id: clear.id,
       size: (got: bigint) => {
         const usdc = Number(formatUnits(buy ? amountIn : got, 6));
         const tokens = Number(formatUnits(buy ? got : amountIn, 18));
@@ -451,7 +452,15 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
         const ratio = Math.min(3, Math.max(1 / 3, (avg / price) ** 2));
         updatePendingTrade(clear.id, { expected: before * ratio, usdc, tokens });
       },
-      settle: (ok: boolean) => (ok ? void setTimeout(clear, 10_000) : clear()),
+      settle: (ok: boolean) => {
+        if (ok) {
+          timingMark(clear.id, "relayReturned");
+          setTimeout(clear, 10_000);
+        } else {
+          clear();
+          timingPrint(clear.id);
+        }
+      },
     };
   };
 
@@ -496,13 +505,14 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
    * trades still ahead of it.
    */
   const accountTrade = async (buy: boolean, amount: bigint, shown?: bigint) => {
+    const clickAt = performance.now();
     setNote(null);
     const id = Date.now() + Math.random();
     let settle: ((ok: boolean) => void) | null = null;
     try {
       if (!accountReady) throw new Error("Log in to trade in one click from your CRUX Account.");
       if (amount <= BigInt(0)) throw new Error(buy ? "Enter an amount to buy." : "Nothing to sell yet.");
-      const onChart = showPending(buy, amount);
+      const onChart = showPending(buy, amount, clickAt);
       settle = onChart.settle;
       if (shown && shown > BigInt(0)) onChart.size(shown);
       const { got, alone } = await quoteAfterFlights(buy, amount);

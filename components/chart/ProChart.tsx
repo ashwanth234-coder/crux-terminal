@@ -45,6 +45,7 @@ import { OverlaysButton } from "./OverlaysBar";
 import { SymbolSwitch } from "./SymbolSwitch";
 import { requestOrderAt } from "@/lib/chartOrders";
 import { dropPendingTrade, usePendingTrades } from "@/lib/pendingTrades";
+import { timingMark } from "@/lib/tradeTiming";
 import { TemplatesButton } from "./Templates";
 import { DEFAULT_CONFIG, DEFAULT_SETTINGS, loadLayout, loadSettings, palette, saveSettings, type ChartSettings, type ScaleMode } from "./settings";
 import { SettingsModal } from "./SettingsModal";
@@ -653,6 +654,8 @@ export function ProChart({
         now.time !== was.time ? Math.max(1, now.trades ?? 1) : now.trades !== null && was.trades !== null ? Math.max(1, now.trades - was.trades) : 1;
       const gone = pending.slice(0, landed);
       for (const g of gone) dropPendingTrade(g.id);
+      // Timed (lib/tradeTiming) once the frame with the real candle is painted.
+      requestAnimationFrame(() => gone.forEach((g) => timingMark(g.id, "realCandleDrawn")));
       live = pending.slice(gone.length);
     }
     const p = live.length ? live[live.length - 1] : null;
@@ -663,6 +666,7 @@ export function ProChart({
     const nowS = Math.floor(Date.now() / 1000);
     const time = last && nowS < last.time + interval ? last.time : Math.floor(nowS / interval) * interval;
     engine.setPending({ time, open: last?.close ?? p.price, close: p.expected ?? p.price, side: p.side }, k);
+    requestAnimationFrame(() => timingMark(p.id, "canvasDrawnPending"));
   }, [engine, pending, last, interval, k]);
 
   useChartAlerts({ external, slot, crux, auction, symbol, interval, gradPrice, config, set, candles, last, studyCtx, fmt, k, flash, replaying });
