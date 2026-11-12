@@ -279,6 +279,14 @@ function LiveTokenBar({ token, priceReadAt, price, ...bar }: { token: Address; p
 /** How much newer than your last fill the page's price read must be before the header trusts it again. */
 const LAST_FILL_HOLD_MS = 4_000;
 
+/**
+ * How far back a filled trade of yours is assumed not to be in the pool reserves the page last read (they come every
+ * 3 s through a cache whose lag varies). 3 s was too short: after a burst a buy was priced before two of its trades,
+ * asked too much and was refused. Counting one that is in already only lowers the minimum a little (never under half
+ * of what the trade gets on its own, inside the relay's guard).
+ */
+const PRICE_WINDOW_MS = 8_000;
+
 /** `pool`: a graduated launch's pool reserves (USDC and tokens), for sizing a pending trade's candle at the click. */
 function TradePanel({
   token,
@@ -370,10 +378,12 @@ function TradePanel({
       sum(counted.filter((f) => f.buy).map((f) => f.amountIn)) +
       sum(counted.filter((f) => !f.buy && f.filledAt !== null).map((f) => f.got)),
   );
-  // Trades the balances now include are forgotten.
+  // Trades the balances include and that are past the pricing window (PRICE_WINDOW_MS) are forgotten. (Forgotten as
+  // soon as the balances had them, a trade from a burst could no longer be counted when pricing the next one.)
   useEffect(() => {
-    if (flightsRef.current.some((f) => f.filledAt !== null && held.dataUpdatedAt > f.filledAt + SETTLED_MS)) {
-      flightsRef.current = flightsRef.current.filter((f) => f.filledAt === null || held.dataUpdatedAt <= f.filledAt + SETTLED_MS);
+    const done = (f: Flight) => f.filledAt !== null && held.dataUpdatedAt > f.filledAt + SETTLED_MS && Date.now() - f.filledAt > PRICE_WINDOW_MS;
+    if (flightsRef.current.some(done)) {
+      flightsRef.current = flightsRef.current.filter((f) => !done(f));
       setFlights(flightsRef.current);
     }
   }, [held.dataUpdatedAt]);
@@ -386,7 +396,7 @@ function TradePanel({
   const pm = (() => {
     if (opening || !pool || pool.feeBps === undefined || pool.usdc <= BigInt(0) || pool.tokens <= BigInt(0)) return null;
     let r = { usdc: pool.usdc, tokens: pool.tokens };
-    for (const f of flights) if (f.filledAt === null || f.filledAt > pool.readAt - 3_000) r = poolMath({ ...r, feeBps: pool.feeBps }).after(f.buy, f.amountIn);
+    for (const f of flights) if (f.filledAt === null || f.filledAt > pool.readAt - PRICE_WINDOW_MS) r = poolMath({ ...r, feeBps: pool.feeBps }).after(f.buy, f.amountIn);
     return r.usdc > BigInt(0) && r.tokens > BigInt(0) ? poolMath({ ...r, feeBps: pool.feeBps }) : null;
   })();
   const heldValue = useReadContracts({
@@ -683,10 +693,14 @@ function TradePanel({
       const gross = swap(a, r.tokens, r.usdc);
       return { out: gross - (gross * fee) / BPS, next: { usdc: r.usdc - gross, tokens: r.tokens + a } };
     };
+    // `alone` (the minimum's floor): after the trades surely not in the reserves yet (still on their way); `got`: after
+    // those and the recently filled ones that may not be in yet either. Measured before any of them, the floor alone
+    // could ask more than the price after a long burst.
+    let surely = { usdc: pool.usdc, tokens: pool.tokens };
+    for (const f of flightsRef.current) if (f.filledAt === null) surely = trade(surely, f.buy, f.amountIn).next;
     let r = { usdc: pool.usdc, tokens: pool.tokens };
-    const alone = trade(r, buy, amount).out;
-    for (const f of flightsRef.current) if (f.filledAt === null || f.filledAt > pool.readAt - 3_000) r = trade(r, f.buy, f.amountIn).next;
-    return { got: trade(r, buy, amount).out, alone };
+    for (const f of flightsRef.current) if (f.filledAt === null || f.filledAt > pool.readAt - PRICE_WINDOW_MS) r = trade(r, f.buy, f.amountIn).next;
+    return { got: trade(r, buy, amount).out, alone: trade(surely, buy, amount).out };
   };
 
   /**
