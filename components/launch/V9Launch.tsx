@@ -38,6 +38,37 @@ const SLIPPAGE_BPS = BigInt(1_000); // 10%, the terminal's default
  */
 const freshReads = createPublicClient({ chain: TESTNET, transport: http(process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || undefined, { timeout: 8_000 }) });
 
+/**
+ * CruxRouterV9's pool math for a graduated launch, worked out on the page: its fee (the curve's rate) off a buy's USDC
+ * and then Uniswap V2's 0.3% swap; a sell's swap and then its fee. Exact to the router's quoteBuy / quoteSell on the
+ * same reserves (checked on $BG). `tokensFor`: the fewest tokens whose sale pays at least `usdcOut`, or null when the
+ * pool doesn't hold that much.
+ */
+function poolMath(p: { usdc: bigint; tokens: bigint; feeBps: number }) {
+  const BPS = BigInt(10_000);
+  const fee = BigInt(p.feeBps);
+  const ZERO = BigInt(0);
+  const ONE = BigInt(1);
+  const swap = (a: bigint, rin: bigint, rout: bigint) =>
+    a <= ZERO || rin <= ZERO || rout <= ZERO ? ZERO : (a * BigInt(997) * rout) / (rin * BigInt(1000) + a * BigInt(997));
+  const buyOut = (usdc: bigint) => swap(usdc - (usdc * fee) / BPS, p.usdc, p.tokens);
+  const sellOut = (tokens: bigint) => {
+    const gross = swap(tokens, p.tokens, p.usdc);
+    return gross - (gross * fee) / BPS;
+  };
+  const tokensFor = (usdcOut: bigint) => {
+    if (usdcOut <= ZERO) return ZERO;
+    // The gross the pool must pay before the fee, then Uniswap's getAmountIn for it; nudged up while rounding leaves
+    // it a unit short.
+    const gross = (usdcOut * BPS + (BPS - fee) - ONE) / (BPS - fee);
+    if (gross >= p.usdc) return null;
+    let t = (p.tokens * gross * BigInt(1000)) / ((p.usdc - gross) * BigInt(997)) + ONE;
+    for (let i = 0; i < 4 && sellOut(t) < usdcOut; i++) t += t / BigInt(1_000_000) + ONE;
+    return t;
+  };
+  return { buyOut, sellOut, tokensFor };
+}
+
 function useNowSeconds() {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
   useEffect(() => {
@@ -318,12 +349,16 @@ function TradePanel({
       setFlights(flightsRef.current);
     }
   }, [held.dataUpdatedAt]);
+  // On a graduated pool every price here is worked out on the page (poolMath, exact to the router's quotes): typing
+  // "1" on Sell waited ~1 s for the button (a 250 ms pause, then two chain reads to find the tokens, and the holding's
+  // value read only once the Sell tab opened). On the curve the chain is still asked.
+  const pm = !opening && pool && pool.feeBps !== undefined && pool.usdc > BigInt(0) && pool.tokens > BigInt(0) ? poolMath({ usdc: pool.usdc, tokens: pool.tokens, feeBps: pool.feeBps }) : null;
   const heldValue = useReadContracts({
     allowFailure: true,
-    query: { enabled: side === "sell" && tokensHeld > BigInt(0) && !opening, refetchInterval: 10_000 },
+    query: { enabled: !pm && side === "sell" && tokensHeld > BigInt(0) && !opening, refetchInterval: 10_000 },
     contracts: [{ address: ROUTER_V9, abi: routerV9Abi, functionName: "quoteSell", args: [token, tokensHeld], chainId: TESTNET.id }],
   });
-  const tokensHeldUsd = (heldValue.data?.[0]?.result as readonly bigint[] | undefined)?.[0];
+  const tokensHeldUsd = pm ? pm.sellOut(tokensHeld) : (heldValue.data?.[0]?.result as readonly bigint[] | undefined)?.[0];
   const selling = side === "sell" && !opening;
 
   // Every amount is typed in USDC: a buy spends it; a sell asks for about that much back.
@@ -340,7 +375,7 @@ function TradePanel({
   const [picked, setPicked] = useState<bigint | null>(null);
   // Only the quoted case is found in an effect (it reads the chain); the others follow from what's on screen.
   const solveKey = `${usdIn}:${tokensHeld}:${tokensHeldUsd ?? ""}`;
-  const needsQuote = selling && picked === null && usdIn > BigInt(0) && tokensHeld > BigInt(0) && tokensHeldUsd !== undefined && usdIn < tokensHeldUsd;
+  const needsQuote = !pm && selling && picked === null && usdIn > BigInt(0) && tokensHeld > BigInt(0) && tokensHeldUsd !== undefined && usdIn < tokensHeldUsd;
   const [solved, setSolved] = useState<{ key: string; tokens: bigint } | null>(null);
   useEffect(() => {
     if (!needsQuote || !tokensHeldUsd) return;
@@ -367,14 +402,16 @@ function TradePanel({
           ? usdIn === tokensHeldUsd
             ? tokensHeld
             : tokensHeld + BigInt(1) // more than the holding: shown as over the balance
-          : solved?.key === solveKey
-            ? solved.tokens
-            : BigInt(0);
+          : pm
+            ? (pm.tokensFor(usdIn) ?? tokensHeld + BigInt(1))
+            : solved?.key === solveKey
+              ? solved.tokens
+              : BigInt(0);
   const amountIn = selling ? sellTokens : usdIn;
 
   const quote = useReadContracts({
     allowFailure: true,
-    query: { enabled: amountIn > BigInt(0) && !opening, refetchInterval: 3_000 },
+    query: { enabled: !pm && amountIn > BigInt(0) && !opening, refetchInterval: 3_000 },
     contracts: [
       side === "buy"
         ? { address: ROUTER_V9, abi: routerV9Abi, functionName: "quoteBuy", args: [token, amountIn], chainId: TESTNET.id }
@@ -395,7 +432,13 @@ function TradePanel({
   const openingAll = (openingQuote.data?.[0]?.result as readonly bigint[] | undefined)?.[0] ?? BigInt(0);
   // Its share of what the opening would buy if nobody else joins: more deposits only raise the one price.
   const shareIfAlone = openingTotal + amountIn > BigInt(0) ? (openingAll * amountIn) / (openingTotal + amountIn) : BigInt(0);
-  const out = opening ? shareIfAlone : ((quote.data?.[0]?.result as readonly bigint[] | undefined)?.[0] ?? BigInt(0));
+  const out = opening
+    ? shareIfAlone
+    : pm
+      ? side === "buy"
+        ? pm.buyOut(amountIn)
+        : pm.sellOut(amountIn)
+      : ((quote.data?.[0]?.result as readonly bigint[] | undefined)?.[0] ?? BigInt(0));
   const split = side === "buy" ? (quote.data?.[0]?.result as readonly bigint[] | undefined) : undefined;
   // A buy at open signs half its share-if-alone: it fills unless the opening's price ends up over twice today's.
   const minOut = opening ? out / BigInt(2) : (out * (BigInt(10_000) - SLIPPAGE_BPS)) / BigInt(10_000);
