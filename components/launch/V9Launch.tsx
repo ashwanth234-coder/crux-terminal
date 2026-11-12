@@ -20,7 +20,7 @@ import { TESTNET } from "@/lib/chains";
 import { TESTNET_USDC } from "@/lib/intents";
 import { simulateThenWrite } from "@/lib/preflight";
 import { tradeFromAccount } from "@/lib/account";
-import { addPendingTrade } from "@/lib/pendingTrades";
+import { addPendingTrade, usePendingTrades } from "@/lib/pendingTrades";
 import { launchCaip19 } from "@/lib/launchTrade";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import type { AuctionV2 } from "@/lib/launchV2";
@@ -393,6 +393,12 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
   };
   /** When this page's last trade finished: a quote read before then is from the price before it. */
   const lastTradeAt = useRef(0);
+  /** This browser's trades on the chart still waiting for their real candle (read when the next one is drawn). */
+  const pendingOnChart = usePendingTrades(token);
+  const pendingRef = useRef(pendingOnChart);
+  useEffect(() => {
+    pendingRef.current = pendingOnChart;
+  }, [pendingOnChart]);
   const run = async (what: string, fn: () => Promise<string>) => {
     setNote(null);
     setBusy(what);
@@ -425,12 +431,16 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
     const tokens = Number(formatUnits(buy ? got : amountIn, 18));
     if (!(usdc > 0 && tokens > 0)) return none;
     const avg = usdc / tokens;
+    // With trades still pending, this one starts where the newest of them should leave the price (its quote already
+    // counts them: quoteAfterFlights), so the chart's candle runs on from theirs instead of from before them.
+    const ahead = pendingRef.current[pendingRef.current.length - 1];
+    const before = ahead?.expected && ahead.expected > 0 ? ahead.expected : price;
     const clear = addPendingTrade({
       token,
       side: buy ? "buy" : "sell",
       label: buy ? `Buying $${usd(amountIn)}…` : `Selling ${tokensText(amountIn)} $${symbol}…`,
-      price,
-      expected: (avg * avg) / price,
+      price: before,
+      expected: (avg * avg) / before,
       usdc,
       tokens,
     });

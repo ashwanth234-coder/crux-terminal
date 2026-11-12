@@ -628,24 +628,34 @@ export function ProChart({
     engine.setMarkers(events.sort((a, b) => (a.time as number) - (b.time as number)));
   }, [engine, candles, k, fmt, minMove, config.type, drawnStudies, config.alerts, settings, marksHidden, gradPrice, shownMarks, mine, last, standingOrders, auction.token, auction.settledAt, external, market.protectedUntil, vestDays, interval, pending, me, auction.creator, focus]);
 
-  // Your newest trade the moment you press Buy or Sell: a candle on the current bar (or the next one, once this bar's
-  // time is up), from the price then to its expected fill. It goes the moment the chart's newest candle moves (the
-  // solver's trade, pushed as it's sent), so it never sits on top of the real one.
-  const pressedAt = useRef<{ id: number; time: number | null; close: number | null; trades: number | null } | null>(null);
+  // Your trades the moment you press Buy or Sell: one candle on the current bar (or the next one, once this bar's time
+  // is up), from the chart's price to where your newest trade should leave it (each trade's expected price counts the
+  // ones still ahead of it). As real trades reach the chart (the solver's, pushed as they're sent), the OLDEST pending
+  // ones go, as many as landed: with several in flight, the first one landing used to take away the newest, so your
+  // latest trade vanished from the chart until its own real candle came.
+  const seenLast = useRef<{ time: number | null; close: number | null; trades: number | null } | null>(null);
   useEffect(() => {
     if (!engine) return;
-    const p = pending.length ? pending[pending.length - 1] : null;
-    if (!p) {
-      pressedAt.current = null;
+    if (pending.length === 0) {
+      seenLast.current = null;
       engine.setPending(null, k);
       return;
     }
-    if (pressedAt.current?.id !== p.id) pressedAt.current = { id: p.id, time: last?.time ?? null, close: last?.close ?? null, trades: last?.trades ?? null };
-    const then = pressedAt.current;
-    if (last && (last.time !== then.time || last.close !== then.close || (last.trades ?? null) !== then.trades)) {
-      // The real trade is on the chart: the pending one (and its Confirming row) goes now, not before.
+    const now = { time: last?.time ?? null, close: last?.close ?? null, trades: last?.trades ?? null };
+    const was = seenLast.current;
+    seenLast.current = now;
+    let live = pending;
+    if (was && last && (now.time !== was.time || now.close !== was.close || now.trades !== was.trades)) {
+      // How many trades landed: the candle's trade count says (on a new bar, all of its trades); one if it can't.
+      const landed =
+        now.time !== was.time ? Math.max(1, now.trades ?? 1) : now.trades !== null && was.trades !== null ? Math.max(1, now.trades - was.trades) : 1;
+      const gone = pending.slice(0, landed);
+      for (const g of gone) dropPendingTrade(g.id);
+      live = pending.slice(gone.length);
+    }
+    const p = live.length ? live[live.length - 1] : null;
+    if (!p) {
       engine.setPending(null, k);
-      dropPendingTrade(p.id);
       return;
     }
     const nowS = Math.floor(Date.now() / 1000);
