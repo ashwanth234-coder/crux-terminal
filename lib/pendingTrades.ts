@@ -93,6 +93,21 @@ export function watchPendingTrades(token: Address, listener: (trades: PendingTra
   return () => void listeners.delete(l);
 }
 
+/** The price this browser's last filled trade on each token left (from the relay's fill), and when it came back. */
+const lastFills = new Map<string, { price: number; at: number }>();
+
+/** Notes the price a filled trade left (the relay's fill): the header keeps it until its own price read catches up. */
+export function noteFill(token: Address, price: number) {
+  if (!(price > 0)) return;
+  lastFills.set(token.toLowerCase(), { price, at: Date.now() });
+  emit();
+}
+
+/** This browser's last fill on `token` (noteFill), or undefined. */
+export function useLastFill(token: Address): { price: number; at: number } | undefined {
+  return useSyncExternalStore(subscribe, () => lastFills.get(token.toLowerCase()), () => undefined);
+}
+
 /** When this browser last pressed a trade on `token` (ms since the epoch), or 0. */
 export function useLastPressed(token: Address): number {
   return useSyncExternalStore(subscribe, () => lastPressed.get(token.toLowerCase()) ?? 0, () => 0);

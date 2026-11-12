@@ -20,7 +20,7 @@ import { TESTNET } from "@/lib/chains";
 import { TESTNET_USDC } from "@/lib/intents";
 import { simulateThenWrite } from "@/lib/preflight";
 import { MARKET_FILL_SECONDS, tradeFromAccount, type AccountFill } from "@/lib/account";
-import { addPendingTrade, updatePendingTrade, usePendingTrades } from "@/lib/pendingTrades";
+import { addPendingTrade, noteFill, updatePendingTrade, useLastFill, usePendingTrades } from "@/lib/pendingTrades";
 import { timingMark, timingPrint, timingStart } from "@/lib/tradeTiming";
 import { launchCaip19 } from "@/lib/launchTrade";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
@@ -66,7 +66,15 @@ function poolMath(p: { usdc: bigint; tokens: bigint; feeBps: number }) {
     for (let i = 0; i < 4 && sellOut(t) < usdcOut; i++) t += t / BigInt(1_000_000) + ONE;
     return t;
   };
-  return { buyOut, sellOut, tokensFor };
+  /** The pool once a trade of `amount` (USDC for a buy, tokens for a sell) has gone through it. */
+  const after = (isBuy: boolean, amount: bigint): { usdc: bigint; tokens: bigint } => {
+    if (isBuy) {
+      const net = amount - (amount * fee) / BPS;
+      return { usdc: p.usdc + net, tokens: p.tokens - swap(net, p.usdc, p.tokens) };
+    }
+    return { usdc: p.usdc - swap(amount, p.tokens, p.usdc), tokens: p.tokens + amount };
+  };
+  return { buyOut, sellOut, tokensFor, after };
 }
 
 function useNowSeconds() {
@@ -114,9 +122,6 @@ function V9Launch({ id }: { id: bigint }) {
 
   const curve = l?.curve ?? zeroAddress;
   const token = l?.token ?? zeroAddress;
-  // Your trades on their way: the header's price and market cap move with them at the click, as the chart's candle
-  // does (it read only the confirmed price, so it stayed put until the trade landed).
-  const onTheWay = usePendingTrades(token);
   const reads = useReadContracts({
     allowFailure: true,
     query: { enabled: Boolean(l), refetchInterval: 3_000 },
@@ -189,21 +194,20 @@ function V9Launch({ id }: { id: bigint }) {
 
   const poolUsdc = graduated && reserves && token0 ? (token0.toLowerCase() === l.token.toLowerCase() ? reserves[1] : reserves[0]) : null;
   const sym = `$${symbol}`;
-  // The header's price: where your newest trade on its way should leave it, else the confirmed price.
-  const newest = onTheWay.length ? onTheWay[onTheWay.length - 1] : undefined;
-  const headerPrice = newest?.expected && newest.expected > 0 ? newest.expected : price;
 
   // The pro terminal (as for every launch): token bar; chart and execution side by side; trades, holders, top traders
   // and your orders below. Phones stack them: bar, chart, execution, tape.
   return (
     <TerminalShell>
-      <V9TokenBar
+      <LiveTokenBar
+        token={l.token}
+        priceReadAt={reads.dataUpdatedAt}
         id={id}
         auction={auction}
         symbol={symbol}
         name={name ?? null}
         phase={phase}
-        price={headerPrice}
+        price={price}
         realUsdc={realUsdc}
         threshold={threshold}
         poolUsdc={poolUsdc}
@@ -251,6 +255,30 @@ function V9Launch({ id }: { id: bigint }) {
 }
 
 /** Buy or sell from the CRUX Account (gasless, the relay) or the wallet (CruxRouterV9); deposit during a fair opening. */
+/**
+ * The token bar, with its price and market cap moving with your trades. It alone listens to your pending trades: the
+ * page did, so every click re-rendered the whole terminal (chart, tape, panel) and Chrome flagged the trade input for
+ * blocking the main thread (INP). Its price: where your newest trade on its way should leave it; once that's filled,
+ * the price your last fill left until the page's price read (every 3 s, through a cache a few seconds behind) is newer
+ * than that fill (falling back to the read sooner showed the price from before the trade for a few seconds, then
+ * jumped back up); otherwise the price read.
+ */
+function LiveTokenBar({ token, priceReadAt, price, ...bar }: { token: Address; priceReadAt: number } & Parameters<typeof V9TokenBar>[0]) {
+  const onTheWay = usePendingTrades(token);
+  const lastFill = useLastFill(token);
+  const newest = onTheWay.length ? onTheWay[onTheWay.length - 1] : undefined;
+  const shown =
+    newest?.expected && newest.expected > 0
+      ? newest.expected
+      : lastFill && priceReadAt < lastFill.at + LAST_FILL_HOLD_MS
+        ? lastFill.price
+        : price;
+  return <V9TokenBar {...bar} price={shown} />;
+}
+
+/** How much newer than your last fill the page's price read must be before the header trusts it again. */
+const LAST_FILL_HOLD_MS = 4_000;
+
 /** `pool`: a graduated launch's pool reserves (USDC and tokens), for sizing a pending trade's candle at the click. */
 function TradePanel({
   token,
@@ -352,7 +380,15 @@ function TradePanel({
   // On a graduated pool every price here is worked out on the page (poolMath, exact to the router's quotes): typing
   // "1" on Sell waited ~1 s for the button (a 250 ms pause, then two chain reads to find the tokens, and the holding's
   // value read only once the Sell tab opened). On the curve the chain is still asked.
-  const pm = !opening && pool && pool.feeBps !== undefined && pool.usdc > BigInt(0) && pool.tokens > BigInt(0) ? poolMath({ usdc: pool.usdc, tokens: pool.tokens, feeBps: pool.feeBps }) : null;
+  // The pool as it is after this page's trades that its read doesn't include yet (not back from the relay, or filled
+  // after it was read, through a cache a few seconds behind), so a sell typed right after a buy is priced after it
+  // (priced before it, it asked too much and the relay refused it as "the price has moved").
+  const pm = (() => {
+    if (opening || !pool || pool.feeBps === undefined || pool.usdc <= BigInt(0) || pool.tokens <= BigInt(0)) return null;
+    let r = { usdc: pool.usdc, tokens: pool.tokens };
+    for (const f of flights) if (f.filledAt === null || f.filledAt > pool.readAt - 3_000) r = poolMath({ ...r, feeBps: pool.feeBps }).after(f.buy, f.amountIn);
+    return r.usdc > BigInt(0) && r.tokens > BigInt(0) ? poolMath({ ...r, feeBps: pool.feeBps }) : null;
+  })();
   const heldValue = useReadContracts({
     allowFailure: true,
     query: { enabled: !pm && side === "sell" && tokensHeld > BigInt(0) && !opening, refetchInterval: 10_000 },
@@ -576,6 +612,7 @@ function TradePanel({
           // Filled: the candle snaps to exactly where the real trade leaves the price (the relay's fill, as the charts
           // draw it), and the chart takes it away the moment the trade with this hash is on it (3 s at most).
           updatePendingTrade(clear.id, { tx: tradeTx ?? "none", ...(fill ? { expected: fill.priceAfter ?? fill.price } : {}) });
+          if (fill) noteFill(token, fill.priceAfter ?? fill.price);
           setTimeout(clear, 6_000); // only if that trade never shows (the feed brings it with the reply)
         } else {
           clear();
