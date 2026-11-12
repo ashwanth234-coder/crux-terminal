@@ -44,7 +44,7 @@ import { PATTERN_LABELS, TOOL_POINTS, defaultStop, isPattern, type DrawPart, typ
 import { OverlaysButton } from "./OverlaysBar";
 import { SymbolSwitch } from "./SymbolSwitch";
 import { requestOrderAt } from "@/lib/chartOrders";
-import { dropPendingTrade, usePendingTrades } from "@/lib/pendingTrades";
+import { dropPendingTrade, usePendingTrades, watchPendingTrades } from "@/lib/pendingTrades";
 import { timingMark } from "@/lib/tradeTiming";
 import { TemplatesButton } from "./Templates";
 import { DEFAULT_CONFIG, DEFAULT_SETTINGS, loadLayout, loadSettings, palette, saveSettings, type ChartSettings, type ScaleMode } from "./settings";
@@ -232,7 +232,10 @@ export function ProChart({
   const k = config.units === "mcap" ? supply : 1;
   const gradPrice = Number(formatUnits(auction.clearingPrice, PRICE_DECIMALS));
   // At most four redraws a second however fast trades land: a hot launch's blocks would otherwise redraw it 5–10 times.
-  const swapData = useThrottled(swaps.data, 250);
+  // Not while you have a trade on its way: its real candle then shows the moment it arrives, not up to 250 ms later
+  // (with the feed's throttle below, up to half a second).
+  const redrawMs = pending.length > 0 ? 0 : 250;
+  const swapData = useThrottled(swaps.data, redrawMs);
   // The shared feed's candles (crux-solver feedhub.ts): made once on the server for every viewer and kept current by
   // its frames, so the page neither reads the chain nor buckets trades. A pool it doesn't serve (another DEX's), or
   // while it's down, falls back to bucketing the trades here.
@@ -242,7 +245,7 @@ export function ProChart({
   const pickedInterval = config.interval === "auto" ? autoPick : config.interval;
   const feed = useFeedCandles(external ? null : auction.pair, pickedInterval);
   const feedLive = feed.usable;
-  const feedCandles = useThrottled(feedLive ? feed.candles : null, 250);
+  const feedCandles = useThrottled(feedLive ? feed.candles : null, redrawMs);
   // The opening, the token's first trade (lib/openingTrade): a launch whose only activity is its opening still draws.
   const opening = useMemo(() => (external ? null : openingTrade(auction)), [external, auction]);
   // Oldest first (the scan is newest first), so the candles needn't sort; the opening comes first of all.
@@ -636,6 +639,25 @@ export function ProChart({
   // ones still ahead of it). As real trades reach the chart (the solver's, pushed as they're sent), the OLDEST pending
   // ones go, as many as landed: with several in flight, the first one landing used to take away the newest, so your
   // latest trade vanished from the chart until its own real candle came.
+  //
+  // A trade just pressed (or just priced) is drawn straight from the pending-trades store, in the click's own task,
+  // without waiting for React to re-render the chart and run the effect below; the effect then keeps it in step.
+  const drawWith = useRef({ last, interval, k });
+  useEffect(() => {
+    drawWith.current = { last, interval, k };
+  }, [last, interval, k]);
+  useEffect(() => {
+    if (!engine) return;
+    return watchPendingTrades(auction.token, (trades) => {
+      const p = trades.length ? trades[trades.length - 1] : null;
+      if (!p) return; // taking one away is the effect's (it knows which real trade landed)
+      const { last: l, interval: iv, k: kk } = drawWith.current;
+      const nowS = Math.floor(Date.now() / 1000);
+      const time = l && nowS < l.time + iv ? l.time : Math.floor(nowS / iv) * iv;
+      engine.setPending({ time, open: l?.close ?? p.price, close: p.expected ?? p.price, side: p.side }, kk);
+      requestAnimationFrame(() => timingMark(p.id, "canvasDrawnPending"));
+    });
+  }, [engine, auction.token]);
   const seenLast = useRef<{ time: number | null; close: number | null; trades: number | null } | null>(null);
   useEffect(() => {
     if (!engine) return;

@@ -68,6 +68,16 @@ const subscribe = (l: () => void) => {
 const snapshot = () => items;
 const empty: PendingTrade[] = [];
 
+/**
+ * Calls `listener` with this browser's pending trades on `token` the moment they change, outside React (in the same
+ * task as the click that added one), so the chart can draw it without waiting for a render. Returns the unsubscribe.
+ */
+export function watchPendingTrades(token: Address, listener: (trades: PendingTrade[]) => void): () => void {
+  const l = () => listener(items.filter((t) => t.token.toLowerCase() === token.toLowerCase()));
+  listeners.add(l);
+  return () => void listeners.delete(l);
+}
+
 /** This browser's pending trades on `token`. */
 export function usePendingTrades(token: Address): PendingTrade[] {
   const all = useSyncExternalStore(subscribe, snapshot, () => empty);
