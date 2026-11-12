@@ -431,7 +431,7 @@ export function ProChart({
     [marks, settings.minUsd, settings.marks, focus, replayEnd],
   );
   /** Your trades' badges shown ahead of their marks (see the overlays effect). */
-  const ownBadges = useRef<{ id: number; time: number; side: "buy" | "sell"; who: MarkWho; high: number; until: number }[]>([]);
+  const ownBadges = useRef<{ id: number; time: number; side: "buy" | "sell"; who: MarkWho; high: number; low: number; until: number }[]>([]);
   const markCounts = useMemo(
     () => ({ mine: marks.filter((m) => m.who === "me").length, dev: marks.filter((m) => m.who === "dev" || m.who === "whale").length, top: marks.filter((m) => m.who === "top").length }),
     [marks],
@@ -557,7 +557,8 @@ export function ProChart({
       const nowS = Math.floor(nowMs / 1000);
       const time = last && nowS < last.time + interval ? last.time : Math.floor(nowS / interval) * interval;
       const open = last?.close ?? p.price;
-      ownBadges.current = [...ownBadges.current, { id: p.id, time, side: p.side, who: ownWho, high: Math.max(open, p.expected ?? p.price), until: nowMs + 20_000 }];
+      const to = p.expected ?? p.price;
+      ownBadges.current = [...ownBadges.current, { id: p.id, time, side: p.side, who: ownWho, high: Math.max(open, to), low: Math.min(open, to), until: nowMs + 20_000 }];
     }
     // An instant badge goes as soon as its trade's real mark is on the chart: on its candle or the next (the instant
     // candle and the mined one can fall either side of a period boundary), so the same trade never shows twice.
@@ -578,13 +579,17 @@ export function ProChart({
       }),
       ...ownBadges.current.map((o) => {
         const style = MARK_STYLE[o.who];
-        // On the instant candle's bar, or the real candle's if it landed in the next one.
-        const time = barOf.has(o.time) || !last || last.time <= o.time ? o.time : last.time;
+        // While its instant candle is up: on that candle, edged by it (and by its bar's own range when the bar exists).
+        // A buy's badge hung from the instant candle's top on a new bar, then jumped down when the real candle came.
+        // Once the real trade is on the chart: exactly where its real badge will sit (the bar markBarTime gives the
+        // newest trade, with that bar's range), so the hand-over to the real badge, up to 250 ms later, never moves it.
+        const instant = pending.some((q) => q.id === o.id);
+        const time = instant ? o.time : (markBarTime(times, Math.max(o.time, last?.time ?? o.time), o.side, isDown, interval) ?? o.time);
         const c = barOf.get(time);
         return {
           time,
-          high: Math.max(c?.high ?? 0, o.high) * k,
-          low: (c ? Math.min(c.low, o.high) : o.high) * k,
+          high: (instant ? Math.max(c?.high ?? o.high, o.high) : (c?.high ?? o.high)) * k,
+          low: (instant ? Math.min(c?.low ?? o.low, o.low) : (c?.low ?? o.low)) * k,
           label: o.side === "buy" ? style.buy : style.sell,
           side: o.side,
         };
