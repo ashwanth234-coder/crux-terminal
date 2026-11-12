@@ -669,17 +669,22 @@ export function ProChart({
     const now = { time: last?.time ?? null, close: last?.close ?? null, trades: last?.trades ?? null };
     const was = seenLast.current;
     seenLast.current = now;
-    let live = pending;
+    // A trade goes the moment its own swap is on the chart: its fill came back with that swap's tx hash. Guessing from
+    // the newest candle moving (as it used to, for every trade) misfired with several in flight and kept a pending
+    // trade drawn over the real ones for seconds (seen in a screen recording).
+    const onChart = new Set((swapData?.trades ?? []).map((t) => t.txHash.toLowerCase()));
+    const gone = pending.filter((p) => p.tx !== undefined && p.tx !== "none" && onChart.has(p.tx.toLowerCase()));
+    // A fill that came back without a swap (from the solver's stock): the newest candle moving takes the oldest of
+    // those away, as many as landed. One still on its way (no reply yet) is never taken away by a guess.
     if (was && last && (now.time !== was.time || now.close !== was.close || now.trades !== was.trades)) {
-      // How many trades landed: the candle's trade count says (on a new bar, all of its trades); one if it can't.
       const landed =
         now.time !== was.time ? Math.max(1, now.trades ?? 1) : now.trades !== null && was.trades !== null ? Math.max(1, now.trades - was.trades) : 1;
-      const gone = pending.slice(0, landed);
-      for (const g of gone) dropPendingTrade(g.id);
-      // Timed (lib/tradeTiming) once the frame with the real candle is painted.
-      requestAnimationFrame(() => gone.forEach((g) => timingMark(g.id, "realCandleDrawn")));
-      live = pending.slice(gone.length);
+      gone.push(...pending.filter((p) => p.tx === "none" && !gone.includes(p)).slice(0, landed));
     }
+    for (const g of gone) dropPendingTrade(g.id);
+    // Timed (lib/tradeTiming) once the frame with the real candle is painted.
+    if (gone.length) requestAnimationFrame(() => gone.forEach((g) => timingMark(g.id, "realCandleDrawn")));
+    const live = pending.filter((p) => !gone.includes(p));
     const p = live.length ? live[live.length - 1] : null;
     if (!p) {
       engine.setPending(null, k);
@@ -689,7 +694,7 @@ export function ProChart({
     const time = last && nowS < last.time + interval ? last.time : Math.floor(nowS / interval) * interval;
     engine.setPending({ time, open: last?.close ?? p.price, close: p.expected ?? p.price, side: p.side }, k);
     requestAnimationFrame(() => timingMark(p.id, "canvasDrawnPending"));
-  }, [engine, pending, last, interval, k]);
+  }, [engine, pending, last, interval, k, swapData]);
 
   useChartAlerts({ external, slot, crux, auction, symbol, interval, gradPrice, config, set, candles, last, studyCtx, fmt, k, flash, replaying });
 

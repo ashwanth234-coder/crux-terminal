@@ -19,6 +19,11 @@ export type PendingTrade = {
   /** Its size, as far as known when it's sent: USDC (dollars) and whole tokens. */
   usdc?: number;
   tokens?: number;
+  /**
+   * Once its fill is back: the tx hash of its trade on the charts (the chart takes it away the moment that trade is
+   * on it), or "none" when the fill came back without one (then the chart's newest candle moving takes it away).
+   */
+  tx?: string;
   at: number;
 };
 
@@ -48,7 +53,7 @@ export function addPendingTrade(t: Omit<PendingTrade, "id" | "at">): (() => void
  * Fills in what a pending trade wasn't known yet when it was shown (its expected price and size, once quoted): it goes
  * on the chart at the click, then takes its right height a moment later, the same candle and badge throughout.
  */
-export function updatePendingTrade(id: number, patch: Partial<Pick<PendingTrade, "expected" | "usdc" | "tokens" | "label">>) {
+export function updatePendingTrade(id: number, patch: Partial<Pick<PendingTrade, "expected" | "usdc" | "tokens" | "label" | "tx">>) {
   if (!items.some((i) => i.id === id)) return;
   items = items.map((i) => (i.id === id ? { ...i, ...patch } : i));
   emit();

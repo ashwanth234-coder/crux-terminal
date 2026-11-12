@@ -237,13 +237,15 @@ export async function tradeFromAccount(
   account: Address,
   t: AccountTrade,
   signed?: Promise<SignedTrade>,
-): Promise<{ orderId: Hex; filled: boolean; timing: TradeTiming }> {
+): Promise<{ orderId: Hex; filled: boolean; tradeTx?: Hex; timing: TradeTiming }> {
   const { message, signature, t_click, t_signed } = await (signed ?? signTrade(sign, account, t));
   const sent = { t_click, t_signed };
   const data = await postRelay("/v1/account/trade", { owner, ...accountFields(account), trade: message, signature, timing: sent });
   if (typeof data.orderId !== "string") throw new Error("The relay opened the trade but didn't return its order id.");
   const timing: TradeTiming = { ...sent, ...(data.timing && typeof data.timing === "object" ? (data.timing as TradeTiming) : {}), t_reply: Date.now() };
-  return { orderId: data.orderId as Hex, filled: data.filled === true, timing };
+  // The fill's trade as the charts show it (its swap's tx hash), when the solver filled it with one.
+  const tradeTx = typeof data.tradeTx === "string" && /^0x[0-9a-fA-F]{64}$/.test(data.tradeTx) ? (data.tradeTx as Hex) : undefined;
+  return { orderId: data.orderId as Hex, filled: data.filled === true, ...(tradeTx ? { tradeTx } : {}), timing };
 }
 
 /** Binds the withdrawal address (instant while none is bound) or requests a change (takes effect after 48 hours). */

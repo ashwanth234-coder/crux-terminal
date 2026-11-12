@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { formatUnits, maxUint256, parseAbi, parseUnits, zeroAddress, type Address } from "viem";
+import { createPublicClient, formatUnits, http, maxUint256, parseAbi, parseUnits, zeroAddress, type Address } from "viem";
 import { useConfig, useConnection, useReadContracts, useSwitchChain } from "wagmi";
 import { readContract, waitForTransactionReceipt } from "wagmi/actions";
 import { erc20Abi } from "viem";
@@ -32,6 +32,11 @@ import { FACTORY_V9, ROUTER_V9, V9_ON, curvePrice, curveV9Abi, factoryV9Abi, pha
 
 const usd = (v: bigint) => Number(formatUnits(v, 6)).toLocaleString("en-US", { maximumFractionDigits: 2 });
 const SLIPPAGE_BPS = BigInt(1_000); // 10%, the terminal's default
+/**
+ * Reads a trade is priced from, straight from Base Sepolia's own node (NEXT_PUBLIC_BASE_SEPOLIA_RPC for a fork), not
+ * through the relay's shared read cache, which answers from a couple of seconds back.
+ */
+const freshReads = createPublicClient({ chain: TESTNET, transport: http(process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || undefined, { timeout: 8_000 }) });
 
 function useNowSeconds() {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
@@ -433,7 +438,7 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
    * had often already landed, drew one candle 8× too tall and rescaled the whole chart for a moment.
    */
   const showPending = (buy: boolean, amountIn: bigint, clickAt: number) => {
-    const none: { id: number; size: (got: bigint) => void; settle: (ok: boolean) => void } = { id: -1, size: () => {}, settle: () => {} };
+    const none: { id: number; size: (got: bigint) => void; settle: (ok: boolean, tradeTx?: string) => void } = { id: -1, size: () => {}, settle: () => {} };
     if (opening || !(price > 0)) return none;
     const ahead = pendingRef.current[pendingRef.current.length - 1];
     const before = ahead?.expected && ahead.expected > 0 ? ahead.expected : price;
@@ -452,9 +457,11 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
         const ratio = Math.min(3, Math.max(1 / 3, (avg / price) ** 2));
         updatePendingTrade(clear.id, { expected: before * ratio, usdc, tokens });
       },
-      settle: (ok: boolean) => {
+      settle: (ok: boolean, tradeTx?: string) => {
         if (ok) {
           timingMark(clear.id, "relayReturned");
+          // The chart takes it away the moment its trade (this hash) is on it; 10 s at most if that never shows.
+          updatePendingTrade(clear.id, { tx: tradeTx ?? "none" });
           setTimeout(clear, 10_000);
         } else {
           clear();
@@ -487,9 +494,14 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
    */
   /** Also returns `alone`: what this trade gets at the price now, ignoring trades ahead (what the chart's candle shows). */
   const quoteAfterFlights = async (buy: boolean, amount: bigint) => {
-    const ahead = sum(flightsRef.current.filter((f) => f.buy === buy && (f.filledAt === null || Date.now() - f.filledAt < SETTLED_MS)).map((f) => f.amountIn));
+    // Only trades not back yet: one whose fill came back is in the chain's price already (read fresh below). Counting
+    // those too priced a rapid buy as if the one before it hadn't landed: its minimum came out so low that the relay
+    // refused it as "more than 55% below the current price".
+    const ahead = sum(flightsRef.current.filter((f) => f.buy === buy && f.filledAt === null).map((f) => f.amountIn));
+    // Straight from the chain, not the shared read cache (a couple of seconds behind: a price from before the trade
+    // just filled would ask too much).
     const q = async (a: bigint) =>
-      ((await readContract(config, { chainId: TESTNET.id, address: ROUTER_V9, abi: routerV9Abi, functionName: buy ? "quoteBuy" : "quoteSell", args: [token, a] })) as readonly bigint[])[0];
+      ((await freshReads.readContract({ address: ROUTER_V9, abi: routerV9Abi, functionName: buy ? "quoteBuy" : "quoteSell", args: [token, a] })) as readonly bigint[])[0];
     if (ahead === BigInt(0)) {
       const got = await q(amount);
       return { got, alone: got };
@@ -508,7 +520,7 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
     const clickAt = performance.now();
     setNote(null);
     const id = Date.now() + Math.random();
-    let settle: ((ok: boolean) => void) | null = null;
+    let settle: ((ok: boolean, tradeTx?: string) => void) | null = null;
     try {
       if (!accountReady) throw new Error("Log in to trade in one click from your CRUX Account.");
       if (amount <= BigInt(0)) throw new Error(buy ? "Enter an amount to buy." : "Nothing to sell yet.");
@@ -525,7 +537,7 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
         tokenOut: launchCaip19(buy ? token : TESTNET_USDC),
         minAmountOut: (got * (BigInt(10_000) - SLIPPAGE_BPS)) / BigInt(10_000),
       });
-      settle(true);
+      settle(true, res.tradeTx);
       updateFlights((fs) => fs.map((f) => (f.id === id ? { ...f, filledAt: Date.now() } : f)));
       // Read the balances back once they can include it, rather than on the 5 s timer.
       setTimeout(() => void held.refetch(), SETTLED_MS + 100);
