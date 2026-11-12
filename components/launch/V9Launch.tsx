@@ -234,8 +234,41 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
       { address: TESTNET_USDC, abi: erc20Abi, functionName: "balanceOf", args: [holder ?? zeroAddress], chainId: TESTNET.id },
     ],
   });
-  const tokensHeld = (held.data?.[0]?.result as bigint | undefined) ?? BigInt(0);
-  const usdcHeld = (held.data?.[1]?.result as bigint | undefined) ?? BigInt(0);
+  /**
+   * CRUX Account trades sent from this page and not yet in the balances read back (they're read every 5 s, through a
+   * cache a couple of seconds behind the chain). Counted in the balances shown, so a sell can follow a buy (and a buy a
+   * buy) at once instead of waiting for the next read: a sell's tokens and a buy's USDC leave at the click, a buy's
+   * tokens and a sell's USDC arrive at its fill.
+   */
+  type Flight = { id: number; buy: boolean; amountIn: bigint; got: bigint; filledAt: number | null };
+  const [flights, setFlights] = useState<Flight[]>([]);
+  const flightsRef = useRef<Flight[]>([]);
+  const updateFlights = (fn: (f: Flight[]) => Flight[]) => {
+    flightsRef.current = fn(flightsRef.current);
+    setFlights(flightsRef.current);
+  };
+  /** A balance read this long after a fill includes it (the read cache runs a couple of seconds behind). */
+  const SETTLED_MS = 3_000;
+  const counted = via === "account" ? flights.filter((f) => f.filledAt === null || held.dataUpdatedAt <= f.filledAt + SETTLED_MS) : [];
+  const sum = (xs: bigint[]) => xs.reduce((a, b) => a + b, BigInt(0));
+  const nonNegative = (v: bigint) => (v > BigInt(0) ? v : BigInt(0));
+  const tokensHeld = nonNegative(
+    ((held.data?.[0]?.result as bigint | undefined) ?? BigInt(0)) +
+      sum(counted.filter((f) => f.buy && f.filledAt !== null).map((f) => f.got)) -
+      sum(counted.filter((f) => !f.buy).map((f) => f.amountIn)),
+  );
+  const usdcHeld = nonNegative(
+    ((held.data?.[1]?.result as bigint | undefined) ?? BigInt(0)) -
+      sum(counted.filter((f) => f.buy).map((f) => f.amountIn)) +
+      sum(counted.filter((f) => !f.buy && f.filledAt !== null).map((f) => f.got)),
+  );
+  // Trades the balances now include are forgotten.
+  useEffect(() => {
+    if (flightsRef.current.some((f) => f.filledAt !== null && held.dataUpdatedAt > f.filledAt + SETTLED_MS)) {
+      flightsRef.current = flightsRef.current.filter((f) => f.filledAt === null || held.dataUpdatedAt <= f.filledAt + SETTLED_MS);
+      setFlights(flightsRef.current);
+    }
+  }, [held.dataUpdatedAt]);
   const heldValue = useReadContracts({
     allowFailure: true,
     query: { enabled: side === "sell" && tokensHeld > BigInt(0) && !opening, refetchInterval: 10_000 },
@@ -418,60 +451,84 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
     return (got * (BigInt(10_000) - SLIPPAGE_BPS)) / BigInt(10_000);
   };
 
-  /** One tap from the CRUX Account: a fresh quote for exactly `amount` (USDC for a buy, tokens for a sell), signed with a
-   *  minimum 10% under it, sent through the relay. Nothing to type, no pop-up. */
-  const quick = (label: string, amount: bigint) =>
-    run(`${label}…`, async () => {
-      if (!accountReady) throw new Error("Log in to trade in one click from your CRUX Account.");
-      if (amount <= BigInt(0)) throw new Error("Nothing to sell yet.");
-      const buy = side === "buy";
-      const [got] = (await readContract(config, {
-        chainId: TESTNET.id,
-        address: ROUTER_V9,
-        abi: routerV9Abi,
-        functionName: buy ? "quoteBuy" : "quoteSell",
-        args: [token, amount],
-      })) as readonly bigint[];
-      if (got === BigInt(0)) throw new Error(settling ? "The fair opening just ended and is being settled: try again in a few seconds." : "Too small to trade.");
-      const settle = showPending(buy, amount, got);
-      let res: Awaited<ReturnType<typeof tradeFromAccount>>;
-      try {
-        res = await tradeFromAccount(crux.sign!, crux.owner!, crux.account!, {
-          tokenIn: buy ? TESTNET_USDC : token,
-          amountIn: amount,
-          tokenOut: launchCaip19(buy ? token : TESTNET_USDC),
-          minAmountOut: (got * (BigInt(10_000) - SLIPPAGE_BPS)) / BigInt(10_000),
-        });
-      } catch (e) {
-        settle(false);
-        throw e;
-      }
-      settle(true);
-      const what = buy ? `Bought $${usd(amount)} of $${symbol}` : `Sold about $${usd(got)} of $${symbol}`;
-      return res.filled ? `${what}.` : `${what}: order placed, it fills in seconds.`;
-    });
+  /**
+   * What `amount` gets now, after this page's trades on the same side that haven't landed yet (or landed too recently
+   * for the price read, through a cache a couple of seconds behind, to show them): a second buy fired while the first
+   * is in flight is priced as the buy after it, quote(both) − quote(first), not as if the first never happened (on a
+   * thin curve that over-asked by 20% and the relay refused it). A trade the other way only moves the price in its
+   * favour, so it isn't counted.
+   */
+  const quoteAfterFlights = async (buy: boolean, amount: bigint) => {
+    const ahead = sum(flightsRef.current.filter((f) => f.buy === buy && (f.filledAt === null || Date.now() - f.filledAt < SETTLED_MS)).map((f) => f.amountIn));
+    const q = async (a: bigint) =>
+      ((await readContract(config, { chainId: TESTNET.id, address: ROUTER_V9, abi: routerV9Abi, functionName: buy ? "quoteBuy" : "quoteSell", args: [token, a] })) as readonly bigint[])[0];
+    if (ahead === BigInt(0)) return q(amount);
+    const [all, first] = await Promise.all([q(ahead + amount), q(ahead)]);
+    return all > first ? all - first : BigInt(0);
+  };
 
-  const trade = () =>
-    run("Sending…", async () => {
+  /**
+   * A market trade from the CRUX Account, which never locks the panel: the next buy or sell can be pressed while this
+   * one is still on its way (the relay and solver take them in turn). On the chart at once (from `shown`, the quote on
+   * screen, when there is one), its minimum 10% under a fresh quote that counts the trades still ahead of it.
+   */
+  const accountTrade = async (buy: boolean, amount: bigint, shown?: bigint) => {
+    setNote(null);
+    const id = Date.now() + Math.random();
+    let settle: ((ok: boolean) => void) | null = null;
+    try {
+      if (!accountReady) throw new Error("Log in to trade in one click from your CRUX Account.");
+      if (amount <= BigInt(0)) throw new Error(buy ? "Enter an amount to buy." : "Nothing to sell yet.");
+      const ahead = flightsRef.current.some((f) => f.buy === buy && f.filledAt === null);
+      if (shown && shown > BigInt(0) && !ahead) settle = showPending(buy, amount, shown);
+      const got = await quoteAfterFlights(buy, amount);
+      if (got === BigInt(0)) throw new Error(settling ? "The fair opening just ended and is being settled: try again in a few seconds." : "Too small to trade.");
+      settle ??= showPending(buy, amount, got);
+      updateFlights((fs) => [...fs, { id, buy, amountIn: amount, got, filledAt: null }]);
+      const res = await tradeFromAccount(crux.sign!, crux.owner!, crux.account!, {
+        tokenIn: buy ? TESTNET_USDC : token,
+        amountIn: amount,
+        tokenOut: launchCaip19(buy ? token : TESTNET_USDC),
+        minAmountOut: (got * (BigInt(10_000) - SLIPPAGE_BPS)) / BigInt(10_000),
+      });
+      settle(true);
+      updateFlights((fs) => fs.map((f) => (f.id === id ? { ...f, filledAt: Date.now() } : f)));
+      // Read the balances back once they can include it, rather than on the 5 s timer.
+      setTimeout(() => void held.refetch(), SETTLED_MS + 100);
+      const what = buy ? `Bought $${usd(amount)} of $${symbol}` : `Sold about $${usd(got)} of $${symbol}`;
+      setNote({ ok: true, text: res.filled ? `${what}.` : `${what}: order placed, it fills in seconds.` });
+    } catch (e) {
+      settle?.(false);
+      updateFlights((fs) => fs.filter((f) => f.id !== id));
+      const msg = (e as Error).message ?? String(e);
+      setNote({ ok: false, text: msg.split("\n")[0] });
+      if (/price has moved/i.test(msg)) void quote.refetch();
+    } finally {
+      lastTradeAt.current = Date.now();
+    }
+  };
+
+  /** One tap from the CRUX Account: exactly `amount` (USDC for a buy, tokens for a sell). Nothing to type, no pop-up. */
+  const quick = (amount: bigint) => void accountTrade(side === "buy", amount);
+
+  const trade = () => {
+    // A market trade from the CRUX Account doesn't lock the panel (accountTrade); the box empties for the next one.
+    if (via === "account" && !opening) {
+      const amt = amountIn;
+      setAmount("");
+      setPicked(null);
+      return accountTrade(side === "buy", amt, out);
+    }
+    return run("Sending…", async () => {
       if (via === "account") {
-        // On the chart at once, from the quote on screen; the minimum it signs is priced fresh (freshMinOut).
-        const settle = showPending(side === "buy", amountIn, out);
-        let res: Awaited<ReturnType<typeof tradeFromAccount>>;
-        try {
-          const min = await freshMinOut();
-          res = await tradeFromAccount(crux.sign!, crux.owner!, crux.account!, {
-            tokenIn: side === "buy" ? TESTNET_USDC : token,
-            amountIn,
-            tokenOut: launchCaip19(side === "buy" ? token : TESTNET_USDC),
-            minAmountOut: min,
-          });
-        } catch (e) {
-          settle(false);
-          throw e;
-        }
-        settle(true);
-        if (opening) return "In the fair opening from your CRUX Account: your tokens arrive when it ends, at its one price.";
-        return res.filled ? `Filled from your CRUX Account.` : `Order placed from your CRUX Account: it fills in seconds.`;
+        // A buy in the fair opening: deposited by the solver, filled at the opening's one price when it ends.
+        await tradeFromAccount(crux.sign!, crux.owner!, crux.account!, {
+          tokenIn: TESTNET_USDC,
+          amountIn,
+          tokenOut: launchCaip19(token),
+          minAmountOut: await freshMinOut(),
+        });
+        return "In the fair opening from your CRUX Account: your tokens arrive when it ends, at its one price.";
       }
       if (!address) throw new Error("Connect a wallet first.");
       await onBase();
@@ -490,6 +547,7 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
       await waitForTransactionReceipt(config, { chainId: TESTNET.id, hash });
       return side === "buy" ? `Bought $${symbol}.` : `Sold $${symbol}.`;
     });
+  };
 
   const deposit = () =>
     run("Depositing…", async () => {
@@ -595,7 +653,7 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
                       key={d}
                       type="button"
                       disabled={busy !== null || (held.data !== undefined && usdcHeld < units)}
-                      onClick={() => void quick(`Buying $${d} of $${symbol}`, units)}
+                      onClick={() => quick(units)}
                       className="h-9 rounded-lg border border-up/40 font-mono text-[12.5px] text-up transition-colors hover:border-up hover:bg-up/[0.06] disabled:opacity-35"
                     >
                       ${d}
@@ -607,7 +665,7 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
                     key={pct}
                     type="button"
                     disabled={busy !== null || tokensHeld === BigInt(0)}
-                    onClick={() => void quick(`Selling ${pct}% of your $${symbol}`, (tokensHeld * BigInt(Math.round(pct * 100))) / BigInt(10_000))}
+                    onClick={() => quick((tokensHeld * BigInt(Math.round(pct * 100))) / BigInt(10_000))}
                     className="h-9 rounded-lg border border-down/40 font-mono text-[12.5px] text-down transition-colors hover:border-down hover:bg-down/[0.06] disabled:opacity-35"
                   >
                     {pct >= 100 ? "All" : `${pct}%`}
