@@ -83,6 +83,9 @@ function V9Launch({ id }: { id: bigint }) {
 
   const curve = l?.curve ?? zeroAddress;
   const token = l?.token ?? zeroAddress;
+  // Your trades on their way: the header's price and market cap move with them at the click, as the chart's candle
+  // does (it read only the confirmed price, so it stayed put until the trade landed).
+  const onTheWay = usePendingTrades(token);
   const reads = useReadContracts({
     allowFailure: true,
     query: { enabled: Boolean(l), refetchInterval: 3_000 },
@@ -153,6 +156,9 @@ function V9Launch({ id }: { id: bigint }) {
 
   const poolUsdc = graduated && reserves && token0 ? (token0.toLowerCase() === l.token.toLowerCase() ? reserves[1] : reserves[0]) : null;
   const sym = `$${symbol}`;
+  // The header's price: where your newest trade on its way should leave it, else the confirmed price.
+  const newest = onTheWay.length ? onTheWay[onTheWay.length - 1] : undefined;
+  const headerPrice = newest?.expected && newest.expected > 0 ? newest.expected : price;
 
   // The pro terminal (as for every launch): token bar; chart and execution side by side; trades, holders, top traders
   // and your orders below. Phones stack them: bar, chart, execution, tape.
@@ -164,7 +170,7 @@ function V9Launch({ id }: { id: bigint }) {
         symbol={symbol}
         name={name ?? null}
         phase={phase}
-        price={price}
+        price={headerPrice}
         realUsdc={realUsdc}
         threshold={threshold}
         poolUsdc={poolUsdc}
@@ -493,7 +499,14 @@ function TradePanel({
           })();
       return Number.isFinite(ratio) && ratio > 0 ? before * Math.min(3, Math.max(1 / 3, ratio)) : undefined;
     })();
-    const clear = addPendingTrade({ token, side: buy ? "buy" : "sell", label, price: before, ...(atClick ? { expected: atClick } : {}) });
+    // Its size at the click, for its row in the swaps list (it showed "…" until quoted): the side it pays is known;
+    // the other comes from the average fill, which on a constant-product pool is √(price before × price after).
+    const paid = buy ? Number(formatUnits(amountIn, 6)) : Number(formatUnits(amountIn, 18));
+    const avg = atClick ? Math.sqrt(before * atClick) : undefined;
+    const size = buy
+      ? { usdc: paid, ...(avg ? { tokens: paid / avg } : {}) }
+      : { tokens: paid, ...(avg ? { usdc: paid * avg } : {}) };
+    const clear = addPendingTrade({ token, side: buy ? "buy" : "sell", label, price: before, ...size, ...(atClick ? { expected: atClick } : {}) });
     // Click-to-candle timing in DevTools (lib/tradeTiming): printed when its real candle is drawn.
     timingStart(clear.id, label, clickAt);
     timingMark(clear.id, "pendingAdded");
