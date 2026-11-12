@@ -38,10 +38,15 @@ let nextId = 1;
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 
+/** When this browser last pressed a trade on each token (ms; tokens lowercased), for "you're trading" (1s candles). */
+const lastPressed = new Map<string, number>();
+
 /** Shows a trade as pending; returns the function that clears it (its `id` for updatePendingTrade). */
 export function addPendingTrade(t: Omit<PendingTrade, "id" | "at">): (() => void) & { id: number } {
   const id = nextId++;
-  items = [...items, { ...t, id, at: Date.now() }];
+  const at = Date.now();
+  lastPressed.set(t.token.toLowerCase(), at);
+  items = [...items, { ...t, id, at }];
   emit();
   const clear = () => {
     if (!items.some((i) => i.id === id)) return;
@@ -84,6 +89,11 @@ export function watchPendingTrades(token: Address, listener: (trades: PendingTra
   const l = () => listener(items.filter((t) => t.token.toLowerCase() === token.toLowerCase()));
   listeners.add(l);
   return () => void listeners.delete(l);
+}
+
+/** When this browser last pressed a trade on `token` (ms since the epoch), or 0. */
+export function useLastPressed(token: Address): number {
+  return useSyncExternalStore(subscribe, () => lastPressed.get(token.toLowerCase()) ?? 0, () => 0);
 }
 
 /** This browser's pending trades on `token`. */

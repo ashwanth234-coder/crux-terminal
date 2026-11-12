@@ -45,7 +45,7 @@ import { PATTERN_LABELS, TOOL_POINTS, defaultStop, isPattern, type DrawPart, typ
 import { OverlaysButton } from "./OverlaysBar";
 import { SymbolSwitch } from "./SymbolSwitch";
 import { requestOrderAt } from "@/lib/chartOrders";
-import { dropPendingTrade, usePendingTrades } from "@/lib/pendingTrades";
+import { dropPendingTrade, useLastPressed, usePendingTrades } from "@/lib/pendingTrades";
 import { timingMark } from "@/lib/tradeTiming";
 import { TemplatesButton } from "./Templates";
 import { DEFAULT_CONFIG, DEFAULT_SETTINGS, loadLayout, loadSettings, palette, saveSettings, type ChartSettings, type ScaleMode } from "./settings";
@@ -61,6 +61,9 @@ import { Toolbar } from "./Toolbar";
 
 /** A new chart in a multi-chart layout starts on a different timeframe: auto, 1 minute, 15 minutes, 1 hour. */
 const SLOT_INTERVALS: (number | "auto")[] = ["auto", 60, 900, 3_600];
+
+/** How long after your last press the chart stays on 1-second candles. */
+const TRADING_CANDLES_MS = 60_000;
 
 /** How each kind of marked trader shows on the bars. */
 
@@ -240,7 +243,19 @@ export function ProChart({
   // "Auto" picks a timeframe once, when the chart opens (1s for a young token), and keeps it while the page is open.
   // A launch time not read yet (0) would look decades old and pick 1D: treat it as new instead.
   const [autoPick] = useState(() => (auction.settledAt > 0 ? openingInterval(auction.settledAt, Math.floor(Date.now() / 1000)) : 1));
-  const pickedInterval = config.interval === "auto" ? autoPick : config.interval;
+  // While you're trading here (a trade on its way, or one pressed in the last minute): 1-second candles, so every
+  // click prints its own candle, as memecoin terminals trade. On a 1-minute chart a buy right after a sell only
+  // shrank that minute's red candle and looked like nothing happened. A minute after your last press it goes back to
+  // your timeframe; the saved setting is never changed.
+  const lastPressed = useLastPressed(auction.token);
+  const [idleAfter, setIdleAfter] = useState(0);
+  useEffect(() => {
+    if (!lastPressed) return;
+    const t = setTimeout(() => setIdleAfter(lastPressed), Math.max(0, lastPressed + TRADING_CANDLES_MS - Date.now()));
+    return () => clearTimeout(t);
+  }, [lastPressed]);
+  const trading = !external && (pending.length > 0 || (lastPressed > 0 && idleAfter !== lastPressed));
+  const pickedInterval = trading ? 1 : config.interval === "auto" ? autoPick : config.interval;
   const feed = useFeedCandles(external ? null : auction.pair, pickedInterval);
   const feedLive = feed.usable;
   const feedCandles = useThrottled(feedLive ? feed.candles : null, redrawMs);
