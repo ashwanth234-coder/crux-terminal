@@ -20,6 +20,7 @@ import { TESTNET } from "@/lib/chains";
 import { TESTNET_USDC } from "@/lib/intents";
 import { simulateThenWrite } from "@/lib/preflight";
 import { tradeFromAccount } from "@/lib/account";
+import { addPendingTrade } from "@/lib/pendingTrades";
 import { launchCaip19 } from "@/lib/launchTrade";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import type { AuctionV2 } from "@/lib/launchV2";
@@ -378,6 +379,32 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
   };
 
   /**
+   * An account trade on the chart the moment it's pressed (lib/pendingTrades, as on the V8 terminal): a candle from the
+   * price now to the price it should leave. On a constant-product curve or pool the average fill is the geometric mean
+   * of the prices before and after, so after = average² / before. The chart takes it away the moment the real trade
+   * is on it; a trade that fails takes it away at once. Not in the fair opening (no price moves until it settles).
+   * Returns the function that settles it: failed (gone now) or sent (gone with the real candle, or after 10 s).
+   */
+  const showPending = (buy: boolean, amountIn: bigint, got: bigint) => {
+    const none: (ok: boolean) => void = () => {};
+    if (opening || !(price > 0) || got === BigInt(0)) return none;
+    const usdc = Number(formatUnits(buy ? amountIn : got, 6));
+    const tokens = Number(formatUnits(buy ? got : amountIn, 18));
+    if (!(usdc > 0 && tokens > 0)) return none;
+    const avg = usdc / tokens;
+    const clear = addPendingTrade({
+      token,
+      side: buy ? "buy" : "sell",
+      label: buy ? `Buying $${usd(amountIn)}…` : `Selling ${tokensText(amountIn)} $${symbol}…`,
+      price,
+      expected: (avg * avg) / price,
+      usdc,
+      tokens,
+    });
+    return (ok: boolean) => (ok ? setTimeout(clear, 10_000) : clear());
+  };
+
+  /**
    * The minimum to sign, from a quote no older than 2 s and newer than this page's last trade. After a trade the box
    * empties and its quote stops refreshing, so typing the same amount again showed (and signed) the price from before
    * that trade: seen live, a second buy signed a minimum 15% over the price the first buy had left, and sat unfilled.
@@ -406,12 +433,20 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
         args: [token, amount],
       })) as readonly bigint[];
       if (got === BigInt(0)) throw new Error(settling ? "The fair opening just ended and is being settled: try again in a few seconds." : "Too small to trade.");
-      const res = await tradeFromAccount(crux.sign!, crux.owner!, crux.account!, {
-        tokenIn: buy ? TESTNET_USDC : token,
-        amountIn: amount,
-        tokenOut: launchCaip19(buy ? token : TESTNET_USDC),
-        minAmountOut: (got * (BigInt(10_000) - SLIPPAGE_BPS)) / BigInt(10_000),
-      });
+      const settle = showPending(buy, amount, got);
+      let res: Awaited<ReturnType<typeof tradeFromAccount>>;
+      try {
+        res = await tradeFromAccount(crux.sign!, crux.owner!, crux.account!, {
+          tokenIn: buy ? TESTNET_USDC : token,
+          amountIn: amount,
+          tokenOut: launchCaip19(buy ? token : TESTNET_USDC),
+          minAmountOut: (got * (BigInt(10_000) - SLIPPAGE_BPS)) / BigInt(10_000),
+        });
+      } catch (e) {
+        settle(false);
+        throw e;
+      }
+      settle(true);
       const what = buy ? `Bought $${usd(amount)} of $${symbol}` : `Sold about $${usd(got)} of $${symbol}`;
       return res.filled ? `${what}.` : `${what}: order placed, it fills in seconds.`;
     });
@@ -419,13 +454,22 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
   const trade = () =>
     run("Sending…", async () => {
       if (via === "account") {
-        const min = await freshMinOut();
-        const res = await tradeFromAccount(crux.sign!, crux.owner!, crux.account!, {
-          tokenIn: side === "buy" ? TESTNET_USDC : token,
-          amountIn,
-          tokenOut: launchCaip19(side === "buy" ? token : TESTNET_USDC),
-          minAmountOut: min,
-        });
+        // On the chart at once, from the quote on screen; the minimum it signs is priced fresh (freshMinOut).
+        const settle = showPending(side === "buy", amountIn, out);
+        let res: Awaited<ReturnType<typeof tradeFromAccount>>;
+        try {
+          const min = await freshMinOut();
+          res = await tradeFromAccount(crux.sign!, crux.owner!, crux.account!, {
+            tokenIn: side === "buy" ? TESTNET_USDC : token,
+            amountIn,
+            tokenOut: launchCaip19(side === "buy" ? token : TESTNET_USDC),
+            minAmountOut: min,
+          });
+        } catch (e) {
+          settle(false);
+          throw e;
+        }
+        settle(true);
         if (opening) return "In the fair opening from your CRUX Account: your tokens arrive when it ends, at its one price.";
         return res.filled ? `Filled from your CRUX Account.` : `Order placed from your CRUX Account: it fills in seconds.`;
       }
