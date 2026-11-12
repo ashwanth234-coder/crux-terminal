@@ -11,7 +11,7 @@ import type {
   Time,
   UTCTimestamp,
 } from "lightweight-charts";
-import { BadgesPrimitive, type Badge } from "./badges";
+import { BadgesPrimitive, badgeColumnPx, type Badge } from "./badges";
 import { heikinAshi, type Candle } from "@/lib/candles";
 import type { Study, StudyLine } from "@/lib/indicators";
 import { DrawingsPrimitive, type DrawPoint } from "./drawings";
@@ -233,7 +233,7 @@ export class ChartEngine {
   private addMain(type: ChartType): ISeriesApi<SeriesType> {
     const series = this.addMainSeries(type);
     const s = this.settings;
-    series.applyOptions({ priceScaleId: this.side, priceLineVisible: s.lastPriceLine, autoscaleInfoProvider: minRangeAutoscale });
+    series.applyOptions({ priceScaleId: this.side, priceLineVisible: s.lastPriceLine, autoscaleInfoProvider: this.mainAutoscale });
     if (type === "candles" || type === "heikin" || type === "hollow") {
       const { up, down } = palette(s);
       series.applyOptions({ wickVisible: s.wicks, ...(type !== "hollow" ? { borderVisible: s.borders, borderUpColor: up, borderDownColor: down } : {}) } as never);
@@ -316,10 +316,27 @@ export class ChartEngine {
     this.main.attachPrimitive(this.badges);
   }
 
-  /** Trader badges above the candles (DB, DS, ...), kept across chart-style changes. */
+  /**
+   * Trader badges above the candles (DB, DS, ...), kept across chart-style changes. The price scale keeps room over the
+   * highest candle for the tallest column (a column over the top candle ran off the pane).
+   */
   setBadges(badges: Badge[]) {
     this.badges.set(badges);
+    const room = badgeColumnPx(badges.reduce((m, b) => Math.max(m, b.stack + 1), 0));
+    if (room !== this.badgeRoom) {
+      this.badgeRoom = room;
+      this.main.applyOptions({ autoscaleInfoProvider: this.mainAutoscale });
+    }
   }
+
+  /** Pixels kept over the highest candle for its badges (setBadges). */
+  private badgeRoom = 0;
+  private readonly mainAutoscale = (original: () => AutoscaleInfo): AutoscaleInfo => {
+    const r = minRangeAutoscale(original);
+    if (!r || this.badgeRoom === 0) return r;
+    const m = (r.margins ?? {}) as { above?: number; below?: number };
+    return { ...r, margins: { above: (m.above ?? 0) + this.badgeRoom, below: m.below ?? 0 } };
+  };
 
   /** Marks on the bars (milestones), kept across chart-style changes. */
   setMarkers(markers: SeriesMarker<Time>[]) {

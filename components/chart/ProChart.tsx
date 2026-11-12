@@ -61,6 +61,9 @@ import { Toolbar } from "./Toolbar";
 const SLOT_INTERVALS: (number | "auto")[] = ["auto", 60, 900, 3_600];
 
 /** How each kind of marked trader shows on the bars. */
+/** Most badges stacked over one candle; a busier one folds its oldest into a "+N" disc. */
+const BADGE_COLUMN = 6;
+
 const MARK_STYLE: Record<MarkWho, { color: string; buy: string; sell: string }> = {
   focus: { color: "#ff9d6e", buy: "B", sell: "S" },
   me: { color: "#00e676", buy: "B", sell: "S" },
@@ -533,17 +536,20 @@ export function ProChart({
     // A sell's badge goes on the red candle its sale made (markBarTime).
     const downAt = new Set(candles.filter((c) => c.close < c.open).map((c) => c.time));
     const isDown = (time: number) => downAt.has(time);
-    // One small badge per candle for each kind of trader and side ("DB", "DB 3"), on top of the candle: never a column
-    // of arrows, one per trade.
-    const grouped = new Map<string, { time: number; who: MarkWho; side: "buy" | "sell"; n: number }>();
+    // Every marked trade its own badge, in one column over its candle in the order they happened (oldest nearest the
+    // candle), so a candle's story reads upwards: DB, then TS, then DS... (as the memecoin terminals draw them). The
+    // kinds per candle are also kept, for telling when your instant badge's real one has arrived.
+    const grouped = new Map<string, { time: number; who: MarkWho; side: "buy" | "sell" }>();
+    const columns = new Map<number, { at: number; label: string; side: "buy" | "sell" }[]>();
     if (!marksHidden) {
       for (const m of shownMarks.slice(-300)) {
         const time = markBarTime(times, m.time, m.side, isDown, interval);
         if (time === null) continue;
-        const key = `${time}:${m.who}:${m.side}`;
-        const g = grouped.get(key);
-        if (g) g.n++;
-        else grouped.set(key, { time, who: m.who, side: m.side, n: 1 });
+        grouped.set(`${time}:${m.who}:${m.side}`, { time, who: m.who, side: m.side });
+        const style = MARK_STYLE[m.who];
+        const col = columns.get(time) ?? [];
+        col.push({ at: m.time, label: m.side === "buy" ? style.buy : style.sell, side: m.side });
+        columns.set(time, col);
       }
     }
     // Your own trade's badge (DB / DS for the creator, B / S with "My trades" on) the moment you press Buy or Sell,
@@ -568,33 +574,38 @@ export function ProChart({
         (g) => g.who === o.who && g.side === o.side && g.time >= o.time - interval && g.time <= o.time + (o.side === "sell" ? SELL_LAG_SECONDS : interval),
       );
     ownBadges.current = ownBadges.current.filter((o) => o.until > nowMs && !hasReal(o));
-    // Drawn as electric green (buy) or red (sell) discs with the label inside in white (badges.ts).
+    // Drawn as electric green (buy) or red (sell) discs with the label inside in white (badges.ts), stacked upwards
+    // from the top of the candle.
     const barOf = new Map(candles.map((c) => [c.time, c]));
-    engine.setBadges([
-      ...[...grouped.values()].flatMap((g) => {
-        const c = barOf.get(g.time);
-        if (c === undefined) return [];
-        const style = MARK_STYLE[g.who];
-        return [{ time: g.time, high: c.high * k, low: c.low * k, label: g.side === "buy" ? style.buy : style.sell, side: g.side }];
+    // Each column's base: the candle's high, or your instant candle's top while it's up there.
+    const tops = new Map<number, number>();
+    for (const o of ownBadges.current) {
+      const style = MARK_STYLE[o.who];
+      // While its instant candle is up: on that candle's column, over its top. Once the real trade is on the chart:
+      // on the bar markBarTime gives the newest trade, where its real badge will sit, so the hand-over to the real one
+      // (up to 250 ms later) never moves it. Newest in its column: on top.
+      const instant = pending.some((q) => q.id === o.id);
+      const time = instant ? o.time : (markBarTime(times, Math.max(o.time, last?.time ?? o.time), o.side, isDown, interval) ?? o.time);
+      if (instant) tops.set(time, Math.max(tops.get(time) ?? -Infinity, o.high));
+      const col = columns.get(time) ?? [];
+      col.push({ at: Infinity, label: o.side === "buy" ? style.buy : style.sell, side: o.side });
+      columns.set(time, col);
+    }
+    engine.setBadges(
+      [...columns.entries()].flatMap(([time, col]) => {
+        const high = Math.max(barOf.get(time)?.high ?? -Infinity, tops.get(time) ?? -Infinity);
+        if (!Number.isFinite(high)) return [];
+        // Oldest nearest the candle. A busy candle shows its newest BADGE_COLUMN - 1 and folds the older ones into a
+        // "+N" disc at the bottom, so a column never runs off the pane.
+        const sorted = [...col].sort((a, b) => a.at - b.at);
+        const hidden = sorted.length > BADGE_COLUMN ? sorted.length - (BADGE_COLUMN - 1) : 0;
+        const shown = [
+          ...(hidden > 0 ? [{ label: `+${hidden}`, side: "more" as const }] : []),
+          ...sorted.slice(hidden).map((b) => ({ label: b.label, side: b.side })),
+        ];
+        return shown.map((b, stack) => ({ time, high: high * k, label: b.label, side: b.side, stack }));
       }),
-      ...ownBadges.current.map((o) => {
-        const style = MARK_STYLE[o.who];
-        // While its instant candle is up: on that candle, edged by it (and by its bar's own range when the bar exists).
-        // A buy's badge hung from the instant candle's top on a new bar, then jumped down when the real candle came.
-        // Once the real trade is on the chart: exactly where its real badge will sit (the bar markBarTime gives the
-        // newest trade, with that bar's range), so the hand-over to the real badge, up to 250 ms later, never moves it.
-        const instant = pending.some((q) => q.id === o.id);
-        const time = instant ? o.time : (markBarTime(times, Math.max(o.time, last?.time ?? o.time), o.side, isDown, interval) ?? o.time);
-        const c = barOf.get(time);
-        return {
-          time,
-          high: (instant ? Math.max(c?.high ?? o.high, o.high) : (c?.high ?? o.high)) * k,
-          low: (instant ? Math.min(c?.low ?? o.low, o.low) : (c?.low ?? o.low)) * k,
-          label: o.side === "buy" ? style.buy : style.sell,
-          side: o.side,
-        };
-      }),
-    ]);
+    );
     const milestones: { time: number; text: string; color: string }[] = [];
     if (!external && !marksHidden && auction.settledAt > 0) {
       milestones.push({ time: auction.settledAt, text: "Graduated", color: "#f3f3f0" });
