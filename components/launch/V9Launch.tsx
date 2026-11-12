@@ -20,7 +20,7 @@ import { TESTNET } from "@/lib/chains";
 import { TESTNET_USDC } from "@/lib/intents";
 import { simulateThenWrite } from "@/lib/preflight";
 import { tradeFromAccount } from "@/lib/account";
-import { addPendingTrade, usePendingTrades } from "@/lib/pendingTrades";
+import { addPendingTrade, updatePendingTrade, usePendingTrades } from "@/lib/pendingTrades";
 import { launchCaip19 } from "@/lib/launchTrade";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import type { AuctionV2 } from "@/lib/launchV2";
@@ -424,15 +424,16 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
    * is on it; a trade that fails takes it away at once. Not in the fair opening (no price moves until it settles).
    * Returns the function that settles it: failed (gone now) or sent (gone with the real candle, or after 10 s).
    */
-  const showPending = (buy: boolean, amountIn: bigint, got: bigint) => {
-    const none: (ok: boolean) => void = () => {};
-    if (opening || !(price > 0) || got === BigInt(0)) return none;
-    const usdc = Number(formatUnits(buy ? amountIn : got, 6));
-    const tokens = Number(formatUnits(buy ? got : amountIn, 18));
-    if (!(usdc > 0 && tokens > 0)) return none;
-    const avg = usdc / tokens;
-    // With trades still pending, this one starts where the newest of them should leave the price (its quote already
-    // counts them: quoteAfterFlights), so the chart's candle runs on from theirs instead of from before them.
+  /**
+   * Puts the trade on the chart at the click, before anything is quoted (a small candle at the current price), and
+   * returns `size(got)` to give it its height once quoted, and `settle(ok)`. `got` is what this trade alone gets now:
+   * its move is the ratio after/before = (average / before)², applied on from the newest trade still pending (so rapid
+   * trades stack), and kept within 3× either way. Sizing it from the minimum's quote, which counts trades ahead that
+   * had often already landed, drew one candle 8× too tall and rescaled the whole chart for a moment.
+   */
+  const showPending = (buy: boolean, amountIn: bigint) => {
+    const none: { size: (got: bigint) => void; settle: (ok: boolean) => void } = { size: () => {}, settle: () => {} };
+    if (opening || !(price > 0)) return none;
     const ahead = pendingRef.current[pendingRef.current.length - 1];
     const before = ahead?.expected && ahead.expected > 0 ? ahead.expected : price;
     const clear = addPendingTrade({
@@ -440,11 +441,18 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
       side: buy ? "buy" : "sell",
       label: buy ? `Buying $${usd(amountIn)}…` : `Selling ${tokensText(amountIn)} $${symbol}…`,
       price: before,
-      expected: (avg * avg) / before,
-      usdc,
-      tokens,
     });
-    return (ok: boolean) => (ok ? setTimeout(clear, 10_000) : clear());
+    return {
+      size: (got: bigint) => {
+        const usdc = Number(formatUnits(buy ? amountIn : got, 6));
+        const tokens = Number(formatUnits(buy ? got : amountIn, 18));
+        if (!(usdc > 0 && tokens > 0)) return;
+        const avg = usdc / tokens;
+        const ratio = Math.min(3, Math.max(1 / 3, (avg / price) ** 2));
+        updatePendingTrade(clear.id, { expected: before * ratio, usdc, tokens });
+      },
+      settle: (ok: boolean) => (ok ? void setTimeout(clear, 10_000) : clear()),
+    };
   };
 
   /**
@@ -468,19 +476,24 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
    * thin curve that over-asked by 20% and the relay refused it). A trade the other way only moves the price in its
    * favour, so it isn't counted.
    */
+  /** Also returns `alone`: what this trade gets at the price now, ignoring trades ahead (what the chart's candle shows). */
   const quoteAfterFlights = async (buy: boolean, amount: bigint) => {
     const ahead = sum(flightsRef.current.filter((f) => f.buy === buy && (f.filledAt === null || Date.now() - f.filledAt < SETTLED_MS)).map((f) => f.amountIn));
     const q = async (a: bigint) =>
       ((await readContract(config, { chainId: TESTNET.id, address: ROUTER_V9, abi: routerV9Abi, functionName: buy ? "quoteBuy" : "quoteSell", args: [token, a] })) as readonly bigint[])[0];
-    if (ahead === BigInt(0)) return q(amount);
-    const [all, first] = await Promise.all([q(ahead + amount), q(ahead)]);
-    return all > first ? all - first : BigInt(0);
+    if (ahead === BigInt(0)) {
+      const got = await q(amount);
+      return { got, alone: got };
+    }
+    const [alone, all, first] = await Promise.all([q(amount), q(ahead + amount), q(ahead)]);
+    return { got: all > first ? all - first : BigInt(0), alone };
   };
 
   /**
    * A market trade from the CRUX Account, which never locks the panel: the next buy or sell can be pressed while this
-   * one is still on its way (the relay and solver take them in turn). On the chart at once (from `shown`, the quote on
-   * screen, when there is one), its minimum 10% under a fresh quote that counts the trades still ahead of it.
+   * one is still on its way (the relay and solver take them in turn). On the chart at the click (showPending; sized
+   * from `shown`, the quote on screen, at once when there is one), its minimum 10% under a fresh quote that counts the
+   * trades still ahead of it.
    */
   const accountTrade = async (buy: boolean, amount: bigint, shown?: bigint) => {
     setNote(null);
@@ -489,11 +502,12 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
     try {
       if (!accountReady) throw new Error("Log in to trade in one click from your CRUX Account.");
       if (amount <= BigInt(0)) throw new Error(buy ? "Enter an amount to buy." : "Nothing to sell yet.");
-      const ahead = flightsRef.current.some((f) => f.buy === buy && f.filledAt === null);
-      if (shown && shown > BigInt(0) && !ahead) settle = showPending(buy, amount, shown);
-      const got = await quoteAfterFlights(buy, amount);
+      const onChart = showPending(buy, amount);
+      settle = onChart.settle;
+      if (shown && shown > BigInt(0)) onChart.size(shown);
+      const { got, alone } = await quoteAfterFlights(buy, amount);
       if (got === BigInt(0)) throw new Error(settling ? "The fair opening just ended and is being settled: try again in a few seconds." : "Too small to trade.");
-      settle ??= showPending(buy, amount, got);
+      onChart.size(alone);
       updateFlights((fs) => [...fs, { id, buy, amountIn: amount, got, filledAt: null }]);
       const res = await tradeFromAccount(crux.sign!, crux.owner!, crux.account!, {
         tokenIn: buy ? TESTNET_USDC : token,

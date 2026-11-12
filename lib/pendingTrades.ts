@@ -30,8 +30,8 @@ let nextId = 1;
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 
-/** Shows a trade as pending; returns the function that clears it. */
-export function addPendingTrade(t: Omit<PendingTrade, "id" | "at">): () => void {
+/** Shows a trade as pending; returns the function that clears it (its `id` for updatePendingTrade). */
+export function addPendingTrade(t: Omit<PendingTrade, "id" | "at">): (() => void) & { id: number } {
   const id = nextId++;
   items = [...items, { ...t, id, at: Date.now() }];
   emit();
@@ -41,7 +41,17 @@ export function addPendingTrade(t: Omit<PendingTrade, "id" | "at">): () => void 
     emit();
   };
   setTimeout(clear, MAX_AGE_MS);
-  return clear;
+  return Object.assign(clear, { id });
+}
+
+/**
+ * Fills in what a pending trade wasn't known yet when it was shown (its expected price and size, once quoted): it goes
+ * on the chart at the click, then takes its right height a moment later, the same candle and badge throughout.
+ */
+export function updatePendingTrade(id: number, patch: Partial<Pick<PendingTrade, "expected" | "usdc" | "tokens" | "label">>) {
+  if (!items.some((i) => i.id === id)) return;
+  items = items.map((i) => (i.id === id ? { ...i, ...patch } : i));
+  emit();
 }
 
 /** Takes a pending trade away: the chart calls it the moment the real trade is on it, so the two never overlap or gap. */

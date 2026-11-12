@@ -584,9 +584,11 @@ export function ProChart({
       // While its instant candle is up: on that candle's column, over its top. Once the real trade is on the chart:
       // on the bar markBarTime gives the newest trade, where its real badge will sit, so the hand-over to the real one
       // (up to 250 ms later) never moves it. Newest in its column: on top.
-      const instant = pending.some((q) => q.id === o.id);
+      const q = pending.find((x) => x.id === o.id);
+      const instant = q !== undefined;
       const time = instant ? o.time : (markBarTime(times, Math.max(o.time, last?.time ?? o.time), o.side, isDown, interval) ?? o.time);
-      if (instant) tops.set(time, Math.max(tops.get(time) ?? -Infinity, o.high));
+      // The instant candle's top as it is now: it's drawn at the click and takes its height once quoted.
+      if (q) tops.set(time, Math.max(tops.get(time) ?? -Infinity, o.high, q.expected ?? q.price, last?.close ?? q.price));
       const col = columns.get(time) ?? [];
       col.push({ at: Infinity, label: o.side === "buy" ? style.buy : style.sell, side: o.side });
       columns.set(time, col);
