@@ -36,6 +36,7 @@ import { openingTrade } from "@/lib/openingTrade";
 import { BottomBar } from "./BottomBar";
 import { ContextMenu, ScaleMenu, type ContextAt } from "./ContextMenu";
 import { ChartEngine } from "./engine";
+import { BADGE_ROWS } from "./badges";
 import { useHistory } from "./history";
 import { Legend } from "./Legend";
 import { DrawingBar } from "./DrawingBar";
@@ -62,8 +63,6 @@ import { Toolbar } from "./Toolbar";
 const SLOT_INTERVALS: (number | "auto")[] = ["auto", 60, 900, 3_600];
 
 /** How each kind of marked trader shows on the bars. */
-/** Most badges stacked over one candle; a busier one folds its oldest into a "+N" disc. */
-const BADGE_COLUMN = 6;
 
 const MARK_STYLE: Record<MarkWho, { color: string; buy: string; sell: string }> = {
   focus: { color: "#ff9d6e", buy: "B", sell: "S" },
@@ -601,13 +600,23 @@ export function ProChart({
       [...columns.entries()].flatMap(([time, col]) => {
         const high = Math.max(barOf.get(time)?.high ?? -Infinity, tops.get(time) ?? -Infinity);
         if (!Number.isFinite(high)) return [];
-        // Oldest nearest the candle. A busy candle shows its newest BADGE_COLUMN - 1 and folds the older ones into a
-        // "+N" disc at the bottom, so a column never runs off the pane.
-        const sorted = [...col].sort((a, b) => a.at - b.at);
-        const hidden = sorted.length > BADGE_COLUMN ? sorted.length - (BADGE_COLUMN - 1) : 0;
+        // One badge per kind of trader and side, with how many ("DB3"), stacked in the order each kind first traded in
+        // the candle (oldest nearest it): a busy candle reads as a few steady badges, not a column that grows and
+        // reshuffles with every trade. At most BADGE_ROWS; older kinds fold into a "+N" (their trades) at the bottom.
+        const kinds = new Map<string, { first: number; label: string; side: "buy" | "sell"; n: number }>();
+        for (const b of col) {
+          const g = kinds.get(b.label);
+          if (g) {
+            g.n++;
+            g.first = Math.min(g.first, b.at);
+          } else kinds.set(b.label, { first: b.at, label: b.label, side: b.side, n: 1 });
+        }
+        const sorted = [...kinds.values()].sort((a, b) => a.first - b.first);
+        const hidden = sorted.length > BADGE_ROWS ? sorted.length - (BADGE_ROWS - 1) : 0;
+        const folded = sorted.slice(0, hidden).reduce((s, g) => s + g.n, 0);
         const shown = [
-          ...(hidden > 0 ? [{ label: `+${hidden}`, side: "more" as const }] : []),
-          ...sorted.slice(hidden).map((b) => ({ label: b.label, side: b.side })),
+          ...(hidden > 0 ? [{ label: `+${folded}`, side: "more" as const }] : []),
+          ...sorted.slice(hidden).map((g) => ({ label: g.n > 1 ? `${g.label}${g.n > 99 ? "99" : g.n}` : g.label, side: g.side })),
         ];
         return shown.map((b, stack) => ({ time, high: high * k, label: b.label, side: b.side, stack }));
       }),

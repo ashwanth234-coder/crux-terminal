@@ -11,7 +11,7 @@ import type {
   Time,
   UTCTimestamp,
 } from "lightweight-charts";
-import { BadgesPrimitive, badgeColumnPx, type Badge } from "./badges";
+import { BADGE_ROWS, BadgesPrimitive, badgeColumnPx, type Badge } from "./badges";
 import { heikinAshi, type Candle } from "@/lib/candles";
 import type { Study, StudyLine } from "@/lib/indicators";
 import { DrawingsPrimitive, type DrawPoint } from "./drawings";
@@ -317,12 +317,13 @@ export class ChartEngine {
   }
 
   /**
-   * Trader badges above the candles (DB, DS, ...), kept across chart-style changes. The price scale keeps room over the
-   * highest candle for the tallest column (a column over the top candle ran off the pane).
+   * Trader badges above the candles (DB, DS, ...), kept across chart-style changes. The price scale keeps a fixed room
+   * over the highest candle for a full column whenever there are badges: sized to the tallest column, it changed as
+   * trades landed and the whole chart jumped with nearly every trade.
    */
   setBadges(badges: Badge[]) {
     this.badges.set(badges);
-    const room = badgeColumnPx(badges.reduce((m, b) => Math.max(m, b.stack + 1), 0));
+    const room = badges.length > 0 ? badgeColumnPx(BADGE_ROWS) : 0;
     if (room !== this.badgeRoom) {
       this.badgeRoom = room;
       this.main.applyOptions({ autoscaleInfoProvider: this.mainAutoscale });
@@ -527,7 +528,18 @@ export class ChartEngine {
       return;
     }
     const { up: upSolid, down: downSolid } = palette(this.settings);
-    const look = { priceScaleId: this.side, upColor: upSolid, downColor: downSolid, borderVisible: false, wickVisible: false, lastValueVisible: false, priceLineVisible: false };
+    // Never part of the chart's fit: the price scale stays where the real candles put it, so a click doesn't rescale
+    // the chart (and rescale it back when the real trade lands). A pending candle past the top is drawn to the edge.
+    const look = {
+      priceScaleId: this.side,
+      upColor: upSolid,
+      downColor: downSolid,
+      borderVisible: false,
+      wickVisible: false,
+      lastValueVisible: false,
+      priceLineVisible: false,
+      autoscaleInfoProvider: () => null,
+    };
     if (!this.pending) this.pending = this.chart.addSeries(this.lc.CandlestickSeries, look);
     else this.pending.applyOptions(look);
     // A buy always draws up (green), a sell down (red): an average fill a hair either side of the last close mustn't

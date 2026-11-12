@@ -19,6 +19,9 @@ const LOOK = {
 const R = 7.5;
 const GAP = 3;
 
+/** Most badges in one candle's column (a busier candle folds the rest into "+N"). */
+export const BADGE_ROWS = 4;
+
 /** Pixels a column of `rows` badges needs over its candle (the chart keeps that much room over the highest one). */
 export const badgeColumnPx = (rows: number) => (rows > 0 ? GAP + rows * (2 * R + 2) + 2 : 0);
 
@@ -83,7 +86,7 @@ export class BadgesPrimitive implements ISeriesPrimitive<Time> {
         ctx.stroke();
         // White label, a faint dark shadow under it so it stays legible on the bright fill.
         ctx.save();
-        ctx.font = `800 ${b.label.length > 1 ? 6.5 : 8}px Inter, ui-sans-serif, system-ui, sans-serif`;
+        ctx.font = `800 ${b.label.length > 3 ? 5.2 : b.label.length > 1 ? 6.5 : 8}px Inter, ui-sans-serif, system-ui, sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.shadowColor = "rgba(0, 0, 0, 0.45)";

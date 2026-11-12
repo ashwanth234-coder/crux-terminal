@@ -182,7 +182,21 @@ function V9Launch({ id }: { id: bigint }) {
         </section>
 
         <aside aria-label="Execution" className="flex flex-col gap-3 bg-panel p-3 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:overflow-y-auto">
-          <TradePanel token={l.token} curve={l.curve} symbol={symbol} phase={phase} price={price} supply={Number(formatUnits(supply, 18))} />
+          <TradePanel
+            token={l.token}
+            curve={l.curve}
+            symbol={symbol}
+            phase={phase}
+            price={price}
+            supply={Number(formatUnits(supply, 18))}
+            pool={
+              graduated && reserves && token0
+                ? token0.toLowerCase() === l.token.toLowerCase()
+                  ? { usdc: reserves[1], tokens: reserves[0] }
+                  : { usdc: reserves[0], tokens: reserves[1] }
+                : undefined
+            }
+          />
           {launchedAt > 0 && <Momentum auction={auction} symbol={symbol} />}
           <CreatorNote creator={l.creator} symbol={symbol} />
         </aside>
@@ -196,7 +210,24 @@ function V9Launch({ id }: { id: bigint }) {
 }
 
 /** Buy or sell from the CRUX Account (gasless, the relay) or the wallet (CruxRouterV9); deposit during a fair opening. */
-function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Address; curve: Address; symbol: string; phase: PhaseV9; price: number; supply: number }) {
+/** `pool`: a graduated launch's pool reserves (USDC and tokens), for sizing a pending trade's candle at the click. */
+function TradePanel({
+  token,
+  curve,
+  symbol,
+  phase,
+  price,
+  supply,
+  pool,
+}: {
+  token: Address;
+  curve: Address;
+  symbol: string;
+  phase: PhaseV9;
+  price: number;
+  supply: number;
+  pool?: { usdc: bigint; tokens: bigint };
+}) {
   const config = useConfig();
   const { address, chainId } = useConnection();
   const { mutateAsync: switchChain } = useSwitchChain();
@@ -444,13 +475,33 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
     const ahead = pendingRef.current[pendingRef.current.length - 1];
     const before = ahead?.expected && ahead.expected > 0 ? ahead.expected : price;
     const label = buy ? `Buying $${usd(amountIn)}…` : `Selling ${tokensText(amountIn)} $${symbol}…`;
-    const clear = addPendingTrade({ token, side: buy ? "buy" : "sell", label, price: before });
+    // On a graduated launch's pool its full height is known at the click, from the reserves the page already reads
+    // (exact for a constant-product pool: the price goes as USDC² / k), with no wait for a quote: a stub until the
+    // quote came back (0.4–0.6 s) read as "nothing happened". The pool is advanced past the trades still pending
+    // (the price after them, `before`), so rapid trades stack. On the curve it's sized once quoted.
+    const atClick = (() => {
+      if (!pool || pool.usdc === BigInt(0) || pool.tokens === BigInt(0)) return undefined;
+      const shift = Math.sqrt(before / price);
+      const ratio = buy
+        ? (() => {
+            const x = Number(formatUnits(pool.usdc, 6)) * shift;
+            return ((x + Number(formatUnits(amountIn, 6))) / x) ** 2;
+          })()
+        : (() => {
+            const y = Number(formatUnits(pool.tokens, 18)) / shift;
+            return (y / (y + Number(formatUnits(amountIn, 18)))) ** 2;
+          })();
+      return Number.isFinite(ratio) && ratio > 0 ? before * Math.min(3, Math.max(1 / 3, ratio)) : undefined;
+    })();
+    const clear = addPendingTrade({ token, side: buy ? "buy" : "sell", label, price: before, ...(atClick ? { expected: atClick } : {}) });
     // Click-to-candle timing in DevTools (lib/tradeTiming): printed when its real candle is drawn.
     timingStart(clear.id, label, clickAt);
     timingMark(clear.id, "pendingAdded");
     return {
       id: clear.id,
       size: (got: bigint) => {
+        if (atClick) return; // already the pool's exact move; the relay's fill snaps it to the real trade
+
         const usdc = Number(formatUnits(buy ? amountIn : got, 6));
         const tokens = Number(formatUnits(buy ? got : amountIn, 18));
         if (!(usdc > 0 && tokens > 0)) return;
