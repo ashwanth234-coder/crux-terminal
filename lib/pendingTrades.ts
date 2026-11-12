@@ -27,8 +27,11 @@ export type PendingTrade = {
   at: number;
 };
 
-/** A pending trade that hasn't resolved by now is dropped from the chart (its order status says what happened). */
-const MAX_AGE_MS = 60_000;
+/**
+ * A pending trade is gone from the chart this long after it was pressed, whatever happened: its real trade replaces it
+ * well before (fills take 1.5–2.5 s), and no failure can leave one drawn (one once stayed for 30 s).
+ */
+const MAX_AGE_MS = 3_000;
 
 let items: PendingTrade[] = [];
 let nextId = 1;

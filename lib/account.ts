@@ -193,7 +193,35 @@ export function accountNonce(): bigint {
 /** Signatures expire two minutes after signing (the relay submits within seconds). */
 const deadline = () => BigInt(Math.floor(Date.now() / 1000) + 120);
 
-export type AccountTrade = { tokenIn: Address; amountIn: bigint; tokenOut: string; minAmountOut: bigint };
+/**
+ * `fillSeconds`: how long the solver may take to fill it before it's refunded (default ACCOUNT_FILL_SECONDS). A market
+ * trade asks for 30 s: one that misses its price isn't retried, so it comes back in seconds, not ten minutes.
+ */
+export type AccountTrade = { tokenIn: Address; amountIn: bigint; tokenOut: string; minAmountOut: bigint; fillSeconds?: number };
+
+/** A market trade's fill window (AccountTrade.fillSeconds). */
+export const MARKET_FILL_SECONDS = 30;
+
+/** A fill as the relay reports it (crux-solver feedhub FeedFill): the trade exactly as the charts will draw it. */
+export type AccountFill = { side: "buy" | "sell"; usdc: bigint; tokens: bigint; price: number; priceAfter?: number; time: number; blockNumber: bigint };
+
+const fillFrom = (v: unknown): AccountFill | undefined => {
+  const f = v as Record<string, unknown> | null;
+  if (!f || typeof f !== "object" || typeof f.price !== "number" || typeof f.blockNumber !== "string") return undefined;
+  try {
+    return {
+      side: f.side === "sell" ? "sell" : "buy",
+      usdc: BigInt(String(f.usdc)),
+      tokens: BigInt(String(f.tokens)),
+      price: f.price,
+      ...(typeof f.priceAfter === "number" ? { priceAfter: f.priceAfter } : {}),
+      time: Number(f.time),
+      blockNumber: BigInt(f.blockNumber),
+    };
+  } catch {
+    return undefined;
+  }
+};
 
 /** A buy or sell from the account, signed by the login key and opened by the relay. Returns the order id. */
 /**
@@ -222,7 +250,7 @@ export async function signTrade(sign: AccountSigner, account: Address, t: Accoun
     tokenOut: t.tokenOut,
     // Accounts refuse a zero minimum (CruxAccount.ZeroMinimum); a dust trade asks for at least one unit.
     minAmountOut: t.minAmountOut > BigInt(0) ? t.minAmountOut : BigInt(1),
-    fillDeadline: now + ACCOUNT_FILL_SECONDS,
+    fillDeadline: now + (t.fillSeconds ?? ACCOUNT_FILL_SECONDS),
     batchWindow: 10,
     nonce: accountNonce(),
     deadline: deadline(),
@@ -237,7 +265,7 @@ export async function tradeFromAccount(
   account: Address,
   t: AccountTrade,
   signed?: Promise<SignedTrade>,
-): Promise<{ orderId: Hex; filled: boolean; tradeTx?: Hex; timing: TradeTiming }> {
+): Promise<{ orderId: Hex; filled: boolean; tradeTx?: Hex; fill?: AccountFill; reason?: string; timing: TradeTiming }> {
   const { message, signature, t_click, t_signed } = await (signed ?? signTrade(sign, account, t));
   const sent = { t_click, t_signed };
   const data = await postRelay("/v1/account/trade", { owner, ...accountFields(account), trade: message, signature, timing: sent });
@@ -245,7 +273,10 @@ export async function tradeFromAccount(
   const timing: TradeTiming = { ...sent, ...(data.timing && typeof data.timing === "object" ? (data.timing as TradeTiming) : {}), t_reply: Date.now() };
   // The fill's trade as the charts show it (its swap's tx hash), when the solver filled it with one.
   const tradeTx = typeof data.tradeTx === "string" && /^0x[0-9a-fA-F]{64}$/.test(data.tradeTx) ? (data.tradeTx as Hex) : undefined;
-  return { orderId: data.orderId as Hex, filled: data.filled === true, ...(tradeTx ? { tradeTx } : {}), timing };
+  // The trade itself, when filled; why not, when the solver said (e.g. "slippage": it missed its price).
+  const fill = fillFrom(data.fill);
+  const reason = typeof data.reason === "string" ? data.reason : undefined;
+  return { orderId: data.orderId as Hex, filled: data.filled === true, ...(tradeTx ? { tradeTx } : {}), ...(fill ? { fill } : {}), ...(reason ? { reason } : {}), timing };
 }
 
 /** Binds the withdrawal address (instant while none is bound) or requests a change (takes effect after 48 hours). */

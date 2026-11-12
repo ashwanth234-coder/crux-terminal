@@ -19,7 +19,7 @@ import { buttonClass } from "@/components/ui/Button";
 import { TESTNET } from "@/lib/chains";
 import { TESTNET_USDC } from "@/lib/intents";
 import { simulateThenWrite } from "@/lib/preflight";
-import { tradeFromAccount } from "@/lib/account";
+import { MARKET_FILL_SECONDS, tradeFromAccount, type AccountFill } from "@/lib/account";
 import { addPendingTrade, updatePendingTrade, usePendingTrades } from "@/lib/pendingTrades";
 import { timingMark, timingPrint, timingStart } from "@/lib/tradeTiming";
 import { launchCaip19 } from "@/lib/launchTrade";
@@ -246,7 +246,8 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
    * buy) at once instead of waiting for the next read: a sell's tokens and a buy's USDC leave at the click, a buy's
    * tokens and a sell's USDC arrive at its fill.
    */
-  type Flight = { id: number; buy: boolean; amountIn: bigint; got: bigint; filledAt: number | null };
+  /** `fillBlock`: the block its fill landed in (from the relay), to tell whether a price read includes it. */
+  type Flight = { id: number; buy: boolean; amountIn: bigint; got: bigint; filledAt: number | null; fillBlock?: bigint };
   const [flights, setFlights] = useState<Flight[]>([]);
   const flightsRef = useRef<Flight[]>([]);
   const updateFlights = (fn: (f: Flight[]) => Flight[]) => {
@@ -438,7 +439,7 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
    * had often already landed, drew one candle 8× too tall and rescaled the whole chart for a moment.
    */
   const showPending = (buy: boolean, amountIn: bigint, clickAt: number) => {
-    const none: { id: number; size: (got: bigint) => void; settle: (ok: boolean, tradeTx?: string) => void } = { id: -1, size: () => {}, settle: () => {} };
+    const none: { id: number; size: (got: bigint) => void; settle: (ok: boolean, tradeTx?: string, fill?: AccountFill) => void } = { id: -1, size: () => {}, settle: () => {} };
     if (opening || !(price > 0)) return none;
     const ahead = pendingRef.current[pendingRef.current.length - 1];
     const before = ahead?.expected && ahead.expected > 0 ? ahead.expected : price;
@@ -457,12 +458,13 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
         const ratio = Math.min(3, Math.max(1 / 3, (avg / price) ** 2));
         updatePendingTrade(clear.id, { expected: before * ratio, usdc, tokens });
       },
-      settle: (ok: boolean, tradeTx?: string) => {
+      settle: (ok: boolean, tradeTx?: string, fill?: AccountFill) => {
         if (ok) {
           timingMark(clear.id, "relayReturned");
-          // The chart takes it away the moment its trade (this hash) is on it; 10 s at most if that never shows.
-          updatePendingTrade(clear.id, { tx: tradeTx ?? "none" });
-          setTimeout(clear, 10_000);
+          // Filled: the candle snaps to exactly where the real trade leaves the price (the relay's fill, as the charts
+          // draw it), and the chart takes it away the moment the trade with this hash is on it (3 s at most).
+          updatePendingTrade(clear.id, { tx: tradeTx ?? "none", ...(fill ? { expected: fill.priceAfter ?? fill.price } : {}) });
+          setTimeout(clear, 3_000);
         } else {
           clear();
           timingPrint(clear.id);
@@ -486,22 +488,21 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
   };
 
   /**
-   * What `amount` gets now, after this page's trades on the same side that haven't landed yet (or landed too recently
-   * for the price read, through a cache a couple of seconds behind, to show them): a second buy fired while the first
-   * is in flight is priced as the buy after it, quote(both) − quote(first), not as if the first never happened (on a
-   * thin curve that over-asked by 20% and the relay refused it). A trade the other way only moves the price in its
-   * favour, so it isn't counted.
+   * What `amount` gets after this page's same-side trades that the price read doesn't include yet: a rapid second buy
+   * is priced as the buy after the first, quote(both) − quote(first), so its minimum holds on a thin curve where each
+   * buy moves the price 20%. Exactly which ones count: the price is read at a known block, straight from the chain (not
+   * the shared read cache, seconds behind), and a trade counts if it isn't back from the relay yet or its fill landed
+   * after that block. (Guessing that — counting none of the filled ones, or all of the recent ones — left one buy
+   * asking too much and stuck, and another asking so little the relay refused it.) A trade the other way only moves
+   * the price in this one's favour, so it isn't counted. Also returns `alone`: this trade at that block on its own.
    */
-  /** Also returns `alone`: what this trade gets at the price now, ignoring trades ahead (what the chart's candle shows). */
   const quoteAfterFlights = async (buy: boolean, amount: bigint) => {
-    // Only trades not back yet: one whose fill came back is in the chain's price already (read fresh below). Counting
-    // those too priced a rapid buy as if the one before it hadn't landed: its minimum came out so low that the relay
-    // refused it as "more than 55% below the current price".
-    const ahead = sum(flightsRef.current.filter((f) => f.buy === buy && f.filledAt === null).map((f) => f.amountIn));
-    // Straight from the chain, not the shared read cache (a couple of seconds behind: a price from before the trade
-    // just filled would ask too much).
+    const block = await freshReads.getBlockNumber({ cacheTime: 0 });
+    const ahead = sum(
+      flightsRef.current.filter((f) => f.buy === buy && (f.filledAt === null || (f.fillBlock !== undefined && f.fillBlock > block))).map((f) => f.amountIn),
+    );
     const q = async (a: bigint) =>
-      ((await freshReads.readContract({ address: ROUTER_V9, abi: routerV9Abi, functionName: buy ? "quoteBuy" : "quoteSell", args: [token, a] })) as readonly bigint[])[0];
+      ((await freshReads.readContract({ address: ROUTER_V9, abi: routerV9Abi, functionName: buy ? "quoteBuy" : "quoteSell", args: [token, a], blockNumber: block })) as readonly bigint[])[0];
     if (ahead === BigInt(0)) {
       const got = await q(amount);
       return { got, alone: got };
@@ -520,7 +521,7 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
     const clickAt = performance.now();
     setNote(null);
     const id = Date.now() + Math.random();
-    let settle: ((ok: boolean, tradeTx?: string) => void) | null = null;
+    let settle: ((ok: boolean, tradeTx?: string, fill?: AccountFill) => void) | null = null;
     try {
       if (!accountReady) throw new Error("Log in to trade in one click from your CRUX Account.");
       if (amount <= BigInt(0)) throw new Error(buy ? "Enter an amount to buy." : "Nothing to sell yet.");
@@ -531,18 +532,37 @@ function TradePanel({ token, curve, symbol, phase, price, supply }: { token: Add
       if (got === BigInt(0)) throw new Error(settling ? "The fair opening just ended and is being settled: try again in a few seconds." : "Too small to trade.");
       onChart.size(alone);
       updateFlights((fs) => [...fs, { id, buy, amountIn: amount, got, filledAt: null }]);
+      // 10% under what it should get after the trades ahead; never under half of what it gets on its own now (the
+      // relay refuses a minimum more than 55% under its price).
+      const tenUnder = (got * (BigInt(10_000) - SLIPPAGE_BPS)) / BigInt(10_000);
       const res = await tradeFromAccount(crux.sign!, crux.owner!, crux.account!, {
         tokenIn: buy ? TESTNET_USDC : token,
         amountIn: amount,
         tokenOut: launchCaip19(buy ? token : TESTNET_USDC),
-        minAmountOut: (got * (BigInt(10_000) - SLIPPAGE_BPS)) / BigInt(10_000),
+        minAmountOut: tenUnder > alone / BigInt(2) ? tenUnder : alone / BigInt(2),
+        fillSeconds: MARKET_FILL_SECONDS,
       });
-      settle(true, res.tradeTx);
-      updateFlights((fs) => fs.map((f) => (f.id === id ? { ...f, filledAt: Date.now() } : f)));
+      if (!res.filled) {
+        // Not filled (it missed its price, or the solver is slow): off the chart at once, and said plainly.
+        settle(false);
+        updateFlights((fs) => fs.filter((f) => f.id !== id));
+        setTimeout(() => void held.refetch(), SETTLED_MS + 100);
+        const what = buy ? `$${usd(amount)}` : `your ${tokensText(amount)} $${symbol}`;
+        setNote({
+          ok: false,
+          text:
+            res.reason === "slippage"
+              ? `The price moved past your ${Number(SLIPPAGE_BPS) / 100}% limit before it filled: not ${buy ? "bought" : "sold"}. ${what} comes back to your account within ${MARKET_FILL_SECONDS} seconds.`
+              : `Not filled yet: it fills in the next few seconds, or ${what} comes back to your account within ${MARKET_FILL_SECONDS} seconds.`,
+        });
+        return;
+      }
+      settle(true, res.tradeTx, res.fill);
+      updateFlights((fs) => fs.map((f) => (f.id === id ? { ...f, filledAt: Date.now(), ...(res.fill ? { fillBlock: res.fill.blockNumber } : {}) } : f)));
       // Read the balances back once they can include it, rather than on the 5 s timer.
       setTimeout(() => void held.refetch(), SETTLED_MS + 100);
-      const what = buy ? `Bought $${usd(amount)} of $${symbol}` : `Sold about $${usd(got)} of $${symbol}`;
-      setNote({ ok: true, text: res.filled ? `${what}.` : `${what}: order placed, it fills in seconds.` });
+      const what = buy ? `Bought $${usd(amount)} of $${symbol}` : `Sold about $${usd(res.fill?.usdc ?? got)} of $${symbol}`;
+      setNote({ ok: true, text: `${what}.` });
     } catch (e) {
       settle?.(false);
       updateFlights((fs) => fs.filter((f) => f.id !== id));
