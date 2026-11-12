@@ -238,6 +238,8 @@ function V9Launch({ id }: { id: bigint }) {
                     ...(token0.toLowerCase() === l.token.toLowerCase() ? { usdc: reserves[1], tokens: reserves[0] } : { usdc: reserves[0], tokens: reserves[1] }),
                     feeBps,
                     readAt: reads.dataUpdatedAt,
+                    pair: l.pair,
+                    usdcIs0: token0.toLowerCase() !== l.token.toLowerCase(),
                   }
                 : undefined
             }
@@ -304,7 +306,7 @@ function TradePanel({
   price: number;
   supply: number;
   /** `feeBps`: the router's fee on pool trades (the curve's rate); `readAt`: when these reserves were read (ms). */
-  pool?: { usdc: bigint; tokens: bigint; feeBps?: number; readAt: number };
+  pool?: { usdc: bigint; tokens: bigint; feeBps?: number; readAt: number; pair: Address; usdcIs0: boolean };
 }) {
   const config = useConfig();
   const { address, chainId } = useConnection();
@@ -387,6 +389,37 @@ function TradePanel({
       setFlights(flightsRef.current);
     }
   }, [held.dataUpdatedAt]);
+  // The pool's reserves read straight from the chain every second at a known block, off the click path: the page's
+  // other reads come through the shared cache, whose lag varied past 8 s (after a burst, buys were priced before the
+  // burst's trades and refused as "the price has moved"). With the block known, which of this page's trades they hold
+  // is exact: a fill's block comes back with the relay's reply.
+  const [fresh, setFresh] = useState<{ usdc: bigint; tokens: bigint; block: bigint; at: number } | null>(null);
+  const pairAddr = pool?.pair;
+  const usdcIs0 = pool?.usdcIs0;
+  useEffect(() => {
+    if (!pairAddr || usdcIs0 === undefined) return;
+    let live = true;
+    const tick = async () => {
+      try {
+        const block = await freshReads.getBlockNumber({ cacheTime: 0 });
+        const [r0, r1] = (await freshReads.readContract({ address: pairAddr, abi: pairPriceAbi, functionName: "getReserves", blockNumber: block })) as readonly [bigint, bigint, number];
+        if (live) setFresh({ usdc: usdcIs0 ? r0 : r1, tokens: usdcIs0 ? r1 : r0, block, at: Date.now() });
+      } catch {
+        // A missed read: the next second's, or the cached reserves meanwhile.
+      }
+    };
+    void tick();
+    const t = setInterval(() => void tick(), 1_000);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, [pairAddr, usdcIs0]);
+  /** The reserves to price from, and whether one of this page's trades isn't in them yet (so it's run on top). */
+  const reservesNow = fresh ?? (pool ? { usdc: pool.usdc, tokens: pool.tokens, block: undefined, at: pool.readAt } : null);
+  const notInReserves = (f: Flight) =>
+    f.filledAt === null ||
+    (reservesNow?.block !== undefined && f.fillBlock !== undefined ? f.fillBlock > reservesNow.block : f.filledAt > (reservesNow?.at ?? 0) - PRICE_WINDOW_MS);
   // On a graduated pool every price here is worked out on the page (poolMath, exact to the router's quotes): typing
   // "1" on Sell waited ~1 s for the button (a 250 ms pause, then two chain reads to find the tokens, and the holding's
   // value read only once the Sell tab opened). On the curve the chain is still asked.
@@ -394,9 +427,9 @@ function TradePanel({
   // after it was read, through a cache a few seconds behind), so a sell typed right after a buy is priced after it
   // (priced before it, it asked too much and the relay refused it as "the price has moved").
   const pm = (() => {
-    if (opening || !pool || pool.feeBps === undefined || pool.usdc <= BigInt(0) || pool.tokens <= BigInt(0)) return null;
-    let r = { usdc: pool.usdc, tokens: pool.tokens };
-    for (const f of flights) if (f.filledAt === null || f.filledAt > pool.readAt - PRICE_WINDOW_MS) r = poolMath({ ...r, feeBps: pool.feeBps }).after(f.buy, f.amountIn);
+    if (opening || !pool || !reservesNow || pool.feeBps === undefined || reservesNow.usdc <= BigInt(0) || reservesNow.tokens <= BigInt(0)) return null;
+    let r = { usdc: reservesNow.usdc, tokens: reservesNow.tokens };
+    for (const f of flights) if (notInReserves(f)) r = poolMath({ ...r, feeBps: pool.feeBps }).after(f.buy, f.amountIn);
     return r.usdc > BigInt(0) && r.tokens > BigInt(0) ? poolMath({ ...r, feeBps: pool.feeBps }) : null;
   })();
   const heldValue = useReadContracts({
@@ -679,7 +712,7 @@ function TradePanel({
    * when there's no pool (on the curve) or its fee isn't read yet: then the chain is asked.
    */
   const localQuote = (buy: boolean, amount: bigint) => {
-    if (!pool || pool.feeBps === undefined || pool.usdc === BigInt(0) || pool.tokens === BigInt(0)) return null;
+    if (!pool || !reservesNow || pool.feeBps === undefined || reservesNow.usdc === BigInt(0) || reservesNow.tokens === BigInt(0)) return null;
     const fee = BigInt(pool.feeBps);
     const BPS = BigInt(10_000);
     const swap = (a: bigint, rin: bigint, rout: bigint) =>
@@ -693,13 +726,13 @@ function TradePanel({
       const gross = swap(a, r.tokens, r.usdc);
       return { out: gross - (gross * fee) / BPS, next: { usdc: r.usdc - gross, tokens: r.tokens + a } };
     };
-    // `alone` (the minimum's floor): after the trades surely not in the reserves yet (still on their way); `got`: after
-    // those and the recently filled ones that may not be in yet either. Measured before any of them, the floor alone
-    // could ask more than the price after a long burst.
-    let surely = { usdc: pool.usdc, tokens: pool.tokens };
+    // On the reserves read straight from the chain at a known block (reservesNow): `got` after this page's trades not
+    // in them (notInReserves: still on their way, or filled in a later block); `alone` (the minimum's floor) after only
+    // those still on their way.
+    let surely = { usdc: reservesNow.usdc, tokens: reservesNow.tokens };
     for (const f of flightsRef.current) if (f.filledAt === null) surely = trade(surely, f.buy, f.amountIn).next;
-    let r = { usdc: pool.usdc, tokens: pool.tokens };
-    for (const f of flightsRef.current) if (f.filledAt === null || f.filledAt > pool.readAt - PRICE_WINDOW_MS) r = trade(r, f.buy, f.amountIn).next;
+    let r = { usdc: reservesNow.usdc, tokens: reservesNow.tokens };
+    for (const f of flightsRef.current) if (notInReserves(f)) r = trade(r, f.buy, f.amountIn).next;
     return { got: trade(r, buy, amount).out, alone: trade(surely, buy, amount).out };
   };
 
