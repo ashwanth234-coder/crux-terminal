@@ -28,10 +28,12 @@ export type PendingTrade = {
 };
 
 /**
- * A pending trade is gone from the chart this long after it was pressed, whatever happened: its real trade replaces it
- * well before (fills take 1.5–2.5 s), and no failure can leave one drawn (one once stayed for 30 s).
+ * A pending trade is gone from the chart this long after it was pressed, whatever happened (a safety net only). It
+ * normally goes the moment its own trade is on the chart, or at once when the relay says it wasn't filled. A 3 s cap
+ * took trades away while still on their way in a burst (the solver fills them in turn, so the sixth fills 4–5 s after
+ * its click): the header and candle fell back to the confirmed price, then jumped up when the trade landed.
  */
-const MAX_AGE_MS = 3_000;
+const MAX_AGE_MS = 15_000;
 
 let items: PendingTrade[] = [];
 let nextId = 1;

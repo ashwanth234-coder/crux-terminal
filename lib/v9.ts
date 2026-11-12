@@ -31,6 +31,7 @@ export const factoryV9Abi = parseAbi([
 ]);
 
 export const curveV9Abi = parseAbi([
+  "function feeBps() view returns (uint16)",
   "function graduated() view returns (bool)",
   "function trading() view returns (bool)",
   "function openingSettled() view returns (bool)",

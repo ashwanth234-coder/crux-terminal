@@ -103,6 +103,7 @@ function V9Launch({ id }: { id: bigint }) {
       { address: ROUTER_V9, abi: routerV9Abi, functionName: "quoteSell", args: [token, PRICE_LOT], chainId: TESTNET.id },
       { address: l?.pair ?? zeroAddress, abi: pairPriceAbi, functionName: "getReserves", chainId: TESTNET.id },
       { address: l?.pair ?? zeroAddress, abi: pairPriceAbi, functionName: "token0", chainId: TESTNET.id },
+      { address: curve, abi: curveV9Abi, functionName: "feeBps", chainId: TESTNET.id },
     ],
   });
   const r = (i: number) => reads.data?.[i]?.result;
@@ -119,6 +120,7 @@ function V9Launch({ id }: { id: bigint }) {
   const sellOne = r(10) as readonly [bigint, bigint] | undefined;
   const reserves = r(11) as readonly [bigint, bigint, number] | undefined;
   const token0 = r(12) as Address | undefined;
+  const feeBps = r(13) as number | undefined;
 
   if (launch.isLoading) return <Shell><p className="text-muted">Reading the launch…</p></Shell>;
   if (!l) return <Shell><p className="text-muted">No V9 launch #{id.toString()} on Base Sepolia.</p></Shell>;
@@ -197,9 +199,11 @@ function V9Launch({ id }: { id: bigint }) {
             supply={Number(formatUnits(supply, 18))}
             pool={
               graduated && reserves && token0
-                ? token0.toLowerCase() === l.token.toLowerCase()
-                  ? { usdc: reserves[1], tokens: reserves[0] }
-                  : { usdc: reserves[0], tokens: reserves[1] }
+                ? {
+                    ...(token0.toLowerCase() === l.token.toLowerCase() ? { usdc: reserves[1], tokens: reserves[0] } : { usdc: reserves[0], tokens: reserves[1] }),
+                    feeBps,
+                    readAt: reads.dataUpdatedAt,
+                  }
                 : undefined
             }
           />
@@ -232,7 +236,8 @@ function TradePanel({
   phase: PhaseV9;
   price: number;
   supply: number;
-  pool?: { usdc: bigint; tokens: bigint };
+  /** `feeBps`: the router's fee on pool trades (the curve's rate); `readAt`: when these reserves were read (ms). */
+  pool?: { usdc: bigint; tokens: bigint; feeBps?: number; readAt: number };
 }) {
   const config = useConfig();
   const { address, chainId } = useConnection();
@@ -528,7 +533,7 @@ function TradePanel({
           // Filled: the candle snaps to exactly where the real trade leaves the price (the relay's fill, as the charts
           // draw it), and the chart takes it away the moment the trade with this hash is on it (3 s at most).
           updatePendingTrade(clear.id, { tx: tradeTx ?? "none", ...(fill ? { expected: fill.priceAfter ?? fill.price } : {}) });
-          setTimeout(clear, 3_000);
+          setTimeout(clear, 6_000); // only if that trade never shows (the feed brings it with the reply)
         } else {
           clear();
           timingPrint(clear.id);
@@ -576,6 +581,35 @@ function TradePanel({
   };
 
   /**
+   * On a graduated pool, the same quote worked out here with no network wait (the chain read above took 0.3–0.5 s
+   * from India before every trade could even be signed): CruxRouterV9's own pool math (its fee off a buy's USDC, then
+   * Uniswap V2's 0.3%; a sell's swap, then its fee) on the pool reserves the page reads, run on past this page's trades
+   * those reserves don't include yet (not back from the relay, or filled after they were read, through a cache a few
+   * seconds behind), both sides in order. The relay still checks the minimum against the solver's own price. Null
+   * when there's no pool (on the curve) or its fee isn't read yet: then the chain is asked.
+   */
+  const localQuote = (buy: boolean, amount: bigint) => {
+    if (!pool || pool.feeBps === undefined || pool.usdc === BigInt(0) || pool.tokens === BigInt(0)) return null;
+    const fee = BigInt(pool.feeBps);
+    const BPS = BigInt(10_000);
+    const swap = (a: bigint, rin: bigint, rout: bigint) =>
+      a <= BigInt(0) || rin <= BigInt(0) || rout <= BigInt(0) ? BigInt(0) : (a * BigInt(997) * rout) / (rin * BigInt(1000) + a * BigInt(997));
+    const trade = (r: { usdc: bigint; tokens: bigint }, isBuy: boolean, a: bigint) => {
+      if (isBuy) {
+        const net = a - (a * fee) / BPS;
+        const out = swap(net, r.usdc, r.tokens);
+        return { out, next: { usdc: r.usdc + net, tokens: r.tokens - out } };
+      }
+      const gross = swap(a, r.tokens, r.usdc);
+      return { out: gross - (gross * fee) / BPS, next: { usdc: r.usdc - gross, tokens: r.tokens + a } };
+    };
+    let r = { usdc: pool.usdc, tokens: pool.tokens };
+    const alone = trade(r, buy, amount).out;
+    for (const f of flightsRef.current) if (f.filledAt === null || f.filledAt > pool.readAt - 3_000) r = trade(r, f.buy, f.amountIn).next;
+    return { got: trade(r, buy, amount).out, alone };
+  };
+
+  /**
    * A market trade from the CRUX Account, which never locks the panel: the next buy or sell can be pressed while this
    * one is still on its way (the relay and solver take them in turn). On the chart at the click (showPending; sized
    * from `shown`, the quote on screen, at once when there is one), its minimum 10% under a fresh quote that counts the
@@ -592,7 +626,7 @@ function TradePanel({
       const onChart = showPending(buy, amount, clickAt);
       settle = onChart.settle;
       if (shown && shown > BigInt(0)) onChart.size(shown);
-      const { got, alone } = await quoteAfterFlights(buy, amount);
+      const { got, alone } = localQuote(buy, amount) ?? (await quoteAfterFlights(buy, amount));
       if (got === BigInt(0)) throw new Error(settling ? "The fair opening just ended and is being settled: try again in a few seconds." : "Too small to trade.");
       onChart.size(alone);
       updateFlights((fs) => [...fs, { id, buy, amountIn: amount, got, filledAt: null }]);
