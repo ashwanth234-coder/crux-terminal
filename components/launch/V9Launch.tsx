@@ -843,9 +843,15 @@ function TradePanel({
         return;
       }
       settle(true, res.tradeTx, res.fill);
-      // What it really got (the relay's fill) replaces the estimate, with the block it landed in.
+      // What it really got replaces the estimate, with the block it landed in. The relay's fill is the pool trade that
+      // filled it, which the solver may have shared between several orders (two $1 buys filled as one $2 trade): this
+      // order's part of it is its own share of what that trade paid in. (Taking the whole trade counted a shared buy's
+      // tokens once per order: the holding showed 20M $BG more than the account had, and "All" was refused.)
       const fill = res.fill;
-      updateFlights((fs) => fs.map((f) => (f.id === id ? { ...f, filledAt: Date.now(), ...(fill ? { fillBlock: fill.blockNumber, got: buy ? fill.tokens : fill.usdc } : {}) } : f)));
+      const paidIn = fill ? (buy ? fill.usdc : fill.tokens) : BigInt(0);
+      const gotOut = fill ? (buy ? fill.tokens : fill.usdc) : BigInt(0);
+      const mine = fill && paidIn > BigInt(0) ? (paidIn > amount ? (gotOut * amount) / paidIn : gotOut) : null;
+      updateFlights((fs) => fs.map((f) => (f.id === id ? { ...f, filledAt: Date.now(), ...(fill ? { fillBlock: fill.blockNumber } : {}), ...(mine !== null && mine > BigInt(0) ? { got: mine } : {}) } : f)));
       // A reply without the fill: its block from the trade's own receipt, so the pricing knows which reads hold it.
       if (!fill && res.tradeTx) {
         void freshReads
@@ -855,7 +861,7 @@ function TradePanel({
       }
       // Read the balances back once they can include it, rather than on the 5 s timer.
       setTimeout(() => void held.refetch(), SETTLED_MS + 100);
-      const what = buy ? `Bought $${usd(amount)} of $${symbol}` : `Sold about $${usd(res.fill?.usdc ?? got)} of $${symbol}`;
+      const what = buy ? `Bought $${usd(amount)} of $${symbol}` : `Sold about $${usd(mine !== null && mine > BigInt(0) ? mine : got)} of $${symbol}`;
       setNote({ ok: true, text: `${what}.` });
     } catch (e) {
       settle?.(false);
