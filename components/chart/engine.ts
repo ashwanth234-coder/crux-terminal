@@ -794,6 +794,31 @@ export class ChartEngine {
     this.chart.priceScale(this.side).applyOptions({ autoScale: true });
   }
 
+  /**
+   * Whether the price scale was set by hand and the newest candles no longer read on it: the last price is off the
+   * pane, or the last 30 bars together take up under a tenth of its height.
+   */
+  cramped(): boolean {
+    const d = this.mainData;
+    if (this.isAutoScale() || !d || d.width !== 4 || d.times.length === 0) return false;
+    let range: { from: number; to: number } | null = null;
+    try {
+      range = this.chart.priceScale(this.side).getVisibleRange();
+    } catch {
+      range = null;
+    }
+    if (!range || !(range.to > range.from)) return false;
+    const n = d.times.length;
+    let hi = -Infinity;
+    let lo = Infinity;
+    for (let i = Math.max(0, n - 30); i < n; i++) {
+      hi = Math.max(hi, d.values[i * 4 + 1]);
+      lo = Math.min(lo, d.values[i * 4 + 2]);
+    }
+    const close = d.values[(n - 1) * 4 + 3];
+    return close > range.to || close < range.from || hi - lo < (range.to - range.from) * 0.1;
+  }
+
   isAutoScale() {
     try {
       return this.chart.priceScale(this.side).options().autoScale;

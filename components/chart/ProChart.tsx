@@ -223,6 +223,8 @@ export function ProChart({
   // Bumped when the visible range moves, so the locked time line follows the candles.
   const [, setRangeTick] = useState(0);
   const followsView = useRef(false);
+  // Whether the price scale fits itself to the data (off once it was stretched by hand).
+  const [autoOn, setAutoOn] = useState(true);
 
   const setSettings = (s: ChartSettings) => {
     setSettingsState(s);
@@ -262,7 +264,9 @@ export function ProChart({
   // A timeframe (or range) you pick yourself wins until your next trade: the 1s view used to override every pick for a
   // minute after trading, so the menu and the range buttons seemed to do nothing.
   const [pickedAt, setPickedAt] = useState(0);
-  const trading = !external && lastPressed > pickedAt && (pending.length > 0 || (lastPressed > 0 && idleAfter !== lastPressed));
+  // Only on "Auto", where the chart picks the timeframe: one you picked yourself (1m, 5m, ...) is never changed by a
+  // trade. (It used to be: every Buy or Sell threw a 1m or 5m chart back to 1s.)
+  const trading = !external && config.interval === "auto" && lastPressed > pickedAt && (pending.length > 0 || (lastPressed > 0 && idleAfter !== lastPressed));
   const pickedInterval = trading ? 1 : config.interval === "auto" ? autoPick : config.interval;
   // Each feed frame is drawn straight from the socket (onFeedFrame below), before React renders it.
   const feedTick = useRef<(cs: FeedCandle[]) => void>(() => {});
@@ -689,6 +693,12 @@ export function ProChart({
         // Looking at older bars on your own timeframe: a trade doesn't take the view away (to 1s candles at the
         // newest bar). It's drawn where it belongs, and "Jump to live" brings you to it.
         if (!tradingRef.current && engine.scrolledBack()) setPickedAt(Date.now());
+        // A price scale stretched by hand (a scroll over the axis does it) on which the newest candles no longer
+        // read, or the price has left: fitted again, so the trade you just pressed can be seen.
+        if (engine.cramped()) {
+          engine.autoScale();
+          setAutoOn(true);
+        }
         requestAnimationFrame(() => timingMark(newest.id, "canvasDrawnPending"));
       }
       paintRef.current(trades, candlesRef.current);
@@ -901,7 +911,6 @@ export function ProChart({
 
   // The price axis, as on a trading terminal: drag it (the library's own) or scroll over it to squeeze or stretch
   // prices; double-click it, or press auto, to fit them again. `autoOn` keeps the bottom bar's auto button in step.
-  const [autoOn, setAutoOn] = useState(true);
   useEffect(() => {
     const el = area.current;
     if (!engine || !el || view !== "chart") return;
