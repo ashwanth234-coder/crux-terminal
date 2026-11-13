@@ -28,10 +28,10 @@ import type { AuctionV2 } from "@/lib/launchV2";
 import { tokensForUsdc } from "@/lib/sellAmount";
 import { CreatorNote } from "@/components/launch/V9Creator";
 import { StandingOrderForm, type OrderType } from "@/components/pro/StandingOrderForm";
+import { SLIPPAGE_BPS, PRICE_WINDOW_MS, afterRead, readyToSell, heldNow, minimumOut, poolMath, poolQuote, quickSellAmount, routerQuote, type Flight } from "@/lib/tradeMath";
 import { FACTORY_V9, ROUTER_V9, V9_ON, curvePrice, curveV9Abi, factoryV9Abi, phaseV9, registerV9Curve, routerV9Abi, type PhaseV9 } from "@/lib/v9";
 
 const usd = (v: bigint) => Number(formatUnits(v, 6)).toLocaleString("en-US", { maximumFractionDigits: 2 });
-const SLIPPAGE_BPS = BigInt(1_000); // 10%, the terminal's default
 /**
  * Reads a trade is priced from, straight from Base Sepolia's own node (NEXT_PUBLIC_BASE_SEPOLIA_RPC for a fork), not
  * through the relay's shared read cache, which answers from a couple of seconds back.
@@ -39,42 +39,18 @@ const SLIPPAGE_BPS = BigInt(1_000); // 10%, the terminal's default
 const freshReads = createPublicClient({ chain: TESTNET, transport: http(process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || undefined, { timeout: 8_000 }) });
 
 /**
- * CruxRouterV9's pool math for a graduated launch, worked out on the page: its fee (the curve's rate) off a buy's USDC
- * and then Uniswap V2's 0.3% swap; a sell's swap and then its fee. Exact to the router's quoteBuy / quoteSell on the
- * same reserves (checked on $BG). `tokensFor`: the fewest tokens whose sale pays at least `usdcOut`, or null when the
- * pool doesn't hold that much.
+ * The clock for the trade panel's click handlers (they run on a press, never while rendering; the React compiler
+ * can't tell for the async ones, so they read the time through here).
  */
-function poolMath(p: { usdc: bigint; tokens: bigint; feeBps: number }) {
-  const BPS = BigInt(10_000);
-  const fee = BigInt(p.feeBps);
-  const ZERO = BigInt(0);
-  const ONE = BigInt(1);
-  const swap = (a: bigint, rin: bigint, rout: bigint) =>
-    a <= ZERO || rin <= ZERO || rout <= ZERO ? ZERO : (a * BigInt(997) * rout) / (rin * BigInt(1000) + a * BigInt(997));
-  const buyOut = (usdc: bigint) => swap(usdc - (usdc * fee) / BPS, p.usdc, p.tokens);
-  const sellOut = (tokens: bigint) => {
-    const gross = swap(tokens, p.tokens, p.usdc);
-    return gross - (gross * fee) / BPS;
-  };
-  const tokensFor = (usdcOut: bigint) => {
-    if (usdcOut <= ZERO) return ZERO;
-    // The gross the pool must pay before the fee, then Uniswap's getAmountIn for it; nudged up while rounding leaves
-    // it a unit short.
-    const gross = (usdcOut * BPS + (BPS - fee) - ONE) / (BPS - fee);
-    if (gross >= p.usdc) return null;
-    let t = (p.tokens * gross * BigInt(1000)) / ((p.usdc - gross) * BigInt(997)) + ONE;
-    for (let i = 0; i < 4 && sellOut(t) < usdcOut; i++) t += t / BigInt(1_000_000) + ONE;
-    return t;
-  };
-  /** The pool once a trade of `amount` (USDC for a buy, tokens for a sell) has gone through it. */
-  const after = (isBuy: boolean, amount: bigint): { usdc: bigint; tokens: bigint } => {
-    if (isBuy) {
-      const net = amount - (amount * fee) / BPS;
-      return { usdc: p.usdc + net, tokens: p.tokens - swap(net, p.usdc, p.tokens) };
-    }
-    return { usdc: p.usdc - swap(amount, p.tokens, p.usdc), tokens: p.tokens + amount };
-  };
-  return { buyOut, sellOut, tokensFor, after };
+const clock = { now: () => Date.now(), perf: () => performance.now(), random: () => Math.random() };
+
+/** Resolves once `ready()` holds (checked every 50 ms), or after `ms` whatever it says. */
+function waitFor(ready: () => boolean, ms: number): Promise<void> {
+  const end = Date.now() + ms;
+  return new Promise((done) => {
+    const tick = () => (ready() || Date.now() >= end ? done() : setTimeout(tick, 50));
+    tick();
+  });
 }
 
 function useNowSeconds() {
@@ -292,13 +268,6 @@ function LiveTokenBar({ token, priceReadAt, price, ...bar }: { token: Address; p
 /** How much newer than your last fill the page's price read must be before the header trusts it again. */
 const LAST_FILL_HOLD_MS = 4_000;
 
-/**
- * How far back a filled trade of yours is assumed not to be in the pool reserves the page last read (they come every
- * 3 s through a cache whose lag varies). 3 s was too short: after a burst a buy was priced before two of its trades,
- * asked too much and was refused. Counting one that is in already only lowers the minimum a little (never under half
- * of what the trade gets on its own, inside the relay's guard).
- */
-const PRICE_WINDOW_MS = 8_000;
 
 /** `pool`: a graduated launch's pool reserves (USDC and tokens), for sizing a pending trade's candle at the click. */
 function TradePanel({
@@ -369,7 +338,6 @@ function TradePanel({
    * tokens and a sell's USDC arrive at its fill.
    */
   /** `fillBlock`: the block its fill landed in (from the relay), to tell whether a price read includes it. */
-  type Flight = { id: number; buy: boolean; amountIn: bigint; got: bigint; filledAt: number | null; fillBlock?: bigint };
   const [flights, setFlights] = useState<Flight[]>([]);
   const flightsRef = useRef<Flight[]>([]);
   const updateFlights = (fn: (f: Flight[]) => Flight[]) => {
@@ -382,7 +350,7 @@ function TradePanel({
   // off the click path: the page's other reads come through the shared cache, whose lag varied past 8 s (after a
   // burst, buys were priced before the burst's trades and refused as "the price has moved"). With the block known,
   // which of this page's trades they hold is exact: a fill's block comes back with the relay's reply.
-  const [fresh, setFresh] = useState<{ usdc: bigint; tokens: bigint; block: bigint; at: number; held?: { tokens: bigint; usdc: bigint; holder: Address } } | null>(null);
+  const [fresh, setFresh] = useState<{ usdc: bigint; tokens: bigint; block: bigint; at: number; held?: { tokens: bigint; usdc: bigint; holder: Address; block: bigint; at: number } } | null>(null);
   const pairAddr = pool?.pair;
   const usdcIs0 = pool?.usdcIs0;
   useEffect(() => {
@@ -396,14 +364,18 @@ function TradePanel({
           holder ? freshReads.readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [holder], blockNumber: block }) : Promise.resolve(undefined),
           holder ? freshReads.readContract({ address: TESTNET_USDC, abi: erc20Abi, functionName: "balanceOf", args: [holder], blockNumber: block }) : Promise.resolve(undefined),
         ]);
+        const at = Date.now();
+        // A relay reply's balances from a newer block than this read stay (they include a fill this read doesn't).
         if (live)
-          setFresh({
+          setFresh((cur) => ({
             usdc: usdcIs0 ? r0 : r1,
             tokens: usdcIs0 ? r1 : r0,
             block,
-            at: Date.now(),
-            ...(holder && tokens !== undefined && usdc !== undefined ? { held: { tokens, usdc, holder } } : {}),
-          });
+            at,
+            ...(holder && tokens !== undefined && usdc !== undefined
+              ? { held: cur?.held && cur.held.holder === holder && cur.held.block > block ? cur.held : { tokens, usdc, holder, block, at } }
+              : {}),
+          }));
       } catch {
         // A missed read: the next second's, or the cached reserves meanwhile.
       }
@@ -424,22 +396,24 @@ function TradePanel({
    * between two orders twice: the holding showed 20–35M $BG more than the account had, and selling All was refused.)
    * Before the pool is read (on the curve), the cached balances with this page's trades still on their way.
    */
-  const sum = (xs: bigint[]) => xs.reduce((a, b) => a + b, BigInt(0));
-  const nonNegative = (v: bigint) => (v > BigInt(0) ? v : BigInt(0));
-  const chain = fresh?.held && fresh.held.holder === holder ? { ...fresh.held, block: fresh.block, at: fresh.at } : null;
-  const counted = via === "account" ? flights : [];
-  /** Whether a trade is after the chain read: not filled yet, or filled in a later block (or, its block unknown, lately). */
-  const afterRead = (f: Flight) =>
-    f.filledAt === null || (chain ? (f.fillBlock !== undefined ? f.fillBlock > chain.block : f.filledAt > chain.at - 2_000) : held.dataUpdatedAt <= f.filledAt + SETTLED_MS);
-  const filledAfterRead = (f: Flight) => f.filledAt !== null && afterRead(f);
-  const tokensBase = chain ? chain.tokens : ((held.data?.[0]?.result as bigint | undefined) ?? BigInt(0));
-  const usdcBase = chain ? chain.usdc : ((held.data?.[1]?.result as bigint | undefined) ?? BigInt(0));
-  const tokensHeld = nonNegative(
-    tokensBase + sum(counted.filter((f) => f.buy && filledAfterRead(f)).map((f) => f.got)) - sum(counted.filter((f) => !f.buy && afterRead(f)).map((f) => f.amountIn)),
-  );
-  const usdcHeld = nonNegative(
-    usdcBase - sum(counted.filter((f) => f.buy && afterRead(f)).map((f) => f.amountIn)) + sum(counted.filter((f) => !f.buy && filledAfterRead(f)).map((f) => f.got)),
-  );
+  const chain = fresh?.held && fresh.held.holder === holder ? fresh.held : null;
+  const heldRead = chain ?? {
+    tokens: (held.data?.[0]?.result as bigint | undefined) ?? BigInt(0),
+    usdc: (held.data?.[1]?.result as bigint | undefined) ?? BigInt(0),
+    block: undefined,
+    at: held.dataUpdatedAt,
+  };
+  const { tokens: tokensHeld, usdc: usdcHeld } = heldNow(heldRead as never, via === "account" ? flights : []);
+  // The read and the trades as of now, for a Sell All that waits for the buys on their way (lib/tradeMath heldNow).
+  const heldReadRef = useRef(heldRead);
+  /** The block the pool's reserves were last read at (a quick sell waits for one that holds the burst's fills). */
+  const reservesBlockRef = useRef<bigint | undefined>(undefined);
+  useEffect(() => {
+    reservesBlockRef.current = fresh?.block;
+  }, [fresh?.block]);
+  useEffect(() => {
+    heldReadRef.current = heldRead;
+  });
   // Trades every read holds, and past the pricing window (PRICE_WINDOW_MS), are forgotten.
   useEffect(() => {
     const done = (f: Flight) => f.filledAt !== null && Date.now() - f.filledAt > Math.max(PRICE_WINDOW_MS, 20_000);
@@ -450,17 +424,7 @@ function TradePanel({
   }, [fresh, held.dataUpdatedAt]);
   /** The reserves to price from, and whether one of this page's trades isn't in them yet (so it's run on top). */
   const reservesNow = fresh ?? (pool ? { usdc: pool.usdc, tokens: pool.tokens, block: undefined, at: pool.readAt } : null);
-  const notInReserves = (f: Flight) =>
-    f.filledAt === null ||
-    // Read straight from the chain at a known block: exact when the fill's block is known; when the relay's reply
-    // came without it, a read from 2 s after the reply holds it. (That case used to count the trade for 8 s whatever
-    // the read held: a sell 8 s after a buy was priced as if the buy had happened twice, so the trade showed $4.08
-    // and a price of $12.44 for what filled at $3.74 and $10.53.) The cached reserves keep the long window.
-    (reservesNow?.block !== undefined
-      ? f.fillBlock !== undefined
-        ? f.fillBlock > reservesNow.block
-        : f.filledAt > reservesNow.at - 2_000
-      : f.filledAt > (reservesNow?.at ?? 0) - PRICE_WINDOW_MS);
+  const notInReserves = (f: Flight) => (reservesNow ? afterRead(f, reservesNow) : f.filledAt === null);
   // On a graduated pool every price here is worked out on the page (poolMath, exact to the router's quotes): typing
   // "1" on Sell waited ~1 s for the button (a 250 ms pause, then two chain reads to find the tokens, and the holding's
   // value read only once the Sell tab opened). On the curve the chain is still asked.
@@ -738,7 +702,7 @@ function TradePanel({
    */
   const freshMinOut = async () => {
     if (opening) return minOut; // the opening's floor is half its share-if-alone, not a live price
-    const current = quote.dataUpdatedAt > lastTradeAt.current && Date.now() - quote.dataUpdatedAt < 2_000;
+    const current = quote.dataUpdatedAt > lastTradeAt.current && clock.now() - quote.dataUpdatedAt < 2_000;
     const data = current ? quote.data : (await quote.refetch()).data;
     const got = (data?.[0]?.result as readonly bigint[] | undefined)?.[0] ?? BigInt(0);
     if (got === BigInt(0)) throw new Error("Couldn't get a fresh price just now: try again in a moment.");
@@ -754,19 +718,11 @@ function TradePanel({
    * asking too much and stuck, and another asking so little the relay refused it.) A trade the other way only moves
    * the price in this one's favour, so it isn't counted. Also returns `alone`: this trade at that block on its own.
    */
-  const quoteAfterFlights = async (buy: boolean, amount: bigint) => {
+  const quoteAfterFlights = async (buy: boolean, amount: bigint, ahead?: ReadonlySet<number>) => {
     const block = await freshReads.getBlockNumber({ cacheTime: 0 });
-    const ahead = sum(
-      flightsRef.current.filter((f) => f.buy === buy && (f.filledAt === null || (f.fillBlock !== undefined && f.fillBlock > block))).map((f) => f.amountIn),
-    );
-    const q = async (a: bigint) =>
-      ((await freshReads.readContract({ address: ROUTER_V9, abi: routerV9Abi, functionName: buy ? "quoteBuy" : "quoteSell", args: [token, a], blockNumber: block })) as readonly bigint[])[0];
-    if (ahead === BigInt(0)) {
-      const got = await q(amount);
-      return { got, alone: got };
-    }
-    const [alone, all, first] = await Promise.all([q(amount), q(ahead + amount), q(ahead)]);
-    return { got: all > first ? all - first : BigInt(0), alone };
+    const read = async (b: boolean, a: bigint, at: bigint) =>
+      ((await freshReads.readContract({ address: ROUTER_V9, abi: routerV9Abi, functionName: b ? "quoteBuy" : "quoteSell", args: [token, a], blockNumber: at })) as readonly bigint[])[0];
+    return routerQuote(read, block, flightsRef.current.filter((f) => !ahead || ahead.has(f.id)), buy, amount);
   };
 
   /**
@@ -777,30 +733,8 @@ function TradePanel({
    * seconds behind), both sides in order. The relay still checks the minimum against the solver's own price. Null
    * when there's no pool (on the curve) or its fee isn't read yet: then the chain is asked.
    */
-  const localQuote = (buy: boolean, amount: bigint) => {
-    if (!pool || !reservesNow || pool.feeBps === undefined || reservesNow.usdc === BigInt(0) || reservesNow.tokens === BigInt(0)) return null;
-    const fee = BigInt(pool.feeBps);
-    const BPS = BigInt(10_000);
-    const swap = (a: bigint, rin: bigint, rout: bigint) =>
-      a <= BigInt(0) || rin <= BigInt(0) || rout <= BigInt(0) ? BigInt(0) : (a * BigInt(997) * rout) / (rin * BigInt(1000) + a * BigInt(997));
-    const trade = (r: { usdc: bigint; tokens: bigint }, isBuy: boolean, a: bigint) => {
-      if (isBuy) {
-        const net = a - (a * fee) / BPS;
-        const out = swap(net, r.usdc, r.tokens);
-        return { out, next: { usdc: r.usdc + net, tokens: r.tokens - out } };
-      }
-      const gross = swap(a, r.tokens, r.usdc);
-      return { out: gross - (gross * fee) / BPS, next: { usdc: r.usdc - gross, tokens: r.tokens + a } };
-    };
-    // On the reserves read straight from the chain at a known block (reservesNow): `got` after this page's trades not
-    // in them (notInReserves: still on their way, or filled in a later block); `alone` (the minimum's floor) after only
-    // those still on their way.
-    let surely = { usdc: reservesNow.usdc, tokens: reservesNow.tokens };
-    for (const f of flightsRef.current) if (f.filledAt === null) surely = trade(surely, f.buy, f.amountIn).next;
-    let r = { usdc: reservesNow.usdc, tokens: reservesNow.tokens };
-    for (const f of flightsRef.current) if (notInReserves(f)) r = trade(r, f.buy, f.amountIn).next;
-    return { got: trade(r, buy, amount).out, alone: trade(surely, buy, amount).out };
-  };
+  const localQuote = (buy: boolean, amount: bigint, ahead?: ReadonlySet<number>) =>
+    !pool || !reservesNow || pool.feeBps === undefined ? null : poolQuote(reservesNow, pool.feeBps, flightsRef.current.filter((f) => !ahead || ahead.has(f.id)), buy, amount);
 
   /**
    * A market trade from the CRUX Account, which never locks the panel: the next buy or sell can be pressed while this
@@ -808,30 +742,44 @@ function TradePanel({
    * from `shown`, the quote on screen, at once when there is one), its minimum 10% under a fresh quote that counts the
    * trades still ahead of it.
    */
-  const accountTrade = async (buy: boolean, amount: bigint, shown?: bigint) => {
-    const clickAt = performance.now();
+  const accountTrade = async (buy: boolean, amount: bigint, shown?: bigint, onQueued?: () => void) => {
+    const clickAt = clock.perf();
     setNote(null);
-    const id = Date.now() + Math.random();
+    const id = clock.now() + clock.random();
     let settle: ((ok: boolean, tradeTx?: string, fill?: AccountFill) => void) | null = null;
+    let postedNow: (() => void) | null = null;
     try {
       if (!accountReady) throw new Error("Log in to trade in one click from your CRUX Account.");
       if (amount <= BigInt(0)) throw new Error(buy ? "Enter an amount to buy." : "Nothing to sell yet.");
       const onChart = showPending(buy, amount, clickAt);
       settle = onChart.settle;
       if (shown && shown > BigInt(0)) onChart.size(shown);
-      const { got, alone } = localQuote(buy, amount) ?? (await quoteAfterFlights(buy, amount));
+      // On its way from the press, before its price is read: a press right behind it (on the curve the price is a
+      // chain read, a few hundred ms) is then priced after it. Counted only once its price is in (`got` 0 until then).
+      // Priced after the trades pressed before it (as they stand when its price is read), never after a later one.
+      const ahead = new Set(flightsRef.current.map((f) => f.id));
+      // Posted after the one pressed before it (the relay then has every trade it was priced after).
+      const postedBefore = postsQueued.current;
+      let posted!: () => void;
+      postsQueued.current = new Promise<void>((r) => (posted = r));
+      postedNow = posted;
+      updateFlights((fs) => [...fs, { id, buy, amountIn: amount, got: BigInt(0), filledAt: null, sent: false }]);
+      onQueued?.();
+      const q = localQuote(buy, amount, ahead) ?? (await quoteAfterFlights(buy, amount, ahead));
+      const { got, alone } = q;
       if (got === BigInt(0)) throw new Error(settling ? "The fair opening just ended and is being settled: try again in a few seconds." : "Too small to trade.");
       onChart.size(alone);
-      updateFlights((fs) => [...fs, { id, buy, amountIn: amount, got, filledAt: null }]);
-      // 10% under what it should get after the trades ahead; never under half of what it gets on its own now (the
-      // relay refuses a minimum more than 55% under its price).
-      const tenUnder = (got * (BigInt(10_000) - SLIPPAGE_BPS)) / BigInt(10_000);
+      updateFlights((fs) => fs.map((f) => (f.id === id ? { ...f, got, sent: true } : f)));
       const res = await tradeFromAccount(crux.sign!, crux.owner!, crux.account!, {
         tokenIn: buy ? TESTNET_USDC : token,
         amountIn: amount,
         tokenOut: launchCaip19(buy ? token : TESTNET_USDC),
-        minAmountOut: tenUnder > alone / BigInt(2) ? tenUnder : alone / BigInt(2),
+        // 10% under what it should get after the trades ahead; never under half of what it gets alone (lib/tradeMath).
+        minAmountOut: minimumOut(q),
         fillSeconds: MARKET_FILL_SECONDS,
+      }, undefined, async () => {
+        await Promise.race([postedBefore, new Promise((r) => setTimeout(r, 3_000))]);
+        posted();
       });
       if (!res.filled) {
         // Not filled (it missed its price, or the solver is slow): off the chart at once, and said plainly.
@@ -849,15 +797,23 @@ function TradePanel({
         return;
       }
       settle(true, res.tradeTx, res.fill);
-      // What it really got replaces the estimate, with the block it landed in. The relay's fill is the pool trade that
-      // filled it, which the solver may have shared between several orders (two $1 buys filled as one $2 trade): this
-      // order's part of it is its own share of what that trade paid in. (Taking the whole trade counted a shared buy's
-      // tokens once per order: the holding showed 20M $BG more than the account had, and "All" was refused.)
+      // What it really got: the relay's exact amount for this order (the solver may fill several orders with one pool
+      // trade, each its own part), and the account's balances read right after it, at their block: the holding is the
+      // chain's, never added up here. (Guessing a share of a shared trade showed 20–35M $BG more than the account had.)
       const fill = res.fill;
-      const paidIn = fill ? (buy ? fill.usdc : fill.tokens) : BigInt(0);
-      const gotOut = fill ? (buy ? fill.tokens : fill.usdc) : BigInt(0);
-      const mine = fill && paidIn > BigInt(0) ? (paidIn > amount ? (gotOut * amount) / paidIn : gotOut) : null;
-      updateFlights((fs) => fs.map((f) => (f.id === id ? { ...f, filledAt: Date.now(), ...(fill ? { fillBlock: fill.blockNumber } : {}), ...(mine !== null && mine > BigInt(0) ? { got: mine } : {}) } : f)));
+      const mine = res.amountOut ?? null;
+      const fillBlock = res.fillBlock ?? fill?.blockNumber;
+      updateFlights((fs) => fs.map((f) => (f.id === id ? { ...f, filledAt: Date.now(), ...(fillBlock !== undefined ? { fillBlock } : {}), ...(mine !== null && mine > BigInt(0) ? { got: mine } : {}) } : f)));
+      if (res.held) {
+        const h = res.held;
+        const at = clock.now();
+        // Only the balances take the reply's block: the pool's reserves keep the block they were read at.
+        setFresh((cur) =>
+          cur && !(cur.held && cur.held.block > h.block)
+            ? { ...cur, held: { tokens: buy ? h.tokenOut : h.tokenIn, usdc: buy ? h.tokenIn : h.tokenOut, holder: crux.account!, block: h.block, at } }
+            : cur,
+        );
+      }
       // A reply without the fill: its block from the trade's own receipt, so the pricing knows which reads hold it.
       if (!fill && res.tradeTx) {
         void freshReads
@@ -870,6 +826,7 @@ function TradePanel({
       const what = buy ? `Bought $${usd(amount)} of $${symbol}` : `Sold about $${usd(mine !== null && mine > BigInt(0) ? mine : got)} of $${symbol}`;
       setNote({ ok: true, text: `${what}.` });
     } catch (e) {
+      postedNow?.();
       settle?.(false);
       updateFlights((fs) => fs.filter((f) => f.id !== id));
       const msg = (e as Error).message ?? String(e);
@@ -882,6 +839,25 @@ function TradePanel({
 
   /** One tap from the CRUX Account: exactly `amount` (USDC for a buy, tokens for a sell). Nothing to type, no pop-up. */
   const quick = (amount: bigint) => void accountTrade(side === "buy", amount);
+  /**
+   * A quick sell of `pct` of the holding, after the buys still on their way (a second or two): their tokens arrive
+   * with their fills, and "sell 50%" or "sell all" right after a burst of buys means of them too, not of what was here
+   * before it (or nothing at all: "Nothing to sell yet").
+   */
+  const quickSell = (pct: number) => {
+    // In the order pressed: each is sized once the one before it is counted (50% then All sells half, then the rest).
+    sellsQueued.current = sellsQueued.current
+      .then(() => waitFor(() => readyToSell(flightsRef.current, reservesBlockRef.current), 15_000))
+      .then(
+        () =>
+          new Promise<void>((queued) => {
+            void accountTrade(false, quickSellAmount(heldNow(heldReadRef.current as never, flightsRef.current).tokens, pct), undefined, queued).finally(queued);
+          }),
+      );
+  };
+  const sellsQueued = useRef<Promise<void>>(Promise.resolve());
+  /** Resolves once the trade pressed last has been posted to the relay (each press posts after the one before). */
+  const postsQueued = useRef<Promise<void>>(Promise.resolve());
 
   const trade = () => {
     // A market trade from the CRUX Account doesn't lock the panel (accountTrade); the box empties for the next one.
@@ -1037,7 +1013,7 @@ function TradePanel({
                     key={pct}
                     type="button"
                     disabled={busy !== null || tokensHeld === BigInt(0)}
-                    onClick={() => quick((tokensHeld * BigInt(Math.round(pct * 100))) / BigInt(10_000))}
+                    onClick={() => quickSell(pct)}
                     className="h-9 rounded-lg border border-down/40 font-mono text-[12.5px] text-down transition-colors hover:border-down hover:bg-down/[0.06] disabled:opacity-35"
                   >
                     {pct >= 100 ? "All" : `${pct}%`}

@@ -1,0 +1,4 @@
+{
+  "//": "lib/tradeMath is also run by crux-solver scripts/fork-burst.ts under plain Node: an ES module there.",
+  "type": "module"
+}

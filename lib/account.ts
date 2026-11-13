@@ -265,8 +265,24 @@ export async function tradeFromAccount(
   account: Address,
   t: AccountTrade,
   signed?: Promise<SignedTrade>,
-): Promise<{ orderId: Hex; filled: boolean; tradeTx?: Hex; fill?: AccountFill; reason?: string; timing: TradeTiming }> {
+  /** Signed and about to go: awaited before the request is posted (the trade panel posts a burst in press order). */
+  beforePost?: () => Promise<void>,
+): Promise<{
+  orderId: Hex;
+  filled: boolean;
+  tradeTx?: Hex;
+  fill?: AccountFill;
+  /** What this order itself got (its own part when the solver filled several orders with one pool trade). */
+  amountOut?: bigint;
+  /** The block its fill landed in. */
+  fillBlock?: bigint;
+  /** The account's balances of the trade's two tokens read right after it filled, and the block they were read at. */
+  held?: { block: bigint; tokenIn: bigint; tokenOut: bigint };
+  reason?: string;
+  timing: TradeTiming;
+}> {
   const { message, signature, t_click, t_signed } = await (signed ?? signTrade(sign, account, t));
+  if (beforePost) await beforePost();
   const sent = { t_click, t_signed };
   const data = await postRelay("/v1/account/trade", { owner, ...accountFields(account), trade: message, signature, timing: sent });
   if (typeof data.orderId !== "string") throw new Error("The relay opened the trade but didn't return its order id.");
@@ -276,7 +292,28 @@ export async function tradeFromAccount(
   // The trade itself, when filled; why not, when the solver said (e.g. "slippage": it missed its price).
   const fill = fillFrom(data.fill);
   const reason = typeof data.reason === "string" ? data.reason : undefined;
-  return { orderId: data.orderId as Hex, filled: data.filled === true, ...(tradeTx ? { tradeTx } : {}), ...(fill ? { fill } : {}), ...(reason ? { reason } : {}), timing };
+  const big = (v: unknown) => {
+    try {
+      return typeof v === "string" && /^\d+$/.test(v) ? BigInt(v) : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  const amountOut = big(data.amountOut);
+  const fillBlock = big(data.fillBlock);
+  const h = data.held as Record<string, unknown> | undefined;
+  const held = h && big(h.block) !== undefined && big(h.tokenIn) !== undefined && big(h.tokenOut) !== undefined ? { block: big(h.block)!, tokenIn: big(h.tokenIn)!, tokenOut: big(h.tokenOut)! } : undefined;
+  return {
+    orderId: data.orderId as Hex,
+    filled: data.filled === true,
+    ...(tradeTx ? { tradeTx } : {}),
+    ...(fill ? { fill } : {}),
+    ...(amountOut !== undefined ? { amountOut } : {}),
+    ...(fillBlock !== undefined ? { fillBlock } : {}),
+    ...(held ? { held } : {}),
+    ...(reason ? { reason } : {}),
+    timing,
+  };
 }
 
 /** Binds the withdrawal address (instant while none is bound) or requests a change (takes effect after 48 hours). */

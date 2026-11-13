@@ -8,7 +8,8 @@ import { mergeIntoScan, pollInterval, scanLogs, tracked, type LogScan } from "@/
 import { useFeedJoin } from "@/hooks/useFeed";
 import { poolTradeReader, readBatchPool, type PoolTrade } from "@/lib/poolTrades";
 import { watchLogsOf } from "@/lib/stream";
-import { loadHistory } from "@/lib/history";
+import { HISTORY_ON, fetchHistory, loadHistory } from "@/lib/history";
+import { externalPoolOf } from "@/lib/externalPools";
 
 export type { PoolTrade };
 
@@ -64,9 +65,26 @@ export function usePoolSwaps(pair: Address, settledAt: number, enabled: boolean,
       stop();
     };
   }, [on, live, pair, qc]);
+  // A Crux launch's trades come from the Crux relay only, decoded once on the server: its history, then the live feed
+  // (and, while the feed is down, its history again every few seconds). The page doesn't decode them itself: its own
+  // decoder drifted from the server's (a sell through the V9 router showed as a "whale" trade by the router, closed at
+  // its average price). A token that isn't a Crux launch, or a local fork the relay doesn't serve, reads the chain.
+  const serverOnly = HISTORY_ON && !externalPoolOf(pair);
   return useQuery({
     queryKey,
     queryFn: async ({ client }) => {
+      if (serverOnly) {
+        const h = await tracked(pollId, () => fetchHistory(pair));
+        if (!h) throw new Error("The relay's trade history isn't available right now.");
+        const prev = client.getQueryData<LogScan<PoolTrade>>(queryKey);
+        const base: LogScan<PoolTrade> = { items: h.trades, floor: BigInt(0), scannedTo: h.scannedTo, truncated: false, windowBlocks: BigInt(0) };
+        // Trades the feed brought that the history (a few blocks behind the head) doesn't have yet stay.
+        const newer = prev ? prev.items.filter((t) => t.blockNumber > h.scannedTo) : [];
+        const merged = newer.length ? mergeIntoScan(base, newer) : base;
+        const held = waiting.get(pair.toLowerCase()) ?? [];
+        waiting.delete(pair.toLowerCase());
+        return held.reduce((s, f) => mergeIntoScan(s, f.trades.map(fromFeed), f.removed), merged);
+      }
       const scan = await tracked(pollId, () =>
         scanLogs(client.getQueryData<LogScan<PoolTrade>>(queryKey), settledAt, poolTradeReader(pair, tokenDecimals), async () => {
           // The whole history from the relay's indexer, when it has it: the chart reaches back to the launch.
@@ -86,6 +104,7 @@ export function usePoolSwaps(pair: Address, settledAt: number, enabled: boolean,
     // Every 3 s while the page is in view and the feed isn't (Base makes a block every 0.2 s); each poll reads only
     // the new blocks.
     refetchInterval: live ? false : () => pollInterval(pollId, 3_000),
-    retry: false,
+    // From the relay: a missed read is tried again, and what's shown stays meanwhile.
+    retry: serverOnly ? 3 : false,
   });
 }

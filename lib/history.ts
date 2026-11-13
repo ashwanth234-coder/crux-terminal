@@ -23,6 +23,26 @@ export type History = { scannedTo: bigint; trades: PoolTrade[]; transfers: Token
 // One request per launch per page view, shared by the chart, tape, holders and PnL (both its token and pair key it).
 const loads = new Map<string, Promise<History | null>>();
 
+/** Whether the relay's history is used here (off for a local fork, whose history the relay doesn't have). */
+export const HISTORY_ON = !OFF;
+
+/** The relay's history now, not the copy loaded when the page opened (a page that isn't on the live feed re-reads it). */
+export async function fetchHistory(address: Address): Promise<History | null> {
+  if (OFF) return null;
+  try {
+    const res = await fetch(`${RELAY}/v1/history/${address}`, { cache: "no-store" });
+    if (!res.ok) return null;
+    const j = (await res.json()) as Json;
+    return {
+      scannedTo: BigInt(j.scannedTo),
+      trades: j.trades.map((t) => ({ ...t, usdc: BigInt(t.usdc), tokens: BigInt(t.tokens), blockNumber: BigInt(t.blockNumber) })),
+      transfers: j.transfers.map((t) => ({ ...t, value: BigInt(t.value), blockNumber: BigInt(t.blockNumber) })),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function loadHistory(address: Address): Promise<History | null> {
   if (OFF) return Promise.resolve(null);
   const key = address.toLowerCase();
