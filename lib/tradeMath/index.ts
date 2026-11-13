@@ -142,6 +142,67 @@ export async function routerQuote(
   return { got, alone: alone ?? got };
 }
 
+/** A V9 curve's state: its fixed virtual USDC, k, threshold and fee, and the real USDC and tokens it holds now. */
+export type CurveState = { virtualUsdc: bigint; k: bigint; threshold: bigint; feeBps: number; realUsdc: bigint; reserveToken: bigint };
+
+const ceilDiv = (a: bigint, b: bigint) => (a + b - BigInt(1)) / b;
+
+/**
+ * CruxCurveV9's own math (x · y = k over virtual USDC), exact to its quoteBuy / quoteSell: a buy's fee off its USDC,
+ * then y − ⌈k / (x + net)⌉ tokens; a sell's x − ⌈k / (y + tokens)⌉ USDC, then its fee. `buyOut` is null for a buy that
+ * would reach the graduation threshold (the rest goes into the new pool: the router is asked for that one).
+ */
+export function curveMath(c: CurveState) {
+  const fee = BigInt(c.feeBps);
+  const buy = (usdcIn: bigint) => {
+    const f = (usdcIn * fee) / BPS;
+    const net = usdcIn - f;
+    if (c.realUsdc + net >= c.threshold) return null;
+    const newY = ceilDiv(c.k, c.virtualUsdc + c.realUsdc + net);
+    return { net, tokens: c.reserveToken > newY ? c.reserveToken - newY : ZERO };
+  };
+  const sellGross = (tokensIn: bigint) => {
+    const x = c.virtualUsdc + c.realUsdc;
+    const newX = ceilDiv(c.k, c.reserveToken + tokensIn);
+    return x > newX ? x - newX : ZERO;
+  };
+  const buyOut = (usdcIn: bigint) => (usdcIn <= ZERO ? ZERO : (buy(usdcIn)?.tokens ?? null));
+  const sellOut = (tokensIn: bigint) => {
+    if (tokensIn <= ZERO) return ZERO;
+    const gross = sellGross(tokensIn);
+    return gross - (gross * fee) / BPS;
+  };
+  /** The curve once a trade has gone through it, or null for a buy that reaches graduation. */
+  const after = (isBuy: boolean, amount: bigint): CurveState | null => {
+    if (isBuy) {
+      const b = buy(amount);
+      return b ? { ...c, realUsdc: c.realUsdc + b.net, reserveToken: c.reserveToken - b.tokens } : null;
+    }
+    return { ...c, realUsdc: c.realUsdc - sellGross(amount), reserveToken: c.reserveToken + amount };
+  };
+  return { buyOut, sellOut, after };
+}
+
+/**
+ * On the curve: what a trade gets after this page's trades the curve read doesn't hold (`got`), and after the ones
+ * on their way (`alone`), worked out here with no chain read (the router read took ~0.3 s before every press could be
+ * signed). Null when any of it reaches graduation: then the router is asked (routerQuote).
+ */
+export function curveQuote(state: CurveState & { block?: bigint; at: number }, flights: readonly Flight[], buy: boolean, amount: bigint): { got: bigint; alone: bigint } | null {
+  let r: CurveState | null = state;
+  let surely: CurveState | null = state;
+  for (const f of flights) {
+    if (!afterRead(f, state)) continue;
+    r = r && curveMath(r).after(f.buy, f.amountIn);
+    if (f.filledAt !== null || atRelay(f)) surely = surely && curveMath(surely).after(f.buy, f.amountIn);
+  }
+  if (!r || !surely) return null;
+  const out = (c: CurveState) => (buy ? curveMath(c).buyOut(amount) : curveMath(c).sellOut(amount));
+  const got = out(r);
+  const alone = out(surely);
+  return got === null || alone === null ? null : { got, alone };
+}
+
 /** The signed minimum: `slippageBps` under what it should get, never under half of what it gets on its own now. */
 export function minimumOut(q: { got: bigint; alone: bigint }, slippageBps = SLIPPAGE_BPS): bigint {
   const under = (q.got * (BPS - slippageBps)) / BPS;

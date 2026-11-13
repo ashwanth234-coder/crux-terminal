@@ -55,3 +55,24 @@ test("minimumOut, quickSellAmount, buysOnTheWay", () => {
   assert.equal(buysOnTheWay([flight({ id: 1, buy: false, amountIn: B(1) })]), false);
   assert.equal(buysOnTheWay([flight({ id: 1, buy: true, amountIn: B(1) })]), true);
 });
+
+test("curveMath: exact to CruxCurveV9 (x·y = k over virtual USDC), null for a buy that reaches graduation", async () => {
+  const { curveMath, curveQuote } = await import("./tradeMath/index.ts");
+  // $BURST-like: 2,000 virtual USDC, 800M tokens (18 decimals), $10 threshold, 1% fee.
+  const virtualUsdc = B(2_000_000_000);
+  const supply = B(800_000_000) * B(10) ** B(18);
+  const c = { virtualUsdc, k: virtualUsdc * supply, threshold: B(10_000_000), feeBps: 100, realUsdc: B(0), reserveToken: supply };
+  const ceil = (a: bigint, b: bigint) => (a + b - B(1)) / b;
+  const net = B(1_000_000) - B(10_000);
+  assert.equal(curveMath(c).buyOut(B(1_000_000)), supply - ceil(c.k, virtualUsdc + net));
+  const after = curveMath(c).after(true, B(1_000_000))!;
+  assert.equal(after.realUsdc, net);
+  const back = after.reserveToken + B(10) ** B(24);
+  const gross = virtualUsdc + net - ceil(c.k, back);
+  assert.equal(curveMath(after).sellOut(B(10) ** B(24)), gross - (gross * B(100)) / B(10_000));
+  assert.equal(curveMath(c).buyOut(B(11_000_000)), null, "reaches the $10 threshold: the router is asked");
+  // With a buy on its way, the next is priced after it; a burst past the threshold isn't priced here.
+  const q = curveQuote({ ...c, at: 0 }, [flight({ id: 1, buy: true, amountIn: B(1_000_000) })], true, B(1_000_000))!;
+  assert.equal(q.got, curveMath(after).buyOut(B(1_000_000)));
+  assert.equal(curveQuote({ ...c, at: 0 }, [flight({ id: 1, buy: true, amountIn: B(9_500_000) })], true, B(1_000_000)), null);
+});

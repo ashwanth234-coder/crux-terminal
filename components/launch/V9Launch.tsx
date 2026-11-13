@@ -28,7 +28,7 @@ import type { AuctionV2 } from "@/lib/launchV2";
 import { tokensForUsdc } from "@/lib/sellAmount";
 import { CreatorNote } from "@/components/launch/V9Creator";
 import { StandingOrderForm, type OrderType } from "@/components/pro/StandingOrderForm";
-import { SLIPPAGE_BPS, PRICE_WINDOW_MS, afterRead, readyToSell, heldNow, minimumOut, poolMath, poolQuote, quickSellAmount, routerQuote, type Flight } from "@/lib/tradeMath";
+import { SLIPPAGE_BPS, PRICE_WINDOW_MS, afterRead, curveQuote, readyToSell, type CurveState, heldNow, minimumOut, poolMath, poolQuote, quickSellAmount, routerQuote, type Flight } from "@/lib/tradeMath";
 import { FACTORY_V9, ROUTER_V9, V9_ON, curvePrice, curveV9Abi, factoryV9Abi, phaseV9, registerV9Curve, routerV9Abi, type PhaseV9 } from "@/lib/v9";
 
 const usd = (v: bigint) => Number(formatUnits(v, 6)).toLocaleString("en-US", { maximumFractionDigits: 2 });
@@ -52,6 +52,16 @@ function waitFor(ready: () => boolean, ms: number): Promise<void> {
     tick();
   });
 }
+
+/** The V9 curve's state, for pricing a trade on the page (lib/tradeMath curveMath). */
+const curveStateAbi = parseAbi([
+  "function virtualUsdc() view returns (uint256)",
+  "function k() view returns (uint256)",
+  "function threshold() view returns (uint256)",
+  "function feeBps() view returns (uint16)",
+  "function realUsdc() view returns (uint256)",
+  "function reserveToken() view returns (uint256)",
+]);
 
 function useNowSeconds() {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
@@ -422,6 +432,43 @@ function TradePanel({
       setFlights(flightsRef.current);
     }
   }, [fresh, held.dataUpdatedAt]);
+  // On the curve: its state read straight from the chain every second at a known block (the fixed parts once), so a
+  // press is priced here with no read (lib/tradeMath curveQuote) instead of waiting ~0.3 s for the router's quote.
+  const curveRef = useRef<(CurveState & { block: bigint; at: number }) | null>(null);
+  useEffect(() => {
+    if (pairAddr || opening) return;
+    let live = true;
+    let fixed: { virtualUsdc: bigint; k: bigint; threshold: bigint; feeBps: number } | null = null;
+    const tick = async () => {
+      try {
+        if (!fixed) {
+          const [virtualUsdc, k, threshold, feeBps] = await Promise.all([
+            freshReads.readContract({ address: curve, abi: curveStateAbi, functionName: "virtualUsdc" }),
+            freshReads.readContract({ address: curve, abi: curveStateAbi, functionName: "k" }),
+            freshReads.readContract({ address: curve, abi: curveStateAbi, functionName: "threshold" }),
+            freshReads.readContract({ address: curve, abi: curveStateAbi, functionName: "feeBps" }),
+          ]);
+          fixed = { virtualUsdc, k, threshold, feeBps: Number(feeBps) };
+        }
+        const block = await freshReads.getBlockNumber({ cacheTime: 0 });
+        const [realUsdc, reserveToken] = await Promise.all([
+          freshReads.readContract({ address: curve, abi: curveStateAbi, functionName: "realUsdc", blockNumber: block }),
+          freshReads.readContract({ address: curve, abi: curveStateAbi, functionName: "reserveToken", blockNumber: block }),
+        ]);
+        if (live && (!curveRef.current || block >= curveRef.current.block)) curveRef.current = { ...fixed, realUsdc, reserveToken, block, at: Date.now() };
+      } catch {
+        // A missed read: the next second's (meanwhile the router is asked).
+      }
+    };
+    void tick();
+    const t = setInterval(() => void tick(), 1_000);
+    return () => {
+      live = false;
+      clearInterval(t);
+      // Graduated (or opening again): never priced from this curve read again.
+      curveRef.current = null;
+    };
+  }, [pairAddr, opening, curve]);
   /** The reserves to price from, and whether one of this page's trades isn't in them yet (so it's run on top). */
   const reservesNow = fresh ?? (pool ? { usdc: pool.usdc, tokens: pool.tokens, block: undefined, at: pool.readAt } : null);
   const notInReserves = (f: Flight) => (reservesNow ? afterRead(f, reservesNow) : f.filledAt === null);
@@ -733,8 +780,13 @@ function TradePanel({
    * seconds behind), both sides in order. The relay still checks the minimum against the solver's own price. Null
    * when there's no pool (on the curve) or its fee isn't read yet: then the chain is asked.
    */
-  const localQuote = (buy: boolean, amount: bigint, ahead?: ReadonlySet<number>) =>
-    !pool || !reservesNow || pool.feeBps === undefined ? null : poolQuote(reservesNow, pool.feeBps, flightsRef.current.filter((f) => !ahead || ahead.has(f.id)), buy, amount);
+  const localQuote = (buy: boolean, amount: bigint, ahead?: ReadonlySet<number>) => {
+    const flightsAhead = flightsRef.current.filter((f) => !ahead || ahead.has(f.id));
+    if (pool && reservesNow && pool.feeBps !== undefined) return poolQuote(reservesNow, pool.feeBps, flightsAhead, buy, amount);
+    // On the curve: its own math on its state read a moment ago (null near graduation: then the router is asked).
+    const cs = curveRef.current;
+    return cs && !opening ? curveQuote(cs, flightsAhead, buy, amount) : null;
+  };
 
   /**
    * A market trade from the CRUX Account, which never locks the panel: the next buy or sell can be pressed while this
