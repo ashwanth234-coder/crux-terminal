@@ -7,6 +7,7 @@ import { getConnection, readContract, simulateContract, switchChain, waitForTran
 import { TESTNET } from "@/lib/chains";
 import { CROSS_CHAIN_ORIGINS, type OriginChainId } from "@/lib/crosschain";
 import { feeHeadroom } from "@/lib/fees";
+import { BUILDER_SUFFIX } from "@/lib/attribution";
 
 /** Anything at or above half of uint256 is treated as an "unlimited" approval and refused outright. */
 const UNLIMITED_FLOOR = maxUint256 / BigInt(2);
@@ -56,7 +57,7 @@ export function useExactApproval() {
       });
       const fees = await feeHeadroom(config, chainId);
       hooks.onPrompt?.();
-      const hash = await writeContract(config, { ...request, ...fees } as typeof request);
+      const hash = await writeContract(config, { ...request, ...fees, dataSuffix: BUILDER_SUFFIX } as typeof request);
       hooks.onSent?.(hash);
       const receipt = await waitForTransactionReceipt(config, { hash, chainId });
       const chainName = CROSS_CHAIN_ORIGINS.find((o) => o.chain.id === chainId)?.name ?? "Base Sepolia";

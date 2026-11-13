@@ -1,5 +1,6 @@
 "use client";
 
+import { BUILDER_SUFFIX } from "@/lib/attribution";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -342,7 +343,7 @@ export function IntentModal({ order, open, onClose, onPlaced }: { order: OrderDr
       const baseFrom = cross ? await getBlockNumber(config, { chainId: TESTNET.id }) : undefined;
       const fees = await feeHeadroom(config, originChain.id);
       setFlow({ kind: "broadcasting" });
-      const hash = await writeContract({ ...request, ...fees } as typeof request);
+      const hash = await writeContract({ ...request, ...fees, dataSuffix: BUILDER_SUFFIX } as typeof request);
       setFlow({ kind: "broadcast", hash, baseFrom });
     } catch (err) {
       setFlow({ kind: "error", message: errorMessage(err) });

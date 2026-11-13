@@ -1,5 +1,6 @@
 "use client";
 
+import { BUILDER_SUFFIX } from "@/lib/attribution";
 import { useEffect, useState } from "react";
 import { encodeAbiParameters, erc20Abi, formatUnits, keccak256, parseAbi, parseUnits, toHex, zeroAddress, type Address } from "viem";
 import { useConfig, useConnection, useReadContract, useReadContracts } from "wagmi";
@@ -245,7 +246,7 @@ export function CrossChainDeposit({
       const { request } = await simulateContract(config, { address: o.depositSettler, abi: openForAbi, functionName: "openFor", args: [order, signature, "0x"], account: wallet, chainId: o.chain.id });
       const fees = await feeHeadroom(config, o.chain.id);
       setStep({ kind: "busy", label: `Confirm the deposit on ${o.name} in your wallet…` });
-      const hash = await writeContract(config, { ...request, ...fees } as typeof request);
+      const hash = await writeContract(config, { ...request, ...fees, dataSuffix: BUILDER_SUFFIX } as typeof request);
       setStep({ kind: "busy", label: `Opening it on ${o.name}…` });
       const receipt = await waitForTransactionReceipt(config, { hash, chainId: o.chain.id });
       if (receipt.status !== "success") throw new Error(`The deposit transaction failed on ${o.name}.`);
