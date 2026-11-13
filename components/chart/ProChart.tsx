@@ -43,7 +43,7 @@ import { OverlaysButton } from "./OverlaysBar";
 import { SymbolSwitch } from "./SymbolSwitch";
 import { requestOrderAt } from "@/lib/chartOrders";
 import { dropPendingTrade, useLastPressed, usePendingTrades, watchPendingTrades, type PendingTrade } from "@/lib/pendingTrades";
-import { clusterBadges, graduationTime, matchExecutions, withLiveBar, withPendingTrades, type BadgeFill } from "@/lib/chartLive";
+import { clusterBadges, continuous, graduationTime, matchExecutions, withLiveBar, withPendingTrades, type BadgeFill } from "@/lib/chartLive";
 import type { Badge } from "./badges";
 import { FACTORY_V9 } from "@/lib/v9";
 import { timingMark } from "@/lib/tradeTiming";
@@ -575,7 +575,8 @@ export function ProChart({
     (pendingNow: readonly PendingTrade[], real: Candle[]) => {
       if (!engine) return;
       // The period running now by the wall clock has its bar from its first second, trade or no trade.
-      const drawn = replaying ? real : withPendingTrades(withLiveBar(real, Math.floor(Date.now() / 1000), interval), pendingNow, onChartTx, interval);
+      // Every candle opens at the previous close (lib/chartLive continuous), the feed's and your trades' alike.
+      const drawn = continuous(replaying ? real : withPendingTrades(withLiveBar(real, Math.floor(Date.now() / 1000), interval), pendingNow, onChartTx, interval));
       engine.setData(drawn, k, fmt, minMove);
 
       const newest = real.length ? real[real.length - 1] : null;
@@ -592,6 +593,8 @@ export function ProChart({
       };
       if (!marksHidden) {
         for (const m of shownMarks.slice(-300)) {
+          // Badges for the creator (DB / DS) and you (B / S) only, or the wallet picked in the desk.
+          if (m.who !== "dev" && m.who !== "me" && m.who !== "focus") continue;
           const time = markBarTime(times, m.time, m.side, isDown, interval);
           if (time === null) continue;
           const style = MARK_STYLE[m.who];

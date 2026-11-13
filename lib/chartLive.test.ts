@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { badgeText, clusterBadges, graduationTime, matchExecutions, withLiveBar, withPendingTrades, type BadgeFill } from "./chartLive.ts";
+import { badgeText, clusterBadges, continuous, graduationTime, matchExecutions, withLiveBar, withPendingTrades, type BadgeFill } from "./chartLive.ts";
 
 const bar = (time: number, close: number) => ({ time, open: close, high: close, low: close, close, volume: 3, trades: 1 });
 
@@ -83,4 +83,15 @@ test("matchExecutions: each mark gets its own swap's price, by transaction or by
   assert.equal(out[2], null);
   assert.deepEqual(out[3], { usd: 3, price: 0.006 });
   assert.equal(out[4], null);
+});
+
+test("continuous: each candle opens at the previous close, with its high and low taking that open in", () => {
+  const c = (time: number, open: number, high: number, low: number, close: number) => ({ time, open, high, low, close, volume: 1, trades: 1 });
+  const ok = [c(1, 1, 2, 1, 2), c(2, 2, 3, 2, 3)];
+  assert.equal(continuous(ok), ok, "already continuous: the same array");
+  // A one-trade candle the feed drew flat at its own price (a dash) gets its body from the last close.
+  const out = continuous([c(1, 1, 2, 1, 2), c(2, 3, 3, 3, 3), c(3, 2.5, 2.5, 2.5, 2.5)]);
+  assert.deepEqual(out[1], c(2, 2, 3, 2, 3));
+  assert.deepEqual(out[2], c(3, 3, 3, 2.5, 2.5));
+  assert.deepEqual(out[0], c(1, 1, 2, 1, 2), "the first keeps its open");
 });

@@ -9,6 +9,23 @@ import type { Candle } from "./candles.ts";
 const priceOk = (v: number | undefined): v is number => v !== undefined && Number.isFinite(v) && v > 0;
 
 /**
+ * Each candle opens where the one before it closed (high and low widened to take that open in), so every trade
+ * draws a body from the previous close to its own: a trade that moved the price never shows as a flat dash. The
+ * first candle keeps its own open. Returns the same array when nothing needed changing.
+ */
+export function continuous(candles: Candle[]): Candle[] {
+  let out: Candle[] | null = null;
+  for (let i = 1; i < candles.length; i++) {
+    const prev = (out ?? candles)[i - 1].close;
+    const c = candles[i];
+    if (!priceOk(prev) || c.open === prev) continue;
+    out ??= candles.slice();
+    out[i] = { ...c, open: prev, high: Math.max(c.high, prev, c.close), low: Math.min(c.low, prev, c.close) };
+  }
+  return out ?? candles;
+}
+
+/**
  * `candles` with the current period's bar: when the newest candle's period is over (by the wall clock, `nowS` in unix
  * seconds), a flat bar at its close (O = H = L = C) for the period now running, so the chart always has a bar for
  * "now" and a trade lands in a bar that's already there. Only that one bar: a period that ends without a trade isn't

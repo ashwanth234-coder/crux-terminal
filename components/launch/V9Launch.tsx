@@ -639,14 +639,37 @@ function TradePanel({
   const showPending = (buy: boolean, amountIn: bigint, clickAt: number) => {
     const none: { id: number; size: (got: bigint) => void; settle: (ok: boolean, tradeTx?: string, fill?: AccountFill) => void } = { id: -1, size: () => {}, settle: () => {} };
     if (opening || !(price > 0)) return none;
-    const ahead = pendingRef.current[pendingRef.current.length - 1];
-    const before = ahead?.expected && ahead.expected > 0 ? ahead.expected : price;
     const label = buy ? `Buying $${usd(amountIn)}…` : `Selling ${tokensText(amountIn)} $${symbol}…`;
+    // On a graduated pool: its Confirming row (what it pays and gets) and the price it leaves, worked out at the click
+    // with the router's own pool math (its fee, then Uniswap V2's getAmountOut with its 0.3%) on the reserves read from
+    // the chain, run past this page's trades they don't hold yet, exactly as its quote is (localQuote). (A sell's USDC
+    // was its tokens times the average of two prices from older reserves, with no fee: a 25% sell showed $4.08 for a
+    // fill of $3.74.)
+    const exact = (() => {
+      if (!pool || !reservesNow || pool.feeBps === undefined || reservesNow.usdc <= BigInt(0) || reservesNow.tokens <= BigInt(0)) return null;
+      const feeBps = pool.feeBps;
+      let r = { usdc: reservesNow.usdc, tokens: reservesNow.tokens };
+      for (const f of flightsRef.current) if (notInReserves(f)) r = poolMath({ ...r, feeBps }).after(f.buy, f.amountIn);
+      if (r.usdc <= BigInt(0) || r.tokens <= BigInt(0)) return null;
+      const m = poolMath({ ...r, feeBps });
+      const next = m.after(buy, amountIn);
+      const spot = (x: { usdc: bigint; tokens: bigint }) => Number(formatUnits(x.usdc, 6)) / Number(formatUnits(x.tokens, 18));
+      const out = buy ? m.buyOut(amountIn) : m.sellOut(amountIn);
+      const before = spot(r);
+      const after = next.usdc > BigInt(0) && next.tokens > BigInt(0) ? spot(next) : NaN;
+      if (!(before > 0) || !(after > 0) || out <= BigInt(0)) return null;
+      return buy
+        ? { before, after, usdc: Number(formatUnits(amountIn, 6)), tokens: Number(formatUnits(out, 18)) }
+        : { before, after, usdc: Number(formatUnits(out, 6)), tokens: Number(formatUnits(amountIn, 18)) };
+    })();
+    const ahead = pendingRef.current[pendingRef.current.length - 1];
+    const before = exact ? exact.before : ahead?.expected && ahead.expected > 0 ? ahead.expected : price;
     // On a graduated launch's pool its full height is known at the click, from the reserves the page already reads
     // (exact for a constant-product pool: the price goes as USDC² / k), with no wait for a quote: a stub until the
     // quote came back (0.4–0.6 s) read as "nothing happened". The pool is advanced past the trades still pending
     // (the price after them, `before`), so rapid trades stack. On the curve it's sized once quoted.
     const atClick = (() => {
+      if (exact) return exact.after;
       if (!pool || pool.usdc === BigInt(0) || pool.tokens === BigInt(0)) return undefined;
       const shift = Math.sqrt(before / price);
       const ratio = buy
@@ -664,9 +687,11 @@ function TradePanel({
     // the other comes from the average fill, which on a constant-product pool is √(price before × price after).
     const paid = buy ? Number(formatUnits(amountIn, 6)) : Number(formatUnits(amountIn, 18));
     const avg = atClick ? Math.sqrt(before * atClick) : undefined;
-    const size = buy
-      ? { usdc: paid, ...(avg ? { tokens: paid / avg } : {}) }
-      : { tokens: paid, ...(avg ? { usdc: paid * avg } : {}) };
+    const size = exact
+      ? { usdc: exact.usdc, tokens: exact.tokens }
+      : buy
+        ? { usdc: paid, ...(avg ? { tokens: paid / avg } : {}) }
+        : { tokens: paid, ...(avg ? { usdc: paid * avg } : {}) };
     const clear = addPendingTrade({ token, side: buy ? "buy" : "sell", label, price: before, ...size, ...(atClick ? { expected: atClick } : {}) });
     // Click-to-candle timing in DevTools (lib/tradeTiming): printed when its real candle is drawn.
     timingStart(clear.id, label, clickAt);
