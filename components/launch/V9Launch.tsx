@@ -378,48 +378,11 @@ function TradePanel({
   };
   /** A balance read this long after a fill includes it (the read cache runs a couple of seconds behind). */
   const SETTLED_MS = 3_000;
-  /**
-   * The balances as read when the first of these trades was pressed. While any is counted, the balances shown are
-   * these plus each trade's own effect, and the reads in between are not used: a read can hold some of a trade (a
-   * sell's tokens leave at the click, its USDC arrives at the fill) at a time nobody can tell from here. Guessing that
-   * from the read's age counted trades twice: after a 25% sell the holding showed half of itself gone for a few
-   * seconds, and the next quick sell was sized from that.
-   */
-  const [anchor, setAnchor] = useState<{ tokens: bigint; usdc: bigint } | null>(null);
-  const sum = (xs: bigint[]) => xs.reduce((a, b) => a + b, BigInt(0));
-  const nonNegative = (v: bigint) => (v > BigInt(0) ? v : BigInt(0));
-  const tokensRead = (held.data?.[0]?.result as bigint | undefined) ?? BigInt(0);
-  const usdcRead = (held.data?.[1]?.result as bigint | undefined) ?? BigInt(0);
-  const counting = via === "account" && anchor !== null && flights.length > 0;
-  const tokensHeld = counting
-    ? nonNegative(anchor.tokens + sum(flights.filter((f) => f.buy && f.filledAt !== null).map((f) => f.got)) - sum(flights.filter((f) => !f.buy).map((f) => f.amountIn)))
-    : tokensRead;
-  const usdcHeld = counting
-    ? nonNegative(anchor.usdc - sum(flights.filter((f) => f.buy).map((f) => f.amountIn)) + sum(flights.filter((f) => !f.buy && f.filledAt !== null).map((f) => f.got)))
-    : usdcRead;
-  // Once every trade is filled and a balance read from after the last fill agrees with what they add up to (or 20 s
-  // have passed: something else moved the balance), the read takes over again and the trades are forgotten, together.
-  useEffect(() => {
-    const fs = flightsRef.current;
-    if (fs.length === 0 || fs.some((f) => f.filledAt === null)) return;
-    const lastFill = Math.max(...fs.map((f) => f.filledAt ?? 0));
-    if (held.dataUpdatedAt <= lastFill + SETTLED_MS) return;
-    const near = (a: bigint, b: bigint) => (a > b ? a - b : b - a) * BigInt(50) <= (a > b ? a : b);
-    if (near(tokensRead, tokensHeld) || Date.now() - lastFill > 20_000) {
-      flightsRef.current = [];
-      setFlights([]);
-      setAnchor(null);
-    } else {
-      const t = setTimeout(() => void held.refetch(), 1_500);
-      return () => clearTimeout(t);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [held.dataUpdatedAt, flights]);
-  // The pool's reserves read straight from the chain every second at a known block, off the click path: the page's
-  // other reads come through the shared cache, whose lag varied past 8 s (after a burst, buys were priced before the
-  // burst's trades and refused as "the price has moved"). With the block known, which of this page's trades they hold
-  // is exact: a fill's block comes back with the relay's reply.
-  const [fresh, setFresh] = useState<{ usdc: bigint; tokens: bigint; block: bigint; at: number } | null>(null);
+  // The pool's reserves, and this trader's balances, read straight from the chain every second at one known block,
+  // off the click path: the page's other reads come through the shared cache, whose lag varied past 8 s (after a
+  // burst, buys were priced before the burst's trades and refused as "the price has moved"). With the block known,
+  // which of this page's trades they hold is exact: a fill's block comes back with the relay's reply.
+  const [fresh, setFresh] = useState<{ usdc: bigint; tokens: bigint; block: bigint; at: number; held?: { tokens: bigint; usdc: bigint; holder: Address } } | null>(null);
   const pairAddr = pool?.pair;
   const usdcIs0 = pool?.usdcIs0;
   useEffect(() => {
@@ -428,8 +391,19 @@ function TradePanel({
     const tick = async () => {
       try {
         const block = await freshReads.getBlockNumber({ cacheTime: 0 });
-        const [r0, r1] = (await freshReads.readContract({ address: pairAddr, abi: pairPriceAbi, functionName: "getReserves", blockNumber: block })) as readonly [bigint, bigint, number];
-        if (live) setFresh({ usdc: usdcIs0 ? r0 : r1, tokens: usdcIs0 ? r1 : r0, block, at: Date.now() });
+        const [[r0, r1], tokens, usdc] = await Promise.all([
+          freshReads.readContract({ address: pairAddr, abi: pairPriceAbi, functionName: "getReserves", blockNumber: block }) as Promise<readonly [bigint, bigint, number]>,
+          holder ? freshReads.readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [holder], blockNumber: block }) : Promise.resolve(undefined),
+          holder ? freshReads.readContract({ address: TESTNET_USDC, abi: erc20Abi, functionName: "balanceOf", args: [holder], blockNumber: block }) : Promise.resolve(undefined),
+        ]);
+        if (live)
+          setFresh({
+            usdc: usdcIs0 ? r0 : r1,
+            tokens: usdcIs0 ? r1 : r0,
+            block,
+            at: Date.now(),
+            ...(holder && tokens !== undefined && usdc !== undefined ? { held: { tokens, usdc, holder } } : {}),
+          });
       } catch {
         // A missed read: the next second's, or the cached reserves meanwhile.
       }
@@ -440,7 +414,40 @@ function TradePanel({
       live = false;
       clearInterval(t);
     };
-  }, [pairAddr, usdcIs0]);
+  }, [pairAddr, usdcIs0, holder, token]);
+  /**
+   * What the trader holds, shown and traded from: the balances read from the chain at a known block (above), with
+   * this page's trades that block doesn't hold yet. A buy's tokens are counted only once its fill is in a later block
+   * (they arrive in that transaction); a sell's tokens come off from the click until a block after its fill holds it,
+   * and a buy's USDC the same way. Any doubt counts the holding low, never high: a sell of "All" can't ask for tokens
+   * the account doesn't have. (Adding each trade to a balance read at the first click counted a fill the solver shared
+   * between two orders twice: the holding showed 20–35M $BG more than the account had, and selling All was refused.)
+   * Before the pool is read (on the curve), the cached balances with this page's trades still on their way.
+   */
+  const sum = (xs: bigint[]) => xs.reduce((a, b) => a + b, BigInt(0));
+  const nonNegative = (v: bigint) => (v > BigInt(0) ? v : BigInt(0));
+  const chain = fresh?.held && fresh.held.holder === holder ? { ...fresh.held, block: fresh.block, at: fresh.at } : null;
+  const counted = via === "account" ? flights : [];
+  /** Whether a trade is after the chain read: not filled yet, or filled in a later block (or, its block unknown, lately). */
+  const afterRead = (f: Flight) =>
+    f.filledAt === null || (chain ? (f.fillBlock !== undefined ? f.fillBlock > chain.block : f.filledAt > chain.at - 2_000) : held.dataUpdatedAt <= f.filledAt + SETTLED_MS);
+  const filledAfterRead = (f: Flight) => f.filledAt !== null && afterRead(f);
+  const tokensBase = chain ? chain.tokens : ((held.data?.[0]?.result as bigint | undefined) ?? BigInt(0));
+  const usdcBase = chain ? chain.usdc : ((held.data?.[1]?.result as bigint | undefined) ?? BigInt(0));
+  const tokensHeld = nonNegative(
+    tokensBase + sum(counted.filter((f) => f.buy && filledAfterRead(f)).map((f) => f.got)) - sum(counted.filter((f) => !f.buy && afterRead(f)).map((f) => f.amountIn)),
+  );
+  const usdcHeld = nonNegative(
+    usdcBase - sum(counted.filter((f) => f.buy && afterRead(f)).map((f) => f.amountIn)) + sum(counted.filter((f) => !f.buy && filledAfterRead(f)).map((f) => f.got)),
+  );
+  // Trades every read holds, and past the pricing window (PRICE_WINDOW_MS), are forgotten.
+  useEffect(() => {
+    const done = (f: Flight) => f.filledAt !== null && Date.now() - f.filledAt > Math.max(PRICE_WINDOW_MS, 20_000);
+    if (flightsRef.current.some(done)) {
+      flightsRef.current = flightsRef.current.filter((f) => !done(f));
+      setFlights(flightsRef.current);
+    }
+  }, [fresh, held.dataUpdatedAt]);
   /** The reserves to price from, and whether one of this page's trades isn't in them yet (so it's run on top). */
   const reservesNow = fresh ?? (pool ? { usdc: pool.usdc, tokens: pool.tokens, block: undefined, at: pool.readAt } : null);
   const notInReserves = (f: Flight) =>
@@ -815,7 +822,6 @@ function TradePanel({
       const { got, alone } = localQuote(buy, amount) ?? (await quoteAfterFlights(buy, amount));
       if (got === BigInt(0)) throw new Error(settling ? "The fair opening just ended and is being settled: try again in a few seconds." : "Too small to trade.");
       onChart.size(alone);
-      if (flightsRef.current.length === 0) setAnchor({ tokens: tokensRead, usdc: usdcRead });
       updateFlights((fs) => [...fs, { id, buy, amountIn: amount, got, filledAt: null }]);
       // 10% under what it should get after the trades ahead; never under half of what it gets on its own now (the
       // relay refuses a minimum more than 55% under its price).
