@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type ComponentProps } from "react";
+import { memo, useMemo, useRef, useState, type ComponentProps } from "react";
 import { SyncBus, type SyncOptions } from "./sync";
 import { ProChart } from "./ProChart";
 import { Popover, Tool } from "./ui";
@@ -35,7 +35,7 @@ const icon = (l: GridLayout) => (
  * indicators and drawings (saved per slot). The layout button sits in every chart's toolbar; "Fullscreen" takes the
  * whole grid full screen.
  */
-export function ChartGrid(props: Omit<ComponentProps<typeof ProChart>, "slot" | "layoutSlot" | "sync">) {
+function ChartGridInner(props: Omit<ComponentProps<typeof ProChart>, "slot" | "layoutSlot" | "sync">) {
   const [bus] = useState(() => new SyncBus());
   const [opts, setOpts] = useState<SyncOptions>(() => {
     try {
@@ -149,3 +149,9 @@ export function ChartGrid(props: Omit<ComponentProps<typeof ProChart>, "slot" | 
     </div>
   );
 }
+
+/**
+ * Re-renders only when what it's given changes: the page around it re-renders every second (its clock), and the
+ * charts used to re-render with it.
+ */
+export const ChartGrid = memo(ChartGridInner);

@@ -11,7 +11,7 @@ import type {
   Time,
   UTCTimestamp,
 } from "lightweight-charts";
-import { BADGE_ROWS, BadgesPrimitive, badgeColumnPx, type Badge } from "./badges";
+import { BADGE_ROOM_PX, BadgesPrimitive, type Badge, type ChartEvent } from "./badges";
 import { heikinAshi, type Candle } from "@/lib/candles";
 import type { Study, StudyLine } from "@/lib/indicators";
 import { DrawingsPrimitive, type DrawPoint } from "./drawings";
@@ -49,14 +49,52 @@ function minRangeAutoscale(original: () => AutoscaleInfo): AutoscaleInfo {
 const sameNum = (a: number, b: number) => a === b || (a !== a && b !== b);
 
 /**
+ * Takes the newest bar of a series instead of the series itself: `ease` true for a bar that changed (or is new) and
+ * still has to be written, false for one a full redraw just wrote (only to be remembered). `replaced`: it stands
+ * where a passing bar just stood (the live bar, a trade on its way), so it carries on from that bar's look.
+ */
+type LastBar = (pt: Point, ease: boolean, replaced: boolean) => void;
+
+/** How long the newest bar takes to reach a new price: about five frames, eased out, as trading terminals grow a candle. */
+const EASE_MS = 90;
+
+const numbersOf = (pt: Point): Record<string, number> => {
+  const out: Record<string, number> = {};
+  for (const [key, v] of Object.entries(pt)) if (key !== "time" && typeof v === "number") out[key] = v;
+  return out;
+};
+
+/**
  * Hands `next` to `series`, sending only the newest bar and any after it when nothing older changed (a live trade):
  * the library redraws one bar instead of re-reading 20,000. Anything else (another timeframe, units, an older bar
  * that changed) is a full setData. `point(i)` builds bar i (null: none, before a study's first value). Older bars
  * trimmed off the front stay in the series, harmlessly.
  */
-function syncSeries(series: ISeriesApi<SeriesType>, prev: Snapshot | undefined, next: Snapshot, point: (i: number) => Point | null): Snapshot {
+function syncSeries(series: ISeriesApi<SeriesType>, prev: Snapshot | undefined, next: Snapshot, point: (i: number) => Point | null, lastBar?: LastBar): Snapshot {
   const { times, values, width } = next;
   const n = times.length;
+  // The newest bar shown was a passing one (the live bar of a period that ended without a trade, a trade of yours on
+  // its way) and the one before it is still there, but what follows that one now is another bar: a later period's
+  // live bar, or a real trade whose block time is a second off the click's. The passing bar is taken off the end and
+  // the rest goes as an update. Without this every quiet second on a 1s chart re-sent all 5,000 bars, and a trade
+  // landing a second off its pending candle redrew the whole chart.
+  let replaced = false;
+  if (prev && prev.width === width && prev.times.length >= 2 && n > 0) {
+    const gone = prev.times[prev.times.length - 1];
+    const before = prev.times[prev.times.length - 2];
+    let j = n - 1;
+    while (j >= 0 && j >= n - 64 && times[j] > before) j--;
+    const kept = j >= 0 && times[j] === before;
+    if (kept && j + 1 < n && times[j + 1] !== gone) {
+      series.pop(1);
+      prev = { times: prev.times.slice(0, -1), values: prev.values.slice(0, -width), width };
+      replaced = true;
+    } else if (kept && j === n - 1) {
+      // Nothing follows it any more (a trade of yours that failed in a bar of its own).
+      series.pop(1);
+      prev = { times: prev.times.slice(0, -1), values: prev.values.slice(0, -width), width };
+    }
+  }
   if (prev && prev.width === width && prev.times.length > 0 && n > 0) {
     const last = prev.times.length - 1;
     let j = n - 1;
@@ -74,7 +112,9 @@ function syncSeries(series: ISeriesApi<SeriesType>, prev: Snapshot | undefined, 
           let same = before <= last;
           for (let w = 0; w < width && same; w++) same = sameNum(prev.values[before * width + w], values[i * width + w]);
           const pt = same ? null : point(i);
-          if (pt) series.update(pt as never);
+          if (!pt) continue;
+          if (lastBar && i === n - 1) lastBar(pt, true, replaced && i === j + 1);
+          else series.update(pt as never);
         }
         return next;
       }
@@ -86,6 +126,7 @@ function syncSeries(series: ISeriesApi<SeriesType>, prev: Snapshot | undefined, 
     if (pt) data.push(pt);
   }
   series.setData(data as never);
+  if (lastBar && data.length > 0) lastBar(data[data.length - 1], false, false);
   // A redraw of data already shown (ChartEngine.setData puts the view back where it was).
   if (prev) redrewAll = true;
   return next;
@@ -139,6 +180,11 @@ export class ChartEngine {
   private side: "left" | "right" = "right";
   private readonly host: HTMLElement;
   private watermark: { applyOptions(o: object): void; detach(): void } | null = null;
+  /** The newest bar on its way to a new price (showLast), and the bar it was last given. */
+  private ease: { time: number; from: Record<string, number>; to: Point; start: number; raf: number } | null = null;
+  private lastPoint: Point | null = null;
+  /** How the newest bar looked when this redraw began, for a bar that takes its slot (showLast). */
+  private carry: Record<string, number> | null = null;
 
   constructor(lc: Lc, host: HTMLElement, theme: Theme, settings: ChartSettings) {
     this.lc = lc;
@@ -175,8 +221,67 @@ export class ChartEngine {
   }
 
   remove() {
+    this.stopEase();
     this.chart.remove();
   }
+
+  private stopEase() {
+    if (this.ease) cancelAnimationFrame(this.ease.raf);
+    this.ease = null;
+  }
+
+  /** The newest bar's values `now` (performance.now()), on their way from where it stood to where it's going. */
+  private easedAt(e: NonNullable<ChartEngine["ease"]>, now: number): Record<string, number> {
+    const p = Math.min(1, Math.max(0, (now - e.start) / EASE_MS));
+    const k = 1 - Math.pow(1 - p, 3);
+    const to = numbersOf(e.to);
+    const out: Record<string, number> = {};
+    for (const key of Object.keys(to)) out[key] = key in e.from ? e.from[key] + (to[key] - e.from[key]) * k : to[key];
+    return out;
+  }
+
+  /**
+   * The main series' newest bar. A changed one grows to its new values over EASE_MS instead of snapping there in one
+   * frame (and the price scale, fitted to the bars, follows it as smoothly): from where it stands on screen (mid-way,
+   * if it was still moving), a new bar from a flat line at its open. The first step is drawn now, already one frame
+   * in, so easing costs no frame between a click and the candle moving. Nothing eases for someone who asked for
+   * reduced motion, or in a hidden tab (no frames run there).
+   */
+  private readonly showLast: LastBar = (pt, ease, replaced) => {
+    const was = this.ease;
+    const time = pt.time as number;
+    let from: Record<string, number> | null = null;
+    // In the slot of a passing bar (your trade's candle a second before its real one, the live bar): it carries on
+    // from how that bar looked instead of collapsing to a flat line and growing again.
+    if (replaced && this.carry) from = this.carry;
+    else if (was && was.time === time) from = this.easedAt(was, performance.now());
+    else if (this.lastPoint && this.lastPoint.time === time) from = numbersOf(this.lastPoint);
+    else if (typeof pt.open === "number") from = { open: pt.open, high: pt.open, low: pt.open, close: pt.open };
+    else if (typeof pt.value === "number" && typeof this.lastPoint?.value === "number") from = { value: this.lastPoint.value };
+    this.stopEase();
+    this.lastPoint = pt;
+    if (!ease) return;
+    const to = numbersOf(pt);
+    const start = from;
+    const moves = start !== null && Object.keys(to).some((key) => key in start && start[key] !== to[key]);
+    const still = typeof document !== "undefined" && (document.hidden || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+    if (!start || !moves || still) {
+      this.main.update(pt as never);
+      return;
+    }
+    const e = { time, from: start, to: pt, start: performance.now() - 16, raf: 0 };
+    this.ease = e;
+    const step = () => {
+      const now = performance.now();
+      this.main.update({ ...pt, ...this.easedAt(e, now) } as never);
+      if (now - e.start >= EASE_MS) {
+        this.ease = null;
+        return;
+      }
+      e.raf = requestAnimationFrame(step);
+    };
+    step();
+  };
 
   /** New colours (the site's light / dark switch), applied in place: the view, drawings and settings are kept. */
   setTheme(theme: Theme) {
@@ -298,6 +403,8 @@ export class ChartEngine {
   /** Swaps the main series' style (recreated, so the next setData fills it). */
   setType(type: ChartType, force = false) {
     if (type === this.type && !force) return;
+    this.stopEase();
+    this.lastPoint = null;
     this.mainLines = [];
     this.markers?.detach();
     this.main.detachPrimitive(this.drawings);
@@ -317,26 +424,36 @@ export class ChartEngine {
   }
 
   /**
-   * Trader badges above the candles (DB, DS, ...), kept across chart-style changes. The price scale keeps a fixed room
-   * over the highest candle for a full column whenever there are badges: sized to the tallest column, it changed as
-   * trades landed and the whole chart jumped with nearly every trade.
+   * Trader badges on the candles (DB, DS, ...), kept across chart-style changes. The price scale keeps a fixed room
+   * for one over the highest candle and one under the lowest whenever there are badges: sized to what's there, it
+   * changed as trades landed and the whole chart jumped with nearly every trade.
    */
   setBadges(badges: Badge[]) {
     this.badges.set(badges);
-    const room = badges.length > 0 ? badgeColumnPx(BADGE_ROWS) : 0;
+    const room = badges.length > 0 ? BADGE_ROOM_PX : 0;
     if (room !== this.badgeRoom) {
       this.badgeRoom = room;
       this.main.applyOptions({ autoscaleInfoProvider: this.mainAutoscale });
     }
   }
 
-  /** Pixels kept over the highest candle for its badges (setBadges). */
+  /** The launch's milestones (Graduated, ...): a line down their bar with the name at the top of the pane. */
+  setEvents(events: ChartEvent[]) {
+    this.badges.setEvents(events);
+  }
+
+  /** The badge under (x, y) on the price pane (pixels from its top-left), with its centre there, or null. */
+  badgeAt(x: number, y: number) {
+    return this.badges.at(x, y);
+  }
+
+  /** Pixels kept over the highest candle and under the lowest for their badges (setBadges). */
   private badgeRoom = 0;
   private readonly mainAutoscale = (original: () => AutoscaleInfo): AutoscaleInfo => {
     const r = minRangeAutoscale(original);
     if (!r || this.badgeRoom === 0) return r;
     const m = (r.margins ?? {}) as { above?: number; below?: number };
-    return { ...r, margins: { above: (m.above ?? 0) + this.badgeRoom, below: m.below ?? 0 } };
+    return { ...r, margins: { above: (m.above ?? 0) + this.badgeRoom, below: (m.below ?? 0) + this.badgeRoom } };
   };
 
   /** Marks on the bars (milestones), kept across chart-style changes. */
@@ -372,6 +489,17 @@ export class ChartEngine {
     const priceFormat = { type: "custom" as const, formatter: (v: number) => (v < 0 ? "" : format(v)), minMove };
     this.main.applyOptions({ priceFormat });
     const times = candles.map((c) => c.time);
+    this.carry = this.ease ? this.easedAt(this.ease, performance.now()) : this.lastPoint ? numbersOf(this.lastPoint) : null;
+    // A bar still on its way to its price that is no longer the newest gets there now.
+    if (this.ease && this.ease.time !== times[times.length - 1]) {
+      const settled = this.ease.to;
+      this.stopEase();
+      try {
+        this.main.update(settled as never);
+      } catch {
+        // already replaced
+      }
+    }
     const dir = (c: Candle) => (c.close >= c.open ? 1 : 0);
     const flat = (width: number, f: (c: Candle, out: number[]) => void, cs: Candle[] = candles): Snapshot => {
       const values: number[] = [];
@@ -381,7 +509,7 @@ export class ChartEngine {
     if (this.type === "candles" || this.type === "hollow" || this.type === "bars" || this.type === "hlc" || this.type === "heikin") {
       const cs = this.type === "heikin" ? heikinAshi(candles) : candles;
       const snap = flat(4, (c, o) => o.push(c.open * k, c.high * k, c.low * k, c.close * k), cs);
-      this.mainData = syncSeries(this.main, this.mainData, snap, (i) => ({ time: t(cs[i]), open: snap.values[i * 4], high: snap.values[i * 4 + 1], low: snap.values[i * 4 + 2], close: snap.values[i * 4 + 3] }));
+      this.mainData = syncSeries(this.main, this.mainData, snap, (i) => ({ time: t(cs[i]), open: snap.values[i * 4], high: snap.values[i * 4 + 1], low: snap.values[i * 4 + 2], close: snap.values[i * 4 + 3] }), this.showLast);
     } else if (this.type === "highlow") {
       // One bar from low to high, coloured by the candle's direction.
       const snap = flat(3, (c, o) => o.push(c.low * k, c.high * k, dir(c)));
@@ -406,7 +534,7 @@ export class ChartEngine {
       if (this.type === "baseline" && candles.length) {
         (this.main as ISeriesApi<"Baseline">).applyOptions({ baseValue: { type: "price", price: candles[0].open * k } });
       }
-      this.mainData = syncSeries(this.main, this.mainData, flat(1, (c, o) => o.push(c.close * k)), (i) => ({ time: t(candles[i]), value: candles[i].close * k }));
+      this.mainData = syncSeries(this.main, this.mainData, flat(1, (c, o) => o.push(c.close * k)), (i) => ({ time: t(candles[i]), value: candles[i].close * k }), this.showLast);
     }
     this.volumeData = syncSeries(this.volume, this.volumeData, flat(2, (c, o) => o.push(c.volume, dir(c))), (i) => ({
       time: t(candles[i]),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { Candle } from "@/lib/candles";
 import type { StudyId, StudyLine } from "@/lib/indicators";
 import { Icon } from "./ui";
@@ -31,6 +31,7 @@ export function Legend({
   onToggle,
   onRemove,
   compares = [],
+  live,
 }: {
   title: string;
   candle: Candle | null;
@@ -47,47 +48,97 @@ export function Legend({
   onRemove: (id: StudyId) => void;
   /** Compared tokens, each with its change over the view and a remove button. */
   compares?: { key: string; label: string; color: string; onRemove: () => void }[];
+  /**
+   * The hovered bar (its time, or null) and the candles to find it in. The legend then follows the crosshair by
+   * writing the hovered bar's numbers into its own text, outside React: nothing re-renders as the pointer moves.
+   */
+  live?: { hover: { get: () => number | null; subscribe: (l: () => void) => () => void }; candles: Candle[] };
 }) {
   const [open, setOpen] = useState(true);
-  if (!candle) return null;
-  const delta = candle.close - candle.open;
-  const pct = candle.open > 0 ? (delta / candle.open) * 100 : 0;
-  const tone = delta < 0 ? "text-down" : "text-up";
+  const root = useRef<HTMLDivElement>(null);
   const value = (v: number | null | undefined, priced: boolean) =>
-    v == null ? "…" : priced ? fmt(v * k) : Math.abs(v) >= 1_000 ? compact.format(v) : Number.isInteger(v) ? v : v.toFixed(Math.abs(v) >= 100 ? 0 : 1);
+    v == null ? "…" : priced ? fmt(v * k) : Math.abs(v) >= 1_000 ? compact.format(v) : Number.isInteger(v) ? String(v) : v.toFixed(Math.abs(v) >= 100 ? 0 : 1);
+  /** Every number the legend shows for candle `c` (the `at`-th), by the `data-v` name of the element that shows it. */
+  const texts = (c: Candle, at: number) => {
+    // A candle mid-update never prints "NaN": a change that isn't a number reads as none.
+    const raw = c.close - c.open;
+    const delta = Number.isFinite(raw) ? raw : 0;
+    const pct = c.open > 0 && Number.isFinite(delta / c.open) ? (delta / c.open) * 100 : 0;
+    const volume = Number.isFinite(c.volume) ? c.volume : 0;
+    const values: Record<string, string> = {
+      o: fmt(c.open * k),
+      h: fmt(c.high * k),
+      l: fmt(c.low * k),
+      c: fmt(c.close * k),
+      chg: `${delta >= 0 ? "+" : "−"}${fmt(Math.abs(delta * k))} (${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%)`,
+      vol: `$${volume.toLocaleString("en-US", { maximumFractionDigits: 2 })}`,
+      trades: ` · ${c.trades} trade${c.trades === 1 ? "" : "s"}`,
+    };
+    for (const s of studies) for (const l of s.lines) values[`line:${s.id}:${l.key}`] = String(value(l.values[at], s.priced));
+    return { values, down: delta < 0 };
+  };
+  useLayoutEffect(() => {
+    if (!live) return;
+    const paint = () => {
+      const el = root.current;
+      if (!el) return;
+      const time = live.hover.get();
+      let at = live.candles.length - 1;
+      if (time !== null) for (let i = live.candles.length - 1; i >= 0; i--) if (live.candles[i].time === time) {
+        at = i;
+        break;
+      }
+      const c = live.candles[at];
+      if (!c) return;
+      const t = texts(c, at);
+      // The text node React made is kept (only its value changes), so React's own updates still reach it.
+      el.querySelectorAll<HTMLElement>("[data-v]").forEach((n) => {
+        const v = t.values[n.dataset.v ?? ""];
+        if (v === undefined) return;
+        if (n.firstChild) {
+          if (n.firstChild.nodeValue !== v) n.firstChild.nodeValue = v;
+        } else n.textContent = v;
+      });
+      el.querySelectorAll<HTMLElement>("[data-tone]").forEach((n) => {
+        n.classList.toggle("text-down", t.down);
+        n.classList.toggle("text-up", !t.down);
+      });
+    };
+    paint();
+    return live.hover.subscribe(paint);
+  });
+  if (!candle) return null;
+  const shown = texts(candle, index);
+  const tone = shown.down ? "text-down" : "text-up";
   return (
-    <div className={`pointer-events-none absolute top-1.5 z-10 max-w-[calc(100%-6rem)] ${inset ? "left-12" : "left-2"} font-mono text-[11px] leading-snug`}>
+    <div ref={root} className={`pointer-events-none absolute top-1.5 z-10 max-w-[calc(100%-6rem)] ${inset ? "left-12" : "left-2"} font-mono text-[11px] leading-snug`}>
       <p className="w-fit max-w-full rounded-[3px] bg-void/75 px-1 flex flex-wrap items-baseline gap-x-2">
         <span className="text-chrome/90">{title}</span>
         {show.ohlc && (
           <>
             <span>
-              <span className="text-dim">O</span> <span className={tone}>{fmt(candle.open * k)}</span>
+              <span className="text-dim">O</span> <span data-tone="" data-v="o" className={tone}>{shown.values.o}</span>
             </span>
             <span>
-              <span className="text-dim">H</span> <span className={tone}>{fmt(candle.high * k)}</span>
+              <span className="text-dim">H</span> <span data-tone="" data-v="h" className={tone}>{shown.values.h}</span>
             </span>
             <span>
-              <span className="text-dim">L</span> <span className={tone}>{fmt(candle.low * k)}</span>
+              <span className="text-dim">L</span> <span data-tone="" data-v="l" className={tone}>{shown.values.l}</span>
             </span>
             <span>
-              <span className="text-dim">C</span> <span className={tone}>{fmt(candle.close * k)}</span>
+              <span className="text-dim">C</span> <span data-tone="" data-v="c" className={tone}>{shown.values.c}</span>
             </span>
           </>
         )}
         {show.change && (
-          <span className={tone}>
-            {delta >= 0 ? "+" : "−"}
-            {fmt(Math.abs(delta * k))} ({pct >= 0 ? "+" : ""}
-            {pct.toFixed(2)}%)
-          </span>
+          <span data-tone="" data-v="chg" className={tone}>{shown.values.chg}</span>
         )}
       </p>
       <p className="w-fit max-w-full rounded-[3px] bg-void/75 px-1 flex items-center gap-1.5 text-muted">
         {show.volume && (
           <span>
-            <span className="text-dim">Vol</span> ${candle.volume.toLocaleString("en-US", { maximumFractionDigits: 2 })}
-            <span className="text-dim"> · {candle.trades} trade{candle.trades === 1 ? "" : "s"}</span>
+            <span className="text-dim">Vol</span> <span data-v="vol">{shown.values.vol}</span>
+            <span data-v="trades" className="text-dim">{shown.values.trades}</span>
           </span>
         )}
         {studies.length > 0 && (
@@ -129,7 +180,7 @@ export function Legend({
               s.lines.map((l) => (
                 <span key={l.key} style={{ color: l.color }}>
                   {s.lines.length > 1 && <span className="opacity-70">{l.label} </span>}
-                  {value(l.values[index], s.priced)}
+                  <span data-v={`line:${s.id}:${l.key}`}>{shown.values[`line:${s.id}:${l.key}`]}</span>
                 </span>
               ))}
             <span className="flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">

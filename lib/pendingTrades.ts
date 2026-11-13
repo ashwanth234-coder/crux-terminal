@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import type { Address } from "viem";
 
 /**
@@ -116,5 +116,7 @@ export function useLastPressed(token: Address): number {
 /** This browser's pending trades on `token`. */
 export function usePendingTrades(token: Address): PendingTrade[] {
   const all = useSyncExternalStore(subscribe, snapshot, () => empty);
-  return all.filter((t) => t.token.toLowerCase() === token.toLowerCase());
+  // The same array until the trades change: a new one each render re-ran everything that depends on it (the chart's
+  // drawing among it) on every render of its reader.
+  return useMemo(() => all.filter((t) => t.token.toLowerCase() === token.toLowerCase()), [all, token]);
 }

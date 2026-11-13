@@ -7,7 +7,7 @@ import type { TokenTransfer } from "../hooks/useTokenTransfers";
  */
 export type MarkWho = "focus" | "me" | "dev" | "whale" | "top";
 
-export type MarkTrade = { time: number; side: "buy" | "sell"; who: MarkWho; address: Address; tokens: number; usd: number };
+export type MarkTrade = { time: number; side: "buy" | "sell"; who: MarkWho; address: Address; tokens: number; usd: number; txHash: string };
 
 export type MarkContext = {
   /** Where buys come from: the pool, the batch pool, the solver (intent fills). */
@@ -61,7 +61,7 @@ export function markTrades(transfers: TokenTransfer[], ctx: MarkContext, priceAt
     if (!who) continue;
     const tokens = Number(t.value) / ONE;
     const price = priceAt(t.time);
-    out.push({ time: t.time, side, who, address: holder, tokens, usd: price === null ? 0 : tokens * price });
+    out.push({ time: t.time, side, who, address: holder, tokens, usd: price === null ? 0 : tokens * price, txHash: t.txHash });
   }
   return out;
 }

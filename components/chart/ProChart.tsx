@@ -2,9 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import { formatUnits, getAddress, type Address } from "viem";
-import type { SeriesMarker, Time } from "lightweight-charts";
 import { useConnection } from "wagmi";
-import { useNow } from "@/hooks/useLaunchAuction";
 import { usePoolSwaps } from "@/hooks/usePoolSwaps";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { DESTINATION_SETTLER, useLaunchMarket } from "@/hooks/useLaunchMarket";
@@ -36,16 +34,18 @@ import { openingTrade } from "@/lib/openingTrade";
 import { BottomBar } from "./BottomBar";
 import { ContextMenu, ScaleMenu, type ContextAt } from "./ContextMenu";
 import { ChartEngine } from "./engine";
-import { BADGE_ROWS } from "./badges";
 import { useHistory } from "./history";
-import { Legend } from "./Legend";
+import { AxisCountdown, HoverLegend, valueStore } from "./liveParts";
 import { DrawingBar } from "./DrawingBar";
 import { DrawingPalette, TOOL_INFO, TOOL_KEYS } from "./DrawingPalette";
 import { PATTERN_LABELS, TOOL_POINTS, defaultStop, isPattern, type DrawPart, type DrawPoint, type DrawTool, type Drawing } from "./drawings";
 import { OverlaysButton } from "./OverlaysBar";
 import { SymbolSwitch } from "./SymbolSwitch";
 import { requestOrderAt } from "@/lib/chartOrders";
-import { dropPendingTrade, useLastPressed, usePendingTrades } from "@/lib/pendingTrades";
+import { dropPendingTrade, useLastPressed, usePendingTrades, watchPendingTrades, type PendingTrade } from "@/lib/pendingTrades";
+import { clusterBadges, graduationTime, matchExecutions, withLiveBar, withPendingTrades, type BadgeFill } from "@/lib/chartLive";
+import type { Badge } from "./badges";
+import { FACTORY_V9 } from "@/lib/v9";
 import { timingMark } from "@/lib/tradeTiming";
 import { TemplatesButton } from "./Templates";
 import { DEFAULT_CONFIG, DEFAULT_SETTINGS, loadLayout, loadSettings, palette, saveSettings, type ChartSettings, type ScaleMode } from "./settings";
@@ -169,7 +169,6 @@ export function ProChart({
   const { orders: standingOrders } = useStandingOrders();
   // Your trades in flight: on the chart from the moment Buy is pressed, until they fill (lib/pendingTrades).
   const pending = usePendingTrades(auction.token);
-  const now = useNow();
   const frame = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const [engine, setEngine] = useState<ChartEngine | null>(null);
@@ -192,7 +191,12 @@ export function ProChart({
   const [scrolledBack, setScrolledBack] = useState(false);
   // Which axis the pointer is over: drag (or scroll) the price axis to stretch prices, the time axis to zoom time.
   const [overAxis, setOverAxis] = useState<"price" | "time" | null>(null);
-  const [hoverTime, setHoverTime] = useState<number | null>(null);
+  // The hovered bar and "the view moved", outside React: the crosshair and panning change them on every frame, and
+  // only the legend and the countdown follow them. (Each used to re-render this whole component.)
+  const hover = useMemo(() => valueStore<number | null>(null), []);
+  const viewMoved = useMemo(() => valueStore(0), []);
+  // The badge under the pointer, with its trades listed (`seenAt`: when, for their ages).
+  const [tip, setTip] = useState<{ x: number; y: number; flip: boolean; below: boolean; badge: Badge; seenAt: number } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   // Drawing: the palette, the active tool, its first point and where the cursor is (for the live preview).
   // The drawing toolbar starts open on wide screens, folded away on phones.
@@ -211,13 +215,14 @@ export function ProChart({
   const [dragged, setDragged] = useState<Drawing | null>(null);
   const [drawHidden, setDrawHidden] = useState(false);
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
-  const [hover, setHover] = useState<DrawPart | null>(null);
+  const [hoverPart, setHover] = useState<DrawPart | null>(null);
   const drag = useRef<{ orig: Drawing; part: DrawPart; x: number; y: number; moved: boolean; last: Drawing | null } | null>(null);
   const area = useRef<HTMLDivElement>(null);
   // Where the last drawing point was clicked: a second click on the same spot doesn't finish a zero-size drawing.
   const lastClick = useRef<{ x: number; y: number } | null>(null);
   // Bumped when the visible range moves, so the locked time line follows the candles.
   const [, setRangeTick] = useState(0);
+  const followsView = useRef(false);
 
   const setSettings = (s: ChartSettings) => {
     setSettingsState(s);
@@ -259,9 +264,12 @@ export function ProChart({
   const [pickedAt, setPickedAt] = useState(0);
   const trading = !external && lastPressed > pickedAt && (pending.length > 0 || (lastPressed > 0 && idleAfter !== lastPressed));
   const pickedInterval = trading ? 1 : config.interval === "auto" ? autoPick : config.interval;
-  const feed = useFeedCandles(external ? null : auction.pair, pickedInterval);
+  // Each feed frame is drawn straight from the socket (onFeedFrame below), before React renders it.
+  const feedTick = useRef<(cs: FeedCandle[]) => void>(() => {});
+  const onFeedFrame = useCallback((cs: FeedCandle[]) => feedTick.current(cs), []);
+  const feed = useFeedCandles(external ? null : auction.pair, pickedInterval, onFeedFrame);
   const feedLive = feed.usable;
-  const feedCandles = useThrottled(feedLive ? feed.candles : null, redrawMs);
+  const feedCandles = feedLive ? feed.candles : null;
   // The opening, the token's first trade (lib/openingTrade): a launch whose only activity is its opening still draws.
   const opening = useMemo(() => (external ? null : openingTrade(auction)), [external, auction]);
   // Oldest first (the scan is newest first), so the candles needn't sort; the opening comes first of all.
@@ -281,8 +289,8 @@ export function ProChart({
   // stretches of empty axis (or rows of flat bars). Each candle still opens at the previous one's close.
   // The newest MAX_CANDLES traded periods, counted, not a clock window: on a 1-second chart a token that last traded an
   // hour ago still shows its recent trades side by side, as Axiom and Padre draw it, not one lone candle.
-  const allCandles = useMemo(() => {
-    if (feedCandles) {
+  const fromFeed = useCallback(
+    (feedCandles: FeedCandle[]): Candle[] => {
       const cut = Math.max(0, feedCandles.length - MAX_CANDLES);
       const kept: Candle[] = cut > 0 ? feedCandles.slice(cut) : [...feedCandles];
       // The very first candle opens at the auction's clearing price, as the chart's own bucketing does.
@@ -304,11 +312,15 @@ export function ProChart({
       // showed before its candle moved. A trade newer than the newest candle's last update moves that candle (or opens
       // the next) now; the feed's own candle replaces it a moment later with the same prices.
       return withLatestTrades(kept, swapData?.trades ?? [], interval);
-    }
+    },
+    [feed.firstTime, interval, gradPrice, opening, swapData],
+  );
+  const allCandles = useMemo(() => {
+    if (feedCandles) return fromFeed(feedCandles);
     // Every trade bucketed (only periods that traded become candles), then the newest MAX_CANDLES.
     const all = toCandles(fills, interval, gradPrice > 0 ? gradPrice : null);
     return all.length > MAX_CANDLES ? all.slice(-MAX_CANDLES) : all;
-  }, [fills, feedCandles, feed.firstTime, interval, gradPrice, opening, swapData]);
+  }, [fills, feedCandles, fromFeed, interval, gradPrice]);
   // Bar replay: the chart as it stood at `index`, played forward a candle at a time. Off: every candle, live.
   const [replay, setReplay] = useState<{ index: number | null; playing: boolean; speed: number } | null>(null);
   const replayIndex = replay?.index ?? null;
@@ -328,7 +340,8 @@ export function ProChart({
     }, 1_000 / replay.speed);
     return () => clearInterval(t);
   }, [replay?.playing, replay?.speed, replay?.index, allCandles.length]);
-  const fmt = useCallback((v: number) => (config.units === "mcap" ? compactUsd.format(v) : fmtTokenPrice(v)), [config.units]);
+  // Never "NaN" on the axis, the legend or the crosshair label: a value that isn't a number shows as a dash.
+  const fmt = useCallback((v: number) => (!Number.isFinite(v) ? "—" : config.units === "mcap" ? compactUsd.format(v) : fmtTokenPrice(v)), [config.units]);
   const minMove = config.units === "mcap" ? 0.01 : 1e-15;
   // What the on-chain studies read: USDC bought / sold per candle, and holders at each close (only when shown).
   const studyCtx = useMemo<StudyContext>(() => {
@@ -455,7 +468,7 @@ export function ProChart({
     [marks, settings.minUsd, settings.marks, focus, replayEnd],
   );
   /** Your trades' badges shown ahead of their marks (see the overlays effect). */
-  const ownBadges = useRef<{ id: number; time: number; side: "buy" | "sell"; who: MarkWho; at: number; filled: boolean; until: number }[]>([]);
+  const ownBadges = useRef<{ id: number; time: number; side: "buy" | "sell"; who: MarkWho; at: number; filled: boolean; until: number; usd: number | null; tokens: number | null }[]>([]);
   const markCounts = useMemo(
     () => ({ mine: marks.filter((m) => m.who === "me").length, dev: marks.filter((m) => m.who === "dev" || m.who === "whale").length, top: marks.filter((m) => m.who === "top").length }),
     [marks],
@@ -467,33 +480,18 @@ export function ProChart({
   // real trade replaces it without a double count or a blink; one that fails leaves the list, and the bar goes back.
   // `candles` and `last` stay the real ones (everything else reads them).
   const onChartTx = useMemo(() => new Set((swapData?.trades ?? []).map((t) => t.txHash.toLowerCase())), [swapData]);
-  const drawnCandles = useMemo(() => {
-    const ahead = pending.filter((p) => !(p.tx && p.tx !== "none" && onChartTx.has(p.tx.toLowerCase())));
-    if (ahead.length === 0 || candles.length === 0 || replaying) return candles;
-    const out = candles.slice();
-    const newest = out[out.length - 1];
-    // The bar of the newest press (pressed after this bar's time was up: the next one).
-    const nowS = Math.floor(Math.max(...ahead.map((p) => p.at)) / 1000);
-    const barAt = nowS < newest.time + interval ? newest.time : Math.floor(nowS / interval) * interval;
-    const bar =
-      barAt > newest.time
-        ? { time: barAt, open: newest.close, high: newest.close, low: newest.close, close: newest.close, volume: 0, trades: 0 }
-        : { ...newest };
-    for (const p of ahead) {
-      const to = p.expected ?? p.price;
-      bar.high = Math.max(bar.high, to);
-      bar.low = Math.min(bar.low, to);
-      bar.close = to;
-      bar.volume += p.usdc ?? 0;
-      bar.trades += 1;
-    }
-    if (barAt > newest.time) out.push(bar);
-    else out[out.length - 1] = bar;
-    return out;
-  }, [candles, pending, onChartTx, interval, replaying]);
-  const hoverIndex = hoverTime === null ? -1 : candles.findIndex((c) => c.time === hoverTime);
-  const shownIndex = hoverIndex >= 0 ? hoverIndex : candles.length - 1;
-  const shown = shownIndex >= 0 ? candles[shownIndex] : null;
+  // When it graduated, for its mark on the bars. A curve launch (V9) graduates while it trades: at its first trade in
+  // the pool, which arrives over the feed like any other, so the mark appears live. Earlier launches graduate at their
+  // auction's settlement.
+  const isCurveLaunch = factory.toLowerCase() === FACTORY_V9.toLowerCase();
+  const graduatedAt = useMemo(() => (isCurveLaunch ? graduationTime(swapData?.trades ?? []) : auction.settledAt), [isCurveLaunch, swapData, auction.settledAt]);
+  // What each marked trade really traded at: its own swap (lib/chartLive matchExecutions), for the badge's hover list.
+  const executions = useMemo(() => {
+    const shown = shownMarks.slice(-300);
+    const swaps = (slowTrades?.trades ?? []).slice(0, 3_000).map((t) => ({ time: t.time, side: t.side, usdc: Number(t.usdc) / 1e6, tokens: Number(t.tokens) / 1e18, txHash: t.txHash }));
+    const found = matchExecutions(shown, swaps);
+    return new Map(shown.map((m, i) => [m, found[i]]));
+  }, [shownMarks, slowTrades]);
 
   // -------------------------------------------------------------- engine
 
@@ -519,14 +517,17 @@ export function ProChart({
       );
       created.onCrosshair((p) => {
         const time = typeof p.time === "number" ? p.time : null;
-        setHoverTime(time);
+        hover.set(time);
         // Only the trader's own pointer is shared; crosshairs placed from other charts carry no source event.
         const s = syncRef.current;
         if (s?.opts.crosshair && p.sourceEvent !== undefined) s.bus.publish({ kind: "crosshair", from: slotRef.current, time });
         else if (s?.opts.crosshair && time === null && p.point === undefined) s.bus.publish({ kind: "crosshair", from: slotRef.current, time: null });
       });
       created.onRange(() => {
-        setRangeTick((n) => n + 1);
+        viewMoved.set(viewMoved.get() + 1);
+        // Only what's pinned to a bar (the locked time line, a selected drawing's bar, a note being typed) needs this
+        // component to follow the view; panning an empty chart re-rendered all of it on every frame.
+        if (followsView.current) setRangeTick((n) => n + 1);
         const s = syncRef.current;
         if (!s?.opts.time || Date.now() - remoteAt.current < 250) return;
         const r = created?.visibleTimes();
@@ -538,7 +539,7 @@ export function ProChart({
       disposed = true;
       created?.remove();
     };
-  }, []);
+  }, [hover, viewMoved]);
 
   useEffect(() => {
     engine?.applySettings(settings);
@@ -552,10 +553,170 @@ export function ProChart({
     engine?.setScale(scale);
   }, [engine, scale]);
 
-  // Data, studies and lines: whenever the candles, units, style, settings or studies change.
+  const marksDev = settings.marks.dev;
+  const marksMine = settings.marks.mine;
+  // Whether anything pinned to a bar is on screen (see onRange above).
+  useEffect(() => {
+    followsView.current = config.lockedTime !== null || selected !== null || editing !== null;
+  }, [config.lockedTime, selected, editing]);
+  /**
+   * Draws the candles and their trade badges, straight onto the chart: `real` candles with the live bar and
+   * `pendingNow` (your trades on their way) in them. Called from three places: the pending-trade store, in the same
+   * task as the click, so the candle moves on the next frame before React has rendered anything (it used to wait for
+   * this component to re-render, 100–250 ms when the tape and the panel re-rendered with it); each feed frame, from
+   * the socket; and after a render, when anything else it reads changed. Drawing the same thing twice costs nothing:
+   * the engine sends only what differs.
+   */
+  const paintLive = useCallback(
+    (pendingNow: readonly PendingTrade[], real: Candle[]) => {
+      if (!engine) return;
+      // The period running now by the wall clock has its bar from its first second, trade or no trade.
+      const drawn = replaying ? real : withPendingTrades(withLiveBar(real, Math.floor(Date.now() / 1000), interval), pendingNow, onChartTx, interval);
+      engine.setData(drawn, k, fmt, minMove);
+
+      const newest = real.length ? real[real.length - 1] : null;
+      const times = real.map((c) => c.time);
+      // A sell's badge goes on the red candle its sale made (markBarTime).
+      const downAt = new Set(real.filter((c) => c.close < c.open).map((c) => c.time));
+      const isDown = (time: number) => downAt.has(time);
+      // Each candle's marked trades (clustered into one buy badge and one sell badge below).
+      const columns = new Map<number, BadgeFill[]>();
+      const add = (time: number, fill: BadgeFill) => {
+        const col = columns.get(time);
+        if (col) col.push(fill);
+        else columns.set(time, [fill]);
+      };
+      if (!marksHidden) {
+        for (const m of shownMarks.slice(-300)) {
+          const time = markBarTime(times, m.time, m.side, isDown, interval);
+          if (time === null) continue;
+          const style = MARK_STYLE[m.who];
+          // Its own swap's amount and price where that's known; otherwise its size at the candle's close, and no price.
+          const exec = executions.get(m) ?? null;
+          add(time, { who: m.who, side: m.side, label: m.side === "buy" ? style.buy : style.sell, usd: exec ? exec.usd : m.usd > 0 ? m.usd : null, tokens: m.tokens, price: exec ? exec.price : null, at: m.time * 1000 });
+        }
+      }
+      // Your own trade's badge (DB / DS for the creator, B / S with "My trades" on) the moment you press Buy or Sell,
+      // on the candle it moves, and kept on the real one until its mark arrives from the chain (a second or two
+      // later). Every trade you press counts at the click (DB×3 becomes DB×4 at once). Each kind's instant badges give
+      // way, oldest first, to that kind's real marks newer than their click, one for one, so the count never drops or
+      // doubles at the hand-over. A trade that fails, or never came back, takes its badge away at once; one that
+      // filled keeps it until its mark lands (3 s at most).
+      const nowMs = Date.now();
+      const isDev = me.some((a) => a.toLowerCase() === auction.creator.toLowerCase());
+      const ownWho: MarkWho | null = marksHidden || focus ? null : isDev && marksDev ? "dev" : marksMine ? "me" : null;
+      for (const q of pendingNow) {
+        if (!ownWho || ownBadges.current.some((o) => o.id === q.id)) continue;
+        const nowS = Math.floor(q.at / 1000);
+        const time = newest && nowS < newest.time + interval ? newest.time : Math.floor(nowS / interval) * interval;
+        ownBadges.current = [...ownBadges.current, { id: q.id, time, side: q.side, who: ownWho, at: q.at, filled: false, until: nowMs + 20_000, usd: null, tokens: null }];
+      }
+      for (const o of ownBadges.current) {
+        const q = pendingNow.find((x) => x.id === o.id);
+        if (q) {
+          if (q.tx !== undefined) o.filled = true; // its fill came back (with or without a swap)
+          if (q.usdc !== undefined && Number.isFinite(q.usdc)) o.usd = q.usdc;
+          if (q.tokens !== undefined && Number.isFinite(q.tokens)) o.tokens = q.tokens;
+        } else if (!o.filled) {
+          o.until = 0; // failed, or never came back: gone now
+        } else o.until = Math.min(o.until, nowMs + 3_000);
+      }
+      const landed = new Set<number>();
+      for (const who of ["dev", "me"] as MarkWho[]) {
+        for (const side of ["buy", "sell"] as const) {
+          const mine = ownBadges.current.filter((o) => o.who === who && o.side === side && o.until > nowMs).sort((a, b) => a.at - b.at);
+          if (mine.length === 0) continue;
+          // Real marks of this kind since the oldest instant one was pressed (block times are whole seconds).
+          const real = shownMarks.filter((m) => m.who === who && m.side === side && m.time * 1000 >= mine[0].at - 2_000).length;
+          for (const o of mine.slice(0, real)) landed.add(o.id);
+        }
+      }
+      ownBadges.current = ownBadges.current.filter((o) => o.until > nowMs && !landed.has(o.id));
+      for (const o of ownBadges.current) {
+        const style = MARK_STYLE[o.who];
+        // On its own bar while its trade is on the way (drawn in that candle); once filled, on the bar markBarTime
+        // gives the newest trade, where its real mark will land, so the hand-over never moves it.
+        const instant = pendingNow.some((x) => x.id === o.id);
+        const time = instant ? o.time : (markBarTime(times, Math.max(o.time, newest?.time ?? o.time), o.side, isDown, interval) ?? o.time);
+        const price = o.usd !== null && o.tokens !== null && o.tokens > 0 && o.usd > 0 ? o.usd / o.tokens : null;
+        add(time, { who: o.who, side: o.side, label: o.side === "buy" ? style.buy : style.sell, usd: o.usd, tokens: o.tokens, price, at: o.at, pending: instant });
+      }
+      // One badge for a candle's buys, over its high, and one for its sells, under its low: the candle as drawn, with
+      // your trades on their way in it.
+      const barOf = new Map(drawn.map((c) => [c.time, c]));
+      engine.setBadges(
+        clusterBadges(columns).flatMap((c) => {
+          const bar = barOf.get(c.time);
+          const high = bar?.high ?? newest?.close;
+          const low = bar?.low ?? newest?.close;
+          if (high === undefined || low === undefined || !Number.isFinite(high) || !Number.isFinite(low)) return [];
+          return [{ time: c.time, high: high * k, low: low * k, label: c.label, side: c.side, count: c.count, fills: c.fills }];
+        }),
+      );
+    },
+    [engine, replaying, interval, onChartTx, k, fmt, minMove, marksHidden, shownMarks, executions, me, auction.creator, focus, marksDev, marksMine],
+  );
+  // The newest of what the direct paths read, for a click or a feed frame that comes before the next render.
+  const paintRef = useRef(paintLive);
+  const pendingRef = useRef<readonly PendingTrade[]>(pending);
+  const candlesRef = useRef(candles);
+  const tradingRef = useRef(trading);
+  const intervalRef = useRef(interval);
+  useEffect(() => {
+    intervalRef.current = interval;
+    paintRef.current = paintLive;
+    pendingRef.current = pending;
+    candlesRef.current = candles;
+    tradingRef.current = trading;
+    feedTick.current = (cs) => {
+      if (!feedLive || replaying) return;
+      const real = fromFeed(cs);
+      candlesRef.current = real;
+      paintLive(pendingRef.current, real);
+    };
+    paintLive(pending, candles);
+    // `config.type` and `settings`: a new style or palette makes a new, empty series (the effects above), filled here.
+  }, [paintLive, pending, candles, trading, interval, feedLive, replaying, fromFeed, config.type, settings]);
+  // The click's own path: the store calls this in the task that pressed Buy or Sell.
+  const pressSeen = useRef(0);
   useEffect(() => {
     if (!engine) return;
-    engine.setData(drawnCandles, k, fmt, minMove);
+    return watchPendingTrades(auction.token, (trades) => {
+      pendingRef.current = trades;
+      const newest = trades.length ? trades[trades.length - 1] : null;
+      if (newest && newest.id > pressSeen.current) {
+        pressSeen.current = newest.id;
+        // Looking at older bars on your own timeframe: a trade doesn't take the view away (to 1s candles at the
+        // newest bar). It's drawn where it belongs, and "Jump to live" brings you to it.
+        if (!tradingRef.current && engine.scrolledBack()) setPickedAt(Date.now());
+        requestAnimationFrame(() => timingMark(newest.id, "canvasDrawnPending"));
+      }
+      paintRef.current(trades, candlesRef.current);
+    });
+  }, [engine, auction.token]);
+
+  // The wall clock's own path: when a period ends, the live bar moves on to the next one, drawn from a timer with no
+  // render at all (this component used to re-render every second for it).
+  useEffect(() => {
+    if (!engine) return;
+    let timer: ReturnType<typeof setTimeout>;
+    let bucket = -1;
+    const tick = () => {
+      const now = Math.floor(Date.now() / 1000);
+      const at = Math.floor(now / intervalRef.current) * intervalRef.current;
+      if (at !== bucket) {
+        bucket = at;
+        paintRef.current(pendingRef.current, candlesRef.current);
+      }
+      timer = setTimeout(tick, 1_000 - (Date.now() % 1_000) + 4);
+    };
+    timer = setTimeout(tick, 1_000 - (Date.now() % 1_000) + 4);
+    return () => clearTimeout(timer);
+  }, [engine]);
+
+  // Studies and lines: whenever the candles, units, style, settings or studies change.
+  useEffect(() => {
+    if (!engine) return;
     engine.setStudies(drawnStudies, candles, k, fmt, minMove);
     const lines: { price: number; color: string; title: string; style?: number }[] = [];
     if (settings.clearingLine && !marksHidden && gradPrice > 0) lines.push({ price: gradPrice * k, color: "#f3f3f080", title: "Auction clear" });
@@ -584,119 +745,23 @@ export function ProChart({
     engine.setPriceLines(lines);
 
     const times = candles.map((c) => c.time);
-    // A sell's badge goes on the red candle its sale made (markBarTime).
-    const downAt = new Set(candles.filter((c) => c.close < c.open).map((c) => c.time));
-    const isDown = (time: number) => downAt.has(time);
-    // Each candle's marked trades, in the order they happened (grouped into one badge per kind with a count below).
-    const columns = new Map<number, { at: number; label: string; side: "buy" | "sell" }[]>();
-    if (!marksHidden) {
-      for (const m of shownMarks.slice(-300)) {
-        const time = markBarTime(times, m.time, m.side, isDown, interval);
-        if (time === null) continue;
-        const style = MARK_STYLE[m.who];
-        const col = columns.get(time) ?? [];
-        col.push({ at: m.time, label: m.side === "buy" ? style.buy : style.sell, side: m.side });
-        columns.set(time, col);
-      }
-    }
-    // Your own trade's badge (DB / DS for the creator, B / S with "My trades" on) the moment you press Buy or Sell,
-    // on the instant candle, and kept on the real one until its mark arrives from the chain (a second or two later),
-    // so the badge appears with the candle instead of after it.
-    // Every trade you press gets its badge at the click (one per trade, so a DB3 becomes DB4 at once). Each kind's
-    // instant badges give way, oldest first, to that kind's real marks newer than their click, one for one, so the
-    // count never drops or doubles at the hand-over. (It used to be dropped as soon as ANY real DB was on the candle:
-    // with an earlier DB there, the count only went up when the chain's mark came, 1.5–2.5 s later.) A trade that
-    // fails, or never came back, takes its badge away at once; one that filled keeps it until its mark lands (3 s at
-    // most).
-    const nowMs = Date.now();
-    const isDev = me.some((a) => a.toLowerCase() === auction.creator.toLowerCase());
-    const ownWho: MarkWho | null = marksHidden || focus ? null : isDev && settings.marks.dev ? "dev" : settings.marks.mine ? "me" : null;
-    for (const q of pending) {
-      if (!ownWho || ownBadges.current.some((o) => o.id === q.id)) continue;
-      const nowS = Math.floor(q.at / 1000);
-      const time = last && nowS < last.time + interval ? last.time : Math.floor(nowS / interval) * interval;
-      ownBadges.current = [...ownBadges.current, { id: q.id, time, side: q.side, who: ownWho, at: q.at, filled: false, until: nowMs + 20_000 }];
-    }
-    for (const o of ownBadges.current) {
-      const q = pending.find((x) => x.id === o.id);
-      if (q) {
-        if (q.tx !== undefined) o.filled = true; // its fill came back (with or without a swap)
-      } else if (!o.filled) {
-        o.until = 0; // failed, or never came back: gone now
-      } else o.until = Math.min(o.until, nowMs + 3_000);
-    }
-    const landed = new Set<number>();
-    for (const who of ["dev", "me"] as MarkWho[]) {
-      for (const side of ["buy", "sell"] as const) {
-        const mine = ownBadges.current.filter((o) => o.who === who && o.side === side && o.until > nowMs).sort((a, b) => a.at - b.at);
-        if (mine.length === 0) continue;
-        // Real marks of this kind since the oldest instant one was pressed (block times are whole seconds).
-        const real = shownMarks.filter((m) => m.who === who && m.side === side && m.time * 1000 >= mine[0].at - 2_000).length;
-        for (const o of mine.slice(0, real)) landed.add(o.id);
-      }
-    }
-    ownBadges.current = ownBadges.current.filter((o) => o.until > nowMs && !landed.has(o.id));
-    // Drawn as electric green (buy) or red (sell) discs with the label inside in white (badges.ts), stacked upwards
-    // from the top of the candle: the candle as drawn, with your trades on their way in it (drawnCandles).
-    const barOf = new Map(drawnCandles.map((c) => [c.time, c]));
-    const tops = new Map<number, number>();
-    for (const o of ownBadges.current) {
-      const style = MARK_STYLE[o.who];
-      // On its own bar while its trade is on the way (drawn in that candle); once filled, on the bar markBarTime gives
-      // the newest trade, where its real mark will land, so the hand-over never moves it.
-      const instant = pending.some((x) => x.id === o.id);
-      const time = instant ? o.time : (markBarTime(times, Math.max(o.time, last?.time ?? o.time), o.side, isDown, interval) ?? o.time);
-      if (!barOf.has(time)) tops.set(time, Math.max(tops.get(time) ?? -Infinity, last?.close ?? -Infinity));
-      const col = columns.get(time) ?? [];
-      col.push({ at: Infinity, label: o.side === "buy" ? style.buy : style.sell, side: o.side });
-      columns.set(time, col);
-    }
-    engine.setBadges(
-      [...columns.entries()].flatMap(([time, col]) => {
-        const high = Math.max(barOf.get(time)?.high ?? -Infinity, tops.get(time) ?? -Infinity);
-        if (!Number.isFinite(high)) return [];
-        // One badge per kind of trader and side, with how many ("DB3"), stacked in the order each kind first traded in
-        // the candle (oldest nearest it): a busy candle reads as a few steady badges, not a column that grows and
-        // reshuffles with every trade. At most BADGE_ROWS; older kinds fold into a "+N" (their trades) at the bottom.
-        const kinds = new Map<string, { first: number; label: string; side: "buy" | "sell"; n: number }>();
-        for (const b of col) {
-          const g = kinds.get(b.label);
-          if (g) {
-            g.n++;
-            g.first = Math.min(g.first, b.at);
-          } else kinds.set(b.label, { first: b.at, label: b.label, side: b.side, n: 1 });
-        }
-        const sorted = [...kinds.values()].sort((a, b) => a.first - b.first);
-        const hidden = sorted.length > BADGE_ROWS ? sorted.length - (BADGE_ROWS - 1) : 0;
-        const folded = sorted.slice(0, hidden).reduce((s, g) => s + g.n, 0);
-        const shown = [
-          ...(hidden > 0 ? [{ label: `+${folded}`, side: "more" as const }] : []),
-          ...sorted.slice(hidden).map((g) => ({ label: g.n > 1 ? `${g.label}${g.n > 99 ? "99" : g.n}` : g.label, side: g.side })),
-        ];
-        return shown.map((b, stack) => ({ time, high: high * k, label: b.label, side: b.side, stack }));
-      }),
-    );
     const milestones: { time: number; text: string; color: string }[] = [];
+    if (!external && !marksHidden && graduatedAt !== null && graduatedAt > 0) milestones.push({ time: graduatedAt, text: "Graduated", color: "#f3f3f0" });
     if (!external && !marksHidden && auction.settledAt > 0) {
-      milestones.push({ time: auction.settledAt, text: "Graduated", color: "#f3f3f0" });
       if (market.protectedUntil && market.protectedUntil > auction.settledAt) milestones.push({ time: market.protectedUntil, text: "Anti-sniper ends", color: "#5cc08c" });
       if (vestDays) milestones.push({ time: auction.settledAt + vestDays * 86_400, text: "Creator unlocked", color: "#ffd166" });
     }
-    // One label per few candles: milestones close together (graduating, then the anti-sniper window ending a minute
-    // later) would print over each other, so a later one that close keeps its square and drops its words.
-    let lastLabelled = -Infinity;
-    const events: SeriesMarker<Time>[] = milestones.flatMap((m) => {
-      // Only within the candles: a milestone still to come has no bar to sit on yet.
-      if (times.length === 0 || m.time < times[0] || m.time > times[times.length - 1] + interval) return [];
-      const time = barTime(times, m.time);
-      if (time === null) return [];
-      const at = times.indexOf(time);
-      const crowded = at - lastLabelled < 4;
-      if (!crowded) lastLabelled = at;
-      return [{ time: time as Time, position: "belowBar" as const, shape: "square" as const, color: m.color, text: crowded ? "" : m.text, size: 0.6 }];
-    });
-    engine.setMarkers(events.sort((a, b) => (a.time as number) - (b.time as number)));
-  }, [engine, candles, drawnCandles, k, fmt, minMove, config.type, drawnStudies, config.alerts, settings, marksHidden, gradPrice, shownMarks, mine, last, standingOrders, auction.token, auction.settledAt, external, market.protectedUntil, vestDays, interval, pending, me, auction.creator, focus]);
+    // Each on its bar as a line down the pane with its name at the top (badges.ts), clear of the badges on the candles.
+    // Only within the candles: a milestone still to come has no bar to sit on yet.
+    engine.setMarkers([]);
+    engine.setEvents(
+      milestones.flatMap((m) => {
+        if (times.length === 0 || m.time < times[0] || m.time > times[times.length - 1] + interval) return [];
+        const time = barTime(times, m.time);
+        return time === null ? [] : [{ time, text: m.text, color: m.color }];
+      }),
+    );
+  }, [engine, candles, k, fmt, minMove, config.type, drawnStudies, config.alerts, settings, marksHidden, gradPrice, mine, standingOrders, auction.token, auction.settledAt, graduatedAt, external, market.protectedUntil, vestDays, interval]);
 
   // Your trades on their way are drawn in the candles themselves (drawnCandles above), so the separate overlay candle
   // stays off. This takes each one off the list once its real trade is on the chart: the moment a trade with its hash
@@ -729,18 +794,11 @@ export function ProChart({
     // Timed (lib/tradeTiming) once the frame with the real candle is painted; the newest one still on its way was
     // drawn in this commit's candles (the frame after it was pressed).
     if (gone.length) requestAnimationFrame(() => gone.forEach((g) => timingMark(g.id, "realCandleDrawn")));
-    const live = pending.filter((p) => !gone.includes(p));
-    const p = live.length ? live[live.length - 1] : null;
-    if (p) requestAnimationFrame(() => timingMark(p.id, "canvasDrawnPending"));
   }, [engine, pending, last, interval, k, swapData]);
 
   useChartAlerts({ external, slot, crux, auction, symbol, interval, gradPrice, config, set, candles, last, studyCtx, fmt, k, flash, replaying });
 
   // A synced layout: apply the other charts' crosshair, time range and timeframe.
-  const candlesRef = useRef(candles);
-  useEffect(() => {
-    candlesRef.current = candles;
-  }, [candles]);
   const kRef = useRef(k);
   useEffect(() => {
     kRef.current = k;
@@ -937,8 +995,9 @@ export function ProChart({
   const onRange = (seconds: number) => {
     if (!engine) return;
     if (trading) setPickedAt(Date.now()); // back to your timeframe first: a range on the 1s view showed nothing new
-    if (seconds === 0 || now === null) engine.showAll();
-    else engine.showRange(now - seconds, now);
+    const nowS = Math.floor(Date.now() / 1000);
+    if (seconds === 0) engine.showAll();
+    else engine.showRange(nowS - seconds, nowS);
   };
   const onContext = (e: MouseEvent<HTMLDivElement>) => {
     if (!engine || view !== "chart") return;
@@ -1118,7 +1177,16 @@ export function ProChart({
     const next = onPrice ? "price" : onTime ? "time" : null;
     if (next !== overAxis) setOverAxis(next);
     const part = at && !next ? (engine.drawings.drawingAt(at.x, at.y)?.part ?? null) : null;
-    if (part !== hover) setHover(part);
+    if (part !== hoverPart) setHover(part);
+    // A badge under the pointer lists its trades.
+    const paneLeft = settings.scaleSide === "left" ? axis : 0;
+    const hit = at && box && !next ? engine.badgeAt(at.x - paneLeft, at.y) : null;
+    if (!hit) {
+      if (tip) setTip(null);
+    } else if (!tip || tip.badge.time !== hit.badge.time || tip.badge.side !== hit.badge.side || tip.badge.count !== hit.badge.count) {
+      const x = hit.x + paneLeft;
+      setTip({ x, y: hit.y, flip: box ? x > box.width - 260 : false, below: hit.y < 150, badge: hit.badge, seenAt: Date.now() });
+    }
   };
   const onDoubleClick = (e: MouseEvent<HTMLDivElement>) => {
     const at = local(e);
@@ -1169,23 +1237,10 @@ export function ProChart({
 
   const lockedX = config.lockedTime !== null && engine ? engine.xOf(config.lockedTime) : null;
 
-  // Time left in the current candle, on the price axis under the last price.
-  const countdownY = settings.countdown && !replay && last && engine && now !== null ? engine.yOf(last.close * k) : null;
+  // Time left in the current candle, on the price axis under the last price (it follows the axis on its own).
   const countdown =
-    countdownY !== null && now !== null && engine ? (
-      <span
-        aria-label="Time to candle close"
-        className="pointer-events-none absolute z-10 rounded-[2px] bg-panel-2/95 text-center font-mono text-[10px] text-muted"
-        style={{ top: countdownY + 9, width: engine.axisWidth(), ...(settings.scaleSide === "left" ? { left: 0 } : { right: 0 }) }}
-      >
-        {(() => {
-          const left = Math.max(0, Math.floor(now / interval) * interval + interval - now);
-          const h = Math.floor(left / 3600);
-          const m = Math.floor((left % 3600) / 60);
-          const s2 = left % 60;
-          return `${h ? `${h}:` : ""}${h ? String(m).padStart(2, "0") : m}:${String(s2).padStart(2, "0")}`;
-        })()}
-      </span>
+    settings.countdown && !replay && last && engine ? (
+      <AxisCountdown view={viewMoved} engine={engine} price={last.close * k} interval={interval} side={settings.scaleSide} />
     ) : null;
 
   // The selected drawing's bar, just above its first point (kept inside the chart).
@@ -1315,9 +1370,9 @@ export function ProChart({
                 ? "cursor-ns-resize"
                 : overAxis === "time"
                   ? "cursor-ew-resize"
-                  : hover === "body"
+                  : hoverPart === "body"
                     ? "cursor-move"
-                    : hover
+                    : hoverPart
                       ? "cursor-grab"
                       : ""
         }`}
@@ -1333,6 +1388,7 @@ export function ProChart({
         onMouseLeave={() => {
           setHover(null);
           setOverAxis(null);
+          setTip(null);
         }}
       >
         <div
@@ -1345,14 +1401,14 @@ export function ProChart({
           data-close={candles.at(-1)?.close}
         />
         {view === "chart" && (
-          <Legend
+          <HoverLegend
+            hover={hover}
+            candles={candles}
             inset={false}
             title={`${name ?? symbol} · ${intervalLabel} · CRUX`}
-            candle={shown}
             k={k}
             fmt={fmt}
             studies={computedStudies.map((c) => ({ id: c.inst.id, title: c.title, hidden: Boolean(c.inst.hidden), priced: c.study.priced, lines: c.lines }))}
-            index={shownIndex}
             onSettings={setEditingStudy}
             onToggle={(id) => updateStudy(id, (s) => ({ ...s, hidden: !s.hidden }))}
             onRemove={(id) => updateStudy(id, () => null)}
@@ -1447,16 +1503,41 @@ export function ProChart({
           </button>
         )}
         {view === "chart" && engine && scrolledBack && (
+          // Looking at older bars: new trades don't pull the view back; this does.
           <button
             type="button"
             onClick={() => engine.scrollToLatest()}
-            title="Scroll to the newest bar"
-            aria-label="Scroll to the newest bar"
+            title="Back to the newest bar"
             style={settings.scaleSide === "left" ? { right: 8 } : { right: engine.axisWidth() + 8 }}
-            className="absolute bottom-8 z-20 grid h-[22px] w-[26px] place-items-center rounded-[4px] border border-line-2 bg-panel-2/95 text-[13px] leading-none text-chrome shadow hover:border-chrome/50"
+            className="absolute bottom-8 z-20 inline-flex h-[22px] items-center gap-1 rounded-full border border-line-2 bg-panel-2/95 px-2.5 font-mono text-[10.5px] text-chrome shadow hover:border-chrome/50"
           >
-            »
+            Jump to live <span aria-hidden="true">→</span>
           </button>
+        )}
+        {view === "chart" && tip && (
+          <div
+            role="tooltip"
+            className="pointer-events-none absolute z-30 w-max max-w-[250px] rounded-[4px] border border-line-2 bg-panel-2/95 px-2 py-1.5 font-mono text-[10.5px] leading-relaxed text-muted shadow-lg"
+            style={{ left: tip.flip ? undefined : tip.x + 12, right: tip.flip ? `calc(100% - ${tip.x - 12}px)` : undefined, top: tip.below ? tip.y + 12 : undefined, bottom: tip.below ? undefined : `calc(100% - ${tip.y - 12}px)` }}
+          >
+            <p className={tip.badge.side === "buy" ? "text-up" : "text-down"}>
+              {tip.badge.count} {tip.badge.side === "buy" ? "buy" : "sell"}
+              {tip.badge.count === 1 ? "" : "s"} in this candle
+            </p>
+            {tip.badge.fills.slice(0, 8).map((f, i) => {
+              const usd = f.usd !== null && Number.isFinite(f.usd) ? f.usd : null;
+              const age = Math.max(0, Math.round((tip.seenAt - f.at) / 1000));
+              return (
+                <p key={i} className="flex gap-2 whitespace-nowrap">
+                  <span className="w-6 text-chrome">{f.label}</span>
+                  <span>{usd !== null ? `$${usd.toLocaleString("en-US", { maximumFractionDigits: 2 })}` : "…"}</span>
+                  {f.price !== null && Number.isFinite(f.price) && f.price > 0 && <span>@ {fmt(f.price * k)}</span>}
+                  <span className="ml-auto pl-2 text-dim">{f.pending ? "sending" : age < 60 ? `${age}s ago` : age < 3_600 ? `${Math.floor(age / 60)}m ago` : age < 86_400 ? `${Math.floor(age / 3_600)}h ago` : `${Math.floor(age / 86_400)}d ago`}</span>
+                </p>
+              );
+            })}
+            {tip.badge.fills.length > 8 && <p className="text-dim">+{tip.badge.fills.length - 8} more</p>}
+          </div>
         )}
         {scaleMenu && (
           <ScaleMenu
@@ -1572,7 +1653,6 @@ export function ProChart({
         </div>
       )}
       <BottomBar
-        now={now}
         onRange={onRange}
         scale={scale}
         setScale={setScale}

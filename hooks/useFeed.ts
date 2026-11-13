@@ -13,10 +13,15 @@ export const FEED_GRACE_MS = 20_000;
  * `usable`: the candles can be drawn, live or through a brief reconnect (FEED_GRACE_MS), which then backfills them, so
  * the chart doesn't switch sources and flicker on a dropped socket.
  */
-export function useFeedCandles(pair: Address | null, interval: number | "auto") {
+export function useFeedCandles(pair: Address | null, interval: number | "auto", onCandles?: (candles: FeedCandle[]) => void) {
   const [state, setState] = useState<{ key: string; candles: FeedCandle[]; interval: number; firstTime: number | null; status: FeedStatus } | null>(null);
   const key = `${pair}:${interval}`;
   const held = useRef<FeedCandle[]>([]);
+  // `onCandles` gets each frame's candles in the socket's own task, before React renders them (the chart draws there).
+  const direct = useRef(onCandles);
+  useEffect(() => {
+    direct.current = onCandles;
+  });
   useEffect(() => {
     if (!pair) return;
     held.current = [];
@@ -28,6 +33,7 @@ export function useFeedCandles(pair: Address | null, interval: number | "auto") 
       onFrame: (f: FeedFrame) => {
         held.current = applyFrame(held.current, f);
         const candles = held.current;
+        direct.current?.(candles);
         setState((s) => ({ key, candles, interval: f.interval || (s?.interval ?? 0), firstTime: f.firstTime ?? s?.firstTime ?? null, status: "live" }));
       },
       onStatus: (status) => setState((s) => (s && s.key === key ? { ...s, status } : { key, candles: [], interval: 0, firstTime: null, status })),

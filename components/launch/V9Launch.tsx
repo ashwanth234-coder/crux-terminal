@@ -158,8 +158,35 @@ function V9Launch({ id }: { id: bigint }) {
   const token0 = r(12) as Address | undefined;
   const feeBps = r(13) as number | undefined;
 
+  // The launch as the chart, the tape and the panels take it: the same object until something in it changes. This
+  // page re-renders every second (its clock); a new object each time made the chart rework every candle, holder and
+  // mark each second, which showed as a stall in the middle of panning or trading.
+  const auctionNow = useMemo<AuctionV2 | null>(
+    () =>
+      l
+        ? {
+            token: l.token,
+            creator: l.creator,
+            startTime: launchedAt,
+            batchWindow: 0,
+            status: 1,
+            bidderCount: 0,
+            settledAt: launchedAt,
+            pair: l.pair,
+            totalSupply: supply,
+            saleSupply: supply,
+            graduationTarget: threshold,
+            floorPrice: BigInt(0),
+            maxAllocationPerWallet: BigInt(0),
+            totalDeposits: realUsdc,
+            clearingPrice: BigInt(0),
+          }
+        : null,
+    [l, launchedAt, supply, threshold, realUsdc],
+  );
+
   if (launch.isLoading) return <Shell><p className="text-muted">Reading the launch…</p></Shell>;
-  if (!l) return <Shell><p className="text-muted">No V9 launch #{id.toString()} on Base Sepolia.</p></Shell>;
+  if (!l || !auctionNow) return <Shell><p className="text-muted">No V9 launch #{id.toString()} on Base Sepolia.</p></Shell>;
 
   const phase = phaseV9({ graduated, openingEnds, realUsdc, threshold }, now);
   // Before graduation the curve's spot price; after, what one token sells for in the pool (fees included).
@@ -174,23 +201,7 @@ function V9Launch({ id }: { id: bigint }) {
       : 0;
   const quoted = sellOne ? Number(formatUnits(sellOne[0] + sellOne[1], 6)) / PRICE_LOT_TOKENS : 0;
   const price = graduated ? poolSpot || quoted : curvePrice(spot);
-  const auction: AuctionV2 = {
-    token: l.token,
-    creator: l.creator,
-    startTime: launchedAt,
-    batchWindow: 0,
-    status: 1,
-    bidderCount: 0,
-    settledAt: launchedAt,
-    pair: l.pair,
-    totalSupply: supply,
-    saleSupply: supply,
-    graduationTarget: threshold,
-    floorPrice: BigInt(0),
-    maxAllocationPerWallet: BigInt(0),
-    totalDeposits: realUsdc,
-    clearingPrice: BigInt(0),
-  };
+  const auction = auctionNow;
 
   const poolUsdc = graduated && reserves && token0 ? (token0.toLowerCase() === l.token.toLowerCase() ? reserves[1] : reserves[0]) : null;
   const sym = `$${symbol}`;

@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import type { ScaleMode } from "./settings";
 import { Popover } from "./ui";
 
@@ -15,9 +15,22 @@ const RANGES = [
 
 const utc = (s: number) => new Date(s * 1000).toISOString().slice(11, 19);
 
+/** The UTC clock: it writes its own text each second, so nothing around it re-renders for the time. */
+function UtcClock() {
+  const el = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const paint = () => {
+      if (el.current) el.current.textContent = `${utc(Math.floor(Date.now() / 1000))} UTC`;
+    };
+    paint();
+    const t = setInterval(paint, 1_000);
+    return () => clearInterval(t);
+  }, []);
+  return <span ref={el} className="font-mono text-[11px] text-muted" aria-label="Current time (UTC)" />;
+}
+
 /** Under the time axis: zoom presets on the left; the UTC clock and the price-scale modes on the right. */
 export function BottomBar({
-  now,
   onRange,
   scale,
   setScale,
@@ -25,7 +38,6 @@ export function BottomBar({
   onAuto,
   note,
 }: {
-  now: number | null;
   /** Shows the last `seconds` (0: everything). */
   onRange: (seconds: number) => void;
   scale: ScaleMode;
@@ -71,9 +83,7 @@ export function BottomBar({
           </Popover>
         )}
         <span className="mx-1 h-3 w-px bg-line" aria-hidden="true" />
-        <span className="font-mono text-[11px] text-muted" aria-label="Current time (UTC)">
-          {now === null ? "--:--:--" : utc(now)} UTC
-        </span>
+        <UtcClock />
         <span className="mx-1 h-3 w-px bg-line" aria-hidden="true" />
         <button type="button" aria-pressed={scale === "percent"} onClick={() => setScale(scale === "percent" ? "normal" : "percent")} className={btn(scale === "percent")} title="Percentage scale">
           %
