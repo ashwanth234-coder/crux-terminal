@@ -1,4 +1,4 @@
-import { useMemo, useSyncExternalStore } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import type { Address } from "viem";
 
 /**
@@ -81,7 +81,6 @@ const subscribe = (l: () => void) => {
   return () => void listeners.delete(l);
 };
 const snapshot = () => items;
-const empty: PendingTrade[] = [];
 
 /**
  * Calls `listener` with this browser's pending trades on `token` the moment they change, outside React (in the same
@@ -103,19 +102,37 @@ export function noteFill(token: Address, price: number) {
   emit();
 }
 
+/**
+ * A value from this store, re-rendered as a transition: React paints the frame first and renders the page's other
+ * parts (the trades list, the header, the trade panel) after, interruptibly. A press used to re-render all of them
+ * synchronously (~60 ms of a 135 ms press, measured), while the chart, which draws itself straight from the store
+ * (watchPendingTrades), was already done. Read through useSyncExternalStore, React would not let them wait.
+ */
+function useStoreValue<T>(read: () => T): T {
+  const [value, setValue] = useState(read);
+  useEffect(() => {
+    const update = () => startTransition(() => setValue(() => read()));
+    update();
+    return subscribe(update);
+  }, [read]);
+  return value;
+}
+
 /** This browser's last fill on `token` (noteFill), or undefined. */
 export function useLastFill(token: Address): { price: number; at: number } | undefined {
-  return useSyncExternalStore(subscribe, () => lastFills.get(token.toLowerCase()), () => undefined);
+  const key = token.toLowerCase();
+  return useStoreValue(useMemo(() => () => lastFills.get(key), [key]));
 }
 
 /** When this browser last pressed a trade on `token` (ms since the epoch), or 0. */
 export function useLastPressed(token: Address): number {
-  return useSyncExternalStore(subscribe, () => lastPressed.get(token.toLowerCase()) ?? 0, () => 0);
+  const key = token.toLowerCase();
+  return useStoreValue(useMemo(() => () => lastPressed.get(key) ?? 0, [key]));
 }
 
 /** This browser's pending trades on `token`. */
 export function usePendingTrades(token: Address): PendingTrade[] {
-  const all = useSyncExternalStore(subscribe, snapshot, () => empty);
+  const all = useStoreValue(snapshot);
   // The same array until the trades change: a new one each render re-ran everything that depends on it (the chart's
   // drawing among it) on every render of its reader.
   return useMemo(() => all.filter((t) => t.token.toLowerCase() === token.toLowerCase()), [all, token]);

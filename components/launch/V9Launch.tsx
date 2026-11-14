@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { createPublicClient, formatUnits, http, maxUint256, parseAbi, parseUnits, zeroAddress, type Address } from "viem";
 import { useConfig, useConnection, useReadContracts, useSwitchChain } from "wagmi";
@@ -352,8 +352,11 @@ function TradePanel({
   const [flights, setFlights] = useState<Flight[]>([]);
   const flightsRef = useRef<Flight[]>([]);
   const updateFlights = (fn: (f: Flight[]) => Flight[]) => {
+    // The ref is the truth for every press and price (at once); the panel's numbers re-render as a transition, after
+    // the frame the press paints (a synchronous re-render here held the click's next paint).
     flightsRef.current = fn(flightsRef.current);
-    setFlights(flightsRef.current);
+    const next = flightsRef.current;
+    startTransition(() => setFlights(next));
   };
   /** A balance read this long after a fill includes it (the read cache runs a couple of seconds behind). */
   const SETTLED_MS = 3_000;
