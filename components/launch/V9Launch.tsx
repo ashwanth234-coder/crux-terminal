@@ -281,6 +281,39 @@ const LAST_FILL_HOLD_MS = 4_000;
 
 
 /** `pool`: a graduated launch's pool reserves (USDC and tokens), for sizing a pending trade's candle at the click. */
+/**
+ * Buy / Sell. The tab lights up on the click by itself (only this re-renders then); the trade panel follows as a
+ * transition React can pause, so a busy panel (quotes, holdings, the order form) never holds the click's paint up.
+ */
+function SideTabs({ side, onChange }: { side: "buy" | "sell"; onChange: (s: "buy" | "sell") => void }) {
+  const [shown, setShown] = useState(side);
+  const [prev, setPrev] = useState(side);
+  if (side !== prev) {
+    setPrev(side);
+    setShown(side);
+  }
+  return (
+    <div className="flex gap-1" role="tablist">
+      {(["buy", "sell"] as const).map((s) => (
+        <button
+          key={s}
+          type="button"
+          role="tab"
+          aria-selected={shown === s}
+          onClick={() => {
+            if (s === shown) return;
+            setShown(s);
+            startTransition(() => onChange(s));
+          }}
+          className={`h-8 flex-1 rounded-[4px] border text-[13px] ${shown === s ? (s === "buy" ? "border-up/60 text-up" : "border-down/60 text-down") : "border-line-2 text-muted"}`}
+        >
+          {s === "buy" ? "Buy" : "Sell"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function TradePanel({
   token,
   curve,
@@ -982,25 +1015,15 @@ function TradePanel({
           <p className="mt-1 text-[12.5px] leading-snug text-muted">Every deposit is bought as one order at one price when the opening ends: there&apos;s nothing to snipe.</p>
         </>
       ) : (
-        <div className="flex gap-1" role="tablist">
-          {(["buy", "sell"] as const).map((s) => (
-            <button
-              key={s}
-              type="button"
-              role="tab"
-              aria-selected={side === s}
-              onClick={() => {
-                setSide(s);
-                setPicked(null);
-                setAmount("");
-                setOrderType("market");
-              }}
-              className={`h-8 flex-1 rounded-[4px] border text-[13px] ${side === s ? (s === "buy" ? "border-up/60 text-up" : "border-down/60 text-down") : "border-line-2 text-muted"}`}
-            >
-              {s === "buy" ? "Buy" : "Sell"}
-            </button>
-          ))}
-        </div>
+        <SideTabs
+          side={side}
+          onChange={(s) => {
+            setSide(s);
+            setPicked(null);
+            setAmount("");
+            setOrderType("market");
+          }}
+        />
       )}
 
       {accountReady && (
