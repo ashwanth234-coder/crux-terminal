@@ -19,6 +19,7 @@ import { useLaunchMarket, type LaunchMarket } from "@/hooks/useLaunchMarket";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { useBuyingPower } from "@/hooks/useBuyingPower";
 import { signTrade, tradeFromAccount, type SignedTrade } from "@/lib/account";
+import { StillConfirming } from "@/lib/session";
 import type { LaunchV2Model } from "@/hooks/useLaunchV2";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import { LIVE_ORIGINS, originByKey, toUsdc6, type PayFrom } from "@/lib/crosschain";
@@ -1107,6 +1108,8 @@ function TradeForm({ auction, symbol, handover = false }: { auction: AuctionV2; 
       crux.refresh();
     } catch (e) {
       setOneClickOrder({ kind: "error", message: (e as Error).message.split("\n")[0] });
+      // Out on the chain, not seen confirmed yet: the balances are read again as it lands, so the holding catches up.
+      if (e instanceof StillConfirming) for (const ms of [4_000, 12_000, 30_000]) setTimeout(() => crux.refresh(), ms);
     }
   };
 

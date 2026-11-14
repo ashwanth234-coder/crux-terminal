@@ -74,6 +74,18 @@ const json = (v: unknown) => JSON.stringify(v, (_, x) => (typeof x === "bigint" 
 const RELAY_TIMEOUT_MS = 45_000;
 
 /** POSTs to the relay; throws its plain-language error when it turns the request away. */
+/**
+ * The relay sent it but didn't see it confirmed in time: it may still land. The page says so and never invites a retry
+ * (each signature is a new order: trying again could trade twice). `txs`: what went out.
+ */
+export class StillConfirming extends Error {
+  readonly txs: string[];
+  constructor(message: string, txs: string[]) {
+    super(message);
+    this.txs = txs;
+  }
+}
+
 export async function postRelay(path: string, body: unknown): Promise<Record<string, unknown>> {
   let res: Response;
   // A relay (or its RPC) that hangs left the button on "sending" for good. After this long the user is told, and told
@@ -92,6 +104,10 @@ export async function postRelay(path: string, body: unknown): Promise<Record<str
   }
   clearTimeout(timer);
   const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (data.pending === true) {
+    const txs = Array.isArray(data.txs) ? data.txs.filter((t): t is string => typeof t === "string") : [];
+    throw new StillConfirming(typeof data.error === "string" ? data.error : "Still confirming: don't press again.", txs);
+  }
   if (!res.ok || data.ok !== true) throw new Error(typeof data.error === "string" ? data.error : `The relay answered ${res.status}.`);
   return data;
 }
