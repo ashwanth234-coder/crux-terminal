@@ -42,6 +42,7 @@ import {
 import { fmtTokenPrice } from "@/lib/launchTrade";
 import { NOVA_ASSET, clearingLimit, minReceived, slippageOf, sourceAsset, type OrderDraft } from "@/lib/order";
 import { usd } from "@/lib/tokens";
+import { NETWORK } from "@/lib/network";
 
 type Flow =
   | { kind: "idle" }
@@ -442,7 +443,7 @@ export function IntentModal({ order, open, onClose, onPlaced }: { order: OrderDr
   // ---------------------------------------------------------------- quote
 
   const origin = cross ? originName : SETTLER_DEPLOYED ? "Base Sepolia" : order.originLabel;
-  const destination = SETTLER_DEPLOYED ? { name: "Base Sepolia", id: 84532 } : { name: "Base", id: 8453 };
+  const destination = SETTLER_DEPLOYED ? { name: NETWORK.label, id: NETWORK.chain.id } : { name: "Base", id: 8453 };
   // Launch-token trades on thin testnet pools are often under a cent: show USDC to its 6 decimals.
   const money = (v: number) => (order.asset && v < 1 ? `$${v.toFixed(6).replace(/0+$/, "").replace(/\.$/, "")}` : usd.format(v));
   const inputLabel = buying

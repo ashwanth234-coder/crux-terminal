@@ -2,6 +2,7 @@ import { getAddress, parseAbi, type Address, type Hex } from "viem";
 import { TESTNET } from "@/lib/chains";
 import { postRelay } from "@/lib/session";
 import { accountFields, type AccountSigner } from "@/lib/account";
+import { need, NETWORK } from "./network.ts";
 
 /**
  * Crux V9 launches (crux-contracts src/v9): each token trades on its own CruxCurveV9 from launch (after an optional fair
@@ -12,9 +13,9 @@ import { accountFields, type AccountSigner } from "@/lib/account";
  */
 export const V9_ON = process.env.NEXT_PUBLIC_V9 === "1";
 
-/** Base Sepolia (crux-contracts broadcast/DeployFactoryV9.s.sol). Testnet scale: graduation at $10, not $10,000. */
-export const FACTORY_V9 = getAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V9 || "0x4a28e8B20e312fB67c71Fa6e2F085520d3DEd8e7");
-export const ROUTER_V9 = getAddress(process.env.NEXT_PUBLIC_CRUX_ROUTER_V9 || "0x86A518410EFfa9cAEbf92BD87DEe08678bA39682");
+/** This network's CruxFactoryV9 and CruxRouterV9 (lib/network.ts; crux-contracts broadcast/DeployFactoryV9.s.sol). */
+export const FACTORY_V9 = getAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V9 || need("CruxFactoryV9 (NEXT_PUBLIC_CRUX_FACTORY_V9)", NETWORK.crux.factoryV9));
+export const ROUTER_V9 = getAddress(process.env.NEXT_PUBLIC_CRUX_ROUTER_V9 || need("CruxRouterV9 (NEXT_PUBLIC_CRUX_ROUTER_V9)", NETWORK.crux.routerV9));
 
 export const factoryV9Abi = parseAbi([
   "struct LaunchParams { string name; string symbol; string metadataURI; bytes32 salt; }",

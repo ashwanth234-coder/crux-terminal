@@ -1,18 +1,18 @@
 import { cachedReads } from "./readCache";
 import { createPublicClient, fallback, http, type Hex } from "viem";
-import { baseSepolia } from "viem/chains";
 
 import { blockTimeMs } from "@/lib/logTime";
+import { NETWORK } from "./network.ts";
 // sepolia.base.org caps eth_getLogs at 200 blocks; publicnode allows 50k per call, Tenderly is the fallback.
 const LOGS_RPCS = [process.env.NEXT_PUBLIC_BASE_SEPOLIA_LOGS_RPC, "https://base-sepolia-rpc.publicnode.com", "https://base-sepolia.gateway.tenderly.co"].filter(
   (u): u is string => Boolean(u),
 );
 
 /** Base Sepolia client for wide log scans (the terminal's tape and demand curve). */
-export const logClient = createPublicClient({ chain: baseSepolia, transport: cachedReads(fallback(LOGS_RPCS.map((u) => http(u, { timeout: 15_000 })))) });
+export const logClient = createPublicClient({ chain: NETWORK.chain, transport: cachedReads(fallback(LOGS_RPCS.map((u) => http(u, { timeout: 15_000 })))) });
 /** The same RPCs with JSON-RPC batching, for dating many blocks at once. */
 const blockClient = createPublicClient({
-  chain: baseSepolia,
+  chain: NETWORK.chain,
   transport: cachedReads(fallback(LOGS_RPCS.map((u) => http(u, { timeout: 15_000, batch: { batchSize: 50 } })))),
 });
 

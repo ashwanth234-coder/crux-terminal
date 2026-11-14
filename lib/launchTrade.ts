@@ -1,5 +1,6 @@
 import { getAddress, type Address } from "viem";
 import { compactZeros } from "./priceText.ts";
+import { caip19 } from "./network.ts";
 
 /**
  * Intents for graduated launch tokens. The Crux solver (crux-solver/scripts/pool.ts) prices them from the
@@ -12,9 +13,9 @@ export const SOLVER_SPREAD_BPS = 30;
 const BPS = BigInt(10_000);
 const ZERO = BigInt(0);
 
-/** CAIP-19 id of a launch token on Base Sepolia, checksummed: the settlers key assets by keccak256 of this exact string. */
+/** CAIP-19 id of a launch token on this network, checksummed: the settlers key assets by keccak256 of this exact string. */
 export function launchCaip19(token: Address) {
-  return `eip155:84532/erc20:${getAddress(token)}`;
+  return caip19(token);
 }
 
 /** Uniswap V2 getAmountOut (0.3% fee). */

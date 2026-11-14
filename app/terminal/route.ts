@@ -1,10 +1,10 @@
 import { connection } from "next/server";
 import { createPublicClient, http } from "viem";
-import { baseSepolia } from "viem/chains";
 import { cruxBatchFactoryAbi } from "@/contracts/abis/batchAuction";
 import { FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7, FACTORY_V8 } from "@/lib/intents";
 import { phaseV2, toAuctionV2, type AuctionV2 } from "@/lib/launchV2";
 import { FACTORY_V9, V9_ON, factoryV9Abi } from "@/lib/v9";
+import { NETWORK } from "@/lib/network";
 
 /** How many of each factory's newest launches to consider. */
 const LOOKBACK = 20;
@@ -13,7 +13,7 @@ const FALLBACK = "/launches";
 
 // Same Base Sepolia endpoint as the wagmi config: the override if set, else the chain's public RPC.
 const client = createPublicClient({
-  chain: baseSepolia,
+  chain: NETWORK.chain,
   transport: http(process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || undefined, { timeout: 5_000 }),
 });
 

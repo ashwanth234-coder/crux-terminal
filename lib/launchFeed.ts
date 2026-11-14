@@ -1,11 +1,11 @@
 import { createPublicClient, erc20Abi, formatUnits, http, zeroAddress, type Address } from "viem";
-import { baseSepolia } from "viem/chains";
 import { cruxBatchFactoryAbi, factoryV4Abi, factoryV6Abi } from "@/contracts/abis/batchAuction";
 import { TESTNET_EXPLORER } from "@/lib/chains";
 import { FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7, FACTORY_V8 } from "@/lib/intents";
 import { PRICE_DECIMALS, V2_VESTING_DAYS, phaseV2, toAuctionV2, type PhaseV2 } from "@/lib/launchV2";
 import { SITE_URL } from "@/lib/site";
 import { parseTokenMeta, tokenMetaAbi, type TokenMeta } from "@/lib/tokenMeta";
+import { NETWORK } from "./network.ts";
 
 /**
  * Every Crux launch, read straight from the batch factories on Base Sepolia: what /api/launches and
@@ -13,7 +13,7 @@ import { parseTokenMeta, tokenMetaAbi, type TokenMeta } from "@/lib/tokenMeta";
  */
 
 const client = createPublicClient({
-  chain: baseSepolia,
+  chain: NETWORK.chain,
   transport: http(process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || "https://base-sepolia-rpc.publicnode.com", { timeout: 8_000 }),
 });
 

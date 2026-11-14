@@ -2,6 +2,7 @@ import { erc20Abi, getAddress, parseAbi, parseAbiItem, zeroAddress, type Address
 import { TESTNET_USDC } from "@/lib/intents";
 import { logClient, type ReadLogs } from "@/lib/logs";
 import type { PoolTrade } from "@/lib/tradeDecode";
+import { NETWORK } from "./network.ts";
 
 /**
  * Any Base Sepolia token that isn't a Crux launch: its deepest Uniswap pool (V2 or V3, against test USDC or WETH),
@@ -9,13 +10,13 @@ import type { PoolTrade } from "@/lib/tradeDecode";
  * exact for USDC-quoted pools; WETH-quoted pools are converted at the ETH price when the pool was found (labelled).
  */
 
-export const UNISWAP_V2_FACTORY: Address = "0x7Ae58f10f7849cA6F5fB71b7f45CB416c9204b1e";
-export const UNISWAP_V2_ROUTER: Address = "0x1689E7B1F10000AE47eBfE339a4f69dECd19F602";
-export const UNISWAP_V3_FACTORY: Address = "0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24";
+export const UNISWAP_V2_FACTORY: Address = NETWORK.uniswap.v2Factory;
+export const UNISWAP_V2_ROUTER: Address = NETWORK.uniswap.v2Router;
+export const UNISWAP_V3_FACTORY: Address = NETWORK.uniswap.v3Factory;
 /** SwapRouter02: exactInputSingle with no deadline field; wraps ETH sent with a WETH-in swap. */
-export const UNISWAP_V3_ROUTER: Address = "0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4";
-export const UNISWAP_V3_QUOTER: Address = "0xC5290058841028F1614F3A6F0F5816cAd0df5E27";
-export const WETH: Address = "0x4200000000000000000000000000000000000006";
+export const UNISWAP_V3_ROUTER: Address = NETWORK.uniswap.v3Router;
+export const UNISWAP_V3_QUOTER: Address = NETWORK.uniswap.v3Quoter;
+export const WETH: Address = NETWORK.weth;
 const V3_FEES = [100, 500, 3000, 10_000] as const;
 
 export type ExternalPool = {

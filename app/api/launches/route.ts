@@ -1,5 +1,6 @@
 import { connection } from "next/server";
 import { feedResponse, readLaunches } from "@/lib/launchFeed";
+import { NETWORK } from "@/lib/network";
 
 /**
  * GET /api/launches: every Crux launch on Base Sepolia, newest first, read live from the batch factories.
@@ -12,7 +13,7 @@ export async function GET(request: Request) {
   try {
     const launches = await readLaunches();
     return feedResponse({
-      chainId: 84532,
+      chainId: NETWORK.chain.id,
       network: "base-sepolia",
       testnet: true,
       generatedAt: new Date().toISOString(),

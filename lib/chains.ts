@@ -1,5 +1,6 @@
 import { defineChain, type Address } from "viem";
 import { base, baseSepolia, bsc } from "viem/chains";
+import { NETWORK } from "./network.ts";
 
 /**
  * Robinhood Chain mainnet (Arbitrum Orbit, ETH gas; its testnet is 46630, without Hyperlane). Canonical tokens from
@@ -21,9 +22,12 @@ export const robinhoodChain = defineChain({
 
 export const SUPPORTED_CHAINS = [base, bsc, robinhoodChain, baseSepolia] as const;
 
-/** Testnet home of the Crux settler and batch-auction factory. */
-export const TESTNET = baseSepolia;
-export const TESTNET_EXPLORER = "https://sepolia.basescan.org";
+/**
+ * The Base network Crux runs on (lib/network.ts, NEXT_PUBLIC_NETWORK): Base Sepolia until the mainnet switch. Named
+ * TESTNET from before there was a choice; it's whichever one this build is on.
+ */
+export const TESTNET = NETWORK.chain;
+export const TESTNET_EXPLORER = NETWORK.explorer;
 
 export type ChainKey = "base" | "solana" | "bsc" | "robinhood";
 

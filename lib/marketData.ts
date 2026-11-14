@@ -7,6 +7,7 @@ import { readLaunches, type FeedLaunch } from "@/lib/launchFeed";
 import { LOG_WINDOW_LABEL, logClient, scanLogs, type LogScan } from "@/lib/logs";
 import { poolTradeReader, readBatchPool, readUsdcIs0, type PoolTrade } from "@/lib/poolTrades";
 import { SITE_URL } from "@/lib/site";
+import { NETWORK } from "./network.ts";
 
 /**
  * The public market data API's reads (/api/pairs, /api/trades, /api/candles), server-side: every graduated Crux
@@ -19,7 +20,7 @@ const pairAbi = parseAbi(["function getReserves() view returns (uint112 reserve0
 export type PairInfo = {
   /** The Uniswap V2 pair (token / test USDC): the market's id. */
   id: Address;
-  chainId: 84532;
+  chainId: number;
   dex: "uniswap-v2";
   baseToken: { address: Address; symbol: string; name: string; decimals: 18 };
   quoteToken: { address: Address; symbol: "USDC"; decimals: 6 };
@@ -71,7 +72,7 @@ async function pairOf(l: FeedLaunch): Promise<PairInfo> {
   const q = `?pair=${pair}`;
   return {
     id: pair,
-    chainId: 84532,
+    chainId: NETWORK.chain.id,
     dex: "uniswap-v2",
     baseToken: { address: l.token, symbol: l.symbol, name: l.name, decimals: 18 },
     quoteToken: { address: TESTNET_USDC, symbol: "USDC", decimals: 6 },
@@ -151,8 +152,8 @@ export function tradeJson(t: PoolTrade) {
 }
 
 export const API_NOTES = {
-  chainId: 84532,
-  network: "base-sepolia",
-  testnet: true,
+  chainId: NETWORK.chain.id,
+  network: NETWORK.name,
+  testnet: NETWORK.testnet,
   notes: `Test tokens on Base Sepolia only; prices are in test USDC. Trades cover the last ${LOG_WINDOW_LABEL} at most.`,
 } as const;

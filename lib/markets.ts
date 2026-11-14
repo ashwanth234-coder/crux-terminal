@@ -2,6 +2,7 @@ import { concat, getAddress, numberToHex, parseAbi, type Address, type Hex } fro
 import { TESTNET_USDC } from "@/lib/intents";
 import { logClient } from "@/lib/logs";
 import { RELAY_URL } from "@/lib/session";
+import { NETWORK } from "./network.ts";
 
 /**
  * Crux markets (Way C): established tokens that aren't Crux launches, which a Crux account trades through the Crux
@@ -9,7 +10,7 @@ import { RELAY_URL } from "@/lib/session";
  * on official Uniswap V3 pools along a fixed path from USDC (crux-solver scripts/markets.ts, kept in step with this
  * list); a market trades once the Crux Safe has registered its token on both settlers (the relay reports it).
  */
-export const WETH: Address = "0x4200000000000000000000000000000000000006";
+export const WETH: Address = NETWORK.weth;
 
 export type CuratedMarket = {
   symbol: string;
@@ -22,11 +23,12 @@ export type CuratedMarket = {
   note?: string;
 };
 
-const LINK = getAddress("0xE4aB69C077896252FAFBD49EFD26B5D171A32410");
+const LINK = NETWORK.tokens.link;
 
+/** This network's curated markets (WETH everywhere; LINK is a Base Sepolia test token). */
 export const CURATED_MARKETS: CuratedMarket[] = [
   { symbol: "WETH", name: "Wrapped Ether", token: WETH, decimals: 18, tokens: [TESTNET_USDC, WETH], fees: [3000] },
-  { symbol: "LINK", name: "Chainlink (test)", token: LINK, decimals: 18, tokens: [TESTNET_USDC, WETH, LINK], fees: [3000, 10_000], note: "Thin testnet pool" },
+  ...(LINK ? [{ symbol: "LINK", name: "Chainlink (test)", token: LINK, decimals: 18, tokens: [TESTNET_USDC, WETH, LINK], fees: [3000, 10_000], note: "Thin testnet pool" }] : []),
 ];
 
 export const marketOf = (token: Address) => CURATED_MARKETS.find((m) => m.token.toLowerCase() === token.toLowerCase()) ?? null;
@@ -50,7 +52,7 @@ export function encodePath(m: Pick<CuratedMarket, "tokens" | "fees">, reverse = 
 const quoterAbi = parseAbi([
   "function quoteExactInput(bytes path, uint256 amountIn) view returns (uint256 amountOut, uint160[] sqrtPriceX96AfterList, uint32[] initializedTicksCrossedList, uint256 gasEstimate)",
 ]);
-const QUOTER_V2: Address = "0xC5290058841028F1614F3A6F0F5816cAd0df5E27";
+const QUOTER_V2: Address = NETWORK.uniswap.v3Quoter;
 
 /** The route's output for `amountIn` (buy: USDC in; sell: the token in), before the solver's spread; 0 if it can't quote. */
 export async function quoteMarket(m: CuratedMarket, side: "buy" | "sell", amountIn: bigint): Promise<bigint> {

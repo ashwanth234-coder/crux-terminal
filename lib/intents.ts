@@ -1,6 +1,6 @@
 import { encodeAbiParameters, getAddress, isAddress, keccak256, toHex, type Address, type Hex, type TypedDataDefinition } from "viem";
-import { baseSepolia } from "viem/chains";
 import { crossChainDomain, originByKey, type OriginKey } from "./crosschain";
+import { caip19, need, NETWORK, NETWORKS } from "./network.ts";
 
 // Only used as the EIP-712 verifyingContract for local signature checks while
 // nothing is deployed; never sent to a chain.
@@ -16,15 +16,15 @@ function envAddress(value: string | undefined): Address | null {
  * v3 settles only on its own destination's fill record. NEXT_PUBLIC_CRUX_SETTLER_V3 and
  * NEXT_PUBLIC_CRUX_DESTINATION_V2 override them (e.g. on a local fork).
  */
-const SETTLER_V3_ADDRESS: Address | null = "0xC3BE6a2F3D82DdAba03Fb965bd08f5113354f44C";
+const SETTLER_V3_ADDRESS: Address | null = NETWORK.crux.settlerV3 ?? null;
 /**
  * CruxSettlerV4: V3 plus one-click sessions (a browser key signs orders; input pulled through a capped, 24-hour Permit2
  * allowance). Same destination. Active once set; NEXT_PUBLIC_CRUX_SETTLER_V4 overrides it (e.g. a local fork).
  */
-const SETTLER_V4_ADDRESS: Address | null = "0x399147a5960A120A3b8b89A33a30500a561145D9";
-const DESTINATION_V2_ADDRESS: Address | null = "0x62e5ed6BC2f604fad76152045559805c11D1cdf4";
+const SETTLER_V4_ADDRESS: Address | null = NETWORK.crux.settlerV4 ?? null;
+const DESTINATION_V2_ADDRESS: Address | null = NETWORK.crux.destinationV2 ?? null;
 /** CruxDestinationSettler (v1): where v1 and v2 settlers' orders are filled. */
-const LEGACY_DESTINATION = "0x300a835939D2beBed59C543470DCD9a9c8065822" as Address;
+const LEGACY_DESTINATION = (NETWORK.crux.legacyDestination ?? PLACEHOLDER_SETTLER) as Address;
 
 const settlerV1 = envAddress(process.env.NEXT_PUBLIC_CRUX_SETTLER);
 const settlerV2 = envAddress(process.env.NEXT_PUBLIC_CRUX_SETTLER_V2);
@@ -106,35 +106,35 @@ export const FACTORY_V2 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V2);
 export const FACTORY_V3 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V3);
 
 /** The Crux solver's wallet: fills intents (and swaps in launch pools to do it). NEXT_PUBLIC_CRUX_SOLVER overrides. */
-export const CRUX_SOLVER: Address = envAddress(process.env.NEXT_PUBLIC_CRUX_SOLVER) ?? "0xDEbbE137f2AB252e28d1070F687010C0909d0492";
+export const CRUX_SOLVER: Address = envAddress(process.env.NEXT_PUBLIC_CRUX_SOLVER) ?? need("The Crux solver wallet (NEXT_PUBLIC_CRUX_SOLVER)", NETWORK.crux.solver);
 /** Solver wallets Crux used before a key rotation: their fills still read as Crux intent fills on charts and holders. */
-const RETIRED_SOLVERS: Address[] = ["0x69E422d3Cca945a44210684b57F85f556212AD67"];
+const RETIRED_SOLVERS: Address[] = NETWORK.crux.retiredSolvers;
 /** The current solver wallet first, then the retired ones. */
 export const CRUX_SOLVERS: readonly Address[] = [CRUX_SOLVER, ...RETIRED_SOLVERS.filter((a) => a.toLowerCase() !== CRUX_SOLVER.toLowerCase())];
 
 /** CruxFactoryV4 (V3 + the creator's choice of 30-day vesting or an instant unlock), once deployed. */
-const FACTORY_V4_ADDRESS: Address | null = "0x91f65efc87792798dfba69ee191fb4e3a8500d91";
+const FACTORY_V4_ADDRESS: Address | null = NETWORK.crux.factoryV4 ?? null;
 export const FACTORY_V4 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V4) ?? FACTORY_V4_ADDRESS;
 
 /**
  * CruxFactoryV5 (V4 + 24 hours of batch-only trading after graduation, in its CruxBatchPool), once deployed.
  * crux-contracts/broadcast/DeployFactoryV5.s.sol; NEXT_PUBLIC_CRUX_FACTORY_V5 overrides it (e.g. a local fork).
  */
-const FACTORY_V5_ADDRESS: Address | null = "0x87E39E29a8659DB2891358Ba56aA3BE899c130D9";
+const FACTORY_V5_ADDRESS: Address | null = NETWORK.crux.factoryV5 ?? null;
 export const FACTORY_V5 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V5) ?? FACTORY_V5_ADDRESS;
 
 /**
  * CruxFactoryV6 (V5 with a per-launch batch-only window, 15 minutes by default, in its CruxBatchPoolV2), once
  * deployed. crux-contracts/broadcast/DeployFactoryV6.s.sol; NEXT_PUBLIC_CRUX_FACTORY_V6 overrides it.
  */
-const FACTORY_V6_ADDRESS: Address | null = "0xD07fBb34076D88d2391E831aABfd40AcA3F57940";
+const FACTORY_V6_ADDRESS: Address | null = NETWORK.crux.factoryV6 ?? null;
 export const FACTORY_V6 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V6) ?? FACTORY_V6_ADDRESS;
 
 /**
  * CruxFactoryV7: V6 plus gasless launches the creator signs (createAuctionFor), whose creator may be the signer's Crux
  * account. crux-contracts/broadcast/DeployFactoryV7.s.sol; NEXT_PUBLIC_CRUX_FACTORY_V7 overrides it.
  */
-const FACTORY_V7_ADDRESS: Address | null = "0xeacB98371D5597c20A9ECDf6f09726817489722e";
+const FACTORY_V7_ADDRESS: Address | null = NETWORK.crux.factoryV7 ?? null;
 export const FACTORY_V7 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V7) ?? FACTORY_V7_ADDRESS;
 
 /**
@@ -143,7 +143,7 @@ export const FACTORY_V7 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V7) ??
  * gasless launches from a 5afe Crux account. crux-contracts/broadcast/DeployOneAccount.s.sol (it replaced the first V8,
  * 0x3AdA…C58c, which had no account factory and no launches); NEXT_PUBLIC_CRUX_FACTORY_V8 overrides it.
  */
-const FACTORY_V8_ADDRESS: Address | null = "0xdB9f226fb44D5E8d25e2aACA4f7080c83011CfB5";
+const FACTORY_V8_ADDRESS: Address | null = NETWORK.crux.factoryV8 ?? null;
 export const FACTORY_V8 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V8) ?? FACTORY_V8_ADDRESS;
 
 /** The batch factory behind a launch version (/launch/v2…v8/[id]). */
@@ -168,16 +168,16 @@ export const LAUNCH_FACTORY: { address: Address; version: 2 | 3 | 4 | 5 | 6 | 7 
       ? { address: FACTORY_V2, version: 2 }
       : null;
 
-/** Circle USDC on Base Sepolia: what the testnet settler escrows. */
-export const TESTNET_USDC = "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as Address;
+/** Circle USDC on this network (lib/network.ts): what the settler escrows. */
+export const TESTNET_USDC = NETWORK.usdc;
 
 /**
  * CAIP-19 inputs the testnet settler can escrow (mirrors crux-contracts/script/Deploy.s.sol).
  * The terminal quotes in Base USDC, which maps to Sepolia USDC on testnet.
  */
 export const TESTNET_ESCROW_ASSETS: ReadonlySet<string> = new Set([
-  "eip155:8453/erc20:0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-  "eip155:84532/erc20:0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  caip19(NETWORKS["base-mainnet"].usdc, NETWORKS["base-mainnet"]),
+  caip19(NETWORK.usdc),
 ]);
 
 /**
@@ -217,7 +217,7 @@ export function assetId(caip19: string): Hex {
 export const SETTLER_DOMAIN = {
   name: "CruxSettler",
   version: String(SETTLER_VERSION),
-  chainId: baseSepolia.id,
+  chainId: NETWORK.chain.id,
   verifyingContract: SETTLER,
 } as const;
 

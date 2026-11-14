@@ -1,5 +1,6 @@
 import { PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.js";
 import { bytesToHex, keccak256, type Address } from "viem";
+import { NETWORK } from "./network.ts";
 
 /**
  * Pay from Solana (S1, devnet): the crux_escrow program (crux-solana) escrows USDC per order; the Crux solver fills the
@@ -11,8 +12,8 @@ export const SOLANA_ESCROW_PROGRAM = new PublicKey(process.env.NEXT_PUBLIC_CRUX_
 export const USDC_DEVNET_MINT = new PublicKey("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
 export const TOKEN_PROGRAM = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 export const ASSOCIATED_TOKEN_PROGRAM = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
-/** The chain orders are delivered on (Base Sepolia). */
-const DESTINATION_CHAIN_ID = BigInt(84532);
+/** The chain orders are delivered on (this network's Base). */
+const DESTINATION_CHAIN_ID = BigInt(NETWORK.chain.id);
 /** The program's limits: the fill deadline is at most an hour out; refunds open 6 hours after it with no proof. */
 export const SOLANA_MAX_FILL_WINDOW_SECONDS = 3600;
 export const SOLANA_REFUND_GRACE_SECONDS = 6 * 3600;
@@ -72,7 +73,7 @@ export const orderIdMarkerAddress = (orderId: Uint8Array) =>
 export const solanaOrderId = (user: PublicKey, nonce: bigint) =>
   keccak(utf8("crux-solana-order"), SOLANA_ESCROW_PROGRAM.toBytes(), user.toBytes(), le(nonce, 8));
 
-/** abi.encode(orderId, payee, keccak256(tokenOut), minAmountOut, 84532, fillDeadline): what the solver fills and proves. */
+/** abi.encode(orderId, payee, keccak256(tokenOut), minAmountOut, <Base chain id>, fillDeadline): what the solver fills and proves. */
 export function solanaOriginData(orderId: Uint8Array, payee: Address, tokenOut: string, minAmountOut: bigint, fillDeadline: number) {
   const d = new Uint8Array(192);
   d.set(orderId, 0);

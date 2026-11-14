@@ -1,7 +1,7 @@
 import { createPublicClient, erc20Abi, http, type Address } from "viem";
-import { baseSepolia } from "viem/chains";
 import { parseTokenMeta, tokenMetaAbi, type TokenMeta } from "@/lib/tokenMeta";
 import { FACTORY_V9, V9_ON, factoryV9Abi } from "@/lib/v9";
+import { NETWORK } from "./network.ts";
 
 /**
  * Every V9 launch's ticker and metadata, read from CruxFactoryV9 on Base Sepolia (server side): what the anti-copycat
@@ -9,7 +9,7 @@ import { FACTORY_V9, V9_ON, factoryV9Abi } from "@/lib/v9";
  * and X account stay taken for good (as a graduated V8 token's do).
  */
 const client = createPublicClient({
-  chain: baseSepolia,
+  chain: NETWORK.chain,
   transport: http(process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || "https://base-sepolia-rpc.publicnode.com", { timeout: 8_000 }),
 });
 

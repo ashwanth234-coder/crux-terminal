@@ -18,8 +18,9 @@ import { simulateThenWrite } from "@/lib/preflight";
  * First use per token needs one ordinary transaction: approving Permit2 in test USDC.
  */
 
-export const PERMIT2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3" as Address;
+export const PERMIT2: Address = NETWORK.permit2;
 import { RELAY_URL } from "@/lib/readCache";
+import { NETWORK } from "./network.ts";
 export { RELAY_URL };
 /** Longest a session lasts (the settler's MAX_SESSION_DURATION). */
 export const SESSION_SECONDS = 24 * 3600;

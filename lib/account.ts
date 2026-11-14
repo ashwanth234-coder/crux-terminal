@@ -2,6 +2,7 @@ import { getAddress, getContractAddress, isAddress, keccak256, parseAbi, type Ad
 import { TESTNET } from "@/lib/chains";
 import { searchV3Nonce } from "@/lib/mineV3";
 import { postRelay } from "@/lib/session";
+import { need, NETWORK } from "./network.ts";
 
 /**
  * Crux accounts (CruxAccount, Phase B). Logging in with email or Google gives the trader a Privy embedded wallet: the
@@ -15,13 +16,13 @@ import { postRelay } from "@/lib/session";
  */
 
 /** CruxAccountFactory: the same address on every chain (deterministic CREATE2 deploy). */
-export const ACCOUNT_FACTORY = "0xDdB0DF1CfcdEd073A72A489351f22cfF646f8C6E" as Address;
+export const ACCOUNT_FACTORY = need("CruxAccountFactory", NETWORK.crux.accountFactory);
 /**
  * CruxAccountFactoryV2: accounts with standing orders (take profit, stop loss, buy the dip). Once it's deployed it
  * becomes the trader's account; their V1 account stays readable so its funds can be moved, and it remains the creator
  * of gasless launches (CruxFactoryV7 checks the V1 factory).
  */
-export const ACCOUNT_FACTORY_V2 = "0xf8962965f04e20B95dAdD931fDe00121906a97DC" as Address;
+export const ACCOUNT_FACTORY_V2 = need("CruxAccountFactoryV2", NETWORK.crux.accountFactoryV2);
 /**
  * CruxAccountFactoryV3 (crux-contracts script/DeployOneAccount.s.sol): one account per trader that trades, holds
  * standing orders and launches, at an address ending in 5afe, born with its withdrawal address bound. Its address is
@@ -33,7 +34,7 @@ export const ACCOUNT_FACTORY_V2 = "0xf8962965f04e20B95dAdD931fDe00121906a97DC" a
 export const ACCOUNT_FACTORY_V3 = getAddress(
   process.env.NEXT_PUBLIC_CRUX_ACCOUNT_FACTORY_V3 && isAddress(process.env.NEXT_PUBLIC_CRUX_ACCOUNT_FACTORY_V3)
     ? process.env.NEXT_PUBLIC_CRUX_ACCOUNT_FACTORY_V3
-    : "0xBD7AF76bcc2D080364a0c3C138ef82efCF8E12DF",
+    : need("CruxAccountFactoryV3 (NEXT_PUBLIC_CRUX_ACCOUNT_FACTORY_V3)", NETWORK.crux.accountFactoryV3),
 );
 /** The CruxAccountV2 every V3 account clones: the factory's first contract creation. */
 export const ACCOUNT_IMPLEMENTATION_V3 = getContractAddress({ from: ACCOUNT_FACTORY_V3, nonce: BigInt(1) });

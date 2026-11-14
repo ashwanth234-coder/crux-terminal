@@ -6,6 +6,7 @@ import { LinkButton, ArrowUpRight } from "@/components/ui/Button";
 import { SETTLER_VERSION } from "@/lib/intents";
 import { LIVE_NAMES, ORIGIN_NAMES, SOON_LINE } from "@/lib/networks";
 import { SOLANA_KEPT_SOL, SOLANA_MIN_SOL, SOLANA_OPEN_SOL, SOLANA_RETURNED_SOL, solAmount } from "@/lib/solanaEscrow";
+import { NETWORK } from "@/lib/network";
 
 export const metadata: Metadata = {
   title: "Alpha tester guide · Crux",
@@ -133,7 +134,7 @@ export default function AlphaGuidePage() {
               gasless CRUX Account funded from any chain. Every token here is a test token with no value.
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
-              {["Base Sepolia · 84532", "Test tokens only", "Unaudited contracts"].map((t) => (
+              {[`${NETWORK.label} · ${NETWORK.chain.id}`, "Test tokens only", "Unaudited contracts"].map((t) => (
                 <span key={t} className="rounded-[4px] border border-line-2 px-3 py-1 text-[11.5px] text-muted">
                   {t}
                 </span>
@@ -173,7 +174,7 @@ export default function AlphaGuidePage() {
               {[
                 ["Network name", <span key="n">Base Sepolia</span>],
                 ["RPC URL", <CopyValue key="r" value="https://sepolia.base.org" label="RPC URL" />],
-                ["Chain ID", <CopyValue key="c" value="84532" label="chain ID" />],
+                ["Chain ID", <CopyValue key="c" value={String(NETWORK.chain.id)} label="chain ID" />],
                 ["Currency", <span key="cur">ETH</span>],
                 ["Block explorer", <CopyValue key="e" value={BASESCAN} label="block explorer URL" />],
               ].map(([k, v]) => (

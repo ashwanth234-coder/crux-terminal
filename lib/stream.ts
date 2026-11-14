@@ -1,7 +1,7 @@
 "use client";
 
 import { createPublicClient, webSocket, type Address, type PublicClient } from "viem";
-import { baseSepolia } from "viem/chains";
+import { NETWORK } from "./network.ts";
 
 /**
  * Live log streaming over a websocket (eth_subscribe "logs"): the moment a contract emits anything, the matching
@@ -25,7 +25,7 @@ const HEADS = process.env.NEXT_PUBLIC_BASE_FLASHBLOCKS === "1" ? "newFlashblocks
 export function watchHeads(onHead: () => void, minMs = 1_000): () => void {
   if (OFF || typeof window === "undefined") return () => {};
   try {
-    client ??= createPublicClient({ chain: baseSepolia, transport: webSocket(WSS, { retryCount: 5, retryDelay: 2_000 }) }) as PublicClient;
+    client ??= createPublicClient({ chain: NETWORK.chain, transport: webSocket(WSS, { retryCount: 5, retryDelay: 2_000 }) }) as PublicClient;
     let last = 0;
     let stop: (() => void) | null = null;
     let cancelled = false;
@@ -61,7 +61,7 @@ export function watchHeads(onHead: () => void, minMs = 1_000): () => void {
 export function watchLogsOf(addresses: Address[], onLogs: () => void): () => void {
   if (OFF || typeof window === "undefined" || addresses.length === 0) return () => {};
   try {
-    client ??= createPublicClient({ chain: baseSepolia, transport: webSocket(WSS, { retryCount: 5, retryDelay: 2_000 }) }) as PublicClient;
+    client ??= createPublicClient({ chain: NETWORK.chain, transport: webSocket(WSS, { retryCount: 5, retryDelay: 2_000 }) }) as PublicClient;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const unwatch = client.watchEvent({
       address: addresses,

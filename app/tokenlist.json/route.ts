@@ -1,6 +1,7 @@
 import { connection } from "next/server";
 import { feedResponse, readLaunches, type FeedLaunch } from "@/lib/launchFeed";
 import { SITE_URL } from "@/lib/site";
+import { NETWORK } from "@/lib/network";
 
 /**
  * GET /tokenlist.json: every graduated Crux token as a standard Uniswap token list (tokenlists.org), so wallets,
@@ -16,7 +17,7 @@ function entry(l: FeedLaunch) {
   const symbol = l.symbol.trim();
   if (!name || !NAME_OK.test(name) || !symbol || symbol.length > 20 || !SYMBOL_OK.test(symbol)) return null;
   return {
-    chainId: 84532,
+    chainId: NETWORK.chain.id,
     address: l.token,
     name,
     symbol,
