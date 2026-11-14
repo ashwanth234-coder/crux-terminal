@@ -19,7 +19,10 @@ import { buttonClass } from "@/components/ui/Button";
 import { TESTNET } from "@/lib/chains";
 import { TESTNET_USDC } from "@/lib/intents";
 import { simulateThenWrite } from "@/lib/preflight";
-import { MARKET_FILL_SECONDS, tradeFromAccount, type AccountFill } from "@/lib/account";
+import { MARKET_FILL_SECONDS, signTrade, tradeFromAccount, type AccountFill, type SignedTrade } from "@/lib/account";
+
+/** How long a trade signed ahead of its click stays usable (its 30 s fill window starts when it's signed). */
+const PRESIGN_MS = 10_000;
 import { addPendingTrade, noteFill, updatePendingTrade, useLastFill, usePendingTrades } from "@/lib/pendingTrades";
 import { timingMark, timingPrint, timingStart } from "@/lib/tradeTiming";
 import { launchCaip19 } from "@/lib/launchTrade";
@@ -831,8 +834,49 @@ function TradePanel({
    * from `shown`, the quote on screen, at once when there is one), its minimum 10% under a fresh quote that counts the
    * trades still ahead of it.
    */
+  /**
+   * Signatures made before the click: the login key signs through Privy, about 0.3–0.45 s from India on every trade
+   * (seen live, 2026-11-14), so a quick-buy button signs its next trade when hovered and again right after each press,
+   * priced past every trade on its way. A press uses it when its minimum still fits the fresh price (not above what
+   * it gets, no more than 3% under the fresh minimum) and it's under PRESIGN_MS old; otherwise it signs as before. One
+   * never used is never sent: it goes nowhere.
+   */
+  const presigned = useRef(new Map<string, { at: number; minOut: bigint; signed: Promise<SignedTrade> }>());
+  const presignKey = (buy: boolean, amount: bigint) => `${buy ? "buy" : "sell"}:${amount}`;
+  const accountFieldsFor = (buy: boolean, amount: bigint, minAmountOut: bigint) => ({
+    tokenIn: buy ? TESTNET_USDC : token,
+    amountIn: amount,
+    tokenOut: launchCaip19(buy ? token : TESTNET_USDC),
+    minAmountOut,
+    fillSeconds: MARKET_FILL_SECONDS,
+  });
+  const presign = (buy: boolean, amount: bigint) => {
+    if (!accountReady || opening || amount <= BigInt(0)) return;
+    const q = localQuote(buy, amount);
+    if (!q || q.got === BigInt(0)) return;
+    const minOut = minimumOut(q);
+    const key = presignKey(buy, amount);
+    const cur = presigned.current.get(key);
+    if (cur && cur.minOut === minOut && clock.now() - cur.at < PRESIGN_MS / 2) return;
+    const entry = { at: clock.now(), minOut, signed: signTrade(crux.sign!, crux.account!, accountFieldsFor(buy, amount, minOut)) };
+    entry.signed.catch(() => {
+      if (presigned.current.get(key) === entry) presigned.current.delete(key);
+    });
+    presigned.current.set(key, entry);
+  };
+  const takePresigned = (buy: boolean, amount: bigint, q: { got: bigint; alone: bigint }) => {
+    const key = presignKey(buy, amount);
+    const p = presigned.current.get(key);
+    presigned.current.delete(key);
+    if (!p || clock.now() - p.at > PRESIGN_MS) return null;
+    const fresh = minimumOut(q);
+    if (p.minOut > q.got || p.minOut * BigInt(100) < fresh * BigInt(97)) return null;
+    return p;
+  };
+
   const accountTrade = async (buy: boolean, amount: bigint, shown?: bigint, onQueued?: () => void) => {
     const clickAt = clock.perf();
+    const clickWall = clock.now();
     setNote(null);
     const id = clock.now() + clock.random();
     let settle: ((ok: boolean, tradeTx?: string, fill?: AccountFill) => void) | null = null;
@@ -859,14 +903,13 @@ function TradePanel({
       if (got === BigInt(0)) throw new Error(settling ? "The fair opening just ended and is being settled: try again in a few seconds." : "Too small to trade.");
       onChart.size(alone);
       updateFlights((fs) => fs.map((f) => (f.id === id ? { ...f, got, sent: true } : f)));
-      const res = await tradeFromAccount(crux.sign!, crux.owner!, crux.account!, {
-        tokenIn: buy ? TESTNET_USDC : token,
-        amountIn: amount,
-        tokenOut: launchCaip19(buy ? token : TESTNET_USDC),
-        // 10% under what it should get after the trades ahead; never under half of what it gets alone (lib/tradeMath).
-        minAmountOut: minimumOut(q),
-        fillSeconds: MARKET_FILL_SECONDS,
-      }, undefined, async () => {
+      // Signed ahead when it still fits; its timing counted from this click, not from when it was signed.
+      const pre = takePresigned(buy, amount, q);
+      const signed = pre ? pre.signed.then((s) => ({ ...s, t_click: clickWall, t_signed: Math.max(s.t_signed, clickWall) })) : undefined;
+      // The next press of this button is signed now, priced past this one.
+      if (buy) presign(buy, amount);
+      // 10% under what it should get after the trades ahead; never under half of what it gets alone (lib/tradeMath).
+      const res = await tradeFromAccount(crux.sign!, crux.owner!, crux.account!, accountFieldsFor(buy, amount, pre ? pre.minOut : minimumOut(q)), signed, async () => {
         await Promise.race([postedBefore, new Promise((r) => setTimeout(r, 3_000))]);
         posted();
       });
@@ -1080,6 +1123,7 @@ function TradePanel({
                       key={d}
                       type="button"
                       disabled={busy !== null || (held.data !== undefined && usdcHeld < units)}
+                      onPointerEnter={() => presign(true, units)}
                       onClick={() => quick(units)}
                       className="h-9 rounded-lg border border-up/40 font-mono text-[12.5px] text-up transition-colors hover:border-up hover:bg-up/[0.06] disabled:opacity-35"
                     >
