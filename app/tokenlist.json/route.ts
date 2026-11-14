@@ -2,6 +2,7 @@ import { connection } from "next/server";
 import { feedResponse, readLaunches, type FeedLaunch } from "@/lib/launchFeed";
 import { SITE_URL } from "@/lib/site";
 import { NETWORK } from "@/lib/network";
+import { NETWORK_NAME } from "@/lib/network";
 
 /**
  * GET /tokenlist.json: every graduated Crux token as a standard Uniswap token list (tokenlists.org), so wallets,
@@ -57,6 +58,6 @@ export async function GET() {
       tokens,
     });
   } catch {
-    return feedResponse({ error: "Couldn't read Base Sepolia right now. Retry shortly." }, 503);
+    return feedResponse({ error: `Couldn't read ${NETWORK_NAME} right now. Retry shortly.` }, 503);
   }
 }

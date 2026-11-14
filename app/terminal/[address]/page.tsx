@@ -7,10 +7,11 @@ import { Notice } from "@/components/launch/LaunchView";
 import { ExternalTerminalRoute } from "@/components/pro/ExternalTerminal";
 import { readLaunches } from "@/lib/launchFeed";
 import { readV9Launches } from "@/lib/v9Launches";
+import { NETWORK_NAME } from "@/lib/network";
 
 export const metadata: Metadata = {
   title: "Terminal · Crux",
-  description: "Chart and trade any Base Sepolia token with a Uniswap pool in the Crux Pro terminal.",
+  description: `Chart and trade any ${NETWORK_NAME} token with a Uniswap pool in the Crux Pro terminal.`,
 };
 
 /** /terminal/0x…: a Crux launch opens its launch terminal; any other token opens on its own Uniswap pool. */
@@ -25,7 +26,7 @@ export default function TokenTerminalPage({ params }: { params: Promise<{ addres
 async function Resolve({ params }: { params: Promise<{ address: string }> }) {
   const { address } = await params;
   if (!isAddress(address, { strict: false })) {
-    return <Notice title="Not a contract address">That isn&apos;t a 0x… address. Paste a token contract address from Base Sepolia.</Notice>;
+    return <Notice title="Not a contract address">That isn&apos;t a 0x… address. Paste a token contract address from {NETWORK_NAME}.</Notice>;
   }
   await connection();
   let href: string | null = null;

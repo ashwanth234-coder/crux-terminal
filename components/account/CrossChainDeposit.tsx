@@ -18,6 +18,7 @@ import { feeHeadroom } from "@/lib/fees";
 import { TESTNET_USDC, orderNonce } from "@/lib/intents";
 import { launchCaip19 } from "@/lib/launchTrade";
 import { PAY_SOURCES } from "@/lib/tokens";
+import { NETWORK_NAME } from "@/lib/network";
 
 /**
  * The solver's spread on deposits (crux-solver DEPOSIT_SPREAD_BPS): none, so a deposit pays 1:1 and the order signs the
@@ -59,7 +60,7 @@ const SOLANA = "solana";
 const SOLANA_NAME = "Solana devnet";
 /** Base Sepolia: a plain USDC transfer from the wallet to the account (the account lives there), no fee. */
 const BASE = "base";
-const BASE_NAME = "Base Sepolia";
+const BASE_NAME = `${NETWORK_NAME}`;
 const CHOICES: { key: string; name: string }[] = [{ key: BASE, name: BASE_NAME }, ...ORIGINS, { key: SOLANA, name: SOLANA_NAME }];
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
@@ -279,7 +280,7 @@ export function CrossChainDeposit({
         >
           {copied ? "Copied" : "Copy"}
         </button>
-        <span className="text-[11px] text-signal">Base Sepolia only</span>
+        <span className="text-[11px] text-signal">{NETWORK_NAME} only</span>
       </div>
 
       <div className="mt-3">
@@ -323,7 +324,7 @@ export function CrossChainDeposit({
       {fromBase ? (
         wallet && (
           <p className="mt-1.5 text-[11.5px] leading-relaxed text-dim">
-            {over ? "More than your wallet holds. " : ""}From {short(wallet)} on Base Sepolia
+            {over ? "More than your wallet holds. " : ""}From {short(wallet)} on {NETWORK_NAME}
             {base.balance !== undefined ? ` · wallet has $${Number(formatUnits(base.balance, 6)).toFixed(2)}` : ""}. Arrives at once, no fee: your
             wallet asks you to confirm one transfer.
           </p>
@@ -367,7 +368,7 @@ export function CrossChainDeposit({
         <details className="mt-3 rounded-lg border border-line px-3 py-2.5">
           <summary className="cursor-pointer text-[11.5px] text-dim hover:text-chrome">Sending from an exchange or another wallet?</summary>
           <p className="mt-1.5 text-[11.5px] leading-snug text-muted">
-            Send test USDC on <span className="text-chrome">Base Sepolia</span> to your account address above (Copy). It arrives as soon as the transfer lands.
+            Send test USDC on <span className="text-chrome">{NETWORK_NAME}</span> to your account address above (Copy). It arrives as soon as the transfer lands.
           </p>
           <p className="mt-1 text-[11px] leading-snug text-signal">
             USDC sent to that address on any other chain doesn&apos;t reach your account. From another chain, pick it in &ldquo;Deposit from&rdquo; instead.

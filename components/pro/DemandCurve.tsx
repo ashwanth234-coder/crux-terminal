@@ -5,6 +5,7 @@ import type { Address } from "viem";
 import { useAuctionBids } from "@/hooks/useAuctionBids";
 import { curvePoints, curveRange, demandAt, type BookBid } from "@/lib/demand";
 import { goesLiveForSure, graduationNeeds, maxDepositV3, pctDown, priceUsd, type AuctionV2, type BatchVersion } from "@/lib/launchV2";
+import { NETWORK_NAME } from "@/lib/network";
 
 const PAD = { l: 52, r: 14, t: 18, b: 26 };
 const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
@@ -207,7 +208,7 @@ export function DemandCurve({
         )}
 
         {/* States */}
-        {bids.isPending && <p className="absolute inset-x-0 top-1/2 text-center text-[12px] text-dim">Reading bids from Base Sepolia…</p>}
+        {bids.isPending && <p className="absolute inset-x-0 top-1/2 text-center text-[12px] text-dim">Reading bids from {NETWORK_NAME}…</p>}
         {bids.isError && !bids.data && (
           <p className="absolute inset-x-0 top-1/2 text-center text-[12px] text-dim">Couldn&apos;t read the bids. Retrying…</p>
         )}

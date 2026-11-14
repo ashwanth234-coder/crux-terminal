@@ -33,6 +33,7 @@ import {
   type Phase,
   type TxStep,
 } from "@/lib/launch";
+import { NETWORK_LONG, NETWORK_NAME } from "@/lib/network";
 
 // ------------------------------------------------------------------ route
 
@@ -79,7 +80,7 @@ function LiveLaunch({ factory, id }: { factory: Address; id: string }) {
     return (
       <Shell mode="live">
         <div className="flex items-center gap-3 py-24 text-[14px] text-muted">
-          <KineticLoader className="text-signal" /> Reading auction #{id} from Base Sepolia…
+          <KineticLoader className="text-signal" /> Reading auction #{id} from {NETWORK_NAME}…
         </div>
       </Shell>
     );
@@ -115,7 +116,7 @@ export function Shell({ mode, children }: { mode: LaunchModel["mode"] | null; ch
             {mode && (
               <StatusTag
                 status={mode === "simulated" ? "demo" : "testnet"}
-                label={mode === "simulated" ? "Simulated preview" : "Base Sepolia"}
+                label={mode === "simulated" ? "Simulated preview" : `${NETWORK_NAME}`}
                 className="hidden 2xl:inline-flex"
               />
             )}
@@ -211,7 +212,7 @@ function LaunchView({ model, auction, id }: { model: LaunchModel; auction: Aucti
             {model.name && <span className="text-steel"> {model.name}</span>}
           </h1>
           <p className="mt-2 text-[13px] text-muted">
-            {simulated ? "Simulated auction" : <>Auction <span className="font-mono">#{id}</span> on Base Sepolia</>} · Graduates at{" "}
+            {simulated ? "Simulated auction" : <>Auction <span className="font-mono">#{id}</span> on {NETWORK_NAME}</>} · Graduates at{" "}
             <span className="font-mono tabular-nums text-chrome">${fmtUsdc(auction.graduationTarget)}</span> {simulated ? "simulated USDC" : "test USDC"}
           </p>
         </div>
@@ -311,7 +312,7 @@ function TxLink({ hash }: { hash: Hex }) {
       rel="noopener noreferrer"
       className="break-all font-mono text-[11px] text-muted underline decoration-line-2 hover:text-chrome"
     >
-      {short(hash)} on Base Sepolia ↗
+      {short(hash)} on {NETWORK_NAME} ↗
     </a>
   );
 }
@@ -375,7 +376,7 @@ function ActionPanel({ model, auction, phase, symbol }: { model: LaunchModel; au
   } else if (!model.account) {
     body = (
       <>
-        <p className="text-[13px] leading-relaxed text-muted">Connect a wallet on Base Sepolia to deposit, settle or claim.</p>
+        <p className="text-[13px] leading-relaxed text-muted">Connect a wallet on {NETWORK_NAME} to deposit, settle or claim.</p>
         <button type="button" onClick={model.connect} className={buttonClass("primary", "md", "mt-5 w-full rounded-xl font-semibold")}>
           Connect wallet
         </button>
@@ -527,7 +528,7 @@ function ActionPanel({ model, auction, phase, symbol }: { model: LaunchModel; au
   return (
     <section aria-label="Your position" className="panel-sheen rounded-2xl border border-line p-5 sm:p-6">
       <h2 className="font-display-md text-[22px] text-chrome">{heading[phase]}</h2>
-      <p className="mb-5 mt-1 text-[12px] text-dim">{simulated ? "Simulated · no wallet needed" : "Base Sepolia testnet · test USDC only"}</p>
+      <p className="mb-5 mt-1 text-[12px] text-dim">{simulated ? "Simulated · no wallet needed" : `${NETWORK_LONG} · test USDC only`}</p>
       {body}
       {error && (
         <p role="alert" className="mt-4 rounded-lg border border-down/30 bg-down/10 px-3 py-2 text-[12px] text-down">

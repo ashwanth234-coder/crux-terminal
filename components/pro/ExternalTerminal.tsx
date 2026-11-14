@@ -33,6 +33,7 @@ import { marketOf } from "@/lib/markets";
 import { simulateThenWrite } from "@/lib/preflight";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { useConnectModal } from "@/providers/Web3Provider";
+import { NETWORK_NAME } from "@/lib/network";
 
 /**
  * The Pro terminal for a Base Sepolia token that isn't a Crux launch: its deepest Uniswap pool (lib/externalPools)
@@ -94,18 +95,18 @@ export function ExternalTerminalRoute({ token }: { token: Address }) {
     return (
       <TerminalShell>
         <p role="status" className="flex items-center gap-3 px-5 py-10 text-[13.5px] text-muted">
-          <KineticLoader className="text-chrome" /> Finding this token&apos;s Uniswap pool on Base Sepolia…
+          <KineticLoader className="text-chrome" /> Finding this token&apos;s Uniswap pool on {NETWORK_NAME}…
         </p>
       </TerminalShell>
     );
   }
   if (sym?.status !== "success") {
-    return <Missing token={token} title="Not a token on Base Sepolia">This address doesn&apos;t answer as an ERC-20 token on Base Sepolia. Check the chain and the address.</Missing>;
+    return <Missing token={token} title={`Not a token on ${NETWORK_NAME}`}>This address doesn&apos;t answer as an ERC-20 token on {NETWORK_NAME}. Check the chain and the address.</Missing>;
   }
   if (!pool.data) {
     return (
       <Missing token={token} title={`No pool for ${sym.result}`}>
-        Crux found no Uniswap V2 or V3 pool pairing this token with test USDC or WETH on Base Sepolia, so there is no price to chart or trade.
+        Crux found no Uniswap V2 or V3 pool pairing this token with test USDC or WETH on {NETWORK_NAME}, so there is no price to chart or trade.
       </Missing>
     );
   }
@@ -184,7 +185,7 @@ function ExternalTerminal({ pool, symbol, name, totalSupply }: { pool: ExternalP
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="font-display-md text-[26px] text-chrome">${symbol}</h1>
           {name && <span className="text-[13px] text-muted">{name}</span>}
-          <span className="rounded-[3px] border border-line-2 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">Base Sepolia · {venueLabel(pool)}</span>
+          <span className="rounded-[3px] border border-line-2 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{NETWORK_NAME} · {venueLabel(pool)}</span>
           <span
             className="rounded-[3px] border border-dashed border-line-2 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-dim"
             title={
@@ -208,7 +209,7 @@ function ExternalTerminal({ pool, symbol, name, totalSupply }: { pool: ExternalP
           <Stat label="Swaps 24h" value={stats ? String(stats.count) : "—"} />
         </dl>
         {pool.quoteSymbol === "WETH" && (
-          <p className="mt-2 text-[11.5px] text-dim">Priced through WETH at ${pool.quoteUsd.toFixed(2)} per ETH (the Base Sepolia WETH/USDC pool when this page loaded).</p>
+          <p className="mt-2 text-[11.5px] text-dim">Priced through WETH at ${pool.quoteUsd.toFixed(2)} per ETH (the {NETWORK_NAME} WETH/USDC pool when this page loaded).</p>
         )}
       </section>
 
@@ -385,7 +386,7 @@ function SwapPanel({ pool, symbol }: { pool: ExternalPool; symbol: string }) {
             })
           : await simulateThenWrite(config, address, { address: router, abi: v3RouterAbi, functionName: "exactInputSingle", args: [params], value: nativeIn ? input : undefined, chainId: TESTNET.id });
       }
-      setBusy("Waiting for Base Sepolia…");
+      setBusy(`Waiting for ${NETWORK_NAME}…`);
       await waitForTransactionReceipt(config, { hash, chainId: TESTNET.id });
       setDone({ text: `Swapped ${amount} ${inUnit} for ${outUnit}.`, hash });
       setAmount("");

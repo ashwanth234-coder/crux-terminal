@@ -12,6 +12,7 @@ import { LanguageSwitcher } from "@/components/site/LanguageSwitcher";
 import { ThemeToggle } from "@/components/site/ThemeToggle";
 import { SmartAccountHint } from "@/components/ui/SmartAccountNote";
 import { StatusTag } from "@/components/ui/StatusTag";
+import { NETWORK_NAME } from "@/lib/network";
 
 /** Full-bleed app chrome for the pro terminal: a compact 56px bar, then the terminal fills the viewport. */
 export function TerminalShell({ children }: { children: ReactNode }) {
@@ -30,7 +31,7 @@ export function TerminalShell({ children }: { children: ReactNode }) {
         </div>
         <div className="flex items-center gap-3">
           <TokenSearch className="hidden w-[200px] xl:block" />
-          <StatusTag status="testnet" label="Base Sepolia" className="hidden 2xl:inline-flex" />
+          <StatusTag status="testnet" label={`${NETWORK_NAME}`} className="hidden 2xl:inline-flex" />
           <LanguageSwitcher className="hidden 2xl:flex" />
           <ThemeToggle />
           <AccountButton />

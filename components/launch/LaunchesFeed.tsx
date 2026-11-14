@@ -12,6 +12,7 @@ import { FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FA
 import { type Phase } from "@/lib/launch";
 import { describeLaunch } from "@/lib/launchSummary";
 import { launchKey, useWatchlist } from "@/lib/watchlist";
+import { NETWORK_LONG, NETWORK_NAME } from "@/lib/network";
 
 type Filter = "all" | "active" | "graduated" | "watchlist";
 type Sort = "ending" | "newest" | "raised";
@@ -86,7 +87,7 @@ export function LaunchesFeed() {
           </h1>
           <p className="mt-4 max-w-[34rem] text-[14px] leading-relaxed text-muted">
             Every launch opens with a short fair opening: everyone who buys in it pays the same price, so being first buys nothing.
-            Then it trades live on Base, buyable from any chain. Base Sepolia testnet.
+            Then it trades live on Base, buyable from any chain. {NETWORK_LONG}.
           </p>
         </div>
         <LaunchTokenButton className={buttonClass("primary", "md", "font-semibold")} />
@@ -138,7 +139,7 @@ export function LaunchesFeed() {
 
           {error ? (
             <p role="alert" className="mt-10 rounded-xl border border-down/30 bg-down/10 px-4 py-3 text-[13px] text-down">
-              Couldn&apos;t read launches from Base Sepolia. Retrying…
+              Couldn&apos;t read launches from {NETWORK_NAME}. Retrying…
             </p>
           ) : loading ? (
             <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label="Loading launches">

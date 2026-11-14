@@ -8,6 +8,7 @@ import { useTokenMeta } from "@/hooks/useTokenMeta";
 import { TESTNET_EXPLORER } from "@/lib/chains";
 import { PRICE_DECIMALS, type AuctionV2 } from "@/lib/launchV2";
 import { orderflow, priceChange, share, usdAmount } from "@/lib/orderflow";
+import { NETWORK_NAME } from "@/lib/network";
 
 const WINDOWS = [
   { id: "5m", label: "5M", seconds: 300, span: "5 minutes" },
@@ -152,7 +153,7 @@ export function Momentum({ auction, symbol }: { auction: AuctionV2; symbol: stri
             Search X
           </Pill>
         )}
-        <Pill href={`${TESTNET_EXPLORER}/token/${auction.token}`} title="The token on the Base Sepolia explorer">
+        <Pill href={`${TESTNET_EXPLORER}/token/${auction.token}`} title={`The token on the ${NETWORK_NAME} explorer`}>
           Explorer
         </Pill>
       </div>

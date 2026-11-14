@@ -3,6 +3,7 @@ import { isAddress } from "viem";
 import { INTERVALS, toCandles } from "@/lib/candles";
 import { feedResponse } from "@/lib/launchFeed";
 import { API_NOTES, launchOfPair, readTrades } from "@/lib/marketData";
+import { NETWORK_NAME } from "@/lib/network";
 
 const BY_LABEL = new Map<string, number>(INTERVALS.map((i) => [i.label.toLowerCase(), i.seconds]));
 const MAX_LIMIT = 1000;
@@ -46,6 +47,6 @@ export async function GET(request: Request) {
       15,
     );
   } catch {
-    return feedResponse({ error: "Couldn't read Base Sepolia right now. Retry shortly." }, 503);
+    return feedResponse({ error: `Couldn't read ${NETWORK_NAME} right now. Retry shortly.` }, 503);
   }
 }

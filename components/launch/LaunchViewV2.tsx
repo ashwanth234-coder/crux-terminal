@@ -42,6 +42,7 @@ import {
   usesTicks,
 } from "@/lib/launchV2";
 import { PHASE_WORDS } from "@/lib/phaseWords";
+import { NETWORK_LONG, NETWORK_NAME } from "@/lib/network";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
@@ -79,7 +80,7 @@ function LiveLaunchV2({ factory, id, version }: { factory: Address; id: string; 
     return (
       <Shell mode="live">
         <div className="flex items-center gap-3 py-24 text-[14px] text-muted">
-          <KineticLoader className="text-signal" /> Reading auction #{id} from Base Sepolia…
+          <KineticLoader className="text-signal" /> Reading auction #{id} from {NETWORK_NAME}…
         </div>
       </Shell>
     );
@@ -174,7 +175,7 @@ function ViewV2({ model, auction, id }: { model: LaunchV2Model; auction: Auction
             {model.name && <span className="text-steel"> {model.name}</span>}
           </h1>
           <p className="mt-2 text-[13px] text-muted">
-            Auction <span className="font-mono">#{id}</span> on Base Sepolia · Graduates at{" "}
+            Auction <span className="font-mono">#{id}</span> on {NETWORK_NAME} · Graduates at{" "}
             <span className="font-mono text-chrome">${fmtUsdc(auction.graduationTarget)}</span> test USDC
           </p>
         </div>
@@ -344,7 +345,7 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
   } else if (!model.account) {
     body = (
       <>
-        <p className="text-[13px] text-muted">Connect a wallet on Base Sepolia to buy or collect your tokens.</p>
+        <p className="text-[13px] text-muted">Connect a wallet on {NETWORK_NAME} to buy or collect your tokens.</p>
         <button type="button" onClick={model.connect} className={buttonClass("primary", "md", "mt-5 w-full rounded-xl font-semibold")}>
           Connect wallet
         </button>
@@ -358,7 +359,7 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
           <p className="text-[14px] text-chrome">{busy.label}</p>
           {busy.hash && (
             <a href={`${TESTNET_EXPLORER}/tx/${busy.hash}`} target="_blank" rel="noopener noreferrer" className="font-mono text-[11px] text-muted underline decoration-line-2">
-              {short(busy.hash)} on Base Sepolia
+              {short(busy.hash)} on {NETWORK_NAME}
             </a>
           )}
         </div>
@@ -526,7 +527,7 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
   return (
     <section aria-label="Your position" className="rounded-2xl border border-line bg-panel p-5 sm:p-6">
       <h2 className="text-[15px] font-medium text-chrome">{phase === "open" || phase === "scheduled" ? `Buy ${symbol}` : phase === "closed" ? "Going live" : "Your tokens"}</h2>
-      <p className="mt-1 text-[12px] text-muted">Base Sepolia testnet · test USDC only</p>
+      <p className="mt-1 text-[12px] text-muted">{NETWORK_LONG} · test USDC only</p>
       <div className="mt-5">{body}</div>
       {model.account && (phase === "open" || phase === "graduated" || phase === "cancelled") && (
         <SmartAccountNote address={model.account} className="mt-4" />
@@ -594,7 +595,7 @@ function SettingPrice({ auction, onSettle, wallet }: { auction: AuctionV2; onSet
       </p>
       {late && (
         <button type="button" onClick={onSettle} className="mt-4 text-[12px] text-dim underline decoration-line-2 underline-offset-2 hover:text-chrome">
-          Taking a while? {wallet ? "Finish it from your wallet" : "Connect a wallet to finish it"} (a little Base Sepolia gas)
+          Taking a while? {wallet ? "Finish it from your wallet" : "Connect a wallet to finish it"} (a little {NETWORK_NAME} gas)
         </button>
       )}
     </div>

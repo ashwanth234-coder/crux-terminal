@@ -15,6 +15,7 @@ import { mineTokenSalt } from "@/lib/tokenSalt";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { postRelay } from "@/lib/session";
 import { FACTORY_V9, V9_ON, curveV9Abi, factoryV9Abi, launchFromAccountV9, type V9LaunchParams } from "@/lib/v9";
+import { NETWORK_LONG } from "@/lib/network";
 
 const metadataOf = (o: { name: string; description: string; image: string; x: string }) => {
   const json = JSON.stringify({ name: o.name, description: o.description, image: o.image, links: o.x ? { x: o.x } : {} });
@@ -167,7 +168,7 @@ export function V9Create() {
         <h1 className="font-display text-[clamp(1.8rem,3.4vw,2.4rem)] text-bright">Launch a token</h1>
         <p className="mt-2 text-[13.5px] leading-relaxed text-muted">
           Your token trades on its own curve from the first second (after an optional fair opening), then graduates into a Uniswap pool on Base
-          {threshold ? ` at $${Number(threshold) / 1e6}` : ""} with its liquidity burned. Free to launch. Base Sepolia testnet.
+          {threshold ? ` at $${Number(threshold) / 1e6}` : ""} with its liquidity burned. Free to launch. {NETWORK_LONG}.
         </p>
 
         <div className="mt-6 space-y-4 text-[13px]">

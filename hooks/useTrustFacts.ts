@@ -10,6 +10,7 @@ import { useNow } from "@/hooks/useLaunchAuction";
 import { TESTNET } from "@/lib/chains";
 import { fmtUsdc, fmtTokens } from "@/lib/launch";
 import { maxDepositV3, type AuctionV2, type BatchVersion } from "@/lib/launchV2";
+import { NETWORK_LONG, NETWORK_NAME } from "@/lib/network";
 
 const DEAD: Address = "0x000000000000000000000000000000000000dEaD";
 const lpAbi = parseAbi(["function totalSupply() view returns (uint256)", "function balanceOf(address) view returns (uint256)"]);
@@ -224,10 +225,10 @@ export function useTrustFacts(
     key: "chain",
     label: "Home chain",
     state: code.data ? "pass" : code.isPending ? "loading" : "fail",
-    value: `Base Sepolia · ${TESTNET.id}`,
+    value: `${NETWORK_NAME} · ${TESTNET.id}`,
     detail: code.data
-      ? `Factory ${short(factory)} read live from Base Sepolia testnet${version >= 3 ? "; source verified on Basescan and Sourcify" : ""}.`
-      : "Couldn't read the factory's code from Base Sepolia.",
+      ? `Factory ${short(factory)} read live from ${NETWORK_LONG}${version >= 3 ? "; source verified on Basescan and Sourcify" : ""}.`
+      : `Couldn't read the factory's code from ${NETWORK_NAME}.`,
     href: `${explorer}/address/${factory}#code`,
   };
 

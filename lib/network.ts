@@ -85,8 +85,8 @@ const BASE_SEPOLIA: Network = {
 };
 
 /**
- * Base mainnet. Token, Permit2 and Uniswap addresses are the canonical ones; check each against the issuer's docs
- * before the switch. The Crux contracts are empty until they're deployed (set them here, or by NEXT_PUBLIC_CRUX_*).
+ * Base mainnet. Token, Permit2 and Uniswap addresses verified on-chain 2026-11-14 (mainnet.base.org; see crux-solver
+ * scripts/network.ts). The Crux contracts are empty until they're deployed (set them here, or by NEXT_PUBLIC_CRUX_*).
  */
 const BASE_MAINNET: Network = {
   name: "base-mainnet",
@@ -131,3 +131,8 @@ export function need(what: string, value: Address | null | undefined, network: N
 
 /** CAIP-19 id of an ERC-20 on this network: "eip155:<chain>/erc20:<checksummed token>". */
 export const caip19 = (token: Address, network: Network = NETWORK) => `eip155:${network.chain.id}/erc20:${getAddress(token)}`;
+
+/** The network's name in copy: "Base Sepolia" on testnet, "Base" on mainnet. */
+export const NETWORK_NAME = NETWORK.label;
+/** The same where copy said "Base Sepolia testnet": "Base" alone on mainnet, so no testnet wording shows there. */
+export const NETWORK_LONG = NETWORK.testnet ? `${NETWORK.label} testnet` : NETWORK.label;

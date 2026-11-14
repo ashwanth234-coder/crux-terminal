@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Shell } from "@/components/launch/LaunchView";
 import { SITE_URL } from "@/lib/site";
+import { NETWORK_LONG } from "@/lib/network";
 
 export const metadata: Metadata = {
   title: "Market data API · Crux",
   description:
-    "Crux's public market data API on Base Sepolia testnet: every graduated launch's pair, its trades (Uniswap V2 swaps and anti-sniper batch fills) and OHLCV candles. No key, any origin.",
+    `Crux's public market data API on ${NETWORK_LONG}: every graduated launch's pair, its trades (Uniswap V2 swaps and anti-sniper batch fills) and OHLCV candles. No key, any origin.`,
 };
 
 const SECTIONS = [
@@ -88,7 +89,7 @@ export default function DevelopersPage() {
           <header className="pb-10">
             <h1 className="font-display text-[clamp(2.2rem,4.8vw,3.8rem)] leading-[0.95]">
               <span className="block text-bright">Market data API.</span>
-              <span className="block text-steel">Base Sepolia testnet.</span>
+              <span className="block text-steel">{NETWORK_LONG}.</span>
             </h1>
             <p className="mt-6 max-w-[42rem] text-[16px] leading-relaxed text-chrome/70">
               Every graduated Crux launch&apos;s market, its trades and its candles, read live from the chain. The same numbers the Crux
@@ -208,7 +209,7 @@ export default function DevelopersPage() {
 
           <Section id="notes" title="6. Data notes">
             <ul className="list-disc space-y-2.5 pl-5">
-              <li>Everything is on Base Sepolia testnet: test tokens with no value, priced in test USDC.</li>
+              <li>Everything is on {NETWORK_LONG}: test tokens with no value, priced in test USDC.</li>
               <li>
                 Trades and candles cover at most the last three days of a market; {c("truncated")} is true when older trades exist but
                 aren&apos;t included.

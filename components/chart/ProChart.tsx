@@ -58,6 +58,7 @@ import { TableView } from "./TableView";
 import { useChartAlerts } from "./useChartAlerts";
 import { useChartLayoutSync } from "./useChartLayoutSync";
 import { Toolbar } from "./Toolbar";
+import { NETWORK_LONG, NETWORK_NAME } from "@/lib/network";
 
 /** A new chart in a multi-chart layout starts on a different timeframe: auto, 1 minute, 15 minutes, 1 hour. */
 const SLOT_INTERVALS: (number | "auto")[] = ["auto", 60, 900, 3_600];
@@ -984,7 +985,7 @@ export function ProChart({
       value: `${config.units === "mcap" ? "MCap " : ""}${fmt(last.close * k)}`,
       change: change === null ? null : `${change >= 0 ? "+" : ""}${change.toFixed(2)}% shown`,
       up: (change ?? 0) >= 0,
-      sub: `CRUX Pro · Base Sepolia testnet · ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC`,
+      sub: `CRUX Pro · ${NETWORK_LONG} · ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC`,
     });
     const how = await shareImage(blob, `${symbol.replace(/^\$/, "")}-${intervalLabel}.png`);
     flash(how === "copied" ? "Chart copied: paste it into X" : "Chart image downloaded");
@@ -1607,7 +1608,7 @@ export function ProChart({
             {toast}
           </p>
         )}
-        {swaps.isPending && <p className="absolute inset-x-0 top-1/2 text-center text-[12px] text-dim">Reading trades from Base Sepolia…</p>}
+        {swaps.isPending && <p className="absolute inset-x-0 top-1/2 text-center text-[12px] text-dim">Reading trades from {NETWORK_NAME}…</p>}
         {swaps.data && candles.length === 0 && (
           <p className="absolute inset-x-0 top-1/2 px-6 text-center text-[12px] text-dim">{external ? "No swaps in this pool in the last few days." : `No trades since graduation. The pool opened at ${fmtTokenPrice(gradPrice)}.`}</p>
         )}

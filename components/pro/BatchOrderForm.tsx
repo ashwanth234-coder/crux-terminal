@@ -18,6 +18,7 @@ import { formatRemaining, launchError } from "@/lib/launch";
 import { logClient } from "@/lib/logs";
 import { simulateThenWrite } from "@/lib/preflight";
 import { useConnectModal } from "@/providers/Web3Provider";
+import { NETWORK_NAME } from "@/lib/network";
 
 type Side = "buy" | "sell";
 type Flow =
@@ -168,7 +169,7 @@ export function BatchOrderForm({ market, symbol }: { market: LaunchMarket; symbo
   const label = !isConnected
     ? "Connect wallet to trade"
     : flow.kind === "switching"
-      ? "Switching to Base Sepolia…"
+      ? `Switching to ${NETWORK_NAME}…`
       : flow.kind === "approving"
         ? `Approving ${side === "buy" ? "test USDC" : symbol}…`
         : flow.kind === "placing"
@@ -229,7 +230,7 @@ export function BatchOrderForm({ market, symbol }: { market: LaunchMarket; symbo
         <span className="shrink-0 text-[12px] text-muted">{side === "buy" ? "USDC" : symbol}</span>
       </div>
       <div className="-mt-1.5 flex items-baseline justify-between text-[11px] text-dim">
-        <span>{side === "buy" ? "Base Sepolia test USDC" : `Selling ${symbol}`}</span>
+        <span>{side === "buy" ? `${NETWORK_NAME} test USDC` : `Selling ${symbol}`}</span>
         <button
           type="button"
           disabled={!balance}

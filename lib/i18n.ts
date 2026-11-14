@@ -1,3 +1,4 @@
+import { NETWORK_NAME } from "./network.ts";
 /**
  * The terminal's languages: a small dictionary for the core terminal, launchpad and vault strings, with no library and
  * no network. The choice lives only in this browser's localStorage (I18nProvider); nothing is detected from the IP or
@@ -48,7 +49,7 @@ const en = {
   "stat.lpBurned": "LP burned",
   "stat.feesLocked": "Fees locked",
   "stat.bids": "Bids",
-  "stat.pair": "Base Sepolia · USDC pair",
+  "stat.pair": `${NETWORK_NAME} · USDC pair`,
 
   "badge.vested": "Creator vested {days}D",
   "badge.instantUnlock": "Instant unlock",
@@ -120,7 +121,7 @@ const zh: Dict = {
   "stat.lpBurned": "LP 已销毁",
   "stat.feesLocked": "锁定手续费",
   "stat.bids": "出价",
-  "stat.pair": "Base Sepolia · USDC 交易对",
+  "stat.pair": `${NETWORK_NAME} · USDC 交易对`,
   "badge.vested": "{days}天线性解锁",
   "badge.instantUnlock": "即时解锁",
   "badge.antiSniper": "防狙击 {window}",
@@ -184,7 +185,7 @@ const es: Dict = {
   "stat.lpBurned": "LP quemado",
   "stat.feesLocked": "Comisiones bloqueadas",
   "stat.bids": "Pujas",
-  "stat.pair": "Base Sepolia · par USDC",
+  "stat.pair": `${NETWORK_NAME} · par USDC`,
   "badge.vested": "Vesting {days}D",
   "badge.instantUnlock": "Desbloqueo inmediato",
   "badge.antiSniper": "Anti-sniper {window}",
@@ -249,7 +250,7 @@ const ko: Dict = {
   "stat.lpBurned": "LP 소각",
   "stat.feesLocked": "잠긴 수수료",
   "stat.bids": "입찰",
-  "stat.pair": "Base Sepolia · USDC 페어",
+  "stat.pair": `${NETWORK_NAME} · USDC 페어`,
   "badge.vested": "{days}일 베스팅",
   "badge.instantUnlock": "즉시 언락",
   "badge.antiSniper": "스나이퍼 방지 {window}",
@@ -314,7 +315,7 @@ const ru: Dict = {
   "stat.lpBurned": "LP сожжён",
   "stat.feesLocked": "Заблок. комиссии",
   "stat.bids": "Заявки",
-  "stat.pair": "Base Sepolia · пара USDC",
+  "stat.pair": `${NETWORK_NAME} · пара USDC`,
   "badge.vested": "Вестинг {days} дн.",
   "badge.instantUnlock": "Мгновенная разблокировка",
   "badge.antiSniper": "Анти-снайпер {window}",

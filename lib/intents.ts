@@ -1,6 +1,7 @@
 import { encodeAbiParameters, getAddress, isAddress, keccak256, toHex, type Address, type Hex, type TypedDataDefinition } from "viem";
 import { crossChainDomain, originByKey, type OriginKey } from "./crosschain";
 import { caip19, need, NETWORK, NETWORKS } from "./network.ts";
+import { NETWORK_NAME } from "./network.ts";
 
 // Only used as the EIP-712 verifyingContract for local signature checks while
 // nothing is deployed; never sent to a chain.
@@ -299,7 +300,7 @@ export function buildGaslessOrder(draft: IntentDraft): {
     throw new Error(`Switch your wallet to ${origin.name} (chain ${origin.chain.id}) to sign this intent.`);
   }
   if (!cross && SETTLER_DEPLOYED && draft.chainId !== SETTLER_DOMAIN.chainId) {
-    throw new Error(`Switch your wallet to Base Sepolia (chain ${SETTLER_DOMAIN.chainId}) to sign this intent.`);
+    throw new Error(`Switch your wallet to ${NETWORK_NAME} (chain ${SETTLER_DOMAIN.chainId}) to sign this intent.`);
   }
   const domain = origin ? crossChainDomain(origin) : SETTLER_DEPLOYED ? SETTLER_DOMAIN : { ...SETTLER_DOMAIN, chainId: draft.chainId };
   const now = Math.floor(Date.now() / 1000);

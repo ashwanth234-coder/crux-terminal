@@ -9,6 +9,7 @@ import { ThemeToggle } from "@/components/site/ThemeToggle";
 import { StatusTag } from "@/components/ui/StatusTag";
 import { Logo } from "./Logo";
 import { SiteNav } from "./SiteNav";
+import { NETWORK_NAME } from "@/lib/network";
 
 /** Slim site bar: mark and wordmark left, the five routes centred, CONNECT WALLET right. */
 export function Header() {
@@ -82,7 +83,7 @@ export function Header() {
         </div>
         <div className="mt-6 flex items-center gap-3 text-[12px] text-muted">
           <StatusTag status="testnet" />
-          Base Sepolia. Nothing here is on mainnet.
+          {NETWORK_NAME}. Nothing here is on mainnet.
         </div>
       </nav>
     </header>

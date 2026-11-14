@@ -1,5 +1,6 @@
 import { Chapter } from "./Chapter";
 import { ORIGIN_NAMES } from "@/lib/networks";
+import { NETWORK_NAME } from "@/lib/network";
 
 // How Crux is built on Base, for readers who want the mechanism. Each claim is live on Base Sepolia today.
 const PARTS = [
@@ -72,7 +73,7 @@ export function OnBase() {
       </dl>
       <p className="mt-8 max-w-2xl text-[15px] leading-relaxed text-chrome/90">
         Wherever the money comes from, every trade on Crux ends as a transaction on Base.{" "}
-        <span className="text-dim">Measured on Base Sepolia (testnet).</span>
+        <span className="text-dim">Measured on {NETWORK_NAME} (testnet).</span>
       </p>
     </Chapter>
   );

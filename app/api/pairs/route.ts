@@ -2,6 +2,7 @@ import { connection } from "next/server";
 import { isAddress } from "viem";
 import { feedResponse } from "@/lib/launchFeed";
 import { API_NOTES, readPair, readPairs } from "@/lib/marketData";
+import { NETWORK_NAME } from "@/lib/network";
 
 /**
  * GET /api/pairs: every graduated Crux launch's market on Base Sepolia (its Uniswap V2 pair, where it trades now,
@@ -19,6 +20,6 @@ export async function GET(request: Request) {
     }
     return feedResponse({ ...API_NOTES, generatedAt: new Date().toISOString(), pairs: await readPairs() }, 200, 30);
   } catch {
-    return feedResponse({ error: "Couldn't read Base Sepolia right now. Retry shortly." }, 503);
+    return feedResponse({ error: `Couldn't read ${NETWORK_NAME} right now. Retry shortly.` }, 503);
   }
 }

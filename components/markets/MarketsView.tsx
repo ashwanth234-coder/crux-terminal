@@ -9,12 +9,13 @@ import { KineticLoader } from "@/components/ui/Modal";
 import { TESTNET_USDC } from "@/lib/intents";
 import { fmtTokenPrice } from "@/lib/launchTrade";
 import { CURATED_MARKETS, fetchMarkets, WETH, type TrendingRow } from "@/lib/markets";
+import { NETWORK_NAME } from "@/lib/network";
 
 type Tab = "launches" | "markets" | "trending";
 const TABS: { id: Tab; label: string; note: string }[] = [
   { id: "launches", label: "Crux launches", note: "Fair-launched on Crux: one clearing price, LP burned." },
   { id: "markets", label: "Markets", note: "Established tokens your Crux account trades through the Crux solver." },
-  { id: "trending", label: "Trending", note: "The busiest Base Sepolia pools in the last hour." },
+  { id: "trending", label: "Trending", note: `The busiest ${NETWORK_NAME} pools in the last hour.` },
 ];
 
 type FeedLaunch = { key: string; version: number; auctionId: number; token: Address; name: string; symbol: string; phase: string; clearingPriceUsd: number | null };
@@ -39,7 +40,7 @@ export function MarketsView() {
     <Shell mode="live">
       <div className="flex flex-col gap-2">
         <h1 className="font-display text-[clamp(2.2rem,5vw,3.8rem)] text-chrome">Markets</h1>
-        <p className="max-w-[36rem] text-[14px] leading-relaxed text-muted">Crux launches, the established tokens your Crux account can trade, and what is moving on Base Sepolia right now. Testnet tokens only.</p>
+        <p className="max-w-[36rem] text-[14px] leading-relaxed text-muted">Crux launches, the established tokens your Crux account can trade, and what is moving on {NETWORK_NAME} right now. Testnet tokens only.</p>
       </div>
 
       <div role="tablist" aria-label="Lists" className="mt-8 flex flex-wrap gap-1.5 border-b border-line">

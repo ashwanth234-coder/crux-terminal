@@ -2,6 +2,7 @@ import { connection } from "next/server";
 import { isAddress } from "viem";
 import { feedResponse } from "@/lib/launchFeed";
 import { API_NOTES, launchOfPair, readTrades, tradeJson } from "@/lib/marketData";
+import { NETWORK_NAME } from "@/lib/network";
 
 const MAX_LIMIT = 500;
 
@@ -40,6 +41,6 @@ export async function GET(request: Request) {
       10,
     );
   } catch {
-    return feedResponse({ error: "Couldn't read Base Sepolia right now. Retry shortly." }, 503);
+    return feedResponse({ error: `Couldn't read ${NETWORK_NAME} right now. Retry shortly.` }, 503);
   }
 }

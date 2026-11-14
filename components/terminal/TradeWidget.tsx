@@ -13,6 +13,7 @@ import { SETTLER_DEPLOYED, TESTNET_USDC } from "@/lib/intents";
 import { buyCost, fmtTokenPrice, solverQuote } from "@/lib/launchTrade";
 import type { OrderDraft, Side } from "@/lib/order";
 import { PAY_SOURCES, usd } from "@/lib/tokens";
+import { NETWORK_LONG, NETWORK_NAME } from "@/lib/network";
 
 /** A graduated Crux launch: Base Sepolia only, priced from its locked pool, paid in Base Sepolia test USDC. */
 export type LaunchTrade = { symbol: string; market: LaunchMarket };
@@ -89,7 +90,7 @@ export function TradeWidget({ launch }: { launch: LaunchTrade }) {
       price: unitPrice,
       notional,
       source: TEST_USDC_SOURCE,
-      originLabel: "Base Sepolia",
+      originLabel: `${NETWORK_NAME}`,
       asset: { address: market.token, caip19: market.caip19, decimals: market.decimals },
     });
   };
@@ -181,7 +182,7 @@ export function TradeWidget({ launch }: { launch: LaunchTrade }) {
       <div className="mt-2 flex items-center justify-between rounded-lg border border-line px-3 py-2.5 text-[12px]">
         <span className="text-muted">{side === "buy" ? "Pay with" : "Receive"}</span>
         <span className="font-mono text-chrome">
-          Base Sepolia test USDC{side === "buy" && isConnected ? ` · ${usd.format(available)}` : ""}
+          {NETWORK_NAME} test USDC{side === "buy" && isConnected ? ` · ${usd.format(available)}` : ""}
         </span>
       </div>
 
@@ -204,9 +205,9 @@ export function TradeWidget({ launch }: { launch: LaunchTrade }) {
 
       <p aria-live="polite" className="mt-2 min-h-[30px] text-center text-[11px] leading-snug text-muted">
         {blocked === NOT_LISTED ? (
-          <>This launch isn&apos;t listed for Crux orders yet · Base Sepolia testnet</>
+          <>This launch isn&apos;t listed for Crux orders yet · {NETWORK_LONG}</>
         ) : (
-          <>Base Sepolia testnet · priced from the locked Uniswap pool · test funds only</>
+          <>{NETWORK_LONG} · priced from the locked Uniswap pool · test funds only</>
         )}
       </p>
 

@@ -7,18 +7,19 @@ import { SETTLER_VERSION } from "@/lib/intents";
 import { LIVE_NAMES, ORIGIN_NAMES, SOON_LINE } from "@/lib/networks";
 import { SOLANA_KEPT_SOL, SOLANA_MIN_SOL, SOLANA_OPEN_SOL, SOLANA_RETURNED_SOL, solAmount } from "@/lib/solanaEscrow";
 import { NETWORK } from "@/lib/network";
+import { NETWORK_LONG, NETWORK_NAME } from "@/lib/network";
 
 export const metadata: Metadata = {
   title: "Alpha tester guide · Crux",
   description:
-    "How to test Crux on Base Sepolia: wallet and CRUX Account setup, deposits from any chain, launching a token on its USDC curve with an optional fair opening, trading it before and after it graduates to Uniswap, standing orders, refunds and the alpha's trust model.",
+    `How to test Crux on ${NETWORK_NAME}: wallet and CRUX Account setup, deposits from any chain, launching a token on its USDC curve with an optional fair opening, trading it before and after it graduates to Uniswap, standing orders, refunds and the alpha's trust model.`,
 };
 
 /** Set NEXT_PUBLIC_ALPHA_FEEDBACK_URL (Telegram, Discord or a form) to show a feedback button. */
 const FEEDBACK_URL = process.env.NEXT_PUBLIC_ALPHA_FEEDBACK_URL?.trim() || null;
 
 const TESTNET_USDC = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
-const BASESCAN = "https://sepolia.basescan.org";
+const BASESCAN = NETWORK.explorer;
 
 const SECTIONS = [
   { id: "overview", title: "Overview" },
@@ -127,7 +128,7 @@ export default function AlphaGuidePage() {
           <header className="pb-10">
             <h1 className="font-display text-[clamp(2.2rem,4.8vw,3.8rem)] leading-[0.95]">
               <span className="block text-bright">Alpha tester guide.</span>
-              <span className="block text-steel">Base Sepolia testnet.</span>
+              <span className="block text-steel">{NETWORK_LONG}.</span>
             </h1>
             <p className="mt-6 max-w-[40rem] text-[16px] leading-relaxed text-chrome/70">
               Everything you need to launch a token, trade it on its USDC curve and after it graduates to Uniswap, from a wallet or a
@@ -162,17 +163,17 @@ export default function AlphaGuidePage() {
               </li>
             </ul>
             <p>
-              {b("Chains.")} Tokens, curves and pools live on Base Sepolia. You can deposit and trade from {LIVE_NAMES} (testnets;
+              {b("Chains.")} Tokens, curves and pools live on {NETWORK_NAME}. You can deposit and trade from {LIVE_NAMES} (testnets;
               Solana devnet), and nothing has to be bridged. {SOON_LINE}.
             </p>
             <p>Use it like you would a real product, try to break it, and tell us what confused you.</p>
           </Section>
 
           <Section id="setup" title="2. Network & wallet setup">
-            <p>Add Base Sepolia to your wallet (MetaMask: Settings → Networks → Add network → Add a network manually):</p>
+            <p>Add {NETWORK_NAME} to your wallet (MetaMask: Settings → Networks → Add network → Add a network manually):</p>
             <dl className="divide-y divide-line rounded-xl border border-line bg-panel text-[13.5px]">
               {[
-                ["Network name", <span key="n">Base Sepolia</span>],
+                ["Network name", <span key="n">{NETWORK_NAME}</span>],
                 ["RPC URL", <CopyValue key="r" value="https://sepolia.base.org" label="RPC URL" />],
                 ["Chain ID", <CopyValue key="c" value={String(NETWORK.chain.id)} label="chain ID" />],
                 ["Currency", <span key="cur">ETH</span>],
@@ -193,12 +194,12 @@ export default function AlphaGuidePage() {
             <Steps
               items={[
                 <>
-                  {b("Test ETH")} from the <Ext href="https://www.alchemy.com/faucets/base-sepolia">Alchemy Base Sepolia faucet</Ext> or
+                  {b("Test ETH")} from the <Ext href="https://www.alchemy.com/faucets/base-sepolia">Alchemy {NETWORK_NAME} faucet</Ext> or
                   the <Ext href="https://console.optimism.io/faucet">Superchain faucet</Ext>. Some faucets ask you to sign in or hold a
                   tiny mainnet balance; if one refuses, try the other. A few cents&apos; worth of test ETH lasts the whole alpha.
                 </>,
                 <>
-                  {b("Test USDC")} from <Ext href="https://faucet.circle.com">faucet.circle.com</Ext>: pick {b("Base Sepolia")}, paste
+                  {b("Test USDC")} from <Ext href="https://faucet.circle.com">faucet.circle.com</Ext>: pick {b(`${NETWORK_NAME}`)}, paste
                   your address and request.
                 </>,
                 <>
@@ -213,7 +214,7 @@ export default function AlphaGuidePage() {
 
           <Section id="account" title="3. Your CRUX Account">
             <p>
-              A CRUX Account is a smart account on Base Sepolia (its address ends in <code className="font-mono text-[13.5px] text-chrome">5afe</code>). It trades, launches and buys at
+              A CRUX Account is a smart account on {NETWORK_NAME} (its address ends in <code className="font-mono text-[13.5px] text-chrome">5afe</code>). It trades, launches and buys at
               open without gas or pop-ups, and its funds can only ever be withdrawn to the wallet you bind to it.
             </p>
             <Steps
@@ -224,17 +225,17 @@ export default function AlphaGuidePage() {
                 </>,
                 <>
                   Under {b("Deposit")}, pick the chain your test USDC is on in {b("Deposit from")} (each shows your balance there):{" "}
-                  {b("Base Sepolia")}, Arbitrum Sepolia, Ethereum Sepolia, BNB Chain testnet or Solana devnet. Enter an amount and press{" "}
+                  {b(`${NETWORK_NAME}`)}, Arbitrum Sepolia, Ethereum Sepolia, BNB Chain testnet or Solana devnet. Enter an amount and press{" "}
                   {b("Deposit")}.
                 </>,
                 <>
-                  From Base Sepolia it&apos;s one transfer, with no fee, and arrives at once. From another chain your wallet escrows the
+                  From {NETWORK_NAME} it&apos;s one transfer, with no fee, and arrives at once. From another chain your wallet escrows the
                   USDC there and Crux pays it into your account on Base in about a minute, also with no fee. You need a little of that
                   chain&apos;s gas token (Solana: about {SOLANA_MIN_SOL} devnet SOL).
                 </>,
                 <>
-                  You can also send test USDC on {b("Base Sepolia")} straight to your account address ({b("Copy")} at the top of
-                  Deposit), from an exchange or another wallet. Only on Base Sepolia: USDC sent to that address on any other chain
+                  You can also send test USDC on {b(`${NETWORK_NAME}`)} straight to your account address ({b("Copy")} at the top of
+                  Deposit), from an exchange or another wallet. Only on {NETWORK_NAME}: USDC sent to that address on any other chain
                   doesn&apos;t reach the account.
                 </>,
               ]}
@@ -344,8 +345,8 @@ export default function AlphaGuidePage() {
               under {b("Paid from Solana")} in My orders, in the browser you placed them from, with the same refund time and button.
             </p>
             <p>
-              {b("MetaMask says “Requested resource not available” or hangs.")} Its Base Sepolia RPC is congested. Settings → Networks
-              → Base Sepolia → replace the RPC URL with:
+              {b("MetaMask says “Requested resource not available” or hangs.")} Its {NETWORK_NAME} RPC is congested. Settings → Networks
+              → {NETWORK_NAME} → replace the RPC URL with:
             </p>
             <CopyValue value="https://base-sepolia-rpc.publicnode.com" label="backup RPC URL" />
             <ul className="space-y-2.5 text-[14px]">

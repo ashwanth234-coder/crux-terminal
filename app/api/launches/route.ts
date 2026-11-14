@@ -1,6 +1,7 @@
 import { connection } from "next/server";
 import { feedResponse, readLaunches } from "@/lib/launchFeed";
 import { NETWORK } from "@/lib/network";
+import { NETWORK_NAME } from "@/lib/network";
 
 /**
  * GET /api/launches: every Crux launch on Base Sepolia, newest first, read live from the batch factories.
@@ -17,10 +18,10 @@ export async function GET(request: Request) {
       network: "base-sepolia",
       testnet: true,
       generatedAt: new Date().toISOString(),
-      notes: "Test tokens on Base Sepolia only. Prices are in test USDC. Graduated pools are Uniswap V2 pairs whose LP tokens are burned.",
+      notes: `Test tokens on ${NETWORK_NAME} only. Prices are in test USDC. Graduated pools are Uniswap V2 pairs whose LP tokens are burned.`,
       launches: phase ? launches.filter((l) => l.phase === phase) : launches,
     });
   } catch {
-    return feedResponse({ error: "Couldn't read Base Sepolia right now. Retry shortly." }, 503);
+    return feedResponse({ error: `Couldn't read ${NETWORK_NAME} right now. Retry shortly.` }, 503);
   }
 }

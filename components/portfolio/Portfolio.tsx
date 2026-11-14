@@ -27,6 +27,7 @@ import { minReceived, type OrderDraft } from "@/lib/order";
 import { SOLVER_MAX_IMPACT_PCT, tradeRisk } from "@/lib/risk";
 import { PAY_SOURCES } from "@/lib/tokens";
 import { useConnectModal } from "@/providers/Web3Provider";
+import { NETWORK_LONG, NETWORK_NAME } from "@/lib/network";
 
 const TEST_USDC_SOURCE = PAY_SOURCES.find((s) => s.id === "base-usdc") ?? PAY_SOURCES[0];
 const SELL_SIZES = [25, 50, 100] as const;
@@ -146,7 +147,7 @@ export function Portfolio() {
     <Shell mode="live">
       <div className="flex flex-col gap-8">
         <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-dim">Portfolio · Base Sepolia testnet</p>
+          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-dim">Portfolio · {NETWORK_LONG}</p>
           <h1 className="mt-2 font-display-md text-[30px] text-chrome">Your Crux positions</h1>
           <p className="mt-2 max-w-[640px] text-[13.5px] leading-relaxed text-muted">
             Every launch token held, valued at its pool&apos;s price. Entry and PnL are rebuilt from the chain&apos;s own transfers and
@@ -225,7 +226,7 @@ export function Portfolio() {
                     ))}
                   </tbody>
                 </table>
-                {reading && holdings.length === 0 && <p className="px-4 py-8 text-center text-[13px] text-dim">Reading your balances from Base Sepolia…</p>}
+                {reading && holdings.length === 0 && <p className="px-4 py-8 text-center text-[13px] text-dim">Reading your balances from {NETWORK_NAME}…</p>}
                 {!reading && holdings.length === 0 && (
                   <div className="px-4 py-10 text-center">
                     <p className="text-[13px] text-muted">No Crux launch tokens in this {viaAccount ? "account" : "wallet"} yet.</p>
@@ -384,7 +385,7 @@ function HoldingRow({
         price: q > 0 ? notional / q : 0,
         notional,
         source: TEST_USDC_SOURCE,
-        originLabel: "Base Sepolia",
+        originLabel: `${NETWORK_NAME}`,
         asset: { address: market.token, caip19: market.caip19, decimals: market.decimals },
       },
       reason: null,

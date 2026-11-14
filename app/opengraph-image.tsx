@@ -1,7 +1,8 @@
 import { ImageResponse } from "next/og";
 import { CRUX_MARK_PATH } from "@/components/site/Logo";
+import { NETWORK_NAME } from "@/lib/network";
 
-export const alt = "Crux — One account. Every chain. Testnet on Base Sepolia.";
+export const alt = `Crux — One account. Every chain. Testnet on ${NETWORK_NAME}.`;
 export const size = { width: 1200, height: 800 };
 export const contentType = "image/png";
 

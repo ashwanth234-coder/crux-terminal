@@ -26,6 +26,7 @@ import { SITE_URL } from "@/lib/site";
 import { launchKey, useWatchlist } from "@/lib/watchlist";
 import type { Key } from "@/lib/i18n";
 import { useT } from "@/providers/I18nProvider";
+import { NETWORK_NAME } from "@/lib/network";
 
 /** A phase label ("Graduated", "Live"…) in the chosen language; one without a translation stays as it is. */
 function phaseLabel(t: ReturnType<typeof useT>, label: string) {
@@ -414,7 +415,7 @@ export function TokenBar({
           <IconButton label="Search X for this contract" href={`https://x.com/search?q=${auction.token}&f=live`}>
             {Icon.search}
           </IconButton>
-          <IconButton label="View on Basescan (Base Sepolia)" href={`${TESTNET_EXPLORER}/token/${auction.token}`}>
+          <IconButton label={`View on Basescan (${NETWORK_NAME})`} href={`${TESTNET_EXPLORER}/token/${auction.token}`}>
             {Icon.explorer}
           </IconButton>
           <IconButton label="Share on X" href={shareHref}>

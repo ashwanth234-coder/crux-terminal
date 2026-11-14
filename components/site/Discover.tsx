@@ -14,6 +14,7 @@ import { describeLaunch } from "@/lib/launchSummary";
 import { CruxMark } from "./Logo";
 import { Chapter } from "./Chapter";
 import { PHASE_WORDS } from "@/lib/phaseWords";
+import { NETWORK_LONG, NETWORK_NAME } from "@/lib/network";
 
 const SHOWN = 6;
 
@@ -93,7 +94,7 @@ export function Discover() {
 /** The homepage's live markets: the newest launches, each opening its terminal. */
 function LiveLaunches() {
   return (
-    <Chapter id="discover" title="Live markets." intro="Every Crux launch, read from Base Sepolia as you look.">
+    <Chapter id="discover" title="Live markets." intro={`Every Crux launch, read from ${NETWORK_NAME} as you look.`}>
       <TokenTable limit={6} />
       <Link href="/discover" className="mt-4 inline-block text-[13px] text-chrome underline decoration-line-2 hover:text-signal">
         See every launch →
@@ -115,12 +116,12 @@ function BatchDiscover() {
     <Chapter
       id="discover"
       title="Live markets."
-      intro="Every Crux launch, read from Base Sepolia as you look."
+      intro={`Every Crux launch, read from ${NETWORK_NAME} as you look.`}
     >
       {!configured ? (
         <Empty title="No factory configured." body="This build has no Crux factory address, so there are no on-chain launches to list." />
       ) : loading ? (
-        <ul aria-busy="true" aria-label="Reading launches from Base Sepolia" className="border-t border-line">
+        <ul aria-busy="true" aria-label={`Reading launches from ${NETWORK_NAME}`} className="border-t border-line">
           {[0, 1, 2, 3].map((i) => (
             <li key={i} className="flex items-center justify-between gap-6 border-b border-line py-5">
               <span className="space-y-2">
@@ -132,13 +133,13 @@ function BatchDiscover() {
           ))}
         </ul>
       ) : error && launches.length === 0 ? (
-        <Empty title="Base Sepolia is not answering." body="The launch list could not be read. It retries on its own every few seconds." />
+        <Empty title={`${NETWORK_NAME} is not answering.`} body="The launch list could not be read. It retries on its own every few seconds." />
       ) : launches.length === 0 ? (
         <Empty title="No markets yet." body="Launch a token to open the first uniform-price batch auction." action />
       ) : (
         <>
           <table className="w-full table-fixed border-t border-line text-left">
-            <caption className="sr-only">Newest Crux launches on Base Sepolia testnet</caption>
+            <caption className="sr-only">Newest Crux launches on {NETWORK_LONG}</caption>
             <thead>
               <tr className="border-b border-line font-mono text-[10px] uppercase tracking-[0.18em] text-dim">
                 <th scope="col" className="w-[44%] py-3 pl-1 pr-4 font-normal sm:w-[34%] md:w-[30%]">Token</th>

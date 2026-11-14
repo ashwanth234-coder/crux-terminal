@@ -34,6 +34,7 @@ import { launchFromAccount, launchFromAccountV8 } from "@/lib/account";
 import { imageDataUri } from "@/lib/tokenMeta";
 import { DisplayImageField } from "./DisplayImageField";
 import { endsIn5afe, mineTokenSalt } from "@/lib/tokenSalt";
+import { NETWORK_NAME } from "@/lib/network";
 
 type Form = {
   name: string;
@@ -501,7 +502,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
       return;
     }
     if (chainId !== TESTNET.id) {
-      setPhase({ kind: "deploying", label: "Switching to Base Sepolia…" });
+      setPhase({ kind: "deploying", label: `Switching to ${NETWORK_NAME}…` });
       await switchChain({ chainId: TESTNET.id });
     }
     setPhase({ kind: "deploying", label: "Checking the launch settings…" });
@@ -560,7 +561,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
       return;
     }
     if (chainId !== TESTNET.id) {
-      setPhase({ kind: "deploying", label: "Switching to Base Sepolia…" });
+      setPhase({ kind: "deploying", label: `Switching to ${NETWORK_NAME}…` });
       await switchChain({ chainId: TESTNET.id });
     }
     setPhase({ kind: "deploying", label: "Checking the launch settings…" });
@@ -641,11 +642,11 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
         phase.kind === "done"
           ? phase.simulated
             ? "Simulated preview: the launch contracts are awaiting testnet deployment."
-            : "Deployed on Base Sepolia with its batch auction initialised."
+            : `Deployed on ${NETWORK_NAME} with its batch auction initialised.`
           : live
             ? accountLaunch
-              ? "On Base Sepolia (testnet). Free to launch: no gas, no wallet pop-ups."
-              : "Home chain: Base Sepolia (testnet). The token, its auction and its pool all live there."
+              ? `On ${NETWORK_NAME} (testnet). Free to launch: no gas, no wallet pop-ups.`
+              : `Home chain: ${NETWORK_NAME} (testnet). The token, its auction and its pool all live there.`
             : "Preview mode: the launch contracts are awaiting testnet deployment."
       }
     >
@@ -661,7 +662,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                 rel="noopener noreferrer"
                 className="mt-2 inline-block text-[12px] text-chrome/80 underline decoration-line-2 hover:text-chrome"
               >
-                View deployment on Base Sepolia ↗
+                View deployment on {NETWORK_NAME} ↗
               </a>
             )}
           </div>
@@ -1280,7 +1281,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
                 </p>
               ) : (
                 <p className="text-[11.5px] leading-relaxed text-dim">
-                  Launching from your wallet: you pay a little Base Sepolia gas{LAUNCH_FACTORY?.version === 8 ? " and the token gets a …5afe address" : ""}.
+                  Launching from your wallet: you pay a little {NETWORK_NAME} gas{LAUNCH_FACTORY?.version === 8 ? " and the token gets a …5afe address" : ""}.
                 </p>
               )}
               <button

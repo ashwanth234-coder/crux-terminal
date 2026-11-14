@@ -8,6 +8,7 @@ import { useBatchClock } from "@/lib/batch";
 import { SETTLER_DEPLOYED, assetId } from "@/lib/intents";
 import { launchCaip19 } from "@/lib/launchTrade";
 import { SolanaOrders } from "./SolanaOrders";
+import { NETWORK_NAME } from "@/lib/network";
 
 /** A buy delivers this token (its output asset id); a sell escrows it (its input token). */
 export function isOrderFor(intent: MyIntent, token: Address, tokenAsset = assetId(launchCaip19(token))) {
@@ -36,9 +37,9 @@ export function MyOrders({ token, symbol }: { token: Address; symbol: string }) 
         : !isConnected || !enabled
           ? note(`Connect a wallet to see your ${symbol} orders.`)
           : error && intents.length === 0
-            ? note("Couldn't read the settler on Base Sepolia. Retrying…")
+            ? note(`Couldn't read the settler on ${NETWORK_NAME}. Retrying…`)
             : isLoading
-              ? note("Reading your orders from Base Sepolia…")
+              ? note(`Reading your orders from ${NETWORK_NAME}…`)
               : mine.length === 0
                 ? note(`No ${symbol} orders from this wallet yet. Signed orders show here until they fill.`)
                 : (

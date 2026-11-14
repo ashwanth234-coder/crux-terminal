@@ -11,6 +11,7 @@ import { TOKEN_DECIMALS, USDC_DECIMALS, launchError, type AuctionState, type Lau
 import { useExactApproval } from "@/hooks/useExactApproval";
 import { revertedOnAllowance, simulateThenWrite, type WriteRequest } from "@/lib/preflight";
 import { useConnectModal } from "@/providers/Web3Provider";
+import { NETWORK_NAME } from "@/lib/network";
 
 // ------------------------------------------------------------------ clock
 
@@ -122,14 +123,14 @@ export function useLiveLaunch(factory: Address, id: bigint): LaunchModel {
     async (label: string, request: WriteRequest, onStep: OnStep): Promise<Hex> => {
       if (!address) throw new Error("Connect a wallet first.");
       if (chainId !== TESTNET.id) {
-        onStep({ label: "Switching to Base Sepolia…" });
+        onStep({ label: `Switching to ${NETWORK_NAME}…` });
         await switchChain({ chainId: TESTNET.id });
       }
       onStep({ label: "Checking it will go through…" });
       const hash = await simulateThenWrite(config, address, request, () => onStep({ label: "Confirm in your wallet…" }));
       onStep({ label, hash });
       const receipt = await waitForTransactionReceipt(config, { hash, chainId: TESTNET.id });
-      if (receipt.status !== "success") throw new Error("The transaction reverted on Base Sepolia.");
+      if (receipt.status !== "success") throw new Error(`The transaction reverted on ${NETWORK_NAME}.`);
       return hash;
     },
     [address, chainId, config, switchChain],
@@ -143,7 +144,7 @@ export function useLiveLaunch(factory: Address, id: bigint): LaunchModel {
       }
       onStep({ label: "Checking test USDC…" });
       const balance = await readContract(config, { ...usdc, functionName: "balanceOf", args: [address] });
-      if (balance < amount) throw new Error("Not enough test USDC on Base Sepolia. Get some free at faucet.circle.com.");
+      if (balance < amount) throw new Error(`Not enough test USDC on ${NETWORK_NAME}. Get some free at faucet.circle.com.`);
       // Pre-flight before any approval prompt: the auction checks its own rules (window, cap, price) before it
       // pulls USDC, so a revert other than the missing allowance means the bid would fail. Stop here if so.
       onStep({ label: "Checking the bid…" });

@@ -7,6 +7,7 @@ import { isAddress } from "viem";
 import { PHASE, search, type Hit } from "@/components/site/TokenSearch";
 import { RELAY_URL } from "@/lib/readCache";
 import { Popover, Tool } from "./ui";
+import { NETWORK_NAME } from "@/lib/network";
 
 /** The relay's curated markets (Way C: deep-liquidity tokens Crux can fill) and the busiest official pools. */
 type Markets = {
@@ -193,7 +194,7 @@ export function SymbolSwitch({ symbol }: { symbol: string }) {
                     );
                   })}
                 </ul>
-                {pools.length > 0 && <p className="px-1.5 pt-1 text-[10px] uppercase tracking-[0.14em] text-dim">Busiest Base Sepolia pools</p>}
+                {pools.length > 0 && <p className="px-1.5 pt-1 text-[10px] uppercase tracking-[0.14em] text-dim">Busiest {NETWORK_NAME} pools</p>}
                 <ul className="flex flex-col">
                   {pools.map((t) => (
                     <li key={t.address}>

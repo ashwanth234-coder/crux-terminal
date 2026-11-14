@@ -21,6 +21,7 @@ import { TopTraders } from "@/components/pro/TopTraders";
 import { TrustRadar } from "@/components/pro/TrustRadar";
 import { MyOrders } from "@/components/pro/MyOrders";
 import { FocusChip, Tags, Trader, td, th, type DeskTag } from "@/components/pro/desk";
+import { NETWORK_NAME } from "@/lib/network";
 
 const PAGE = 25;
 /** The block the solver files a swap it has sent but not yet mined under (crux-solver feedhub PROVISIONAL_BLOCK). */
@@ -39,7 +40,7 @@ function exactTime(t: { time: number; timeMs?: number }) {
 function ConfirmingBadge() {
   return (
     <span
-      title="Sent, not yet mined on Base Sepolia: it confirms in about a second, or is taken off if it fails"
+      title={`Sent, not yet mined on ${NETWORK_NAME}: it confirms in about a second, or is taken off if it fails`}
       className="inline-flex items-center gap-1 rounded-[3px] border border-line-2 px-1.5 py-px font-mono text-[9.5px] uppercase tracking-[0.12em] text-muted"
     >
       <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-signal" aria-hidden="true" />
@@ -211,7 +212,7 @@ export function LiveTape({
             </button>
           ))}
         </div>
-        <span className="hidden shrink-0 text-[11px] text-dim sm:inline">{live || graduated ? "Updates live" : "Final"} · Base Sepolia</span>
+        <span className="hidden shrink-0 text-[11px] text-dim sm:inline">{live || graduated ? "Updates live" : "Final"} · {NETWORK_NAME}</span>
       </div>
 
       {tab === "orders" ? (
@@ -421,7 +422,7 @@ export function LiveTape({
           </tbody>
         </table>
 
-        {active.isPending && <p className="px-3 py-6 text-center text-[12px] text-dim">Reading from Base Sepolia…</p>}
+        {active.isPending && <p className="px-3 py-6 text-center text-[12px] text-dim">Reading from {NETWORK_NAME}…</p>}
         {active.isError && !active.data && <p className="px-3 py-6 text-center text-[12px] text-dim">Couldn&apos;t read the chain. Retrying…</p>}
         {active.data && total === 0 && (
           <p className="px-3 py-6 text-center text-[12px] text-dim">

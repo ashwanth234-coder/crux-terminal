@@ -1,3 +1,4 @@
+import { NETWORK_NAME } from "./network.ts";
 /**
  * The chains Crux names to users, in one place: every page, tooltip and modal that lists chains reads this, so the list
  * and the "Mainnet ready" badge never drift apart. `live` means it works today on testnet; Robinhood Chain is
@@ -19,7 +20,7 @@ export type Network = {
 export const SOON_MAINNET = "Coming at mainnet";
 
 export const NETWORKS: Network[] = [
-  { key: "base", name: "Base", network: "Base Sepolia (testnet). Tokens, auctions and pools live here.", live: true, color: "#0052ff" },
+  { key: "base", name: "Base", network: `${NETWORK_NAME} (testnet). Tokens, auctions and pools live here.`, live: true, color: "#0052ff" },
   { key: "ethereum", name: "Ethereum", network: "Ethereum Sepolia (testnet)", live: true, color: "#627eea" },
   { key: "solana", name: "Solana", network: "Solana devnet (USDC)", live: true, color: "#14f195" },
   { key: "bnb", name: "BNB Chain", network: "BNB Chain testnet", live: true, color: "#f0b90b" },

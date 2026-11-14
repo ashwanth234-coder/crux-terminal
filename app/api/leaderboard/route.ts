@@ -1,6 +1,7 @@
 import { connection } from "next/server";
 import { feedResponse } from "@/lib/launchFeed";
 import { readLeaderboards } from "@/lib/leaderboard";
+import { NETWORK_NAME } from "@/lib/network";
 
 /**
  * GET /api/leaderboard: the Discover boards. Top 10 Crux memecoins by market cap and the 10 wallets with the best PnL
@@ -11,6 +12,6 @@ export async function GET() {
   try {
     return feedResponse({ chainId: 84532, testnet: true, generatedAt: new Date().toISOString(), ...(await readLeaderboards()) }, 200, 60);
   } catch {
-    return feedResponse({ error: "Couldn't read Base Sepolia right now. Retry shortly." }, 503);
+    return feedResponse({ error: `Couldn't read ${NETWORK_NAME} right now. Retry shortly.` }, 503);
   }
 }

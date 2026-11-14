@@ -7,6 +7,7 @@ import { isSystem, topTraders } from "@/lib/holders";
 import { fmtTokens } from "@/lib/launch";
 import type { AuctionV2 } from "@/lib/launchV2";
 import { FocusChip, Tags, Trader, pnlTone, pnlUsd, td, th } from "@/components/pro/desk";
+import { NETWORK_NAME } from "@/lib/network";
 
 const SHOWN = 25;
 const usd = (v: number) => (v === 0 ? "—" : `$${v >= 1_000 ? v.toLocaleString("en-US", { maximumFractionDigits: 0 }) : v >= 0.01 ? v.toFixed(2) : v.toPrecision(2)}`);
@@ -86,7 +87,7 @@ export function TopTraders({
             ))}
           </tbody>
         </table>
-        {(transfers.isPending || swaps.isPending) && <p className="px-3 py-6 text-center text-[12px] text-dim">Reading trades from Base Sepolia…</p>}
+        {(transfers.isPending || swaps.isPending) && <p className="px-3 py-6 text-center text-[12px] text-dim">Reading trades from {NETWORK_NAME}…</p>}
         {traders && rows.length === 0 && <p className="px-3 py-6 text-center text-[12px] text-dim">{focus ? "This wallet has no priced trades." : "No priced trades yet."}</p>}
       </div>
       <p className="px-1 pt-1.5 text-[11px] text-dim">

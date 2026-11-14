@@ -45,6 +45,7 @@ import { SOLANA_OPEN_SOL, SOLANA_RETURNED_SOL, solAmount } from "@/lib/solanaEsc
 import { LaunchSteps, stepOf } from "@/components/launch/LaunchSteps";
 import { firstBuyFailed, launchChecked } from "@/lib/firstBuy";
 import { addPendingTrade } from "@/lib/pendingTrades";
+import { NETWORK_NAME } from "@/lib/network";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 /** The few seconds between the fair first minute and open trading, or before a new token is ready to trade. */
@@ -138,7 +139,7 @@ function PayFromPicker({ active, onPick }: { active: PayFrom; onPick: (k: PayFro
             onClick={() => onPick(c.key)}
             title={
               c.key === "base"
-                ? "Pay from your wallet on Base: an approval if needed, then one transaction, paid in a little Base Sepolia ETH"
+                ? `Pay from your wallet on Base: an approval if needed, then one transaction, paid in a little ${NETWORK_NAME} ETH`
                 : c.key === "solana"
                   ? `Pay with USDC on Solana devnet, filled on Base in about 20 s. Needs ${solAmount(SOLANA_OPEN_SOL)} for fees and storage; ${solAmount(SOLANA_RETURNED_SOL)} comes back when the order fills or is refunded`
                   : `Pay from your wallet on ${c.name}, filled on Base: an approval if needed, then one transaction, paid in a little ${originByKey(c.key as Exclude<PayFrom, "base" | "solana">)?.chain.nativeCurrency.symbol ?? "test gas"} on ${c.name}`
@@ -959,7 +960,7 @@ function TradeForm({ auction, symbol, handover = false }: { auction: AuctionV2; 
             price: qty > 0 ? notional / qty : 0,
             notional,
             source: TEST_USDC_SOURCE,
-            originLabel: viaSolana ? "Solana devnet" : fromOrigin ? fromOrigin.name : "Base Sepolia",
+            originLabel: viaSolana ? "Solana devnet" : fromOrigin ? fromOrigin.name : `${NETWORK_NAME}`,
             asset: { address: market.token, caip19: market.caip19, decimals: market.decimals },
             slippageBps: slippageFor(trade, side),
             ...(fromOrigin ? { payFrom: fromOrigin.key } : {}),
@@ -1311,7 +1312,7 @@ function TradeForm({ auction, symbol, handover = false }: { auction: AuctionV2; 
               ? "USDC on Solana devnet · settled from Solana in about 20 s"
               : fromOrigin
                 ? `${fromOrigin.name} test USDC · delivered on Base, no bridge`
-                : "Base Sepolia test USDC"
+                : `${NETWORK_NAME} test USDC`
             : `Selling ${symbol}`}
         </span>
         <span className="font-mono text-muted">

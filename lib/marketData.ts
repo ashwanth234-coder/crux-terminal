@@ -8,6 +8,7 @@ import { LOG_WINDOW_LABEL, logClient, scanLogs, type LogScan } from "@/lib/logs"
 import { poolTradeReader, readBatchPool, readUsdcIs0, type PoolTrade } from "@/lib/poolTrades";
 import { SITE_URL } from "@/lib/site";
 import { NETWORK } from "./network.ts";
+import { NETWORK_NAME } from "./network.ts";
 
 /**
  * The public market data API's reads (/api/pairs, /api/trades, /api/candles), server-side: every graduated Crux
@@ -155,5 +156,5 @@ export const API_NOTES = {
   chainId: NETWORK.chain.id,
   network: NETWORK.name,
   testnet: NETWORK.testnet,
-  notes: `Test tokens on Base Sepolia only; prices are in test USDC. Trades cover the last ${LOG_WINDOW_LABEL} at most.`,
+  notes: `Test tokens on ${NETWORK_NAME} only; prices are in test USDC. Trades cover the last ${LOG_WINDOW_LABEL} at most.`,
 } as const;

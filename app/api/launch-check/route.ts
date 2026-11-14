@@ -4,6 +4,7 @@ import { artworkOf } from "@/lib/artwork";
 import { readLaunches } from "@/lib/launchFeed";
 import { readV9Launches } from "@/lib/v9Launches";
 import { MAX_IMAGE_DATA_URI } from "@/lib/tokenMeta";
+import { NETWORK_NAME } from "@/lib/network";
 
 /**
  * POST /api/launch-check { symbol, image?, x? }: whether a proposed launch copies an existing Crux token (lib/antiVamp):
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
     // V9 launches count too (when V9 is on): a V9 ticker can't copy a V8 one, nor another V9 one.
     [launches, v9Launches] = await Promise.all([readLaunches(), readV9Launches()]);
   } catch {
-    return json({ error: "Couldn't read Base Sepolia right now. Retry shortly." }, 503);
+    return json({ error: `Couldn't read ${NETWORK_NAME} right now. Retry shortly.` }, 503);
   }
   const now = Math.floor(Date.now() / 1000);
   // Artwork only counts for tokens still active or graduated; read those (cached per URL) alongside the proposal's.

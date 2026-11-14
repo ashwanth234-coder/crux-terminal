@@ -4,6 +4,7 @@ import { StatusTag } from "@/components/ui/StatusTag";
 import { TESTNET_EXPLORER } from "@/lib/chains";
 import { SETTLER } from "@/lib/intents";
 import { CONTACT_EMAIL } from "@/lib/site";
+import { NETWORK_NAME } from "@/lib/network";
 
 // Only destinations that exist: no legal pages have been published yet.
 const LINKS = [
@@ -24,7 +25,7 @@ export function Footer() {
           </Link>
           <p className="flex items-center gap-3 text-[12.5px] text-muted">
             <StatusTag status="testnet" />
-            Base Sepolia only. Nothing here is on mainnet.
+            {NETWORK_NAME} only. Nothing here is on mainnet.
           </p>
         </div>
         <nav aria-label="Footer">

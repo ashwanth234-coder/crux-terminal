@@ -1,4 +1,5 @@
 import { Chapter } from "./Chapter";
+import { NETWORK_NAME } from "@/lib/network";
 
 // A launch, start to finish. Each step is live on Base Sepolia today.
 const STEPS = [
@@ -24,7 +25,7 @@ const TRUST = ["Creator vests 30 days by default", "LP burned at graduation", "O
 
 export function HowItWorks() {
   return (
-    <Chapter id="protocol" title="How a launch works." intro="Three steps, each a contract live on Base Sepolia today.">
+    <Chapter id="protocol" title="How a launch works." intro={`Three steps, each a contract live on ${NETWORK_NAME} today.`}>
       <ol className="border-t border-line">
         {STEPS.map((s, i) => (
           <li key={s.name} className="grid gap-2 border-b border-line py-7 md:grid-cols-12 md:items-baseline md:gap-6">

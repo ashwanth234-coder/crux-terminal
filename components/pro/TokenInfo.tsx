@@ -6,6 +6,7 @@ import type { TokenMeta } from "@/hooks/useTokenMeta";
 import { TESTNET_EXPLORER } from "@/lib/chains";
 import { fmtTokens, fmtUsdc } from "@/lib/launch";
 import { V2_SPLIT, V2_VESTING_DAYS, priceUsd, windowLabel, type AuctionV2, type BatchVersion } from "@/lib/launchV2";
+import { NETWORK_LONG } from "@/lib/network";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
@@ -58,7 +59,7 @@ export function TokenInfo({
   ].filter(Boolean) as { label: string; href: string }[];
 
   return (
-    <Modal open={open} onClose={onClose} title={`${symbol}${name ? ` · ${name}` : ""}`} subtitle={`Crux V${version} launch #${id} on Base Sepolia testnet`}>
+    <Modal open={open} onClose={onClose} title={`${symbol}${name ? ` · ${name}` : ""}`} subtitle={`Crux V${version} launch #${id} on ${NETWORK_LONG}`}>
       <p className="text-[13.5px] leading-relaxed text-chrome/80">{meta.description ?? "The creator didn't add a description."}</p>
       {socials.length > 0 && (
         <ul className="mt-3 flex flex-wrap gap-2">

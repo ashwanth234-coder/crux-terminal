@@ -43,6 +43,7 @@ import { fmtTokenPrice } from "@/lib/launchTrade";
 import { NOVA_ASSET, clearingLimit, minReceived, slippageOf, sourceAsset, type OrderDraft } from "@/lib/order";
 import { usd } from "@/lib/tokens";
 import { NETWORK } from "@/lib/network";
+import { NETWORK_NAME } from "@/lib/network";
 
 type Flow =
   | { kind: "idle" }
@@ -143,7 +144,7 @@ const SETTLER_ERRORS: Record<string, string> = {
   InvalidOutputAsset: "This order has no output asset. Nothing was sent.",
   ZeroAmount: "Enter an amount above zero.",
   WrongChain: "Your wallet signed on the wrong chain. Switch networks and try again. Nothing was sent.",
-  InvalidDestinationChain: "This settler only fills on Base Sepolia. Nothing was sent.",
+  InvalidDestinationChain: `This settler only fills on ${NETWORK_NAME}. Nothing was sent.`,
 };
 
 function errorMessage(err: unknown) {
@@ -171,7 +172,7 @@ export function IntentModal({ order, open, onClose, onPlaced }: { order: OrderDr
   const cross = crossOrigin !== null;
   const originChain = crossOrigin ? crossOrigin.chain : TESTNET;
   const originSettler = crossOrigin ? crossOrigin.settler : SETTLER;
-  const originName = crossOrigin?.name ?? "Base Sepolia";
+  const originName = crossOrigin?.name ?? `${NETWORK_NAME}`;
 
   const receipt = useWaitForTransactionReceipt({
     hash: flow.kind === "broadcast" ? flow.hash : undefined,
@@ -291,7 +292,7 @@ export function IntentModal({ order, open, onClose, onPlaced }: { order: OrderDr
           setFlow({
             kind: "error",
             message: sellsLaunch
-              ? `Needs ${formatUnits(input.amount, decimals)} $${order.symbol} on Base Sepolia (you have ${formatUnits(balance, decimals)}).`
+              ? `Needs ${formatUnits(input.amount, decimals)} $${order.symbol} on ${NETWORK_NAME} (you have ${formatUnits(balance, decimals)}).`
               : `Needs ${formatUnits(input.amount, decimals)} test USDC on ${originName} (you have ${formatUnits(balance, decimals)}). Get some free at ${crossOrigin ? crossOrigin.faucet : "faucet.circle.com"}.`,
           });
           return;
@@ -420,11 +421,11 @@ export function IntentModal({ order, open, onClose, onPlaced }: { order: OrderDr
       } else if (cross && delivered.data) {
         stage = 3;
         working = true;
-        note = `Delivered on Base Sepolia: ${qtyFmt.format(Number(formatUnits(delivered.data.amount, order.asset?.decimals ?? 18)))} $${order.symbol}. Confirming the fill back on ${originName} (usually a few minutes); nothing more to do.`;
+        note = `Delivered on ${NETWORK_NAME}: ${qtyFmt.format(Number(formatUnits(delivered.data.amount, order.asset?.decimals ?? 18)))} $${order.symbol}. Confirming the fill back on ${originName} (usually a few minutes); nothing more to do.`;
       } else {
         stage = 3;
         working = true;
-        note = `Order placed${cross ? ` on ${originName}` : ""}. Crux fills it ${cross ? "on Base Sepolia " : ""}in the next ${BATCH_WINDOW_SECONDS}-second batch, where everyone pays the same price.`;
+        note = `Order placed${cross ? ` on ${originName}` : ""}. Crux fills it ${cross ? `on ${NETWORK_NAME} ` : ""}in the next ${BATCH_WINDOW_SECONDS}-second batch, where everyone pays the same price.`;
       }
       break;
   }
@@ -442,7 +443,7 @@ export function IntentModal({ order, open, onClose, onPlaced }: { order: OrderDr
 
   // ---------------------------------------------------------------- quote
 
-  const origin = cross ? originName : SETTLER_DEPLOYED ? "Base Sepolia" : order.originLabel;
+  const origin = cross ? originName : SETTLER_DEPLOYED ? `${NETWORK_NAME}` : order.originLabel;
   const destination = SETTLER_DEPLOYED ? { name: NETWORK.label, id: NETWORK.chain.id } : { name: "Base", id: 8453 };
   // Launch-token trades on thin testnet pools are often under a cent: show USDC to its 6 decimals.
   const money = (v: number) => (order.asset && v < 1 ? `$${v.toFixed(6).replace(/0+$/, "").replace(/\.$/, "")}` : usd.format(v));
@@ -513,7 +514,7 @@ export function IntentModal({ order, open, onClose, onPlaced }: { order: OrderDr
             cross
               ? `CruxCrossChainSettler on ${originName} · refundable 6h after the deadline if unproven`
               : SETTLER_DEPLOYED
-                ? "CruxSettler on Base Sepolia"
+                ? `CruxSettler on ${NETWORK_NAME}`
                 : "The signature is checked locally only"
           }
         />

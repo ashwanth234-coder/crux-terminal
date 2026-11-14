@@ -10,6 +10,7 @@ import { useTokenMeta } from "@/hooks/useTokenMeta";
 import { useNow } from "@/hooks/useLaunchAuction";
 import { TESTNET } from "@/lib/chains";
 import { FACTORY_V9, V9_ON, curvePrice, curveV9Abi, factoryV9Abi } from "@/lib/v9";
+import { NETWORK_LONG } from "@/lib/network";
 
 const pairAbi = parseAbi(["function getReserves() view returns (uint112, uint112, uint32)", "function token0() view returns (address)"]);
 const usdCompact = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 2 });
@@ -29,7 +30,7 @@ export function TokenList() {
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div>
             <h1 className="font-display text-[clamp(1.8rem,3.4vw,2.4rem)] text-bright">Discover</h1>
-            <p className="mt-1 text-[13px] text-muted">Every token launched on Crux, newest first. Base Sepolia testnet.</p>
+            <p className="mt-1 text-[13px] text-muted">Every token launched on Crux, newest first. {NETWORK_LONG}.</p>
           </div>
           <Link href="/launch/v9/new" className={buttonClass("primary", "sm", "rounded-lg")}>
             Launch a token

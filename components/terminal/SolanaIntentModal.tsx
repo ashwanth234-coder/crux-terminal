@@ -24,6 +24,7 @@ import {
   solAmount,
   type SolanaOrder,
 } from "@/lib/solanaEscrow";
+import { NETWORK_NAME } from "@/lib/network";
 
 /** A Base buy paid with USDC on Solana devnet: the amounts are the ones the ticket quoted and will be signed. */
 export type SolanaOrderRequest = {
@@ -161,18 +162,18 @@ export function SolanaIntentModal({ request, onClose, onPlaced }: { request: Sol
               : flow.kind === "open"
                 ? status.data?.state === "closed"
                   ? deposit
-                    ? `Done: test USDC paid into your Crux account ${short(request.payee)} on Base Sepolia, settled from Solana.`
-                    : `Done: $${draft.symbol} delivered to ${short(request.payee)} on Base Sepolia, settled from Solana.`
+                    ? `Done: test USDC paid into your Crux account ${short(request.payee)} on ${NETWORK_NAME}, settled from Solana.`
+                    : `Done: $${draft.symbol} delivered to ${short(request.payee)} on ${NETWORK_NAME}, settled from Solana.`
                   : status.data?.state === "proven"
-                    ? "Filled on Base Sepolia. Confirming on Solana; nothing more to do."
+                    ? `Filled on ${NETWORK_NAME}. Confirming on Solana; nothing more to do.`
                     : refundable
                       ? "Not filled in time. Refund your USDC."
                       : refundAt !== null && status.data?.late
                         ? `Not filled in time. Your refund is available at ${refundClock(refundAt)}; My orders keeps the button for you.`
-                      : "USDC held on Solana. Crux fills it on Base Sepolia, usually in about 20 s; Solana confirms shortly after."
+                      : `USDC held on Solana. Crux fills it on ${NETWORK_NAME}, usually in about 20 s; Solana confirms shortly after.`
                 : deposit
-                  ? "Pay test USDC on Solana devnet; Crux pays it into your Crux account on Base Sepolia, no fee. Testnet only, no real funds."
-                  : `Pay with USDC on Solana devnet, receive $${draft.symbol} on Base Sepolia. Testnet only, no real funds.`;
+                  ? `Pay test USDC on Solana devnet; Crux pays it into your Crux account on ${NETWORK_NAME}, no fee. Testnet only, no real funds.`
+                  : `Pay with USDC on Solana devnet, receive $${draft.symbol} on ${NETWORK_NAME}. Testnet only, no real funds.`;
 
   return (
     <Modal
@@ -198,13 +199,13 @@ export function SolanaIntentModal({ request, onClose, onPlaced }: { request: Sol
           <p className="mt-1.5 font-mono text-[18px] text-chrome">
             {deposit ? `${draft.qty.toLocaleString("en-US", { maximumFractionDigits: 2 })} USDC` : `${draft.qty.toLocaleString("en-US", { maximumFractionDigits: 4 })} $${draft.symbol}`}
           </p>
-          <p className="mt-0.5 text-[12px] text-muted">on Base Sepolia</p>
+          <p className="mt-0.5 text-[12px] text-muted">on {NETWORK_NAME}</p>
         </div>
       </div>
 
       <dl className="mt-3 divide-y divide-line">
         <Row label="Paid from" value={payer ? `${payer.label} · ${short(payer.publicKey.toBase58())}` : "Not connected"} />
-        <Row label="Delivered to" value={short(request.payee)} hint={deposit ? "Your Crux account on Base Sepolia" : "Your address on Base Sepolia"} />
+        <Row label="Delivered to" value={short(request.payee)} hint={deposit ? `Your Crux account on ${NETWORK_NAME}` : `Your address on ${NETWORK_NAME}`} />
         <Row label="Settlement" value="Settled from Solana" hint="Your USDC is released only once the fill on Base is confirmed on Solana; otherwise you can refund it 6 h after the deadline" />
         <Row
           label="Solana cost"

@@ -30,6 +30,7 @@ import { CreatorNote } from "@/components/launch/V9Creator";
 import { StandingOrderForm, type OrderType } from "@/components/pro/StandingOrderForm";
 import { SLIPPAGE_BPS, PRICE_WINDOW_MS, afterRead, curveQuote, readyToSell, type CurveState, heldNow, minimumOut, poolMath, poolQuote, quickSellAmount, routerQuote, type Flight } from "@/lib/tradeMath";
 import { FACTORY_V9, ROUTER_V9, V9_ON, curvePrice, curveV9Abi, factoryV9Abi, phaseV9, registerV9Curve, routerV9Abi, type PhaseV9 } from "@/lib/v9";
+import { NETWORK_NAME } from "@/lib/network";
 
 const usd = (v: bigint) => Number(formatUnits(v, 6)).toLocaleString("en-US", { maximumFractionDigits: 2 });
 /**
@@ -172,7 +173,7 @@ function V9Launch({ id }: { id: bigint }) {
   );
 
   if (launch.isLoading) return <Shell><p className="text-muted">Reading the launch…</p></Shell>;
-  if (!l || !auctionNow) return <Shell><p className="text-muted">No V9 launch #{id.toString()} on Base Sepolia.</p></Shell>;
+  if (!l || !auctionNow) return <Shell><p className="text-muted">No V9 launch #{id.toString()} on {NETWORK_NAME}.</p></Shell>;
 
   const phase = phaseV9({ graduated, openingEnds, realUsdc, threshold }, now);
   // Before graduation the curve's spot price; after, what one token sells for in the pool (fees included).

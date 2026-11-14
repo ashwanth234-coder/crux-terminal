@@ -28,6 +28,7 @@ import { CreatorRewards } from "@/components/launch/V9Creator";
 import { V9_ON } from "@/lib/v9";
 import { useV9Holdings } from "@/hooks/useV9Holdings";
 import Link from "next/link";
+import { NETWORK_LONG } from "@/lib/network";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
@@ -577,7 +578,7 @@ function Frame({ children, label, onLogout }: { children: ReactNode; label?: str
       <div className="flex flex-col gap-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-dim">Crux account · Base Sepolia testnet</p>
+            <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-dim">Crux account · {NETWORK_LONG}</p>
             <h1 className="mt-2 font-display-md text-[30px] text-chrome">Your Crux account</h1>
           </div>
           {onLogout && (

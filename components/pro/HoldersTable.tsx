@@ -8,6 +8,7 @@ import { fmtTokens } from "@/lib/launch";
 import { fmtTokenPrice } from "@/lib/launchTrade";
 import type { AuctionV2 } from "@/lib/launchV2";
 import { FocusChip, Tags, Trader, pnlTone, pnlUsd, td, th } from "@/components/pro/desk";
+import { NETWORK_NAME } from "@/lib/network";
 
 const SHOWN = 25;
 
@@ -118,7 +119,7 @@ export function HoldersTable({
             })}
           </tbody>
         </table>
-        {(transfers.isPending || swaps.isPending) && <p className="px-3 py-6 text-center text-[12px] text-dim">Reading transfers from Base Sepolia…</p>}
+        {(transfers.isPending || swaps.isPending) && <p className="px-3 py-6 text-center text-[12px] text-dim">Reading transfers from {NETWORK_NAME}…</p>}
         {transfers.isError && !transfers.data && <p className="px-3 py-6 text-center text-[12px] text-dim">Couldn&apos;t read the chain. Retrying…</p>}
         {holders && rows.length === 0 && <p className="px-3 py-6 text-center text-[12px] text-dim">{focus ? "This wallet holds none now." : "No holders yet."}</p>}
       </div>
