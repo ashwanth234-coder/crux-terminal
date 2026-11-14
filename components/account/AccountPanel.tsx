@@ -29,6 +29,8 @@ import { V9_ON } from "@/lib/v9";
 import { useV9Holdings } from "@/hooks/useV9Holdings";
 import Link from "next/link";
 import { NETWORK_LONG } from "@/lib/network";
+import { USDC_WORD, USDC_WORD_CAP } from "@/lib/network";
+import { IS_TESTNET } from "@/lib/network";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
@@ -125,7 +127,7 @@ export function AccountPanel() {
       <Frame>
         <div className="rounded-xl border border-line px-6 py-12 text-center">
           <p className="mx-auto max-w-[520px] text-[14px] leading-relaxed text-muted">
-            Log in with email or Google to get a Crux account: a deposit address for test USDC that trades in one click, with no wallet
+            Log in with email or Google to get a Crux account: a deposit address for {USDC_WORD} that trades in one click, with no wallet
             pop-ups and no gas. Its funds can only trade through Crux or go back to a wallet you choose.
           </p>
           <button type="button" onClick={a.login} className={buttonClass("primary", "md", "mt-6 font-semibold")}>
@@ -228,7 +230,7 @@ export function AccountPanel() {
         await waitForTransactionReceipt(config, { hash, chainId: TESTNET.id });
         void walletUsdc.refetch();
       },
-      `Deposited $${fmtUsdc(units)} test USDC from your wallet.`,
+      `Deposited $${fmtUsdc(units)} ${USDC_WORD} from your wallet.`,
     );
 
   const sweep = () =>
@@ -270,7 +272,7 @@ export function AccountPanel() {
           <h2 className="font-medium text-chrome">Move what&rsquo;s left in your {l.label} account</h2>
           <p className="mt-1 text-muted">
             Your earlier account {short(l.account)} still holds{" "}
-            {[(l.usdc ?? BigInt(0)) > BigInt(0) ? `$${fmtUsdc(l.usdc!)} test USDC` : null, ...l.tokens.map((h) => `${fmtTokens(h.balance)} $${h.launch.symbol ?? "token"}`)]
+            {[(l.usdc ?? BigInt(0)) > BigInt(0) ? `$${fmtUsdc(l.usdc!)} ${USDC_WORD}` : null, ...l.tokens.map((h) => `${fmtTokens(h.balance)} $${h.launch.symbol ?? "token"}`)]
               .filter(Boolean)
               .join(", ")}
             . Step 1 sends it to its withdrawal wallet (no gas). Step 2 deposits it here: USDC with the deposit box, tokens with
@@ -320,7 +322,7 @@ export function AccountPanel() {
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card title="Deposit" aside={<span className="font-mono text-[13px] text-chrome">{a.usdc !== null ? `$${fmtUsdc(a.usdc)}` : "…"} test USDC</span>}>
+        <Card title="Deposit" aside={<span className="font-mono text-[13px] text-chrome">{a.usdc !== null ? `$${fmtUsdc(a.usdc)}` : "…"} {USDC_WORD}</span>}>
           {/* One box for every chain: Base Sepolia (a transfer, or the address to send to) and the cross-chain ones. */}
           <CrossChainDeposit account={account} onOpened={a.refresh} base={{ balance: walletUsdc.data, busy: busy === "deposit", deposit }} />
           <div>
@@ -392,7 +394,7 @@ export function AccountPanel() {
           </div>
           {tab === "withdraw" && (
             <>
-          <p className="text-[12.5px] text-muted">{bound ? <>Test USDC to <span className="font-mono text-chrome">{short(bound)}</span>, the only place it can go. Free: Crux pays the gas.</> : (
+          <p className="text-[12.5px] text-muted">{bound ? <>{USDC_WORD_CAP} to <span className="font-mono text-chrome">{short(bound)}</span>, the only place it can go. Free: Crux pays the gas.</> : (
             <>
               Set where withdrawals go first:{" "}
               <button type="button" onClick={() => setTab("address")} className="text-chrome underline decoration-line-2 hover:text-signal">
@@ -537,7 +539,7 @@ export function AccountPanel() {
       <p className="text-[11.5px] leading-relaxed text-dim">
         How it&apos;s protected: your login key signs every trade and withdrawal, and Crux&apos;s relay submits them. The account contract only lets
         funds trade through the Crux settler, with every fill and refund paid back to the account, or go to your bound address. Someone who stole
-        your login could trade but never take funds out: changing the withdrawal address waits 48 hours, which you can cancel. Testnet only.
+        your login could trade but never take funds out: changing the withdrawal address waits 48 hours, which you can cancel.{IS_TESTNET ? " Testnet only." : ""}
       </p>
     </Frame>
   );

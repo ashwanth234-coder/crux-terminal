@@ -34,6 +34,8 @@ import {
   type TxStep,
 } from "@/lib/launch";
 import { NETWORK_LONG, NETWORK_NAME } from "@/lib/network";
+import { USDC_WORD } from "@/lib/network";
+import { IS_TESTNET } from "@/lib/network";
 
 // ------------------------------------------------------------------ route
 
@@ -115,7 +117,7 @@ export function Shell({ mode, children }: { mode: LaunchModel["mode"] | null; ch
           <div className="flex items-center gap-3">
             {mode && (
               <StatusTag
-                status={mode === "simulated" ? "demo" : "testnet"}
+                status={mode === "simulated" ? "demo" : IS_TESTNET ? "testnet" : "live"}
                 label={mode === "simulated" ? "Simulated preview" : `${NETWORK_NAME}`}
                 className="hidden 2xl:inline-flex"
               />
@@ -213,7 +215,7 @@ function LaunchView({ model, auction, id }: { model: LaunchModel; auction: Aucti
           </h1>
           <p className="mt-2 text-[13px] text-muted">
             {simulated ? "Simulated auction" : <>Auction <span className="font-mono">#{id}</span> on {NETWORK_NAME}</>} · Graduates at{" "}
-            <span className="font-mono tabular-nums text-chrome">${fmtUsdc(auction.graduationTarget)}</span> {simulated ? "simulated USDC" : "test USDC"}
+            <span className="font-mono tabular-nums text-chrome">${fmtUsdc(auction.graduationTarget)}</span> {simulated ? "simulated USDC" : `${USDC_WORD}`}
           </p>
         </div>
         <span
@@ -325,7 +327,7 @@ function ActionPanel({ model, auction, phase, symbol }: { model: LaunchModel; au
   const [done, setDone] = useState<{ text: string; hash?: Hex } | null>(null);
   const [claimed, setClaimed] = useState(false);
   const simulated = model.mode === "simulated";
-  const unit = simulated ? "simulated USDC" : "test USDC";
+  const unit = simulated ? "simulated USDC" : `${USDC_WORD}`;
 
   let parsed: bigint | null = null;
   try {
@@ -431,9 +433,9 @@ function ActionPanel({ model, auction, phase, symbol }: { model: LaunchModel; au
           Balance {model.usdcBalance !== null ? `$${fmtUsdc(model.usdcBalance)}` : "—"} {unit}
           {model.allowance !== null && ` · approved $${fmtUsdc(model.allowance)}`}
         </p>
-        {!simulated && model.usdcBalance === BigInt(0) && (
+        {IS_TESTNET && !simulated && model.usdcBalance === BigInt(0) && (
           <p className="mt-1.5 text-[11.5px] text-dim">
-            Get free test USDC at{" "}
+            Get free {USDC_WORD} at{" "}
             <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer" className="text-chrome/80 underline decoration-line-2">
               faucet.circle.com ↗
             </a>
@@ -528,7 +530,7 @@ function ActionPanel({ model, auction, phase, symbol }: { model: LaunchModel; au
   return (
     <section aria-label="Your position" className="panel-sheen rounded-2xl border border-line p-5 sm:p-6">
       <h2 className="font-display-md text-[22px] text-chrome">{heading[phase]}</h2>
-      <p className="mb-5 mt-1 text-[12px] text-dim">{simulated ? "Simulated · no wallet needed" : `${NETWORK_LONG} · test USDC only`}</p>
+      <p className="mb-5 mt-1 text-[12px] text-dim">{simulated ? "Simulated · no wallet needed" : `${NETWORK_LONG} · ${USDC_WORD} only`}</p>
       {body}
       {error && (
         <p role="alert" className="mt-4 rounded-lg border border-down/30 bg-down/10 px-3 py-2 text-[12px] text-down">

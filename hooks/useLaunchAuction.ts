@@ -12,6 +12,8 @@ import { useExactApproval } from "@/hooks/useExactApproval";
 import { revertedOnAllowance, simulateThenWrite, type WriteRequest } from "@/lib/preflight";
 import { useConnectModal } from "@/providers/Web3Provider";
 import { NETWORK_NAME } from "@/lib/network";
+import { USDC_WORD } from "@/lib/network";
+import { IS_TESTNET } from "@/lib/network";
 
 // ------------------------------------------------------------------ clock
 
@@ -142,9 +144,9 @@ export function useLiveLaunch(factory: Address, id: bigint): LaunchModel {
         openConnect();
         return;
       }
-      onStep({ label: "Checking test USDC…" });
+      onStep({ label: `Checking ${USDC_WORD}…` });
       const balance = await readContract(config, { ...usdc, functionName: "balanceOf", args: [address] });
-      if (balance < amount) throw new Error(`Not enough test USDC on ${NETWORK_NAME}. Get some free at faucet.circle.com.`);
+      if (balance < amount) throw new Error(`Not enough ${USDC_WORD} on ${NETWORK_NAME}.${IS_TESTNET ? " Get some free at faucet.circle.com." : ""}`);
       // Pre-flight before any approval prompt: the auction checks its own rules (window, cap, price) before it
       // pulls USDC, so a revert other than the missing allowance means the bid would fail. Stop here if so.
       onStep({ label: "Checking the bid…" });
@@ -156,7 +158,7 @@ export function useLiveLaunch(factory: Address, id: bigint): LaunchModel {
       // Exactly this deposit, never an unlimited allowance; skipped when the allowance already covers it.
       await approveExact(
         { token: TESTNET_USDC, owner: address, spender: factory, amount },
-        { onPrompt: () => onStep({ label: "Confirm the approval in your wallet…" }), onSent: (hash) => onStep({ label: "Approving test USDC…", hash }) },
+        { onPrompt: () => onStep({ label: "Confirm the approval in your wallet…" }), onSent: (hash) => onStep({ label: `Approving ${USDC_WORD}…`, hash }) },
       );
       const hash = await send("Depositing into the batch…", { ...fac, functionName: "deposit", args: [id, amount] }, onStep);
       await refetch();

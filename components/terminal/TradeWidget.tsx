@@ -14,6 +14,7 @@ import { buyCost, fmtTokenPrice, solverQuote } from "@/lib/launchTrade";
 import type { OrderDraft, Side } from "@/lib/order";
 import { PAY_SOURCES, usd } from "@/lib/tokens";
 import { NETWORK_LONG, NETWORK_NAME } from "@/lib/network";
+import { USDC_WORD } from "@/lib/network";
 
 /** A graduated Crux launch: Base Sepolia only, priced from its locked pool, paid in Base Sepolia test USDC. */
 export type LaunchTrade = { symbol: string; market: LaunchMarket };
@@ -182,7 +183,7 @@ export function TradeWidget({ launch }: { launch: LaunchTrade }) {
       <div className="mt-2 flex items-center justify-between rounded-lg border border-line px-3 py-2.5 text-[12px]">
         <span className="text-muted">{side === "buy" ? "Pay with" : "Receive"}</span>
         <span className="font-mono text-chrome">
-          {NETWORK_NAME} test USDC{side === "buy" && isConnected ? ` · ${usd.format(available)}` : ""}
+          {NETWORK_NAME} {USDC_WORD}{side === "buy" && isConnected ? ` · ${usd.format(available)}` : ""}
         </span>
       </div>
 
@@ -195,7 +196,7 @@ export function TradeWidget({ launch }: { launch: LaunchTrade }) {
         {blocked && isConnected ? (
           blocked
         ) : overBudget ? (
-          side === "sell" ? `Not enough $${symbol}` : "Insufficient test USDC"
+          side === "sell" ? `Not enough $${symbol}` : `Insufficient ${USDC_WORD}`
         ) : (
           <>
             Review order <ArrowRight />

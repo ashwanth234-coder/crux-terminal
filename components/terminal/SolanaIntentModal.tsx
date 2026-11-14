@@ -25,6 +25,7 @@ import {
   type SolanaOrder,
 } from "@/lib/solanaEscrow";
 import { NETWORK_NAME } from "@/lib/network";
+import { SOLANA_NAME, USDC_WORD } from "@/lib/network";
 
 /** A Base buy paid with USDC on Solana devnet: the amounts are the ones the ticket quoted and will be signed. */
 export type SolanaOrderRequest = {
@@ -145,14 +146,14 @@ export function SolanaIntentModal({ request, onClose, onPlaced }: { request: Sol
   if (!request) return null;
   const { draft, deposit } = request;
   const usd = (n: bigint) => `${(Number(n) / 1e6).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
-  const short_ = !payer ? null : usdc === null ? "Reading your USDC…" : usdc < request.amount ? `Not enough USDC on Solana devnet (you have ${usd(usdc)})` : sol !== null && sol < SOLANA_MIN_SOL ? `Needs ${SOLANA_MIN_SOL} devnet SOL for fees and storage (you have ${sol.toFixed(4)})` : null;
+  const short_ = !payer ? null : usdc === null ? "Reading your USDC…" : usdc < request.amount ? `Not enough USDC on ${SOLANA_NAME} (you have ${usd(usdc)})` : sol !== null && sol < SOLANA_MIN_SOL ? `Needs ${SOLANA_MIN_SOL} devnet SOL for fees and storage (you have ${sol.toFixed(4)})` : null;
   const refundAt = placed ? placed.fillDeadline + SOLANA_REFUND_GRACE_SECONDS : null;
 
   const note =
     flow.kind === "signing"
       ? `Approve the order in ${payer?.label ?? "your wallet"}…`
       : flow.kind === "sending"
-        ? "Escrowing your USDC on Solana devnet…"
+        ? `Escrowing your USDC on ${SOLANA_NAME}…`
         : flow.kind === "refunding"
           ? "Refunding your USDC…"
           : flow.kind === "refunded"
@@ -162,7 +163,7 @@ export function SolanaIntentModal({ request, onClose, onPlaced }: { request: Sol
               : flow.kind === "open"
                 ? status.data?.state === "closed"
                   ? deposit
-                    ? `Done: test USDC paid into your Crux account ${short(request.payee)} on ${NETWORK_NAME}, settled from Solana.`
+                    ? `Done: ${USDC_WORD} paid into your Crux account ${short(request.payee)} on ${NETWORK_NAME}, settled from Solana.`
                     : `Done: $${draft.symbol} delivered to ${short(request.payee)} on ${NETWORK_NAME}, settled from Solana.`
                   : status.data?.state === "proven"
                     ? `Filled on ${NETWORK_NAME}. Confirming on Solana; nothing more to do.`
@@ -172,8 +173,8 @@ export function SolanaIntentModal({ request, onClose, onPlaced }: { request: Sol
                         ? `Not filled in time. Your refund is available at ${refundClock(refundAt)}; My orders keeps the button for you.`
                       : `USDC held on Solana. Crux fills it on ${NETWORK_NAME}, usually in about 20 s; Solana confirms shortly after.`
                 : deposit
-                  ? `Pay test USDC on Solana devnet; Crux pays it into your Crux account on ${NETWORK_NAME}, no fee. Testnet only, no real funds.`
-                  : `Pay with USDC on Solana devnet, receive $${draft.symbol} on ${NETWORK_NAME}. Testnet only, no real funds.`;
+                  ? `Pay ${USDC_WORD} on ${SOLANA_NAME}; Crux pays it into your Crux account on ${NETWORK_NAME}, no fee. Testnet only, no real funds.`
+                  : `Pay with USDC on ${SOLANA_NAME}, receive $${draft.symbol} on ${NETWORK_NAME}. Testnet only, no real funds.`;
 
   return (
     <Modal
@@ -192,7 +193,7 @@ export function SolanaIntentModal({ request, onClose, onPlaced }: { request: Sol
         <div>
           <p className="text-[12px] text-muted">You pay</p>
           <p className="mt-1.5 font-mono text-[18px] text-chrome">{usd(request.amount)} USDC</p>
-          <p className="mt-0.5 text-[12px] text-muted">on Solana devnet</p>
+          <p className="mt-0.5 text-[12px] text-muted">on {SOLANA_NAME}</p>
         </div>
         <div className="min-[420px]:text-right">
           <p className="text-[12px] text-muted">You receive (expected)</p>

@@ -5,6 +5,7 @@ import { SITE_URL, miniAppEmbed } from "@/lib/site";
 import "./globals.css";
 import { THEME_SCRIPT } from "@/lib/theme";
 import { NETWORK_NAME } from "@/lib/network";
+import { IS_TESTNET } from "@/lib/network";
 
 const archivo = Archivo({
   variable: "--font-archivo",
@@ -29,7 +30,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: "Crux — One account. Every chain.",
   description:
-    `One CRUX Account, funded from Base, Ethereum, Solana, BNB Chain or Arbitrum, to launch and trade with no gas and no bridges. Every trade settles in one pool on Base. Fair one-price launch openings, liquidity locked forever. Testnet on ${NETWORK_NAME}.`,
+    `One CRUX Account, funded from Base, Ethereum, Solana, BNB Chain or Arbitrum, to launch and trade with no gas and no bridges. Every trade settles in one pool on Base. Fair one-price launch openings, liquidity locked forever.${IS_TESTNET ? ` Testnet on ${NETWORK_NAME}.` : ""}`,
   openGraph: {
     title: "Crux — One account. Every chain.",
     description: "Deposit from any chain. Launch and trade from one account. Fair from the first second.",

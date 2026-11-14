@@ -37,6 +37,10 @@ export type Network = {
     accountFactory?: Address;
     accountFactoryV2?: Address;
     accountFactoryV3?: Address;
+    /** The EIP-712 verifyingContract of alert and layout signatures (any fixed address; the solver's is the same). */
+    signingDomain?: Address;
+    /** CruxFillProver: the only sender origin settlers accept fill proofs from. */
+    prover?: Address;
     solver?: Address;
     /** Solver wallets Crux used before a key rotation. */
     retiredSolvers: Address[];
@@ -78,6 +82,8 @@ const BASE_SEPOLIA: Network = {
     accountFactory: a("0xDdB0DF1CfcdEd073A72A489351f22cfF646f8C6E"),
     accountFactoryV2: a("0xf8962965f04e20B95dAdD931fDe00121906a97DC"),
     accountFactoryV3: a("0xBD7AF76bcc2D080364a0c3C138ef82efCF8E12DF"),
+    signingDomain: a("0xf8962965f04e20B95dAdD931fDe00121906a97DC"),
+    prover: a("0x7cb1aDd4975CbF1a5a3FA4fd60F11b010E4b29e8"),
     solver: a("0xDEbbE137f2AB252e28d1070F687010C0909d0492"),
     retiredSolvers: [a("0x69E422d3Cca945a44210684b57F85f556212AD67")],
   },
@@ -136,3 +142,22 @@ export const caip19 = (token: Address, network: Network = NETWORK) => `eip155:${
 export const NETWORK_NAME = NETWORK.label;
 /** The same where copy said "Base Sepolia testnet": "Base" alone on mainnet, so no testnet wording shows there. */
 export const NETWORK_LONG = NETWORK.testnet ? `${NETWORK.label} testnet` : NETWORK.label;
+
+/** Alerts' and layouts' EIP-712 domain contract: the solver's fallback (0x…01) where the network names none. */
+export const SIGNING_DOMAIN: Address = NETWORK.crux.signingDomain ?? "0x0000000000000000000000000000000000000001";
+
+/** True on Base Sepolia: testnet notices, faucets and the alpha guide show; on Base mainnet they don't. */
+export const IS_TESTNET = NETWORK.testnet;
+/** The dollar token in copy: "test USDC" on testnet, "USDC" on mainnet (and the capitalised forms). */
+export const USDC_WORD = IS_TESTNET ? "test USDC" : "USDC";
+export const USDC_WORD_CAP = IS_TESTNET ? "Test USDC" : "USDC";
+/** Gas in copy: "test ETH" on testnet, "ETH" on mainnet. */
+export const ETH_WORD = IS_TESTNET ? "test ETH" : "ETH";
+export const ETH_WORD_CAP = IS_TESTNET ? "Test ETH" : "ETH";
+/** Solana as an origin in copy: devnet on testnet, Solana itself on mainnet. */
+export const SOLANA_NAME = IS_TESTNET ? "Solana devnet" : "Solana";
+/**
+ * Paying from Solana: its escrow program is a devnet one, so it's offered on testnet, and on mainnet only once a
+ * mainnet program is named (NEXT_PUBLIC_CRUX_SOLANA_ESCROW).
+ */
+export const SOLANA_LIVE = IS_TESTNET || Boolean(process.env.NEXT_PUBLIC_CRUX_SOLANA_ESCROW);

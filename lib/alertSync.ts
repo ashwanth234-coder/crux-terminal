@@ -1,7 +1,8 @@
 "use client";
 
 import { keccak256, toHex, type Address } from "viem";
-import { ACCOUNT_FACTORY_V2, type AccountSigner } from "@/lib/account";
+import { type AccountSigner } from "@/lib/account";
+import { SIGNING_DOMAIN } from "@/lib/network.ts";
 import { TESTNET } from "@/lib/chains";
 import { RELAY_URL, postRelay } from "@/lib/session";
 
@@ -29,7 +30,7 @@ export const ALERT_TYPES = {
   ],
 } as const;
 
-const domain = { name: "Crux Alerts", version: "1", chainId: TESTNET.id, verifyingContract: ACCOUNT_FACTORY_V2 };
+const domain = { name: "Crux Alerts", version: "1", chainId: TESTNET.id, verifyingContract: SIGNING_DOMAIN };
 const deadline = () => BigInt(Math.floor(Date.now() / 1000) + 300);
 const PUSH_KEY = "crux:push:on:v1";
 

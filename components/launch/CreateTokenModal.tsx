@@ -35,6 +35,8 @@ import { imageDataUri } from "@/lib/tokenMeta";
 import { DisplayImageField } from "./DisplayImageField";
 import { endsIn5afe, mineTokenSalt } from "@/lib/tokenSalt";
 import { NETWORK_NAME } from "@/lib/network";
+import { USDC_WORD_CAP } from "@/lib/network";
+import { IS_TESTNET } from "@/lib/network";
 
 type Form = {
   name: string;
@@ -641,13 +643,13 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
       subtitle={
         phase.kind === "done"
           ? phase.simulated
-            ? "Simulated preview: the launch contracts are awaiting testnet deployment."
+            ? "Simulated preview: the launch contracts are awaiting deployment."
             : `Deployed on ${NETWORK_NAME} with its batch auction initialised.`
           : live
             ? accountLaunch
-              ? `On ${NETWORK_NAME} (testnet). Free to launch: no gas, no wallet pop-ups.`
-              : `Home chain: ${NETWORK_NAME} (testnet). The token, its auction and its pool all live there.`
-            : "Preview mode: the launch contracts are awaiting testnet deployment."
+              ? `On ${IS_TESTNET ? `${NETWORK_NAME} (testnet)` : NETWORK_NAME}. Free to launch: no gas, no wallet pop-ups.`
+              : `Home chain: ${IS_TESTNET ? `${NETWORK_NAME} (testnet)` : NETWORK_NAME}. The token, its auction and its pool all live there.`
+            : "Preview mode: the launch contracts are awaiting deployment."
       }
     >
       {phase.kind === "done" ? (
@@ -870,7 +872,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
             <fieldset className="rounded-xl border border-line p-4">
               <legend className="px-1 text-[13px] text-chrome">Who&apos;s buying?</legend>
               <p className="text-[11.5px] leading-snug text-dim">
-                On testnet every launch is Small: a 30-second opening, and it always goes live (Crux tops up the opening). Bigger
+                {IS_TESTNET ? "On testnet every launch is Small" : "Every launch here is Small"}: a 30-second opening, and it always goes live (Crux tops up the opening). Bigger
                 launches arrive with V9, where no launch needs a goal at all.
               </p>
               <div role="radiogroup" aria-label="Launch size" className="mt-3 grid gap-2 sm:grid-cols-4">
@@ -946,7 +948,7 @@ export function CreateTokenModal({ open, onClose }: { open: boolean; onClose: ()
               id={id("target")}
               label="Graduation target"
               error={showErr("target")}
-              hint={FACTORY ? "Test USDC the opening must raise for the token to launch; under it, everyone is refunded" : "USDC the opening must raise for the token to launch; under it, everyone is refunded"}
+              hint={FACTORY ? `${USDC_WORD_CAP} the opening must raise for the token to launch; under it, everyone is refunded` : "USDC the opening must raise for the token to launch; under it, everyone is refunded"}
             >
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-[14px] text-dim">$</span>

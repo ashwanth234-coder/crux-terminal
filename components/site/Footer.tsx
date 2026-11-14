@@ -5,12 +5,13 @@ import { TESTNET_EXPLORER } from "@/lib/chains";
 import { SETTLER } from "@/lib/intents";
 import { CONTACT_EMAIL } from "@/lib/site";
 import { NETWORK_NAME } from "@/lib/network";
+import { IS_TESTNET } from "@/lib/network";
 
 // Only destinations that exist: no legal pages have been published yet.
 const LINKS = [
   { label: "Discover", href: "/discover" },
   { label: "Protocol", href: "/#protocol" },
-  { label: "Docs", href: "/alpha-guide" },
+  ...(IS_TESTNET ? [{ label: "Docs", href: "/alpha-guide" }] : []),
   { label: "API", href: "/developers" },
   { label: "Settler on Basescan", href: `${TESTNET_EXPLORER}/address/${SETTLER}` },
 ];
@@ -24,8 +25,8 @@ export function Footer() {
             <Logo />
           </Link>
           <p className="flex items-center gap-3 text-[12.5px] text-muted">
-            <StatusTag status="testnet" />
-            {NETWORK_NAME} only. Nothing here is on mainnet.
+            <StatusTag status={IS_TESTNET ? "testnet" : "live"} />
+            {IS_TESTNET ? <>{NETWORK_NAME} only. Nothing here is on mainnet.</> : <>Live on {NETWORK_NAME}.</>}
           </p>
         </div>
         <nav aria-label="Footer">

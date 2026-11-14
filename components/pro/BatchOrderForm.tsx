@@ -19,6 +19,7 @@ import { logClient } from "@/lib/logs";
 import { simulateThenWrite } from "@/lib/preflight";
 import { useConnectModal } from "@/providers/Web3Provider";
 import { NETWORK_NAME } from "@/lib/network";
+import { USDC_WORD } from "@/lib/network";
 
 type Side = "buy" | "sell";
 type Flow =
@@ -171,13 +172,13 @@ export function BatchOrderForm({ market, symbol }: { market: LaunchMarket; symbo
     : flow.kind === "switching"
       ? `Switching to ${NETWORK_NAME}…`
       : flow.kind === "approving"
-        ? `Approving ${side === "buy" ? "test USDC" : symbol}…`
+        ? `Approving ${side === "buy" ? `${USDC_WORD}` : symbol}…`
         : flow.kind === "placing"
           ? "Placing order…"
           : alreadyThisSide
             ? `You have a ${side} in this batch`
             : overBalance
-              ? `Not enough ${side === "buy" ? "test USDC" : symbol}`
+              ? `Not enough ${side === "buy" ? `${USDC_WORD}` : symbol}`
               : `Place ${side} in batch #${batch}`;
 
   return (
@@ -230,7 +231,7 @@ export function BatchOrderForm({ market, symbol }: { market: LaunchMarket; symbo
         <span className="shrink-0 text-[12px] text-muted">{side === "buy" ? "USDC" : symbol}</span>
       </div>
       <div className="-mt-1.5 flex items-baseline justify-between text-[11px] text-dim">
-        <span>{side === "buy" ? `${NETWORK_NAME} test USDC` : `Selling ${symbol}`}</span>
+        <span>{side === "buy" ? `${NETWORK_NAME} ${USDC_WORD}` : `Selling ${symbol}`}</span>
         <button
           type="button"
           disabled={!balance}

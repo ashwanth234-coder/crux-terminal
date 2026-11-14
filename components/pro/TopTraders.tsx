@@ -8,6 +8,7 @@ import { fmtTokens } from "@/lib/launch";
 import type { AuctionV2 } from "@/lib/launchV2";
 import { FocusChip, Tags, Trader, pnlTone, pnlUsd, td, th } from "@/components/pro/desk";
 import { NETWORK_NAME } from "@/lib/network";
+import { USDC_WORD } from "@/lib/network";
 
 const SHOWN = 25;
 const usd = (v: number) => (v === 0 ? "—" : `$${v >= 1_000 ? v.toLocaleString("en-US", { maximumFractionDigits: 0 }) : v >= 0.01 ? v.toFixed(2) : v.toPrecision(2)}`);
@@ -91,7 +92,7 @@ export function TopTraders({
         {traders && rows.length === 0 && <p className="px-3 py-6 text-center text-[12px] text-dim">{focus ? "This wallet has no priced trades." : "No priced trades yet."}</p>}
       </div>
       <p className="px-1 pt-1.5 text-[11px] text-dim">
-        Ranked by realized + unrealized PnL in test USDC, at the pool price · auction claims count as buys at the clearing price · ≈ Crux-order sells priced at
+        Ranked by realized + unrealized PnL in {USDC_WORD}, at the pool price · auction claims count as buys at the clearing price · ≈ Crux-order sells priced at
         Crux&apos;s fill · * some tokens moved without a price and are left out.
       </p>
     </div>

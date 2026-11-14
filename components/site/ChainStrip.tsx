@@ -1,6 +1,7 @@
 import { StatusTag } from "@/components/ui/StatusTag";
 import { NETWORKS, SOON_MAINNET } from "@/lib/networks";
 import { ChainMark } from "./ChainMarks";
+import { IS_TESTNET } from "@/lib/network";
 
 /** Under the hero: the chains you can deposit and buy from, each mark taking its network's colour on hover. */
 export function ChainStrip({ className = "" }: { className?: string }) {
@@ -8,7 +9,7 @@ export function ChainStrip({ className = "" }: { className?: string }) {
     <div className={className}>
       <div className="flex items-center gap-3">
         <span className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-dim">Deposit and buy from</span>
-        <StatusTag status="testnet" />
+        <StatusTag status={IS_TESTNET ? "testnet" : "live"} />
       </div>
       <ul className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3">
         {NETWORKS.map((c) => (

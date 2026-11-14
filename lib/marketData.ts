@@ -9,6 +9,8 @@ import { poolTradeReader, readBatchPool, readUsdcIs0, type PoolTrade } from "@/l
 import { SITE_URL } from "@/lib/site";
 import { NETWORK } from "./network.ts";
 import { NETWORK_NAME } from "./network.ts";
+import { USDC_WORD } from "./network.ts";
+import { IS_TESTNET } from "./network.ts";
 
 /**
  * The public market data API's reads (/api/pairs, /api/trades, /api/candles), server-side: every graduated Crux
@@ -156,5 +158,5 @@ export const API_NOTES = {
   chainId: NETWORK.chain.id,
   network: NETWORK.name,
   testnet: NETWORK.testnet,
-  notes: `Test tokens on ${NETWORK_NAME} only; prices are in test USDC. Trades cover the last ${LOG_WINDOW_LABEL} at most.`,
+  notes: `${IS_TESTNET ? `Test tokens on ${NETWORK_NAME} only; prices` : "Prices"} are in ${USDC_WORD}. Trades cover the last ${LOG_WINDOW_LABEL} at most.`,
 } as const;

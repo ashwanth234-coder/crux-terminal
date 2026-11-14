@@ -34,6 +34,7 @@ import { simulateThenWrite } from "@/lib/preflight";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { useConnectModal } from "@/providers/Web3Provider";
 import { NETWORK_NAME } from "@/lib/network";
+import { USDC_WORD } from "@/lib/network";
 
 /**
  * The Pro terminal for a Base Sepolia token that isn't a Crux launch: its deepest Uniswap pool (lib/externalPools)
@@ -106,7 +107,7 @@ export function ExternalTerminalRoute({ token }: { token: Address }) {
   if (!pool.data) {
     return (
       <Missing token={token} title={`No pool for ${sym.result}`}>
-        Crux found no Uniswap V2 or V3 pool pairing this token with test USDC or WETH on {NETWORK_NAME}, so there is no price to chart or trade.
+        Crux found no Uniswap V2 or V3 pool pairing this token with {USDC_WORD} or WETH on {NETWORK_NAME}, so there is no price to chart or trade.
       </Missing>
     );
   }

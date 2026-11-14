@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { Shell } from "@/components/launch/LaunchView";
 import { SITE_URL } from "@/lib/site";
 import { NETWORK_LONG } from "@/lib/network";
+import { USDC_WORD } from "@/lib/network";
+import { IS_TESTNET, NETWORK } from "@/lib/network";
 
 export const metadata: Metadata = {
   title: "Market data API · Crux",
@@ -96,7 +98,7 @@ export default function DevelopersPage() {
               terminal shows: its chart and tape decode trades with the same code.
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
-              {["Public · no key", "Any origin (CORS)", "JSON", "Test tokens only"].map((t) => (
+              {["Public · no key", "Any origin (CORS)", "JSON", ...(IS_TESTNET ? ["Test tokens only"] : [])].map((t) => (
                 <span key={t} className="rounded-[4px] border border-line-2 px-3 py-1 text-[11.5px] text-muted">
                   {t}
                 </span>
@@ -111,8 +113,8 @@ export default function DevelopersPage() {
               couldn&apos;t be read; retry).
             </p>
             <p>
-              A market is identified by its {c("pair")}: the launch token&apos;s Uniswap V2 pair with test USDC, whose LP tokens are burned.
-              Every response carries {c("chainId")} 84532, {c("network")} &quot;base-sepolia&quot; and {c("testnet")} true.
+              A market is identified by its {c("pair")}: the launch token&apos;s Uniswap V2 pair with {USDC_WORD}, whose LP tokens are burned.
+              Every response carries {c("chainId")} {NETWORK.chain.id}, {c("network")} &quot;{NETWORK.name}&quot; and {c("testnet")} {String(IS_TESTNET)}.
             </p>
           </Section>
 
@@ -123,8 +125,8 @@ export default function DevelopersPage() {
               rows={[
                 ["venue", "Where the liquidity trades now: \"uniswap-v2\", or \"crux-batch-pool\" during a launch's anti-sniper window (one 60-second batch at one price; the pair is empty and locked until the liquidity migrates)."],
                 ["batchOnlyUntil", "Unix seconds the anti-sniper window ends, while it's on; otherwise null."],
-                ["priceUsd", "Mid price from the live reserves, in test USDC per whole token."],
-                ["reserves", "base (tokens) and quote (test USDC), as decimal strings."],
+                ["priceUsd", `Mid price from the live reserves, in ${USDC_WORD} per whole token.`],
+                ["reserves", `base (tokens) and quote (${USDC_WORD}), as decimal strings.`],
                 ["liquidityUsd · marketCapUsd", "2 × quote reserve; price × total supply."],
                 ["antiSniperSeconds", "The launch's batch-only window after graduation: 0 when the creator turned anti-sniper off (and for launches before V5)."],
                 ["creatorVestingDays", "30, or 0 for an instant unlock."],
@@ -133,7 +135,7 @@ export default function DevelopersPage() {
             />
             <Code>{`curl ${SITE_URL}/api/pairs?pair=${EXAMPLE_PAIR}
 
-{ "chainId": 84532, "network": "base-sepolia", "testnet": true,
+{ "chainId": ${NETWORK.chain.id}, "network": "${NETWORK.name}", "testnet": ${IS_TESTNET},
   "pair": {
     "id": "${EXAMPLE_PAIR}", "dex": "uniswap-v2",
     "baseToken": { "address": "0x5182…B106", "symbol": "V6C", "decimals": 18 },
@@ -158,8 +160,8 @@ export default function DevelopersPage() {
             <Params
               rows={[
                 ["side", "\"buy\" (USDC in, tokens out of the pool) or \"sell\"."],
-                ["priceUsd", "This fill's price in test USDC per token, the 0.3% pool fee included."],
-                ["baseAmount · quoteAmount", "Tokens and test USDC traded, as decimal strings."],
+                ["priceUsd", `This fill's price in ${USDC_WORD} per token, the 0.3% pool fee included.`],
+                ["baseAmount · quoteAmount", `Tokens and ${USDC_WORD} traded, as decimal strings.`],
                 ["venue · batch", "\"uniswap-v2\", or \"batch-pool\" with the batch it cleared in."],
                 ["viaCruxSolver", "True when the Crux solver traded it to fill a user's intent (the solver then delivers to the user)."],
                 ["time", "Unix seconds of the trade's block."],
@@ -209,7 +211,7 @@ export default function DevelopersPage() {
 
           <Section id="notes" title="6. Data notes">
             <ul className="list-disc space-y-2.5 pl-5">
-              <li>Everything is on {NETWORK_LONG}: test tokens with no value, priced in test USDC.</li>
+              <li>Everything is on {NETWORK_LONG}{IS_TESTNET ? ": test tokens with no value" : ""}, priced in {USDC_WORD}.</li>
               <li>
                 Trades and candles cover at most the last three days of a market; {c("truncated")} is true when older trades exist but
                 aren&apos;t included.

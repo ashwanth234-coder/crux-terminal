@@ -16,13 +16,15 @@ import { need, NETWORK } from "./network.ts";
  */
 
 /** CruxAccountFactory: the same address on every chain (deterministic CREATE2 deploy). */
-export const ACCOUNT_FACTORY = need("CruxAccountFactory", NETWORK.crux.accountFactory);
+/** Null on a network without the first account factory (Base mainnet has 5afe V3 accounts only). */
+export const ACCOUNT_FACTORY: Address | null = NETWORK.crux.accountFactory ?? null;
 /**
  * CruxAccountFactoryV2: accounts with standing orders (take profit, stop loss, buy the dip). Once it's deployed it
  * becomes the trader's account; their V1 account stays readable so its funds can be moved, and it remains the creator
  * of gasless launches (CruxFactoryV7 checks the V1 factory).
  */
-export const ACCOUNT_FACTORY_V2 = need("CruxAccountFactoryV2", NETWORK.crux.accountFactoryV2);
+/** Null on a network without it (Base mainnet). */
+export const ACCOUNT_FACTORY_V2: Address | null = NETWORK.crux.accountFactoryV2 ?? null;
 /**
  * CruxAccountFactoryV3 (crux-contracts script/DeployOneAccount.s.sol): one account per trader that trades, holds
  * standing orders and launches, at an address ending in 5afe, born with its withdrawal address bound. Its address is

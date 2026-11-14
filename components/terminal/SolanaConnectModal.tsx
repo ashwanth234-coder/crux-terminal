@@ -4,6 +4,7 @@ import { WalletReadyState } from "@solana/wallet-adapter-base";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Modal, KineticLoader } from "@/components/ui/Modal";
 import { buttonClass } from "@/components/ui/Button";
+import { SOLANA_NAME } from "@/lib/network";
 
 function short(key: string) {
   return `${key.slice(0, 4)}…${key.slice(-4)}`;
@@ -19,7 +20,7 @@ export function SolanaConnectModal({ open, onClose }: { open: boolean; onClose: 
   const notInstalled = wallets.filter((w) => w.readyState === WalletReadyState.NotDetected);
 
   return (
-    <Modal open={open} onClose={onClose} title="Connect Solana" subtitle="Pay for Base trades with USDC on Solana devnet, and see your Solana balances.">
+    <Modal open={open} onClose={onClose} title="Connect Solana" subtitle={`Pay for Base trades with USDC on ${SOLANA_NAME}, and see your Solana balances.`}>
       {/* Wallet detection only exists in the browser; building the list while closed would
           differ between server and client render (hydration mismatch). */}
       {!open ? null : connected && publicKey ? (

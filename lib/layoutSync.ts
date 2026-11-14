@@ -1,5 +1,6 @@
 import { keccak256, toHex, type Address } from "viem";
-import { ACCOUNT_FACTORY_V2, type AccountSigner } from "@/lib/account";
+import { type AccountSigner } from "@/lib/account";
+import { SIGNING_DOMAIN } from "@/lib/network.ts";
 import { TESTNET } from "@/lib/chains";
 import { postRelay } from "@/lib/session";
 
@@ -22,7 +23,7 @@ export const LAYOUT_TYPES = {
   ],
 } as const;
 
-const domain = { name: "Crux Layouts", version: "1", chainId: TESTNET.id, verifyingContract: ACCOUNT_FACTORY_V2 };
+const domain = { name: "Crux Layouts", version: "1", chainId: TESTNET.id, verifyingContract: SIGNING_DOMAIN };
 const deadline = () => BigInt(Math.floor(Date.now() / 1000) + 300);
 
 export async function loadRemoteLayout(sign: AccountSigner, owner: Address, token: Address): Promise<{ layout: string; savedAt: number } | null> {

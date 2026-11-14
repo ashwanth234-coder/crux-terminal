@@ -19,6 +19,8 @@ import { TESTNET_USDC, orderNonce } from "@/lib/intents";
 import { launchCaip19 } from "@/lib/launchTrade";
 import { PAY_SOURCES } from "@/lib/tokens";
 import { NETWORK_NAME } from "@/lib/network";
+import { IS_TESTNET, SOLANA_LIVE, SOLANA_NAME } from "@/lib/network";
+import { USDC_WORD, USDC_WORD_CAP } from "@/lib/network";
 
 /**
  * The solver's spread on deposits (crux-solver DEPOSIT_SPREAD_BPS): none, so a deposit pays 1:1 and the order signs the
@@ -54,14 +56,14 @@ const openForAbi = parseAbi([
 ]);
 
 type Origin = CrossChainOrigin & { depositSettler: Address };
-const ORIGINS = CROSS_CHAIN_ORIGINS.filter((o): o is Origin => o.depositSettler !== null);
+const ORIGINS = CROSS_CHAIN_ORIGINS.filter((o): o is Origin => o.depositSettler !== null && Boolean(o.chain.testnet) === IS_TESTNET);
 /** Solana devnet: USDC escrowed by crux_escrow, the account as payee and Base test USDC as the output (SolanaIntentModal). */
 const SOLANA = "solana";
-const SOLANA_NAME = "Solana devnet";
+const SOLANA_LABEL = SOLANA_NAME;
 /** Base Sepolia: a plain USDC transfer from the wallet to the account (the account lives there), no fee. */
 const BASE = "base";
 const BASE_NAME = `${NETWORK_NAME}`;
-const CHOICES: { key: string; name: string }[] = [{ key: BASE, name: BASE_NAME }, ...ORIGINS, { key: SOLANA, name: SOLANA_NAME }];
+const CHOICES: { key: string; name: string }[] = [{ key: BASE, name: BASE_NAME }, ...ORIGINS, ...(SOLANA_LIVE ? [{ key: SOLANA, name: SOLANA_LABEL }] : [])];
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
 type Step = { kind: "idle" } | { kind: "busy"; label: string } | { kind: "opened"; origin: Origin; hash: `0x${string}` } | { kind: "error"; message: string };
@@ -177,7 +179,7 @@ export function CrossChainDeposit({
     const minOut = (units * (BigInt(10_000) - DEPOSIT_SPREAD_BPS)) / BigInt(10_000);
     const qty = Number(minOut) / 1e6;
     setSolanaRequest({
-      draft: { side: "buy", symbol: "USDC", qty, price: 1, notional: qty, source: PAY_SOURCES.find((s) => s.id === "solana-usdc")!, originLabel: SOLANA_NAME },
+      draft: { side: "buy", symbol: "USDC", qty, price: 1, notional: qty, source: PAY_SOURCES.find((s) => s.id === "solana-usdc")!, originLabel: SOLANA_LABEL },
       amount: units,
       minAmountOut: minOut,
       tokenOut: launchCaip19(TESTNET_USDC),
@@ -305,7 +307,7 @@ export function CrossChainDeposit({
       <div className="mt-2 flex items-center gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-line bg-void/60 px-3 py-2 focus-within:border-line-2">
           <span className="font-mono text-dim">$</span>
-          <label htmlFor="deposit-amount" className="sr-only">Test USDC to deposit from {fromBase ? BASE_NAME : (origin?.name ?? SOLANA_NAME)}</label>
+          <label htmlFor="deposit-amount" className="sr-only">{USDC_WORD_CAP} to deposit from {fromBase ? BASE_NAME : (origin?.name ?? SOLANA_LABEL)}</label>
           <input
             id="deposit-amount"
             inputMode="decimal"
@@ -332,7 +334,7 @@ export function CrossChainDeposit({
       ) : origin ? (
         <p className="mt-1.5 text-[11.5px] leading-relaxed text-dim">
           {over ? "More than your wallet holds there. " : ""}
-          Wallet on {origin.name}: {originBalance.data !== undefined ? `$${Number(formatUnits(originBalance.data, origin.decimals)).toFixed(2)}` : "…"} test USDC (free at{" "}
+          Wallet on {origin.name}: {originBalance.data !== undefined ? `$${Number(formatUnits(originBalance.data, origin.decimals)).toFixed(2)}` : "…"} {USDC_WORD} (free at{" "}
           {origin.faucet}). Arrives in your Crux account on Base in about a minute, no fee. Needs a little {origin.chain.nativeCurrency.symbol} there for
           gas.
         </p>
@@ -340,9 +342,9 @@ export function CrossChainDeposit({
         <p className="mt-1.5 text-[11.5px] leading-relaxed text-dim">
           {over ? "More than your Solana wallet holds. " : ""}
           {solana.payer
-            ? `Solana wallet: ${solana.usdc !== null ? `$${Number(formatUnits(solana.usdc, 6)).toFixed(2)}` : "…"} devnet USDC (free at faucet.circle.com). `
-            : "Connect a Solana wallet in the next step. Devnet USDC is free at faucet.circle.com. "}
-          Arrives in your Crux account on Base in about a minute, no fee. Needs a little devnet SOL for network fees.
+            ? `Solana wallet: ${solana.usdc !== null ? `$${Number(formatUnits(solana.usdc, 6)).toFixed(2)}` : "…"} ${IS_TESTNET ? "devnet USDC (free at faucet.circle.com)" : "USDC"}. `
+            : `Connect a Solana wallet in the next step.${IS_TESTNET ? " Devnet USDC is free at faucet.circle.com." : ""} `}
+          Arrives in your Crux account on Base in about a minute, no fee. Needs a little {IS_TESTNET ? "devnet SOL" : "SOL"} for network fees.
         </p>
       )}
       {!fromBase && capacity !== undefined && (
@@ -368,7 +370,7 @@ export function CrossChainDeposit({
         <details className="mt-3 rounded-lg border border-line px-3 py-2.5">
           <summary className="cursor-pointer text-[11.5px] text-dim hover:text-chrome">Sending from an exchange or another wallet?</summary>
           <p className="mt-1.5 text-[11.5px] leading-snug text-muted">
-            Send test USDC on <span className="text-chrome">{NETWORK_NAME}</span> to your account address above (Copy). It arrives as soon as the transfer lands.
+            Send {USDC_WORD} on <span className="text-chrome">{NETWORK_NAME}</span> to your account address above (Copy). It arrives as soon as the transfer lands.
           </p>
           <p className="mt-1 text-[11px] leading-snug text-signal">
             USDC sent to that address on any other chain doesn&apos;t reach your account. From another chain, pick it in &ldquo;Deposit from&rdquo; instead.

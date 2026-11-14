@@ -2,6 +2,8 @@ import { connection } from "next/server";
 import { feedResponse, readLaunches } from "@/lib/launchFeed";
 import { NETWORK } from "@/lib/network";
 import { NETWORK_NAME } from "@/lib/network";
+import { USDC_WORD } from "@/lib/network";
+import { IS_TESTNET } from "@/lib/network";
 
 /**
  * GET /api/launches: every Crux launch on Base Sepolia, newest first, read live from the batch factories.
@@ -15,10 +17,10 @@ export async function GET(request: Request) {
     const launches = await readLaunches();
     return feedResponse({
       chainId: NETWORK.chain.id,
-      network: "base-sepolia",
-      testnet: true,
+      network: NETWORK.name,
+      testnet: IS_TESTNET,
       generatedAt: new Date().toISOString(),
-      notes: `Test tokens on ${NETWORK_NAME} only. Prices are in test USDC. Graduated pools are Uniswap V2 pairs whose LP tokens are burned.`,
+      notes: `${IS_TESTNET ? `Test tokens on ${NETWORK_NAME} only. ` : ""}Prices are in ${USDC_WORD}. Graduated pools are Uniswap V2 pairs whose LP tokens are burned.`,
       launches: phase ? launches.filter((l) => l.phase === phase) : launches,
     });
   } catch {

@@ -1,4 +1,5 @@
 import { Chapter } from "./Chapter";
+import { IS_TESTNET } from "@/lib/network";
 
 // What the CRUX Account gives you. The first two are live on testnet; the third says plainly what waits for mainnet.
 const PILLARS = [
@@ -6,13 +7,13 @@ const PILLARS = [
     n: "01",
     title: "Fund from anywhere.",
     body: "USDC from five chains lands in one CRUX Account, with no fee and no bridge. Withdrawals only ever go to the wallet you bind.",
-    tag: "Live on testnet",
+    tag: IS_TESTNET ? "Live on testnet" : "Live",
   },
   {
     n: "02",
     title: "Trade and launch in one place.",
     body: "Launch a token, buy at open, set take-profit and stop-loss, all from the same balance. No gas, no pop-ups.",
-    tag: "Live on testnet",
+    tag: IS_TESTNET ? "Live on testnet" : "Live",
   },
   {
     n: "03",

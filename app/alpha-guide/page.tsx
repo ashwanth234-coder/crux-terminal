@@ -8,6 +8,9 @@ import { LIVE_NAMES, ORIGIN_NAMES, SOON_LINE } from "@/lib/networks";
 import { SOLANA_KEPT_SOL, SOLANA_MIN_SOL, SOLANA_OPEN_SOL, SOLANA_RETURNED_SOL, solAmount } from "@/lib/solanaEscrow";
 import { NETWORK } from "@/lib/network";
 import { NETWORK_LONG, NETWORK_NAME } from "@/lib/network";
+import { notFound } from "next/navigation";
+import { IS_TESTNET } from "@/lib/network";
+import { ETH_WORD, ETH_WORD_CAP, SOLANA_NAME, USDC_WORD, USDC_WORD_CAP } from "@/lib/network";
 
 export const metadata: Metadata = {
   title: "Alpha tester guide · Crux",
@@ -51,7 +54,7 @@ const CONTRACTS: { name: string; address: string; href?: string }[] = [
   { name: "Crux filler + keeper wallet", address: "0xDEbbE137f2AB252e28d1070F687010C0909d0492" },
   { name: "Earlier filler + keeper wallet (retired 2026-11-01)", address: "0x69E422d3Cca945a44210684b57F85f556212AD67" },
   {
-    name: "crux_escrow (Pay from Solana, Solana devnet)",
+    name: `crux_escrow (Pay from Solana, ${SOLANA_NAME})`,
     address: "51VZTKfmnS85fvJ1rEBCuVQveqHg2XeN44ZiHeeNa8m5",
     href: "https://explorer.solana.com/address/51VZTKfmnS85fvJ1rEBCuVQveqHg2XeN44ZiHeeNa8m5?cluster=devnet",
   },
@@ -104,6 +107,8 @@ function Ext({ href, children }: { href: string; children: ReactNode }) {
 const b = (t: string) => <span className="text-chrome">{t}</span>;
 
 export default function AlphaGuidePage() {
+  // The guide walks through the testnet (faucets, test tokens): on mainnet there's no such page.
+  if (!IS_TESTNET) notFound();
   return (
     <Shell mode="live">
       <div className="lg:grid lg:grid-cols-12 lg:gap-10">
@@ -158,13 +163,13 @@ export default function AlphaGuidePage() {
                 creator&apos;s 2.4% of supply vests over 30 days by default.
               </li>
               <li>
-                {b("A CRUX Account.")} Log in with email or Google, deposit test USDC from any chain, and trade, launch and buy at open
+                {b("A CRUX Account.")} Log in with email or Google, deposit {USDC_WORD} from any chain, and trade, launch and buy at open
                 with no gas and no wallet pop-ups.
               </li>
             </ul>
             <p>
-              {b("Chains.")} Tokens, curves and pools live on {NETWORK_NAME}. You can deposit and trade from {LIVE_NAMES} (testnets;
-              Solana devnet), and nothing has to be bridged. {SOON_LINE}.
+              {b("Chains.")} Tokens, curves and pools live on {NETWORK_NAME}. You can deposit and trade from {LIVE_NAMES} (testnets;{" "}
+              {SOLANA_NAME}), and nothing has to be bridged. {SOON_LINE}.
             </p>
             <p>Use it like you would a real product, try to break it, and tell us what confused you.</p>
           </Section>
@@ -186,7 +191,7 @@ export default function AlphaGuidePage() {
               ))}
             </dl>
 
-            <Callout title="You need both test ETH and test USDC">
+            <Callout title={`You need both ${ETH_WORD} and ${USDC_WORD}`}>
               {b("ETH")} pays gas for every approval and contract call (launching, bidding, claiming, placing an order).{" "}
               {b("USDC")} is what you bid and trade with. Without ETH nothing sends; without USDC there&apos;s nothing to bid.
             </Callout>
@@ -194,18 +199,18 @@ export default function AlphaGuidePage() {
             <Steps
               items={[
                 <>
-                  {b("Test ETH")} from the <Ext href="https://www.alchemy.com/faucets/base-sepolia">Alchemy {NETWORK_NAME} faucet</Ext> or
+                  {b(`${ETH_WORD_CAP}`)} from the <Ext href="https://www.alchemy.com/faucets/base-sepolia">Alchemy {NETWORK_NAME} faucet</Ext> or
                   the <Ext href="https://console.optimism.io/faucet">Superchain faucet</Ext>. Some faucets ask you to sign in or hold a
-                  tiny mainnet balance; if one refuses, try the other. A few cents&apos; worth of test ETH lasts the whole alpha.
+                  tiny mainnet balance; if one refuses, try the other. A few cents&apos; worth of {ETH_WORD} lasts the whole alpha.
                 </>,
                 <>
-                  {b("Test USDC")} from <Ext href="https://faucet.circle.com">faucet.circle.com</Ext>: pick {b(`${NETWORK_NAME}`)}, paste
+                  {b(`${USDC_WORD_CAP}`)} from <Ext href="https://faucet.circle.com">faucet.circle.com</Ext>: pick {b(`${NETWORK_NAME}`)}, paste
                   your address and request.
                 </>,
                 <>
-                  Show it in MetaMask: Tokens → Import tokens → paste Circle&apos;s test USDC address (6 decimals):
+                  Show it in MetaMask: Tokens → Import tokens → paste Circle&apos;s {USDC_WORD} address (6 decimals):
                   <div className="mt-2">
-                    <CopyValue value={TESTNET_USDC} label="test USDC address" />
+                    <CopyValue value={TESTNET_USDC} label={`${USDC_WORD} address`} />
                   </div>
                 </>,
               ]}
@@ -224,8 +229,8 @@ export default function AlphaGuidePage() {
                   bar: click it to open the account page, and bind your withdrawal wallet when asked.
                 </>,
                 <>
-                  Under {b("Deposit")}, pick the chain your test USDC is on in {b("Deposit from")} (each shows your balance there):{" "}
-                  {b(`${NETWORK_NAME}`)}, Arbitrum Sepolia, Ethereum Sepolia, BNB Chain testnet or Solana devnet. Enter an amount and press{" "}
+                  Under {b("Deposit")}, pick the chain your {USDC_WORD} is on in {b("Deposit from")} (each shows your balance there):{" "}
+                  {b(`${NETWORK_NAME}`)}, Arbitrum Sepolia, Ethereum Sepolia, BNB Chain testnet or {SOLANA_NAME}. Enter an amount and press{" "}
                   {b("Deposit")}.
                 </>,
                 <>
@@ -234,7 +239,7 @@ export default function AlphaGuidePage() {
                   chain&apos;s gas token (Solana: about {SOLANA_MIN_SOL} devnet SOL).
                 </>,
                 <>
-                  You can also send test USDC on {b(`${NETWORK_NAME}`)} straight to your account address ({b("Copy")} at the top of
+                  You can also send {USDC_WORD} on {b(`${NETWORK_NAME}`)} straight to your account address ({b("Copy")} at the top of
                   Deposit), from an exchange or another wallet. Only on {NETWORK_NAME}: USDC sent to that address on any other chain
                   doesn&apos;t reach the account.
                 </>,
@@ -335,7 +340,7 @@ export default function AlphaGuidePage() {
                   {SETTLER_VERSION >= 3
                     ? "As soon as the deadline passes (about 10 minutes after you placed it), "
                     : "About an hour after the deadline (roughly 70 minutes after you placed it), "}
-                  click {b("Refund test USDC")} (or the token,
+                  click {b(`Refund ${USDC_WORD}`)} (or the token,
                   for a sell) and confirm. Refunds always return to your own address; nobody else can redirect them.
                 </>,
               ]}
@@ -351,7 +356,7 @@ export default function AlphaGuidePage() {
             <CopyValue value="https://base-sepolia-rpc.publicnode.com" label="backup RPC URL" />
             <ul className="space-y-2.5 text-[14px]">
               <li>
-                {b("“Not enough test USDC”")} → top up at faucet.circle.com. {b("A transaction won't send")} → check you have test
+                {b(`“Not enough ${USDC_WORD}”`)} → top up at faucet.circle.com. {b("A transaction won't send")} → check you have test
                 ETH.
               </li>
               <li>
@@ -367,7 +372,7 @@ export default function AlphaGuidePage() {
               {[
                 ["One filler.", "A single filler run by the Crux team fills every order. If it's down, orders don't fill and you refund after the deadline."],
                 ["Escrow pays only the proven filler.", "On Base, the settler releases your funds only to the filler the destination contract recorded as delivering your exact order; nobody else, the team included, can redirect it. Unfilled orders refund to you after the deadline."],
-                ["Cross-chain orders are confirmed back on the paying chain.", "Paid from Ethereum, Arbitrum or BNB Chain testnets, or from Solana devnet: your funds on that chain are released only when a Hyperlane message from the Crux fill prover on Base proves who filled the order. This trusts Hyperlane's validators (the default security module). With no proof, you refund 6 hours after the deadline."],
+                ["Cross-chain orders are confirmed back on the paying chain.", `Paid from Ethereum, Arbitrum or BNB Chain testnets, or from ${SOLANA_NAME}: your funds on that chain are released only when a Hyperlane message from the Crux fill prover on Base proves who filled the order. This trusts Hyperlane's validators (the default security module). With no proof, you refund 6 hours after the deadline.`],
                 ["Crux accounts: withdrawals only to your wallet.", "An email or Google account can trade, but its funds can only be withdrawn to the wallet you bound. Changing that wallet waits 48 hours (a timelock), and your current wallet can cancel the change and sweep everything to itself."],
                 ["Standing orders run without you.", "Take profit, stop loss, trailing stop, buy-the-dip and buy-at-open orders wait for their moment with this page closed. Your signed floor is enforced on-chain, so an order can never fill below it; the keeper decides when to send it. Orders in one group (TP + SL) are one-cancels-the-other: when one fills, the other can't."],
                 ["Automatic listing, admin by a Safe.", "Graduated tokens are listed for Crux orders by a permissionless lister. Admin settings (the fee treasury, new factories, session limits) need 2 of the 3 signers of the Crux Safe."],

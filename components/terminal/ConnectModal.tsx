@@ -5,6 +5,8 @@ import { useConnect, useConnectors, type Connector } from "wagmi";
 import { Modal, KineticLoader } from "@/components/ui/Modal";
 import { initFarcaster } from "@/lib/farcaster";
 import { LIVE_NAMES, SOON_LINE } from "@/lib/networks";
+import { USDC_WORD } from "@/lib/network";
+import { IS_TESTNET } from "@/lib/network";
 
 const COPY: Record<string, { name: string; detail: string }> = {
   farcaster: { name: "Farcaster Wallet", detail: "The wallet in this Farcaster client" },
@@ -127,7 +129,7 @@ export function ConnectModal({ open, onClose }: { open: boolean; onClose: () => 
       )}
 
       <p className="mt-5 font-mono text-[10px] leading-relaxed text-dim">
-        Crux reads your test USDC on {LIVE_NAMES} (testnets) to show your buying power. {SOON_LINE}. Nothing is signed
+        Crux reads your {USDC_WORD} on {LIVE_NAMES}{IS_TESTNET ? " (testnets)" : ""} to show your buying power. {SOON_LINE}. Nothing is signed
         until you confirm an order.
       </p>
     </Modal>

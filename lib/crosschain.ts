@@ -1,6 +1,7 @@
 import { createPublicClient, fallback, http, isAddress, type Address, type Chain, type PublicClient } from "viem";
 import { arbitrumSepolia, bscTestnet, sepolia } from "viem/chains";
 import { robinhoodChain } from "./chains";
+import { IS_TESTNET, NETWORK } from "./network.ts";
 
 /**
  * Cross-chain intents (testnet): pay with test USDC on another chain, receive on Base Sepolia.
@@ -108,8 +109,13 @@ export const CROSS_CHAIN_ORIGINS: CrossChainOrigin[] = [
   },
 ];
 
-/** The origins whose settler is deployed: what "Pay from" offers and My intents scans. */
-export const LIVE_ORIGINS = CROSS_CHAIN_ORIGINS.filter((o): o is CrossChainOrigin & { settler: Address } => o.settler !== null);
+/**
+ * The origins whose settler is deployed, on the same kind of network as this build's Base (testnet origins with Base
+ * Sepolia, mainnet ones with Base): what "Pay from" offers and My intents scans.
+ */
+export const LIVE_ORIGINS = CROSS_CHAIN_ORIGINS.filter(
+  (o): o is CrossChainOrigin & { settler: Address } => o.settler !== null && Boolean(o.chain.testnet) === IS_TESTNET,
+);
 
 export function originByKey(key: OriginKey) {
   return LIVE_ORIGINS.find((o) => o.key === key) ?? null;
@@ -121,8 +127,8 @@ export type PayFrom = "base" | OriginKey | "solana";
 /** refund() succeeds once block.timestamp > fillDeadline + 6 hours (REFUND_GRACE) with no proof. */
 export const CROSS_CHAIN_REFUND_GRACE_SECONDS = 6 * 3600 + 1;
 
-/** CruxFillProver on Base Sepolia: the only sender the origin settlers accept fill proofs from. */
-export const FILL_PROVER = "0x7cb1aDd4975CbF1a5a3FA4fd60F11b010E4b29e8" as Address;
+/** CruxFillProver on this network: the only sender the origin settlers accept fill proofs from (null: not deployed). */
+export const FILL_PROVER: Address | null = NETWORK.crux.prover ?? null;
 
 /** A settler's EIP-712 domain, pinned like SETTLER_DOMAIN and checked against eip712Domain() before signing. */
 export function crossChainDomain(o: CrossChainOrigin & { settler: Address }) {

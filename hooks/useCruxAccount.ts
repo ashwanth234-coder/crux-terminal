@@ -113,21 +113,22 @@ export function useCruxAccount(): CruxAccountState {
   const owner = authenticated && embedded ? getAddress(embedded.address) : null;
   const on = { chainId: TESTNET.id } as const;
 
+  // The first account factories exist on Base Sepolia only: without them (Base mainnet) V3 is the account.
   const accountOf = useReadContract({
     ...on,
-    address: ACCOUNT_FACTORY,
+    address: ACCOUNT_FACTORY ?? zeroAddress,
     abi: accountFactoryAbi,
     functionName: "accountOf",
     args: [owner ?? zeroAddress],
-    query: { enabled: owner !== null, staleTime: Infinity },
+    query: { enabled: owner !== null && ACCOUNT_FACTORY !== null, staleTime: Infinity },
   });
   const v1 = owner && accountOf.data ? getAddress(accountOf.data) : null;
   // V2 takes over as soon as its factory exists on Base Sepolia.
-  const v2Code = useBytecode({ ...on, address: ACCOUNT_FACTORY_V2, query: { refetchInterval: (q) => (q.state.data ? false : 60_000) } });
+  const v2Code = useBytecode({ ...on, address: ACCOUNT_FACTORY_V2 ?? zeroAddress, query: { enabled: ACCOUNT_FACTORY_V2 !== null, refetchInterval: (q) => (q.state.data ? false : 60_000) } });
   const v2Live = Boolean(v2Code.data && v2Code.data !== "0x");
   const accountOfV2 = useReadContract({
     ...on,
-    address: ACCOUNT_FACTORY_V2,
+    address: ACCOUNT_FACTORY_V2 ?? zeroAddress,
     abi: accountFactoryAbi,
     functionName: "accountOf",
     args: [owner ?? zeroAddress],

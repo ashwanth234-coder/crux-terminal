@@ -20,9 +20,10 @@ import {
   type LoginStep,
   type StoredSession,
 } from "@/lib/session";
+import { USDC_WORD } from "@/lib/network";
 
 const STEP_LABEL: Record<LoginStep, string> = {
-  approving: "Approve Permit2 in your wallet (once, for test USDC)…",
+  approving: `Approve Permit2 in your wallet (once, for ${USDC_WORD})…`,
   "signing-session": "Signature 1 of 2: your one-click session…",
   "signing-permit": "Signature 2 of 2: the Permit2 spending cap…",
   submitting: "Starting your session…",
@@ -173,7 +174,7 @@ export function OneClickBar({ oneClick }: { oneClick: OneClick }) {
       </div>
       {!capValid && <p className="mt-1 text-down">Choose a cap between $1 and ${MAX_CAP_USDC.toLocaleString("en-US")}.</p>}
       <p className="mt-2 leading-snug text-dim">
-        First time only: one approval transaction (Permit2, for test USDC). Then two signatures, no gas. Turn it off or revoke it any time.
+        First time only: one approval transaction (Permit2, for {USDC_WORD}). Then two signatures, no gas. Turn it off or revoke it any time.
       </p>
       {step ? (
         <p role="status" className="mt-2 text-chrome">

@@ -10,6 +10,7 @@ import { StatusTag } from "@/components/ui/StatusTag";
 import { Logo } from "./Logo";
 import { SiteNav } from "./SiteNav";
 import { NETWORK_NAME } from "@/lib/network";
+import { IS_TESTNET } from "@/lib/network";
 
 /** Slim site bar: mark and wordmark left, the five routes centred, CONNECT WALLET right. */
 export function Header() {
@@ -42,7 +43,7 @@ export function Header() {
           <Link href="/" aria-label="Crux home" className="shrink-0">
             <Logo />
           </Link>
-          <StatusTag status="testnet" className="hidden sm:inline-flex" />
+          <StatusTag status={IS_TESTNET ? "testnet" : "live"} className="hidden sm:inline-flex" />
         </div>
 
         <nav aria-label="Primary" className="hidden justify-self-center xl:block">
@@ -82,8 +83,8 @@ export function Header() {
           <ThemeToggle />
         </div>
         <div className="mt-6 flex items-center gap-3 text-[12px] text-muted">
-          <StatusTag status="testnet" />
-          {NETWORK_NAME}. Nothing here is on mainnet.
+          <StatusTag status={IS_TESTNET ? "testnet" : "live"} />
+          {IS_TESTNET ? <>{NETWORK_NAME}. Nothing here is on mainnet.</> : <>Live on {NETWORK_NAME}.</>}
         </div>
       </nav>
     </header>

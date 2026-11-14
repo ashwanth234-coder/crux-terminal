@@ -3,6 +3,7 @@ import { feedResponse, readLaunches, type FeedLaunch } from "@/lib/launchFeed";
 import { SITE_URL } from "@/lib/site";
 import { NETWORK } from "@/lib/network";
 import { NETWORK_NAME } from "@/lib/network";
+import { IS_TESTNET } from "@/lib/network";
 
 /**
  * GET /tokenlist.json: every graduated Crux token as a standard Uniswap token list (tokenlists.org), so wallets,
@@ -47,7 +48,7 @@ export async function GET() {
       // Minor bumps with every newly graduated token (tokenlists.org versioning: additions are minor).
       version: { major: 1, minor: tokens.length, patch: 0 },
       logoURI: `${SITE_URL}/icon-1024.png`,
-      keywords: ["crux", "launchpad", "base sepolia", "testnet"],
+      keywords: ["crux", "launchpad", NETWORK_NAME.toLowerCase(), ...(IS_TESTNET ? ["testnet"] : [])],
       tags: {
         // tokenlists.org allows only letters, digits, spaces and . , : in tag descriptions.
         crux: { name: "Crux graduated", description: "Sold in a uniform price batch auction on Crux, then seeded into a Uniswap V2 pool." },

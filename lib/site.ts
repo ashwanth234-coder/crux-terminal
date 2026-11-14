@@ -1,3 +1,4 @@
+import { IS_TESTNET } from "./network.ts";
 export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 /** Where people reach the team. */
@@ -36,5 +37,5 @@ export const NAV_LINKS = [
   { label: "Terminal", href: TERMINAL_HREF },
   { label: "Portfolio", href: "/portfolio" },
   { label: "Protocol", href: "/#protocol" },
-  { label: "Docs", href: "/alpha-guide" },
+  ...(IS_TESTNET ? ([{ label: "Docs", href: "/alpha-guide" }] as const) : []),
 ] as const;

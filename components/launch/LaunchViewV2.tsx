@@ -43,6 +43,7 @@ import {
 } from "@/lib/launchV2";
 import { PHASE_WORDS } from "@/lib/phaseWords";
 import { NETWORK_LONG, NETWORK_NAME } from "@/lib/network";
+import { USDC_WORD } from "@/lib/network";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
@@ -176,7 +177,7 @@ function ViewV2({ model, auction, id }: { model: LaunchV2Model; auction: Auction
           </h1>
           <p className="mt-2 text-[13px] text-muted">
             Auction <span className="font-mono">#{id}</span> on {NETWORK_NAME} · Graduates at{" "}
-            <span className="font-mono text-chrome">${fmtUsdc(auction.graduationTarget)}</span> test USDC
+            <span className="font-mono text-chrome">${fmtUsdc(auction.graduationTarget)}</span> {USDC_WORD}
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
@@ -417,12 +418,12 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
         </div>
         {capLeft !== null ? (
           <p className={`mt-1.5 text-[11.5px] ${overCap ? "text-down" : "text-dim"}`}>
-            Balance {model.usdcBalance !== null ? `$${fmtUsdc(model.usdcBalance)}` : "…"} test USDC · this wallet can deposit{" "}
+            Balance {model.usdcBalance !== null ? `$${fmtUsdc(model.usdcBalance)}` : "…"} {USDC_WORD} · this wallet can deposit{" "}
             {model.myBid.quote > BigInt(0) ? `$${fmtUsdc(capLeft)} more` : `up to $${fmtUsdc(capLeft)}`}.
           </p>
         ) : (
           <p className="mt-1.5 text-[11.5px] text-dim">
-            Balance {model.usdcBalance !== null ? `$${fmtUsdc(model.usdcBalance)}` : "…"} test USDC · each wallet gets at most{" "}
+            Balance {model.usdcBalance !== null ? `$${fmtUsdc(model.usdcBalance)}` : "…"} {USDC_WORD} · each wallet gets at most{" "}
             {fmtTokens(auction.maxAllocationPerWallet)} {symbol}; anything beyond that is refunded.
           </p>
         )}
@@ -491,7 +492,7 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
           disabled={!parsed || overBalance || overCap || Boolean(limitError) || (limitOn && !limitPrice)}
           className={buttonClass("primary", "md", "mt-5 w-full rounded-xl font-semibold")}
         >
-          {overBalance ? "Not enough test USDC" : overCap ? "More than one wallet can buy" : needsApproval ? "Approve & buy" : "Buy"} <ArrowUpRight />
+          {overBalance ? `Not enough ${USDC_WORD}` : overCap ? "More than one wallet can buy" : needsApproval ? "Approve & buy" : "Buy"} <ArrowUpRight />
         </button>
       </form>
     );
@@ -527,7 +528,7 @@ function ActionPanelV2({ model, auction, phase, symbol, vestDays = null }: { mod
   return (
     <section aria-label="Your position" className="rounded-2xl border border-line bg-panel p-5 sm:p-6">
       <h2 className="text-[15px] font-medium text-chrome">{phase === "open" || phase === "scheduled" ? `Buy ${symbol}` : phase === "closed" ? "Going live" : "Your tokens"}</h2>
-      <p className="mt-1 text-[12px] text-muted">{NETWORK_LONG} · test USDC only</p>
+      <p className="mt-1 text-[12px] text-muted">{NETWORK_LONG} · {USDC_WORD} only</p>
       <div className="mt-5">{body}</div>
       {model.account && (phase === "open" || phase === "graduated" || phase === "cancelled") && (
         <SmartAccountNote address={model.account} className="mt-4" />

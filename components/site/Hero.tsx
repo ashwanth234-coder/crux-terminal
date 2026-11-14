@@ -2,6 +2,8 @@ import Link from "next/link";
 import { CruxEmblem } from "./CruxEmblem";
 import { ChainStrip } from "./ChainStrip";
 import { EnterCrux } from "./EnterCrux";
+import { IS_TESTNET } from "@/lib/network";
+import { LIVE_NAMES } from "@/lib/networks";
 
 /** The promise in one line: one CRUX Account, funded from every chain, that launches and trades. */
 export function Hero() {
@@ -16,7 +18,7 @@ export function Hero() {
             Every chain.
           </h1>
           <p className="mt-6 max-w-lg text-[16px] leading-relaxed text-muted md:mt-8 md:text-[18px]">
-            Trade from Base, Ethereum, Solana, BNB Chain and Arbitrum, with Robinhood Chain at mainnet. One account, one deep pool on Base: no gas,
+            Trade from {LIVE_NAMES}{IS_TESTNET ? ", with Robinhood Chain at mainnet" : ""}. One account, one deep pool on Base: no gas,
             no bridges, no wallet pop-ups.
           </p>
           <div className="mt-9 flex flex-wrap items-center gap-x-8 gap-y-4 md:mt-12">

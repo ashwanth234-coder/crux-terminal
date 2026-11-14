@@ -28,6 +28,8 @@ import { SOLVER_MAX_IMPACT_PCT, tradeRisk } from "@/lib/risk";
 import { PAY_SOURCES } from "@/lib/tokens";
 import { useConnectModal } from "@/providers/Web3Provider";
 import { NETWORK_LONG, NETWORK_NAME } from "@/lib/network";
+import { USDC_WORD, USDC_WORD_CAP } from "@/lib/network";
+import { IS_TESTNET } from "@/lib/network";
 
 const TEST_USDC_SOURCE = PAY_SOURCES.find((s) => s.id === "base-usdc") ?? PAY_SOURCES[0];
 const SELL_SIZES = [25, 50, 100] as const;
@@ -151,7 +153,7 @@ export function Portfolio() {
           <h1 className="mt-2 font-display-md text-[30px] text-chrome">Your Crux positions</h1>
           <p className="mt-2 max-w-[640px] text-[13.5px] leading-relaxed text-muted">
             Every launch token held, valued at its pool&apos;s price. Entry and PnL are rebuilt from the chain&apos;s own transfers and
-            fills, so they cover the last three days. Test tokens and test USDC only.
+            fills, so they cover the last three days.{IS_TESTNET && <> Test tokens and {USDC_WORD} only.</>}
           </p>
         </div>
 
@@ -199,7 +201,7 @@ export function Portfolio() {
                 tone={totalPnl === null ? undefined : totalPnl >= 0 ? "up" : "down"}
                 hint="Across the holdings with a known entry price"
               />
-              <Stat label={viaAccount ? "Account test USDC" : "Test USDC"} value={usdcBalance !== null ? `$${fmtUsdc(usdcBalance)}` : "…"} />
+              <Stat label={viaAccount ? `Account ${USDC_WORD}` : `${USDC_WORD_CAP}`} value={usdcBalance !== null ? `$${fmtUsdc(usdcBalance)}` : "…"} />
               <Stat label="Positions" value={reading ? "…" : String(holdings.length)} />
             </dl>
 

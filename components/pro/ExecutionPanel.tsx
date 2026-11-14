@@ -46,6 +46,8 @@ import { LaunchSteps, stepOf } from "@/components/launch/LaunchSteps";
 import { firstBuyFailed, launchChecked } from "@/lib/firstBuy";
 import { addPendingTrade } from "@/lib/pendingTrades";
 import { NETWORK_NAME } from "@/lib/network";
+import { SOLANA_LIVE } from "@/lib/network";
+import { SOLANA_NAME, USDC_WORD } from "@/lib/network";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 /** The few seconds between the fair first minute and open trading, or before a new token is ready to trade. */
@@ -115,7 +117,7 @@ function PayFromPicker({ active, onPick }: { active: PayFrom; onPick: (k: PayFro
   const chips: { key: PayFrom; name: string; usdc6: bigint | null }[] = [
     { key: "base", name: "Base", usdc6: known.get("base") ?? null },
     ...LIVE_ORIGINS.map((o) => ({ key: o.key as PayFrom, name: o.name.replace(/ (Sepolia|testnet)$/, ""), usdc6: known.get(o.key) ?? null })),
-    { key: "solana", name: "Solana", usdc6: known.get("solana") ?? null },
+    ...(SOLANA_LIVE ? [{ key: "solana" as PayFrom, name: "Solana", usdc6: known.get("solana") ?? null }] : []),
   ];
   const balances = chips.filter((c) => c.usdc6 !== null);
   const total = balances.length ? balances.reduce((sum, c) => sum + (c.usdc6 as bigint), BigInt(0)) : null;
@@ -141,7 +143,7 @@ function PayFromPicker({ active, onPick }: { active: PayFrom; onPick: (k: PayFro
               c.key === "base"
                 ? `Pay from your wallet on Base: an approval if needed, then one transaction, paid in a little ${NETWORK_NAME} ETH`
                 : c.key === "solana"
-                  ? `Pay with USDC on Solana devnet, filled on Base in about 20 s. Needs ${solAmount(SOLANA_OPEN_SOL)} for fees and storage; ${solAmount(SOLANA_RETURNED_SOL)} comes back when the order fills or is refunded`
+                  ? `Pay with USDC on ${SOLANA_NAME}, filled on Base in about 20 s. Needs ${solAmount(SOLANA_OPEN_SOL)} for fees and storage; ${solAmount(SOLANA_RETURNED_SOL)} comes back when the order fills or is refunded`
                   : `Pay from your wallet on ${c.name}, filled on Base: an approval if needed, then one transaction, paid in a little ${originByKey(c.key as Exclude<PayFrom, "base" | "solana">)?.chain.nativeCurrency.symbol ?? "test gas"} on ${c.name}`
             }
             className={`inline-flex h-6 items-center gap-1.5 rounded-[4px] border px-2 font-mono text-[10.5px] transition-colors ${
@@ -317,7 +319,7 @@ function BidForm({
   const label = wholeOpening
     ? "You've got the whole opening ✓"
     : overBalance
-    ? `Not enough test USDC${viaAccount ? " in your account" : ""}`
+    ? `Not enough ${USDC_WORD}${viaAccount ? " in your account" : ""}`
     : overCap
       ? viaAccount
         ? "More than this opening can take"
@@ -425,7 +427,7 @@ function BidForm({
       )}
       <div className="flex items-baseline justify-between text-[11.5px] text-muted">
         <span>{viaAccount ? "From your CRUX Account" : "From your wallet on Base"}</span>
-        <span className="font-mono text-chrome/80">{balance !== null ? `$${fmtUsdc(balance)} test USDC` : "…"}</span>
+        <span className="font-mono text-chrome/80">{balance !== null ? `$${fmtUsdc(balance)} ${USDC_WORD}` : "…"}</span>
       </div>
       <p className="-mt-2 text-[11px] leading-snug text-dim">
         {viaAccount
@@ -960,7 +962,7 @@ function TradeForm({ auction, symbol, handover = false }: { auction: AuctionV2; 
             price: qty > 0 ? notional / qty : 0,
             notional,
             source: TEST_USDC_SOURCE,
-            originLabel: viaSolana ? "Solana devnet" : fromOrigin ? fromOrigin.name : `${NETWORK_NAME}`,
+            originLabel: viaSolana ? `${SOLANA_NAME}` : fromOrigin ? fromOrigin.name : `${NETWORK_NAME}`,
             asset: { address: market.token, caip19: market.caip19, decimals: market.decimals },
             slippageBps: slippageFor(trade, side),
             ...(fromOrigin ? { payFrom: fromOrigin.key } : {}),
@@ -992,7 +994,7 @@ function TradeForm({ auction, symbol, handover = false }: { auction: AuctionV2; 
   const label =
     blocked ??
     (overBalance
-      ? `Not enough ${side === "buy" ? (viaSolana ? "USDC on Solana" : "test USDC") : symbol}${viaAccount ? " in your account" : ""}`
+      ? `Not enough ${side === "buy" ? (viaSolana ? "USDC on Solana" : `${USDC_WORD}`) : symbol}${viaAccount ? " in your account" : ""}`
       : tooBig
         ? t("ticket.tooLarge")
         : overCap
@@ -1309,10 +1311,10 @@ function TradeForm({ auction, symbol, handover = false }: { auction: AuctionV2; 
         <span>
           {side === "buy"
             ? viaSolana
-              ? "USDC on Solana devnet · settled from Solana in about 20 s"
+              ? `USDC on ${SOLANA_NAME} · settled from Solana in about 20 s`
               : fromOrigin
-                ? `${fromOrigin.name} test USDC · delivered on Base, no bridge`
-                : `${NETWORK_NAME} test USDC`
+                ? `${fromOrigin.name} ${USDC_WORD} · delivered on Base, no bridge`
+                : `${NETWORK_NAME} ${USDC_WORD}`
             : `Selling ${symbol}`}
         </span>
         <span className="font-mono text-muted">

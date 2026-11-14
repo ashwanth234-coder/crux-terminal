@@ -44,6 +44,8 @@ import { NOVA_ASSET, clearingLimit, minReceived, slippageOf, sourceAsset, type O
 import { usd } from "@/lib/tokens";
 import { NETWORK } from "@/lib/network";
 import { NETWORK_NAME } from "@/lib/network";
+import { USDC_WORD } from "@/lib/network";
+import { IS_TESTNET } from "@/lib/network";
 
 type Flow =
   | { kind: "idle" }
@@ -280,7 +282,7 @@ export function IntentModal({ order, open, onClose, onPlaced }: { order: OrderDr
         // escrows the token itself (the settler lists it); everything else escrows test USDC.
         const sellsLaunch = !buying && Boolean(traded);
         if (!sellsLaunch && !TESTNET_ESCROW_ASSETS.has(input.caip19)) {
-          setFlow({ kind: "error", message: "Orders on testnet pay in USDC only. Buy with Base USDC to place this order." });
+          setFlow({ kind: "error", message: `Orders${IS_TESTNET ? " on testnet" : ""} pay in USDC only. Buy with Base USDC to place this order.` });
           return;
         }
         const escrowed = crossOrigin
@@ -293,7 +295,7 @@ export function IntentModal({ order, open, onClose, onPlaced }: { order: OrderDr
             kind: "error",
             message: sellsLaunch
               ? `Needs ${formatUnits(input.amount, decimals)} $${order.symbol} on ${NETWORK_NAME} (you have ${formatUnits(balance, decimals)}).`
-              : `Needs ${formatUnits(input.amount, decimals)} test USDC on ${originName} (you have ${formatUnits(balance, decimals)}). Get some free at ${crossOrigin ? crossOrigin.faucet : "faucet.circle.com"}.`,
+              : `Needs ${formatUnits(input.amount, decimals)} ${USDC_WORD} on ${originName} (you have ${formatUnits(balance, decimals)}).${IS_TESTNET ? ` Get some free at ${crossOrigin ? crossOrigin.faucet : "faucet.circle.com"}.` : ""}`,
           });
           return;
         }
@@ -377,7 +379,7 @@ export function IntentModal({ order, open, onClose, onPlaced }: { order: OrderDr
       note =
         !buying && order.asset
           ? `Approve exactly ${qtyFmt.format(order.qty)} $${order.symbol} for the settler to escrow.`
-          : `Approve exactly ${usd.format(order.notional)} of test USDC${cross ? ` on ${originName}` : ""} for the settler.`;
+          : `Approve exactly ${usd.format(order.notional)} of ${USDC_WORD}${cross ? ` on ${originName}` : ""} for the settler.`;
       break;
     case "signing":
       stage = 1;
@@ -410,7 +412,7 @@ export function IntentModal({ order, open, onClose, onPlaced }: { order: OrderDr
           ? `Filled. Crux delivered ${
               buying
                 ? `${qtyFmt.format(Number(formatUnits(delivered.data.amount, order.asset?.decimals ?? 18)))} $${order.symbol}`
-                : `${usd.format(Number(formatUnits(delivered.data.amount, payAsset.decimals)))} test USDC`
+                : `${usd.format(Number(formatUnits(delivered.data.amount, payAsset.decimals)))} ${USDC_WORD}`
             } at the batch price everyone paid.`
           : "Filled at the batch price everyone paid.";
         if (cross) note += ` Your USDC on ${originName} was released only after the fill on Base was confirmed there.`;
@@ -434,7 +436,7 @@ export function IntentModal({ order, open, onClose, onPlaced }: { order: OrderDr
     idle: "Confirm & sign order",
     error: "Try again",
     switching: `Switching to ${originChain.name}…`,
-    approving: "Approving test USDC…",
+    approving: `Approving ${USDC_WORD}…`,
     signing: "Awaiting signature…",
     broadcasting: "Placing order…",
     broadcast: "",
@@ -448,7 +450,7 @@ export function IntentModal({ order, open, onClose, onPlaced }: { order: OrderDr
   // Launch-token trades on thin testnet pools are often under a cent: show USDC to its 6 decimals.
   const money = (v: number) => (order.asset && v < 1 ? `$${v.toFixed(6).replace(/0+$/, "").replace(/\.$/, "")}` : usd.format(v));
   const inputLabel = buying
-    ? `${money(order.notional)} ${SETTLER_DEPLOYED ? "test USDC" : "USDC"}`
+    ? `${money(order.notional)} ${SETTLER_DEPLOYED ? `${USDC_WORD}` : "USDC"}`
     : `${qtyFmt.format(order.qty)} $${order.symbol}`;
   const outputLabel = buying ? `${qtyFmt.format(order.qty)} $${order.symbol}` : money(order.notional);
   const minLabel = buying ? `${qtyFmt.format(min)} $${order.symbol}` : money(min);
@@ -505,7 +507,7 @@ export function IntentModal({ order, open, onClose, onPlaced }: { order: OrderDr
         <Row
           label="Quote"
           value={`${fmtPrice(order.price)} / $${order.symbol}`}
-          hint={order.asset ? "From the locked Uniswap V2 pool at this size · testnet" : SETTLER_DEPLOYED ? "Indicative testnet price" : "Indicative price"}
+          hint={order.asset ? `From the locked Uniswap V2 pool at this size${IS_TESTNET ? " · testnet" : ""}` : SETTLER_DEPLOYED && IS_TESTNET ? "Indicative testnet price" : "Indicative price"}
         />
         <Row
           label="Settler"
@@ -575,7 +577,7 @@ export function IntentModal({ order, open, onClose, onPlaced }: { order: OrderDr
           </button>
           <p className="mt-3 text-center text-[11.5px] text-dim">
             {SETTLER_DEPLOYED
-              ? `Approves test USDC if needed, signs, then submits on ${originChain.name}. Testnet only, no real funds.`
+              ? `Approves ${USDC_WORD} if needed, signs, then submits on ${originChain.name}.${IS_TESTNET ? " Testnet only, no real funds." : ""}`
               : "The signature costs no gas. No funds move until the order fills."}
           </p>
         </>

@@ -8,6 +8,7 @@ import { useLaunchMarket } from "@/hooks/useLaunchMarket";
 import { BATCH_WINDOW_SECONDS } from "@/lib/intents";
 import { fmtTokenPrice } from "@/lib/launchTrade";
 import { NETWORK_LONG } from "@/lib/network";
+import { USDC_WORD } from "@/lib/network";
 
 /**
  * Graduated launches only: trade the token by ERC-7683 intent. The Crux solver fills it from the launch's
@@ -23,7 +24,7 @@ export function TradeViaIntent({ token, pair, symbol }: { token: Address; pair: 
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-[15px] font-medium text-chrome">Trade on Crux</h2>
-          <p className="mt-1 text-[12px] text-muted">{NETWORK_LONG} · test USDC only</p>
+          <p className="mt-1 text-[12px] text-muted">{NETWORK_LONG} · {USDC_WORD} only</p>
         </div>
         {market.price !== null && <span className="shrink-0 font-mono text-[12px] text-muted">{fmtTokenPrice(market.price)}</span>}
       </div>

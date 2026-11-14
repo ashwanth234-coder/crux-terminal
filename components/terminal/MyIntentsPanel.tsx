@@ -13,6 +13,7 @@ import { LIVE_ORIGINS, originByKey } from "@/lib/crosschain";
 import { SETTLER, TESTNET_USDC } from "@/lib/intents";
 import { simulateThenWrite } from "@/lib/preflight";
 import { countdown, refundClock } from "@/lib/refundTime";
+import { USDC_WORD } from "@/lib/network";
 
 // Block timestamps trail the wall clock by a few seconds; wait them out so the
 // refund call isn't estimated against a block still inside the grace period.
@@ -159,7 +160,7 @@ export function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: 
                 {refund.label}
               </>
             ) : (
-              `Refund ${escrowsUsdc ? "test USDC" : unit}`
+              `Refund ${escrowsUsdc ? `${USDC_WORD}` : unit}`
             )}
           </button>
         )}

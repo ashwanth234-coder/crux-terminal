@@ -1,4 +1,6 @@
 import { NETWORK_NAME } from "./network.ts";
+import { IS_TESTNET, SOLANA_LIVE } from "./network.ts";
+import { SOLANA_NAME } from "./network.ts";
 /**
  * The chains Crux names to users, in one place: every page, tooltip and modal that lists chains reads this, so the list
  * and the "Mainnet ready" badge never drift apart. `live` means it works today on testnet; Robinhood Chain is
@@ -17,12 +19,13 @@ export type Network = {
   color: string;
 };
 
-export const SOON_MAINNET = "Coming at mainnet";
+/** A chain that isn't live yet: "Coming at mainnet" on testnet, "Coming soon" on mainnet. */
+export const SOON_MAINNET = IS_TESTNET ? "Coming at mainnet" : "Coming soon";
 
-export const NETWORKS: Network[] = [
+const TESTNET_NETWORKS: Network[] = [
   { key: "base", name: "Base", network: `${NETWORK_NAME} (testnet). Tokens, auctions and pools live here.`, live: true, color: "#0052ff" },
   { key: "ethereum", name: "Ethereum", network: "Ethereum Sepolia (testnet)", live: true, color: "#627eea" },
-  { key: "solana", name: "Solana", network: "Solana devnet (USDC)", live: true, color: "#14f195" },
+  { key: "solana", name: "Solana", network: `${SOLANA_NAME} (USDC)`, live: true, color: "#14f195" },
   { key: "bnb", name: "BNB Chain", network: "BNB Chain testnet", live: true, color: "#f0b90b" },
   { key: "arbitrum", name: "Arbitrum", network: "Arbitrum Sepolia (testnet)", live: true, color: "#28a0f0" },
   {
@@ -33,6 +36,19 @@ export const NETWORKS: Network[] = [
     color: "#ccff00",
   },
 ];
+
+/**
+ * Base mainnet: Base, and each other chain once its settler there is set (Robinhood Chain's settler; Solana's escrow
+ * program); Ethereum, Arbitrum and BNB Chain need mainnet settlers of their own first.
+ */
+const robinhoodLive = Boolean(process.env.NEXT_PUBLIC_CRUX_ROBINHOOD_SETTLER);
+const MAINNET_NETWORKS: Network[] = TESTNET_NETWORKS.map((n): Network => {
+  const live = n.key === "base" || (n.key === "solana" && SOLANA_LIVE) || (n.key === "robinhood" && robinhoodLive);
+  const network = n.key === "base" ? "Base. Tokens, curves and pools live here." : live ? n.name : SOON_MAINNET;
+  return { ...n, live, network };
+});
+
+export const NETWORKS: Network[] = IS_TESTNET ? TESTNET_NETWORKS : MAINNET_NETWORKS;
 
 export const LIVE_NETWORKS = NETWORKS.filter((n) => n.live);
 export const SOON_NETWORKS = NETWORKS.filter((n) => !n.live);

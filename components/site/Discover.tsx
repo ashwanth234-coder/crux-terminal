@@ -15,6 +15,7 @@ import { CruxMark } from "./Logo";
 import { Chapter } from "./Chapter";
 import { PHASE_WORDS } from "@/lib/phaseWords";
 import { NETWORK_LONG, NETWORK_NAME } from "@/lib/network";
+import { IS_TESTNET } from "@/lib/network";
 
 const SHOWN = 6;
 
@@ -159,7 +160,7 @@ function BatchDiscover() {
           </table>
           <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
             <p className="text-[12px] text-muted">
-              Showing {rows.length} of {total}. Prices are testnet USDC.
+              Showing {rows.length} of {total}. Prices are {IS_TESTNET ? "testnet USDC" : "USDC"}.
             </p>
             <Link href="/launches" className="group inline-flex items-center gap-2 text-[13px] font-medium text-chrome hover:text-chrome/80">
               All launches <ArrowRight className="h-3 w-3" />
