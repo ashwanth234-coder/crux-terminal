@@ -169,6 +169,11 @@ class FeedSocket {
     } catch {
       return;
     }
+    if (m.t === "sent") {
+      const s = m as unknown as { nonce?: unknown; tx?: unknown };
+      if (typeof s.nonce === "string" && typeof s.tx === "string" && /^0x[0-9a-fA-F]{64}$/.test(s.tx)) for (const cb of sentListeners) cb(s.nonce, s.tx as `0x${string}`);
+      return;
+    }
     if (m.t === "batch") for (const f of m.frames ?? []) this.onFrame(f);
     else this.onFrame(m);
   }
@@ -183,6 +188,8 @@ class FeedSocket {
     if (m.t !== "snap" && m.t !== "tick" && m.t !== "candle_replace") return;
     const fresh = m.t === "snap" && !this.answered.has(m.id);
     if (m.t === "snap") this.answered.add(m.id);
+    // Before the frame is drawn: a pending trade whose swap is in it gives way to it in that same paint.
+    for (const t of m.trades ?? []) seeOnFeed(t.txHash);
     sub.onFrame({
       kind: m.t,
       from: m.from ?? 0,
@@ -198,6 +205,28 @@ class FeedSocket {
     });
     if (m.t === "snap") sub.onStatus("live");
   }
+}
+
+/**
+ * The solver's word that a trade's burst just went out: its signed nonce (decimal) and the tx hash its swap will have
+ * on the charts. Only the page that signed that nonce knows it's theirs (feedhub `sent`).
+ */
+const sentListeners = new Set<(nonce: string, tx: `0x${string}`) => void>();
+export function onTradeSent(cb: (nonce: string, tx: `0x${string}`) => void): () => void {
+  sentListeners.add(cb);
+  return () => sentListeners.delete(cb);
+}
+
+/** Swaps (tx hashes, lowercased) any feed frame has carried, newest 2,000: on a chart from the frame they came in. */
+const onFeed = new Set<string>();
+function seeOnFeed(tx: string | undefined) {
+  if (!tx) return;
+  onFeed.add(tx.toLowerCase());
+  if (onFeed.size > 2_000) onFeed.delete(onFeed.values().next().value!);
+}
+/** Whether a feed frame has already carried this swap (so its pending trade is drawn by the real candle now). */
+export function feedHasTx(tx: string): boolean {
+  return onFeed.has(tx.toLowerCase());
 }
 
 let socket: FeedSocket | null = null;

@@ -95,3 +95,11 @@ test("continuous: each candle opens at the previous close, with its high and low
   assert.deepEqual(out[2], c(3, 3, 3, 2.5, 2.5));
   assert.deepEqual(out[0], c(1, 1, 2, 1, 2), "the first keeps its open");
 });
+
+test("withPendingTrades: a pending trade whose swap a feed frame already carried gives way in that paint", () => {
+  const candles = [{ time: 100, open: 1, high: 2, low: 1, close: 2, volume: 1, trades: 1 }];
+  const tx = `0x${"cd".repeat(32)}`;
+  // The swap is in the frame's candles (close 2), not yet in the trade list React renders.
+  assert.equal(withPendingTrades(candles, [{ at: 100_400, price: 2, expected: 2.5, usdc: 1, tx }], new Set(), 1, (t) => t === tx), candles);
+  assert.equal(withPendingTrades(candles, [{ at: 100_400, price: 2, expected: 2.5, usdc: 1, tx }], new Set(), 1, () => false)[0].close, 2.5);
+});

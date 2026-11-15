@@ -137,12 +137,12 @@ const openForAbi = [...originSettlerAbi, ...settlerErrorsAbi] as const;
 
 const SETTLER_ERRORS: Record<string, string> = {
   InvalidSignature:
-    "The settler couldn't verify your wallet's signature. Smart-account (EIP-7702) wallets need ERC-1271 support for this. Nothing was sent.",
+    "Crux couldn't verify your wallet's signature. Smart-account (EIP-7702) wallets need ERC-1271 support for this. Nothing was sent.",
   OpenDeadlinePassed: "This quote expired before it was submitted. Nothing was sent; review and sign again.",
   InvalidFillDeadline: "This quote expired before it was submitted. Nothing was sent; review and sign again.",
   NonceAlreadyUsed: "This order was already placed. Nothing new was sent.",
-  UnsupportedInputAsset: "The settler doesn't escrow this asset yet. Nothing was sent.",
-  UnsupportedInputToken: "The settler doesn't escrow this token yet. Nothing was sent.",
+  UnsupportedInputAsset: "Crux can't take this asset yet. Nothing was sent.",
+  UnsupportedInputToken: "Crux can't take this token yet. Nothing was sent.",
   InvalidOutputAsset: "This order has no output asset. Nothing was sent.",
   ZeroAmount: "Enter an amount above zero.",
   WrongChain: "Your wallet signed on the wrong chain. Switch networks and try again. Nothing was sent.",
@@ -394,7 +394,7 @@ export function IntentModal({ order, open, onClose, onPlaced }: { order: OrderDr
       failed = !flow.valid;
       halted = flow.valid;
       note = flow.valid
-        ? "Signed and verified locally. No settler is configured, so nothing was submitted."
+        ? "Signed and checked here. Trading isn't set up on this network, so nothing was sent."
         : "The signature did not verify. Nothing was submitted.";
       break;
     case "broadcast":

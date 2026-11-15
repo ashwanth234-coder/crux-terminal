@@ -266,6 +266,12 @@ export function AccountPanel() {
           </span>
         )}
       </div>
+      {bound && (
+        // The promise, in one line: a stolen login can trade, but can't take the money anywhere else.
+        <p className="-mt-1 text-[12.5px] text-muted">
+          Withdrawals only go to your wallet <span className="font-mono text-chrome">{short(bound)}</span>; changing it takes 48 hours.
+        </p>
+      )}
 
       {legacyHeld.map((l) => (
         <section key={l.account} className="rounded-xl border border-signal/50 bg-signal/[0.04] p-4 text-[13px]">
@@ -537,9 +543,9 @@ export function AccountPanel() {
 
 
       <p className="text-[11.5px] leading-relaxed text-dim">
-        How it&apos;s protected: your login key signs every trade and withdrawal, and Crux&apos;s relay submits them. The account contract only lets
-        funds trade through the Crux settler, with every fill and refund paid back to the account, or go to your bound address. Someone who stole
-        your login could trade but never take funds out: changing the withdrawal address waits 48 hours, which you can cancel.{IS_TESTNET ? " Testnet only." : ""}
+        How it&apos;s protected: your login signs every trade and withdrawal, and Crux pays the gas. Your money can only be traded on Crux, with
+        every trade and refund coming back to this account, or sent to your own wallet. Someone who stole your login could trade but never take
+        funds out: changing the withdrawal wallet waits 48 hours, and you can cancel it.{IS_TESTNET ? " Testnet only." : ""}
       </p>
     </Frame>
   );

@@ -17,7 +17,7 @@ import { INTERVALS, toCandles, type Candle, type Fill } from "@/lib/candles";
 import { chartPrice, openingInterval, withLatestTrades } from "@/lib/chartView";
 import { useThrottled } from "@/hooks/useThrottled";
 import { useFeedCandles } from "@/hooks/useFeed";
-import type { FeedCandle } from "@/lib/feed";
+import { feedHasTx, type FeedCandle } from "@/lib/feed";
 
 /**
  * How many of the newest candles the chart holds: 20,000–25,000 from 1-minute candles up (two weeks of them), and
@@ -42,7 +42,7 @@ import { PATTERN_LABELS, TOOL_POINTS, defaultStop, isPattern, type DrawPart, typ
 import { OverlaysButton } from "./OverlaysBar";
 import { SymbolSwitch } from "./SymbolSwitch";
 import { requestOrderAt } from "@/lib/chartOrders";
-import { dropPendingTrade, useLastPressed, usePendingTrades, watchPendingTrades, type PendingTrade } from "@/lib/pendingTrades";
+import { dropPendingTrade, usePendingTrades, watchPendingTrades, type PendingTrade } from "@/lib/pendingTrades";
 import { clusterBadges, continuous, graduationTime, matchExecutions, withLiveBar, withPendingTrades, type BadgeFill } from "@/lib/chartLive";
 import type { Badge } from "./badges";
 import { FACTORY_V9 } from "@/lib/v9";
@@ -63,8 +63,6 @@ import { NETWORK_LONG, NETWORK_NAME } from "@/lib/network";
 /** A new chart in a multi-chart layout starts on a different timeframe: auto, 1 minute, 15 minutes, 1 hour. */
 const SLOT_INTERVALS: (number | "auto")[] = ["auto", 60, 900, 3_600];
 
-/** How long after your last press the chart stays on 1-second candles. */
-const TRADING_CANDLES_MS = 60_000;
 
 /** How each kind of marked trader shows on the bars. */
 
@@ -251,24 +249,11 @@ export function ProChart({
   // "Auto" picks a timeframe once, when the chart opens (1s for a young token), and keeps it while the page is open.
   // A launch time not read yet (0) would look decades old and pick 1D: treat it as new instead.
   const [autoPick] = useState(() => (auction.settledAt > 0 ? openingInterval(auction.settledAt, Math.floor(Date.now() / 1000)) : 1));
-  // While you're trading here (a trade on its way, or one pressed in the last minute): 1-second candles, so every
-  // click prints its own candle, as memecoin terminals trade. On a 1-minute chart a buy right after a sell only
-  // shrank that minute's red candle and looked like nothing happened. A minute after your last press it goes back to
-  // your timeframe; the saved setting is never changed.
-  const lastPressed = useLastPressed(auction.token);
-  const [idleAfter, setIdleAfter] = useState(0);
-  useEffect(() => {
-    if (!lastPressed) return;
-    const t = setTimeout(() => setIdleAfter(lastPressed), Math.max(0, lastPressed + TRADING_CANDLES_MS - Date.now()));
-    return () => clearTimeout(t);
-  }, [lastPressed]);
-  // A timeframe (or range) you pick yourself wins until your next trade: the 1s view used to override every pick for a
-  // minute after trading, so the menu and the range buttons seemed to do nothing.
-  const [pickedAt, setPickedAt] = useState(0);
-  // Only on "Auto", where the chart picks the timeframe: one you picked yourself (1m, 5m, ...) is never changed by a
-  // trade. (It used to be: every Buy or Sell threw a 1m or 5m chart back to 1s.)
-  const trading = !external && config.interval === "auto" && lastPressed > pickedAt && (pending.length > 0 || (lastPressed > 0 && idleAfter !== lastPressed));
-  const pickedInterval = trading ? 1 : config.interval === "auto" ? autoPick : config.interval;
+  // A trade never changes the timeframe. (On "Auto" every Buy or Sell used to switch the chart to 1-second candles
+  // for a minute, then back: each switch re-subscribed the feed and refitted the axis, and the chart jumped twice.)
+  const [, setPickedAt] = useState(0);
+  const trading = false;
+  const pickedInterval = config.interval === "auto" ? autoPick : config.interval;
   // Each feed frame is drawn straight from the socket (onFeedFrame below), before React renders it.
   const feedTick = useRef<(cs: FeedCandle[]) => void>(() => {});
   const onFeedFrame = useCallback((cs: FeedCandle[]) => feedTick.current(cs), []);
@@ -577,7 +562,7 @@ export function ProChart({
       if (!engine) return;
       // The period running now by the wall clock has its bar from its first second, trade or no trade.
       // Every candle opens at the previous close (lib/chartLive continuous), the feed's and your trades' alike.
-      const drawn = continuous(replaying ? real : withPendingTrades(withLiveBar(real, Math.floor(Date.now() / 1000), interval), pendingNow, onChartTx, interval));
+      const drawn = continuous(replaying ? real : withPendingTrades(withLiveBar(real, Math.floor(Date.now() / 1000), interval), pendingNow, onChartTx, interval, feedHasTx));
       engine.setData(drawn, k, fmt, minMove);
 
       const newest = real.length ? real[real.length - 1] : null;

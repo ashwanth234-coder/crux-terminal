@@ -10,7 +10,22 @@
  * A trade this page has pressed and not yet seen in every read. `got`: what it gets (the relay's exact amount once
  * filled). `sent`: its request has gone to the relay (false while its price is still being read and it's signed).
  */
-export type Flight = { id: number; buy: boolean; amountIn: bigint; got: bigint; filledAt: number | null; fillBlock?: bigint; sent?: boolean };
+/**
+ * `swapBlock`: the block its swap landed in, known before the relay answers (the solver tells the page its swap's tx
+ * hash when the burst goes out; the page reads its receipt). The pool's price moved there, whether or not its fill
+ * (`fillBlock`, the account's balances) is in the same block.
+ */
+export type Flight = { id: number; buy: boolean; amountIn: bigint; got: bigint; filledAt: number | null; fillBlock?: bigint; swapTx?: `0x${string}`; swapBlock?: bigint; sent?: boolean };
+
+/**
+ * Whether a read of the pool (or curve) at `read` doesn't hold trade `f`'s swap yet: by its swap's block when both are
+ * known (exact, even before the relay answers: counted as still to come once a read already held it, a rapid buy was
+ * priced at a third of its price and refused, 2026-11-15), otherwise as afterRead.
+ */
+export function swapAfterRead(f: Flight, read: { block?: bigint; at: number }): boolean {
+  if (read.block !== undefined && f.swapBlock !== undefined) return f.swapBlock > read.block;
+  return afterRead(f, read);
+}
 
 /**
  * On its way: not back from the relay. The relay measures its price guard after the account's trades it has and
@@ -106,7 +121,7 @@ export function poolQuote(reserves: Reserves & { block?: bigint; at: number }, f
   let surely: Reserves = { usdc: reserves.usdc, tokens: reserves.tokens };
   let r: Reserves = { usdc: reserves.usdc, tokens: reserves.tokens };
   for (const f of flights) {
-    if (!afterRead(f, reserves)) continue;
+    if (!swapAfterRead(f, reserves)) continue;
     r = step(r, f.buy, f.amountIn);
     // `alone` leaves out only presses the relay doesn't have yet (not sent): filled ones the read misses count.
     if (f.filledAt !== null || atRelay(f)) surely = step(surely, f.buy, f.amountIn);
@@ -192,7 +207,7 @@ export function curveQuote(state: CurveState & { block?: bigint; at: number }, f
   let r: CurveState | null = state;
   let surely: CurveState | null = state;
   for (const f of flights) {
-    if (!afterRead(f, state)) continue;
+    if (!swapAfterRead(f, state)) continue;
     r = r && curveMath(r).after(f.buy, f.amountIn);
     if (f.filledAt !== null || atRelay(f)) surely = surely && curveMath(surely).after(f.buy, f.amountIn);
   }

@@ -47,8 +47,15 @@ export type AheadTrade = { at: number; price: number; expected?: number; usdc?: 
  * trade is already on the chart (`onChart`: tx hashes, lowercased) isn't added again. A price that isn't a positive
  * number (a quote not back yet, a failed read) never touches the bar: it would turn the candle into NaN.
  */
-export function withPendingTrades(candles: Candle[], pending: readonly AheadTrade[], onChart: ReadonlySet<string>, interval: number): Candle[] {
-  const ahead = pending.filter((p) => !(p.tx && p.tx !== "none" && onChart.has(p.tx.toLowerCase())));
+export function withPendingTrades(
+  candles: Candle[],
+  pending: readonly AheadTrade[],
+  onChart: ReadonlySet<string>,
+  interval: number,
+  /** Whether a feed frame already carried this swap (lib/feed feedHasTx): it's in `candles` now, not still to come. */
+  onFeed?: (tx: string) => boolean,
+): Candle[] {
+  const ahead = pending.filter((p) => !(p.tx && p.tx !== "none" && (onChart.has(p.tx.toLowerCase()) || onFeed?.(p.tx))));
   if (ahead.length === 0 || candles.length === 0) return candles;
   const out = candles.slice();
   const newest = out[out.length - 1];

@@ -36,8 +36,8 @@ function errorMessage(err: unknown) {
   const text = `${e.shortMessage} ${e.message}`;
   if (e.name === "UserRejectedRequestError" || /reject/i.test(e.shortMessage ?? "")) return "Rejected in wallet.";
   if (/RefundNotYetAvailable/.test(text)) return "Not refundable yet. Try again in a moment.";
-  if (/AlreadyFilled/.test(text)) return "A solver already filled this order, so it can't be refunded. It settles to the solver shortly.";
-  if (/OrderNotOpen/.test(text)) return "This order is already settled or refunded.";
+  if (/AlreadyFilled/.test(text)) return "This order was already filled, so it can't be refunded.";
+  if (/OrderNotOpen/.test(text)) return "This order is already complete or refunded.";
   return e.shortMessage ?? e.message?.split("\n")[0] ?? "Refund failed";
 }
 
@@ -110,10 +110,10 @@ export function IntentRow({ intent, now, onRefunded }: { intent: MyIntent; now: 
                   ? `Not filled in time · refund available at ${refundClock(intent.refundAt! + BLOCK_LAG_SECONDS, now!)}`
                   : cross
                     ? `In escrow on ${origin!.name} · awaiting fill + proof`
-                    : "In escrow · awaiting solver",
+                    : "Held safely · filling soon",
               tone: "text-chrome/85",
             }
-          : { dot: "bg-line-2", label: "Reading escrow…", tone: "text-dim" };
+          : { dot: "bg-line-2", label: "Checking your order…", tone: "text-dim" };
 
   return (
     <li className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 py-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(9.5rem,auto)]">

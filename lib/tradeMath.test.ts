@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { afterRead, buysOnTheWay, heldNow, minimumOut, poolMath, poolQuote, quickSellAmount, routerQuote, type Flight } from "./tradeMath/index.ts";
+import { afterRead, swapAfterRead, buysOnTheWay, heldNow, minimumOut, poolMath, poolQuote, quickSellAmount, routerQuote, type Flight } from "./tradeMath/index.ts";
 
 const B = (n: number) => BigInt(n);
 const flight = (o: Partial<Flight> & Pick<Flight, "id" | "buy" | "amountIn">): Flight => ({ got: B(0), filledAt: null, ...o });
@@ -75,4 +75,17 @@ test("curveMath: exact to CruxCurveV9 (x·y = k over virtual USDC), null for a b
   const q = curveQuote({ ...c, at: 0 }, [flight({ id: 1, buy: true, amountIn: B(1_000_000) })], true, B(1_000_000))!;
   assert.equal(q.got, curveMath(after).buyOut(B(1_000_000)));
   assert.equal(curveQuote({ ...c, at: 0 }, [flight({ id: 1, buy: true, amountIn: B(9_500_000) })], true, B(1_000_000)), null);
+});
+
+test("a trade on its way whose swap a pool read already holds isn't priced in again (swapAfterRead)", () => {
+  const reserves = { usdc: B(10_000_000), tokens: B(10) ** B(27), block: B(100), at: 0 };
+  // Not back from the relay, but the solver said its swap is out and it landed in block 100: the read holds it.
+  const inRead = flight({ id: 1, buy: true, amountIn: B(1_000_000), swapTx: `0x${"ab".repeat(32)}`, swapBlock: B(100) });
+  const after = flight({ id: 2, buy: true, amountIn: B(1_000_000), swapBlock: B(101) });
+  assert.equal(swapAfterRead(inRead, reserves), false);
+  assert.equal(swapAfterRead(after, reserves), true);
+  // Its swap's block not known yet: as before, on its way until the relay answers.
+  assert.equal(swapAfterRead(flight({ id: 3, buy: true, amountIn: B(1) }), reserves), true);
+  const alone = poolMath({ ...reserves, feeBps: 100 }).buyOut(B(1_000_000));
+  assert.equal(poolQuote(reserves, 100, [inRead], true, B(1_000_000))!.got, alone);
 });

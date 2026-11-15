@@ -23,6 +23,7 @@ import { MARKET_FILL_SECONDS, signTrade, tradeFromAccount, type AccountFill, typ
 
 /** How long a trade signed ahead of its click stays usable (its 30 s fill window starts when it's signed). */
 const PRESIGN_MS = 10_000;
+import { onTradeSent } from "@/lib/feed";
 import { addPendingTrade, noteFill, updatePendingTrade, useLastFill, usePendingTrades } from "@/lib/pendingTrades";
 import { timingMark, timingPrint, timingStart } from "@/lib/tradeTiming";
 import { launchCaip19 } from "@/lib/launchTrade";
@@ -31,7 +32,7 @@ import type { AuctionV2 } from "@/lib/launchV2";
 import { tokensForUsdc } from "@/lib/sellAmount";
 import { CreatorNote } from "@/components/launch/V9Creator";
 import { StandingOrderForm, type OrderType } from "@/components/pro/StandingOrderForm";
-import { SLIPPAGE_BPS, PRICE_WINDOW_MS, afterRead, curveQuote, readyToSell, type CurveState, heldNow, minimumOut, poolMath, poolQuote, quickSellAmount, routerQuote, type Flight } from "@/lib/tradeMath";
+import { SLIPPAGE_BPS, PRICE_WINDOW_MS, swapAfterRead, curveQuote, readyToSell, type CurveState, heldNow, minimumOut, poolMath, poolQuote, quickSellAmount, routerQuote, type Flight } from "@/lib/tradeMath";
 import { FACTORY_V9, ROUTER_V9, V9_ON, curvePrice, curveV9Abi, factoryV9Abi, phaseV9, registerV9Curve, routerV9Abi, type PhaseV9 } from "@/lib/v9";
 import { NETWORK_NAME } from "@/lib/network";
 
@@ -409,12 +410,28 @@ function TradePanel({
     const tick = async () => {
       try {
         const block = await freshReads.getBlockNumber({ cacheTime: 0 });
+        // The block of each swap the solver said is out (onTradeSent) and not placed yet: asked after the block number,
+        // so a swap at or before that block is found, and one that isn't found is after it.
+        const unplaced = flightsRef.current.filter((f) => f.swapTx && f.swapBlock === undefined);
+        const placing = Promise.all(
+          unplaced.map((f) =>
+            freshReads.getTransactionReceipt({ hash: f.swapTx! }).then(
+              (r) => ({ id: f.id, block: r.blockNumber }),
+              () => null,
+            ),
+          ),
+        );
         const [[r0, r1], tokens, usdc] = await Promise.all([
           freshReads.readContract({ address: pairAddr, abi: pairPriceAbi, functionName: "getReserves", blockNumber: block }) as Promise<readonly [bigint, bigint, number]>,
           holder ? freshReads.readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [holder], blockNumber: block }) : Promise.resolve(undefined),
           holder ? freshReads.readContract({ address: TESTNET_USDC, abi: erc20Abi, functionName: "balanceOf", args: [holder], blockNumber: block }) : Promise.resolve(undefined),
         ]);
+        const placed = await placing;
         const at = Date.now();
+        // The swaps placed first, then the read: no price is ever worked out from a read with a swap in it that's still
+        // counted as to come.
+        const found = placed.filter((p): p is { id: number; block: bigint } => p !== null);
+        if (live && found.length) updateFlights((fs) => fs.map((f) => ({ ...f, ...(found.find((p) => p.id === f.id) ? { swapBlock: found.find((p) => p.id === f.id)!.block } : {}) })));
         // A relay reply's balances from a newer block than this read stay (they include a fill this read doesn't).
         if (live)
           setFresh((cur) => ({
@@ -511,7 +528,7 @@ function TradePanel({
   }, [pairAddr, opening, curve]);
   /** The reserves to price from, and whether one of this page's trades isn't in them yet (so it's run on top). */
   const reservesNow = fresh ?? (pool ? { usdc: pool.usdc, tokens: pool.tokens, block: undefined, at: pool.readAt } : null);
-  const notInReserves = (f: Flight) => (reservesNow ? afterRead(f, reservesNow) : f.filledAt === null);
+  const notInReserves = (f: Flight) => (reservesNow ? swapAfterRead(f, reservesNow) : f.filledAt === null);
   // On a graduated pool every price here is worked out on the page (poolMath, exact to the router's quotes): typing
   // "1" on Sell waited ~1 s for the button (a 250 ms pause, then two chain reads to find the tokens, and the holding's
   // value read only once the Sell tab opened). On the curve the chain is still asked.
@@ -635,7 +652,7 @@ function TradePanel({
           ? `Your $${symbol}${via === "account" ? " in your CRUX Account" : ""} sells for about $${usd(tokensHeldUsd ?? BigInt(0))}. Try that or less, or press Max.`
           : `Not enough USDC${via === "account" ? " in your CRUX Account" : ""} ($${usd(usdcHeld)}).`
         : settling
-          ? "The fair opening just ended and is being settled: trading opens in a few seconds."
+          ? "The fair opening just ended: trading opens in a few seconds."
           : !opening && quoteFailed
             ? "Couldn't get a price just now: retrying…"
           : !opening && quoted && out === BigInt(0)
@@ -874,6 +891,24 @@ function TradePanel({
     return p;
   };
 
+  /**
+   * This page's trades by signed nonce, until the solver says their burst is out: then the trade learns its swap's tx
+   * hash (its pending candle gives way to the real one the frame the feed carries it), and the next pool read asks for
+   * that swap's block, so it's counted in the reads that hold it and only those (swapAfterRead).
+   */
+  const sentWatch = useRef(new Map<string, { flight: number; pending: number }>());
+  useEffect(
+    () =>
+      onTradeSent((nonce, tx) => {
+        const w = sentWatch.current.get(nonce);
+        if (!w) return;
+        sentWatch.current.delete(nonce);
+        updateFlights((fs) => fs.map((f) => (f.id === w.flight ? { ...f, swapTx: tx } : f)));
+        if (w.pending >= 0) updatePendingTrade(w.pending, { tx });
+      }),
+    [],
+  );
+
   const accountTrade = async (buy: boolean, amount: bigint, shown?: bigint, onQueued?: () => void) => {
     const clickAt = clock.perf();
     const clickWall = clock.now();
@@ -900,16 +935,21 @@ function TradePanel({
       onQueued?.();
       const q = localQuote(buy, amount, ahead) ?? (await quoteAfterFlights(buy, amount, ahead));
       const { got, alone } = q;
-      if (got === BigInt(0)) throw new Error(settling ? "The fair opening just ended and is being settled: try again in a few seconds." : "Too small to trade.");
+      if (got === BigInt(0)) throw new Error(settling ? "The fair opening just ended: try again in a few seconds." : "Too small to trade.");
       onChart.size(alone);
       updateFlights((fs) => fs.map((f) => (f.id === id ? { ...f, got, sent: true } : f)));
       // Signed ahead when it still fits; its timing counted from this click, not from when it was signed.
       const pre = takePresigned(buy, amount, q);
-      const signed = pre ? pre.signed.then((s) => ({ ...s, t_click: clickWall, t_signed: Math.max(s.t_signed, clickWall) })) : undefined;
+      // 10% under what it should get after the trades ahead; never under half of what it gets alone (lib/tradeMath).
+      const fields = accountFieldsFor(buy, amount, pre ? pre.minOut : minimumOut(q));
+      const signed = pre
+        ? pre.signed.then((s) => ({ ...s, t_click: clickWall, t_signed: Math.max(s.t_signed, clickWall) }))
+        : signTrade(crux.sign!, crux.account!, fields);
+      // Its signed nonce: the solver names it when the burst goes out (lib/feed onTradeSent), with its swap's tx hash.
+      void signed.then((s) => sentWatch.current.set(String(s.message.nonce), { flight: id, pending: onChart.id }), () => {});
       // The next press of this button is signed now, priced past this one.
       if (buy) presign(buy, amount);
-      // 10% under what it should get after the trades ahead; never under half of what it gets alone (lib/tradeMath).
-      const res = await tradeFromAccount(crux.sign!, crux.owner!, crux.account!, accountFieldsFor(buy, amount, pre ? pre.minOut : minimumOut(q)), signed, async () => {
+      const res = await tradeFromAccount(crux.sign!, crux.owner!, crux.account!, fields, signed, async () => {
         await Promise.race([postedBefore, new Promise((r) => setTimeout(r, 3_000))]);
         posted();
       });

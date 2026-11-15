@@ -15,7 +15,7 @@ import { IS_TESTNET } from "@/lib/network";
 type Tab = "launches" | "markets" | "trending";
 const TABS: { id: Tab; label: string; note: string }[] = [
   { id: "launches", label: "Crux launches", note: "Fair-launched on Crux: one clearing price, LP burned." },
-  { id: "markets", label: "Markets", note: "Established tokens your Crux account trades through the Crux solver." },
+  { id: "markets", label: "Markets", note: "Established tokens you can trade from your Crux account." },
   { id: "trending", label: "Trending", note: `The busiest ${NETWORK_NAME} pools in the last hour.` },
 ];
 

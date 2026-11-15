@@ -182,7 +182,7 @@ export function SolanaIntentModal({ request, onClose, onPlaced }: { request: Sol
       onClose={close}
       locked={busy}
       title={deposit ? "Review deposit" : "Review order"}
-      subtitle={deposit ? "From Solana into your Crux account on Base. Settled from Solana in about 20 s." : "Pay from Solana, receive on Base. Settled from Solana in about 20 s."}
+      subtitle={deposit ? "From Solana into your Crux account on Base. Arrives in about 20 s." : "Pay from Solana, receive on Base. Arrives in about 20 s."}
     >
       <p role="status" aria-live="polite" className={`flex items-start gap-2 text-[12.5px] leading-snug ${flow.kind === "error" ? "text-down" : "text-chrome/85"}`}>
         {(busy || (flow.kind === "open" && status.data?.state !== "closed" && !refundable)) && <KineticLoader className="mt-0.5 shrink-0 text-signal" />}
