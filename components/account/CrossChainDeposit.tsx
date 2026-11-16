@@ -157,6 +157,8 @@ export function CrossChainDeposit({
 
   // An EVM chain needs the wallet connected; Solana connects its own wallet in the review step.
   const needsWallet = !wallet && !fromSolana;
+  // Solana with the login's own wallet (no Phantom / Solflare connected): deposits move in by themselves.
+  const loginSolana = fromSolana && solana.payer?.label === "Crux login";
   const decimals = origin ? origin.decimals : 6;
   const units = (() => {
     try {
@@ -299,18 +301,22 @@ export function CrossChainDeposit({
           options={CHOICES.map((o) => ({ value: o.key, label: o.name, hint: balanceOf(o.key) ?? undefined }))}
         />
       </div>
-      {fromSolana && solana.payer?.label === "Crux login" && (
-        // One Crux account, every chain: the login's own Solana wallet is where Solana USDC goes, then into the account.
+      {loginSolana && solana.payer && (
+        // One Crux account, every chain: USDC sent to the login's Solana address moves into the account by itself
+        // (hooks/useSolanaAutoDeposit; Crux pays the Solana fees), so there's nothing to press and no SOL to hold.
         <div className="mt-2 rounded-lg border border-line px-3 py-2.5">
-          <p className="text-[11.5px] text-dim">Your Solana address (part of your Crux login)</p>
+          <p className="text-[11.5px] text-dim">Your Solana deposit address</p>
           <AddressCopy address={solana.payer.publicKey.toBase58()} />
           <p className="mt-1 text-[11.5px] leading-snug text-muted">
-            Send {USDC_WORD} on {SOLANA_LABEL} here from an exchange or another wallet. It counts toward what you can buy at once; move it into your
-            account below.
+            Send {USDC_WORD} on {SOLANA_LABEL} here{IS_TESTNET ? " (free at faucet.circle.com, pick Solana Devnet)" : " from an exchange or another wallet"}. It
+            moves into your Crux account by itself within a minute or two. No SOL needed: Crux pays the fees.
           </p>
+          {solana.usdc !== null && solana.usdc > BigInt(0) && (
+            <p className="mt-1 text-[11.5px] text-signal">${Number(formatUnits(solana.usdc, 6)).toFixed(2)} arrived; moving it into your account…</p>
+          )}
         </div>
       )}
-      {needsWallet && fromBase ? (
+      {loginSolana ? null : needsWallet && fromBase ? (
         // Logged in with no wallet: the account's own address (above) is the way in from Base.
         <div className="mt-2 rounded-lg border border-line px-3 py-2.5">
           <p className="text-[11.5px] leading-snug text-muted">
@@ -365,7 +371,7 @@ export function CrossChainDeposit({
           {origin.faucet}). Arrives in your Crux account on Base in about a minute, no fee. Needs a little {origin.chain.nativeCurrency.symbol} there for
           gas.
         </p>
-      ) : (
+      ) : loginSolana ? null : (
         <p className="mt-1.5 text-[11.5px] leading-relaxed text-dim">
           {over ? "More than your Solana wallet holds. " : ""}
           {solana.payer
