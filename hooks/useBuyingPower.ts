@@ -17,8 +17,11 @@ export type PowerSource = { key: PayFrom | "account"; name: string; usdc6: bigin
  * can't be read is null and left out of the total.
  */
 export function useBuyingPower(): { sources: PowerSource[]; total: bigint | null } {
-  const { address } = useConnection();
+  const { address: connected } = useConnection();
   const crux = useCruxAccount();
+  // One Crux account, every chain: with no external wallet connected, the login's own EVM wallet (the Crux account's
+  // owner, the same address on Base, Ethereum, BNB and every other EVM origin) is read on every chain.
+  const address = connected ?? (crux.loggedIn ? (crux.owner ?? undefined) : undefined);
   const solana = useSolanaPayer();
   const query = { enabled: Boolean(address), refetchInterval: 30_000 };
   const base = useReadContract({ chainId: TESTNET.id, address: TESTNET_USDC, abi: erc20Abi, functionName: "balanceOf", args: [address ?? zeroAddress], query });
