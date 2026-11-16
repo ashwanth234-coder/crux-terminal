@@ -299,10 +299,37 @@ export function CrossChainDeposit({
           options={CHOICES.map((o) => ({ value: o.key, label: o.name, hint: balanceOf(o.key) ?? undefined }))}
         />
       </div>
-      {needsWallet ? (
-        <button type="button" onClick={openConnect} className={buttonClass("outline", "sm", "mt-2")}>
-          Connect a wallet to deposit from {fromBase ? BASE_NAME : origin?.name}
-        </button>
+      {fromSolana && solana.payer?.label === "Crux login" && (
+        // One Crux account, every chain: the login's own Solana wallet is where Solana USDC goes, then into the account.
+        <div className="mt-2 rounded-lg border border-line px-3 py-2.5">
+          <p className="text-[11.5px] text-dim">Your Solana address (part of your Crux login)</p>
+          <AddressCopy address={solana.payer.publicKey.toBase58()} />
+          <p className="mt-1 text-[11.5px] leading-snug text-muted">
+            Send {USDC_WORD} on {SOLANA_LABEL} here from an exchange or another wallet. It counts toward what you can buy at once; move it into your
+            account below.
+          </p>
+        </div>
+      )}
+      {needsWallet && fromBase ? (
+        // Logged in with no wallet: the account's own address (above) is the way in from Base.
+        <div className="mt-2 rounded-lg border border-line px-3 py-2.5">
+          <p className="text-[11.5px] leading-snug text-muted">
+            Send {USDC_WORD} on <span className="text-chrome">{NETWORK_NAME}</span> to your account address above (Copy). It arrives as soon as the
+            transfer lands, no fee.
+          </p>
+          <button type="button" onClick={openConnect} className="mt-1.5 text-[11.5px] text-dim underline decoration-line-2 hover:text-chrome">
+            Or connect a wallet to deposit from it
+          </button>
+        </div>
+      ) : needsWallet ? (
+        <div className="mt-2">
+          <p className="text-[11.5px] leading-snug text-muted">
+            Depositing from {origin?.name} with just your Crux login is coming soon. For now, connect a wallet that holds {USDC_WORD} there.
+          </p>
+          <button type="button" onClick={openConnect} className={buttonClass("outline", "sm", "mt-2")}>
+            Connect a wallet to deposit from {origin?.name}
+          </button>
+        </div>
       ) : (
       <div className="mt-2 flex items-center gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-line bg-void/60 px-3 py-2 focus-within:border-line-2">
@@ -366,7 +393,7 @@ export function CrossChainDeposit({
           filled, you can refund it on {step.origin.name} 6 hours after its deadline.
         </p>
       )}
-      {fromBase && (
+      {fromBase && !needsWallet && (
         <details className="mt-3 rounded-lg border border-line px-3 py-2.5">
           <summary className="cursor-pointer text-[11.5px] text-dim hover:text-chrome">Sending from an exchange or another wallet?</summary>
           <p className="mt-1.5 text-[11.5px] leading-snug text-muted">
@@ -385,6 +412,28 @@ export function CrossChainDeposit({
           onOpened();
         }}
       />
+    </div>
+  );
+}
+
+/** A full address to send to, with a Copy button (the whole address shows: people check it against their wallet). */
+function AddressCopy({ address }: { address: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="mt-1 flex items-center gap-2">
+      <code className="min-w-0 flex-1 break-all font-mono text-[12px] text-chrome">{address}</code>
+      <button
+        type="button"
+        onClick={() => {
+          void navigator.clipboard?.writeText(address).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          });
+        }}
+        className="shrink-0 rounded-[4px] border border-line-2 px-2 py-0.5 text-[11px] text-muted hover:text-chrome"
+      >
+        {copied ? "Copied" : "Copy"}
+      </button>
     </div>
   );
 }
