@@ -11,6 +11,7 @@ import { RELAY_URL } from "@/lib/session";
 const DEFAULT_MINT = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263";
 const BUY_PRESETS = [1, 2, 5];
 const SELL_PRESETS = [25, 50, 100];
+const LOCK_AVAILABLE = false;
 
 type Holdings = {
   wallet: string;
@@ -172,7 +173,9 @@ export function SolanaTrade() {
               </div>
             </section>
 
-            {holdings && !holdings.locked && (
+            {/* Hidden until Privy accepts login tokens for server-side signing (the 2-of-2 needs them); trades are signed
+                by the Crux signer the login added for deposits, inside its deposits-and-trades rules. */}
+            {LOCK_AVAILABLE && holdings && !holdings.locked && (
               <section className="rounded-xl border border-signal/50 bg-signal/[0.04] p-4 text-[12.5px] text-muted">
                 <p className="text-chrome">One-time: lock your Solana wallet</p>
                 <p className="mt-1">
