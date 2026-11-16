@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { usePrivy, usePrivyClient_experimental } from "@privy-io/react-auth";
+import { useIdentityToken, usePrivy, usePrivyClient_experimental } from "@privy-io/react-auth";
 import { buttonClass } from "@/components/ui/Button";
 import { Shell } from "@/components/launch/LaunchView";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
@@ -44,6 +44,7 @@ export function SolanaTrade() {
   const crux = useCruxAccount();
   const { getAccessToken } = usePrivy();
   const privyClient = usePrivyClient_experimental();
+  const { identityToken } = useIdentityToken();
   const [mint, setMint] = useState(DEFAULT_MINT);
   const [draftMint, setDraftMint] = useState(DEFAULT_MINT);
   const [holdings, setHoldings] = useState<Holdings | null>(null);
@@ -57,7 +58,10 @@ export function SolanaTrade() {
     return t;
   }, [getAccessToken]);
   /** Signing needs Privy's own session token too (Privy's wallet API rejects the app token); the relay checks both name you. */
-  const tokens = useCallback(async () => ({ token: await token(), privyToken: (await privyClient.getAccessToken()) ?? undefined }), [token, privyClient]);
+  const tokens = useCallback(
+    async () => ({ token: await token(), privyToken: (await privyClient.getAccessToken()) ?? undefined, identityToken: identityToken ?? undefined }),
+    [token, privyClient, identityToken],
+  );
 
   const refresh = useCallback(async () => {
     try {
