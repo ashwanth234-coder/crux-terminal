@@ -37,6 +37,8 @@ export type Network = {
     accountFactory?: Address;
     accountFactoryV2?: Address;
     accountFactoryV3?: Address;
+    /** The 5afe account factory before the current one (one-account move, 2026-11-17): its accounts can only withdraw. */
+    accountFactoryV3Previous?: Address;
     /** The EIP-712 verifyingContract of alert and layout signatures (any fixed address; the solver's is the same). */
     signingDomain?: Address;
     /** CruxFillProver: the only sender origin settlers accept fill proofs from. */
@@ -77,11 +79,14 @@ const BASE_SEPOLIA: Network = {
     factoryV6: a("0xD07fBb34076D88d2391E831aABfd40AcA3F57940"),
     factoryV7: a("0xeacB98371D5597c20A9ECDf6f09726817489722e"),
     factoryV8: a("0xdB9f226fb44D5E8d25e2aACA4f7080c83011CfB5"),
-    factoryV9: a("0x4a28e8B20e312fB67c71Fa6e2F085520d3DEd8e7"),
-    routerV9: a("0x86A518410EFfa9cAEbf92BD87DEe08678bA39682"),
+    // One-account move (2026-11-17): launches from FactoryV4 accounts. The first V9 (0x4a28…d8e7) is retired.
+    factoryV9: a("0x7E6686E36d70fA96546829726566C8A627c005fA"),
+    routerV9: a("0x74FA6B852533E59a55813c3f74d64CE6AAEa830D"),
     accountFactory: a("0xDdB0DF1CfcdEd073A72A489351f22cfF646f8C6E"),
     accountFactoryV2: a("0xf8962965f04e20B95dAdD931fDe00121906a97DC"),
-    accountFactoryV3: a("0xBD7AF76bcc2D080364a0c3C138ef82efCF8E12DF"),
+    // CruxAccountFactoryV4 since the one-account move (same interface; accounts add Solana buys).
+    accountFactoryV3: a("0x19049da3A3834A5d65305f9271BFa290E56ea377"),
+    accountFactoryV3Previous: a("0xBD7AF76bcc2D080364a0c3C138ef82efCF8E12DF"),
     signingDomain: a("0xf8962965f04e20B95dAdD931fDe00121906a97DC"),
     prover: a("0x7cb1aDd4975CbF1a5a3FA4fd60F11b010E4b29e8"),
     solver: a("0xDEbbE137f2AB252e28d1070F687010C0909d0492"),

@@ -38,6 +38,11 @@ export const ACCOUNT_FACTORY_V3 = getAddress(
     ? process.env.NEXT_PUBLIC_CRUX_ACCOUNT_FACTORY_V3
     : need("CruxAccountFactoryV3 (NEXT_PUBLIC_CRUX_ACCOUNT_FACTORY_V3)", NETWORK.crux.accountFactoryV3),
 );
+/**
+ * The 5afe factory before the current one (one-account move, 2026-11-17: V3 -> FactoryV4, whose accounts add Solana
+ * buys). Its accounts stay readable and can withdraw, so their money can be moved; nothing new is created there.
+ */
+export const ACCOUNT_FACTORY_V3_PREVIOUS: Address | null = NETWORK.crux.accountFactoryV3Previous ?? null;
 /** The CruxAccountV2 every V3 account clones: the factory's first contract creation. */
 export const ACCOUNT_IMPLEMENTATION_V3 = getContractAddress({ from: ACCOUNT_FACTORY_V3, nonce: BigInt(1) });
 /** How long a change of withdrawal address waits (CruxAccount.WITHDRAWAL_CHANGE_DELAY). */

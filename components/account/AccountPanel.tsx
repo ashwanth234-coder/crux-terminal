@@ -275,7 +275,7 @@ export function AccountPanel() {
 
       {legacyHeld.map((l) => (
         <section key={l.account} className="rounded-xl border border-signal/50 bg-signal/[0.04] p-4 text-[13px]">
-          <h2 className="font-medium text-chrome">Move what&rsquo;s left in your {l.label} account</h2>
+          <h2 className="font-medium text-chrome">Move what&rsquo;s left in your {l.label === "previous" ? "previous" : l.label} account</h2>
           <p className="mt-1 text-muted">
             Your earlier account {short(l.account)} still holds{" "}
             {[(l.usdc ?? BigInt(0)) > BigInt(0) ? `$${fmtUsdc(l.usdc!)} ${USDC_WORD}` : null, ...l.tokens.map((h) => `${fmtTokens(h.balance)} $${h.launch.symbol ?? "token"}`)]

@@ -9,6 +9,7 @@ import {
   ACCOUNT_FACTORY,
   ACCOUNT_FACTORY_V2,
   ACCOUNT_FACTORY_V3,
+  ACCOUNT_FACTORY_V3_PREVIOUS,
   accountFactoryAbi,
   cruxAccountAbi,
   mineAccountV3,
@@ -76,12 +77,14 @@ export type CruxAccountState = {
   refresh: () => void;
 };
 
-export type LegacyAccount = { account: Address; label: "V1" | "V2"; usdc: bigint | null; withdrawalAddress: Address | null };
+export type LegacyAccount = { account: Address; label: "V1" | "V2" | "previous"; usdc: bigint | null; withdrawalAddress: Address | null };
 
-const v3Key = (owner: Address) => `crux.account.v3.${owner.toLowerCase()}`;
-function loadV3(owner: Address): V3Account | null {
+// The current factory's account is remembered under v4 (one-account move, 2026-11-17); v3 holds the previous one's.
+const v3Key = (owner: Address) => `crux.account.v4.${owner.toLowerCase()}`;
+const previousKey = (owner: Address) => `crux.account.v3.${owner.toLowerCase()}`;
+function loadV3(owner: Address, key = v3Key): V3Account | null {
   try {
-    const raw = localStorage.getItem(v3Key(owner));
+    const raw = localStorage.getItem(key(owner));
     if (!raw) return null;
     const j = JSON.parse(raw) as { account: Address; withdrawalAddress: Address; nonce: string };
     return { account: getAddress(j.account), withdrawalAddress: getAddress(j.withdrawalAddress), nonce: BigInt(j.nonce) };
@@ -175,11 +178,27 @@ export function useCruxAccount(): CruxAccountState {
     }
     setCreated({ owner, v3: mined });
   };
+  // The previous 5afe account (before the one-account move): readable and withdrawable, never traded from again.
+  const previous = owner && ACCOUNT_FACTORY_V3_PREVIOUS ? loadV3(owner, previousKey) : null;
+  if (previous) rememberV3(previous);
+  // A trader who already chose their withdrawal wallet gets the new account with it, silently: no setup step again.
+  const autoMined = useRef(false);
+  useEffect(() => {
+    if (!v3Live || !owner || v3 || !previous || autoMined.current) return;
+    autoMined.current = true;
+    void createV3(previous.withdrawalAddress).catch(() => {
+      autoMined.current = false;
+    });
+    // createV3 is recreated each render; the guard above runs it once per login.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [v3Live, owner, v3, previous?.account]);
   const mine = v3Live && v3 ? v3.account : null;
   const account = v3Live ? mine : v2Live ? v2 : v1;
-  const older = (v3Live ? [v2Live && v2 ? { account: v2, label: "V2" as const } : null, v1 ? { account: v1, label: "V1" as const } : null] : [v2Live && v1 ? { account: v1, label: "V1" as const } : null]).filter(
-    (x): x is { account: Address; label: "V1" | "V2" } => x !== null,
-  );
+  const older = (
+    v3Live
+      ? [previous ? { account: previous.account, label: "previous" as const } : null, v2Live && v2 ? { account: v2, label: "V2" as const } : null, v1 ? { account: v1, label: "V1" as const } : null]
+      : [v2Live && v1 ? { account: v1, label: "V1" as const } : null]
+  ).filter((x): x is { account: Address; label: "V1" | "V2" | "previous" } => x !== null);
   const legacyReads = useReadContracts({
     contracts: older.flatMap((o) => [
       { ...on, address: TESTNET_USDC, abi: erc20Abi, functionName: "balanceOf", args: [o.account] } as const,
@@ -275,9 +294,10 @@ export function useCruxAccount(): CruxAccountState {
     v2: v3Live ? mine !== null : v2Live && v2 !== null,
     v3: v3Live ? v3 : null,
     setup: {
-      needed: authenticated && owner !== null && v3Live && v3 === null,
+      // Not while the new account is being mined from the previous one's withdrawal wallet.
+      needed: authenticated && owner !== null && v3Live && v3 === null && previous === null,
       // The wallet the older accounts withdraw to: the same one keeps things simple.
-      suggested: older.map((_, i) => nonZero(legacyReads.data?.[i * 2 + 1]?.result)).find((x) => x !== null) ?? null,
+      suggested: previous?.withdrawalAddress ?? older.map((_, i) => nonZero(legacyReads.data?.[i * 2 + 1]?.result)).find((x) => x !== null) ?? null,
       create: createV3,
     },
     legacy: older.map((o, i) => ({

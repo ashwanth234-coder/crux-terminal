@@ -12,8 +12,10 @@ test("Base Sepolia keeps the addresses the site used before the switch", () => {
   const s = NETWORKS["base-sepolia"];
   assert.equal(s.usdc, "0x036CbD53842c5426634e7929541eC2318f3dCF7e");
   assert.equal(s.crux.settlerV4, "0x399147a5960A120A3b8b89A33a30500a561145D9");
-  assert.equal(s.crux.factoryV9, "0x4a28e8B20e312fB67c71Fa6e2F085520d3DEd8e7");
-  assert.equal(s.crux.accountFactoryV3, "0xBD7AF76bcc2D080364a0c3C138ef82efCF8E12DF");
+  // One-account move (2026-11-17): launches and accounts moved to the FactoryV4 stack; the old factory is the previous one.
+  assert.equal(s.crux.factoryV9, "0x7E6686E36d70fA96546829726566C8A627c005fA");
+  assert.equal(s.crux.accountFactoryV3, "0x19049da3A3834A5d65305f9271BFa290E56ea377");
+  assert.equal(s.crux.accountFactoryV3Previous, "0xBD7AF76bcc2D080364a0c3C138ef82efCF8E12DF");
   assert.equal(caip19(s.usdc, s), "eip155:84532/erc20:0x036CbD53842c5426634e7929541eC2318f3dCF7e");
 });
 
