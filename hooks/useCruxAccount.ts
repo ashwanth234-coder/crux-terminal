@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCreateWallet, usePrivy, useSignTypedData, useWallets } from "@privy-io/react-auth";
+import { useCreateWallet as useCreateSolanaWallet, useWallets as useSolanaWallets } from "@privy-io/react-auth/solana";
 import { erc20Abi, getAddress, zeroAddress, type Address, type Hex } from "viem";
 import { useBytecode, useReadContract, useReadContracts } from "wagmi";
 import {
@@ -110,6 +111,25 @@ export function useCruxAccount(): CruxAccountState {
     }, 2000);
     return () => clearTimeout(t);
   }, [ready, authenticated, walletsReady, embedded, hasKey, createWallet]);
+  // One Crux account, every chain: the same login also holds a Solana wallet (Privy embedded, behind the one account;
+  // never shown as a separate account). New logins get it on login (PrivyProvider); a login from before then gets it
+  // here, once, after its EVM key exists (two creations at once can fail).
+  const { wallets: solanaWallets, ready: solanaReady } = useSolanaWallets();
+  const { createWallet: createSolanaWallet } = useCreateSolanaWallet();
+  const hasSolanaKey = Boolean(
+    user?.linkedAccounts.some((x) => x.type === "wallet" && "chainType" in x && x.chainType === "solana" && "walletClientType" in x && x.walletClientType === "privy"),
+  );
+  const askedForSolana = useRef(false);
+  useEffect(() => {
+    if (!ready || !authenticated || !solanaReady || !embedded || hasSolanaKey || solanaWallets.length > 0 || askedForSolana.current) return;
+    const t = setTimeout(() => {
+      askedForSolana.current = true;
+      void createSolanaWallet().catch(() => {
+        // It has one already (Privy created it on login meanwhile), or it failed: logging in again retries.
+      });
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [ready, authenticated, solanaReady, embedded, hasSolanaKey, solanaWallets.length, createSolanaWallet]);
   const owner = authenticated && embedded ? getAddress(embedded.address) : null;
   const on = { chainId: TESTNET.id } as const;
 
