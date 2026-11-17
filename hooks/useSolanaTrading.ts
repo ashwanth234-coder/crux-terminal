@@ -27,7 +27,7 @@ export type SolanaTradeResult =
   | { kind: "done"; side: "buy" | "sell"; how: "direct" | "account"; signature?: string; orderId?: string | null; fee?: bigint; ms: number; confirmed: boolean }
   | { kind: "error"; message: string };
 
-async function relay<T>(path: string, body: unknown): Promise<T> {
+export async function relay<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${RELAY_URL}${path}`, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, body: JSON.stringify(body) });
   const json = (await res.json().catch(() => ({}))) as T & { ok?: boolean; error?: string };
   if (!json.ok) throw new Error(json.error ?? `The relay said ${res.status}`);

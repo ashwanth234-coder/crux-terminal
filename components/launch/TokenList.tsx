@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { MajorsTable } from "@/components/launch/MajorsTable";
+import { TrenchesTable } from "@/components/launch/TrenchesTable";
 import { erc20Abi, formatUnits, parseAbi, zeroAddress, type Address } from "viem";
 import { useReadContracts } from "wagmi";
 import { Header } from "@/components/site/Header";
@@ -25,8 +26,13 @@ type Launch = { token: Address; curve: Address; pair: Address; creator: Address 
  * how far it is to graduation or its pool's liquidity, and its age. Each row opens the token's terminal.
  */
 export function TokenList() {
-  // Two ends of the "barbell": fresh launches (fast, small) and majors (deep, for size).
-  const [tab, setTab] = useState<"new" | "majors">("new");
+  // The "barbell": Crux's own launches, the newest coins everywhere (fast, small, risky), and majors (deep, for size).
+  const [tab, setTab] = useState<"new" | "trenches" | "majors">("new");
+  const blurb = {
+    new: `Every token launched on Crux, newest first. ${NETWORK_LONG}.`,
+    trenches: "The newest coins, seconds old. Fast and risky: check the warning signs, and use auto-exit.",
+    majors: "Deep-liquidity coins for bigger trades, at a lower fee.",
+  }[tab];
   return (
     <>
       <Header />
@@ -34,9 +40,7 @@ export function TokenList() {
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div>
             <h1 className="font-display text-[clamp(1.8rem,3.4vw,2.4rem)] text-bright">Discover</h1>
-            <p className="mt-1 text-[13px] text-muted">
-              {tab === "new" ? `Every token launched on Crux, newest first. ${NETWORK_LONG}.` : "Deep-liquidity coins for bigger trades, at a lower fee."}
-            </p>
+            <p className="mt-1 text-[13px] text-muted">{blurb}</p>
           </div>
           <Link href="/launch/v9/new" className={buttonClass("primary", "sm", "rounded-lg")}>
             Launch a token
@@ -45,7 +49,8 @@ export function TokenList() {
         <div role="tablist" aria-label="What to show" className="mt-5 flex gap-1 border-b border-line">
           {(
             [
-              ["new", "New launches"],
+              ["new", "Crux launches"],
+              ["trenches", "Trenches"],
               ["majors", "Majors"],
             ] as const
           ).map(([key, label]) => (
@@ -61,7 +66,7 @@ export function TokenList() {
             </button>
           ))}
         </div>
-        {tab === "new" ? <TokenTable /> : <MajorsTable />}
+        {tab === "new" ? <TokenTable /> : tab === "trenches" ? <TrenchesTable /> : <MajorsTable />}
       </main>
     </>
   );

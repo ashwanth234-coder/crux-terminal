@@ -6,6 +6,7 @@ import { buttonClass } from "@/components/ui/Button";
 import { fmtPrice, solanaCoin, solanaFeeText } from "@/lib/solanaCoins";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { useSolanaTrading } from "@/hooks/useSolanaTrading";
+import { useAutoExit } from "@/hooks/useAutoExit";
 
 /**
  * One Buy/Sell panel for a Solana coin, as one account: amounts, one button, the result in plain words. How it's paid
@@ -15,6 +16,7 @@ import { useSolanaTrading } from "@/hooks/useSolanaTrading";
 export function SolanaTradePanel({ mint }: { mint: string }) {
   const crux = useCruxAccount();
   const t = useSolanaTrading(mint);
+  const exit = useAutoExit(mint);
   const [custom, setCustom] = useState("");
   const [turbo, setTurbo] = useState(false);
   // The coin's name, icon and price: the same lookup the coin page makes (shared cache), read in the browser.
@@ -108,6 +110,28 @@ export function SolanaTradePanel({ mint }: { mint: string }) {
           <input type="checkbox" checked={turbo} onChange={(e) => setTurbo(e.target.checked)} />
           Turbo (fastest landing)
         </label>
+        <label className="mt-2 flex items-start gap-2 text-[12px] text-muted">
+          <input type="checkbox" className="mt-0.5" checked={exit.on} disabled={exit.busy} onChange={(e) => void exit.set(e.target.checked)} />
+          <span>
+            Auto-exit: sell everything the moment the coin&rsquo;s creator sells
+            {exit.on && <span className="text-up"> · watching</span>}
+            {exit.busy && <span className="text-dim"> · …</span>}
+          </span>
+        </label>
+        {exit.error && <p className="mt-1 text-[11.5px] text-down">{exit.error}</p>}
+        {exit.lastExit && (
+          <p className="mt-1 text-[11.5px] text-signal">
+            Auto-exit sold: {exit.lastExit.reason}.
+            {exit.lastExit.signature && (
+              <>
+                {" "}
+                <a href={`https://solscan.io/tx/${exit.lastExit.signature}`} target="_blank" rel="noopener noreferrer" className="underline decoration-line-2">
+                  receipt
+                </a>
+              </>
+            )}
+          </p>
+        )}
       </div>
 
       <p className="text-[11.5px] text-dim">Paid from your Crux balance. {solanaFeeText(mint)}</p>

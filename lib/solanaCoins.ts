@@ -55,6 +55,56 @@ export const SOLANA_MAJORS = [
   "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm", // WIF
   "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R", // RAY
 ];
+/** A freshly launched Solana coin, with the facts that tell a rug from a runner (the Trenches tab). */
+export type FreshCoin = SolanaCoin & {
+  createdAt: number;
+  holders?: number;
+  launchpad?: string;
+  /** Nobody can mint more of it / freeze holders' coins. */
+  mintOff?: boolean;
+  freezeOff?: boolean;
+  /** How much of the supply the creator holds, in percent, and how many coins they've launched before. */
+  creatorPct?: number;
+  creatorLaunches?: number;
+  organic?: string;
+  buys5m?: number;
+  sells5m?: number;
+};
+
+type JupRecent = JupToken & {
+  createdAt?: string;
+  firstPool?: { createdAt?: string };
+  holderCount?: number;
+  launchpad?: string;
+  organicScoreLabel?: string;
+  audit?: { mintAuthorityDisabled?: boolean; freezeAuthorityDisabled?: boolean; devBalancePercentage?: number; devMints?: number };
+  stats5m?: { numBuys?: number; numSells?: number };
+};
+
+/** The newest Solana coins (Jupiter's recent list), newest first, leaving out ones with almost no money in their pool. */
+export async function freshSolanaCoins(minLiquidity = 1_000): Promise<FreshCoin[]> {
+  const r = await fetch("https://lite-api.jup.ag/tokens/v2/recent");
+  if (!r.ok) return [];
+  const list = (await r.json()) as JupRecent[];
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((t) => ({
+      ...toCoin(t),
+      createdAt: Date.parse(t.firstPool?.createdAt ?? t.createdAt ?? "") || Date.now(),
+      holders: t.holderCount,
+      launchpad: t.launchpad,
+      mintOff: t.audit?.mintAuthorityDisabled,
+      freezeOff: t.audit?.freezeAuthorityDisabled,
+      creatorPct: t.audit?.devBalancePercentage,
+      creatorLaunches: t.audit?.devMints,
+      organic: t.organicScoreLabel,
+      buys5m: t.stats5m?.numBuys,
+      sells5m: t.stats5m?.numSells,
+    }))
+    .filter((c) => (c.liquidity ?? 0) >= minLiquidity)
+    .sort((a, b) => b.createdAt - a.createdAt);
+}
+
 /** Crux's fee on a Solana coin, as the trade panel states it. */
 export const solanaFeeText = (mint: string) => (SOLANA_MAJORS.includes(mint) ? "Fee 0.15%, at least $0.05." : "Fee 0.5%, at least $0.05.");
 
