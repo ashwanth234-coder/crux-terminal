@@ -5,6 +5,7 @@ import { useSyncExternalStore } from "react";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { useSolanaAutoDeposit } from "@/hooks/useSolanaAutoDeposit";
 import { useOneBalance } from "@/hooks/useSolanaTrading";
+import { AddMoneyButton } from "@/components/account/AddMoney";
 import { fmtUsdc } from "@/lib/launch";
 
 const noopSubscribe = () => () => {};
@@ -33,36 +34,40 @@ export function AccountButton() {
   }
   const protectedNow = a.withdrawalAddress !== null;
   return (
-    <Link
-      href="/account"
-      className={`${base} border-line-2 font-mono text-chrome hover:border-chrome/50`}
-      title={
-        moving.kind === "moving"
-          ? `Moving $${fmtUsdc(moving.usdc)} from Solana into your account…`
-          : protectedNow
-            ? "Your Crux account"
-            : "Your Crux account: not protected yet. Bind a withdrawal address."
-      }
-    >
-      <span className={`h-1.5 w-1.5 rounded-full ${moving.kind === "moving" ? "animate-pulse bg-signal" : protectedNow ? "bg-up" : "bg-down"}`} aria-hidden="true" />
-      {/* Says what it opens: the CRUX Account page (balance, deposit, withdraw, holdings, creator rewards). */}
-      <span className="hidden font-sans uppercase tracking-[0.14em] text-dim xl:inline">Account</span>
-      {a.usdc === null ? (
-        "Account"
-      ) : one.testnet ? (
-        <>
-          ${fmtUsdc(a.usdc)}
-          <span className="font-sans text-[10px] uppercase tracking-[0.12em] text-dim">test</span>
-          {one.solana !== null && one.solana > BigInt(0) && (
-            <>
-              <span className="text-dim">·</span>${fmtUsdc(one.solana)}
-              <span className="font-sans text-[10px] uppercase tracking-[0.12em] text-up">real</span>
-            </>
-          )}
-        </>
-      ) : (
-        `$${fmtUsdc(a.usdc + (one.solana ?? BigInt(0)))}`
-      )}
-    </Link>
+    <span className="inline-flex items-center gap-2">
+      {/* Add money sits beside the balance, wherever the balance is shown. */}
+      <AddMoneyButton />
+      <Link
+        href="/account"
+        className={`${base} border-line-2 font-mono text-chrome hover:border-chrome/50`}
+        title={
+          moving.kind === "moving"
+            ? `Moving $${fmtUsdc(moving.usdc)} from Solana into your account…`
+            : protectedNow
+              ? "Your Crux account"
+              : "Your Crux account: not protected yet. Bind a withdrawal address."
+        }
+      >
+        <span className={`h-1.5 w-1.5 rounded-full ${moving.kind === "moving" ? "animate-pulse bg-signal" : protectedNow ? "bg-up" : "bg-down"}`} aria-hidden="true" />
+        {/* Says what it opens: the CRUX Account page (balance, deposit, withdraw, holdings, creator rewards). */}
+        <span className="hidden font-sans uppercase tracking-[0.14em] text-dim xl:inline">Account</span>
+        {a.usdc === null ? (
+          "Account"
+        ) : one.testnet ? (
+          <>
+            ${fmtUsdc(a.usdc)}
+            <span className="font-sans text-[10px] uppercase tracking-[0.12em] text-dim">test</span>
+            {one.solana !== null && one.solana > BigInt(0) && (
+              <>
+                <span className="text-dim">·</span>${fmtUsdc(one.solana)}
+                <span className="font-sans text-[10px] uppercase tracking-[0.12em] text-up">real</span>
+              </>
+            )}
+          </>
+        ) : (
+          `$${fmtUsdc(a.usdc + (one.solana ?? BigInt(0)))}`
+        )}
+      </Link>
+    </span>
   );
 }
