@@ -12,9 +12,11 @@ export type SolanaCoin = {
   mcap?: number;
   liquidity?: number;
   verified: boolean;
+  decimals?: number;
 };
 
 type JupToken = {
+  decimals?: number;
   id: string;
   name?: string;
   symbol?: string;
@@ -37,6 +39,7 @@ const toCoin = (t: JupToken): SolanaCoin => ({
   mcap: t.mcap,
   liquidity: t.liquidity,
   verified: t.isVerified === true,
+  decimals: t.decimals,
 });
 
 /** A Solana address (base58, 32-44 characters, no 0/O/I/l). */

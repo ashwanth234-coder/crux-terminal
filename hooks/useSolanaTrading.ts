@@ -90,8 +90,12 @@ export function useSolanaTrading(mint: string | null) {
       if (side === "buy" && (!h || typeof amount !== "bigint" || h.usdc < amount)) return; // paid from the account: nothing to prepare
       const key = `${side}|${amount}|${opts.turbo === true}`;
       const last = preparedAt.current.get(key) ?? 0;
-      if (Date.now() - last < 6_000) return;
+      // Each exact trade at most every 6 s; any trade at most every 0.7 s (a pointer sweeping across the buttons
+      // shouldn't prepare all of them: every head start costs a price route).
+      const any = preparedAt.current.get("*") ?? 0;
+      if (Date.now() - last < 6_000 || Date.now() - any < 700) return;
       preparedAt.current.set(key, Date.now());
+      preparedAt.current.set("*", Date.now());
       void tokens()
         .then((t) => relay("/v1/solana/prepare", { ...t, side, mint, amount: amount.toString(), turbo: opts.turbo === true, slippageBps: 300 }))
         .catch(() => preparedAt.current.delete(key));

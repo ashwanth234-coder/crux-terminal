@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { buttonClass } from "@/components/ui/Button";
+import { fmtPrice, solanaCoin } from "@/lib/solanaCoins";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { useSolanaTrading } from "@/hooks/useSolanaTrading";
 
@@ -15,12 +17,16 @@ export function SolanaTradePanel({ mint }: { mint: string }) {
   const t = useSolanaTrading(mint);
   const [custom, setCustom] = useState("");
   const [turbo, setTurbo] = useState(false);
+  // The coin's name, icon and price: the same lookup the coin page makes (shared cache), read in the browser.
+  const coin = useQuery({ queryKey: ["solana-coin", mint], queryFn: () => solanaCoin(mint), refetchInterval: 30_000 }).data;
   const h = t.holdings;
-  const decimals = h?.coin?.decimals ?? h?.token?.decimals ?? 0;
+  const decimals = h?.coin?.decimals ?? coin?.decimals ?? 0;
   const held = h?.coin?.amount ?? BigInt(0);
-  const symbol = h?.token?.symbol ?? "coin";
+  const symbol = coin?.symbol || h?.token?.symbol || "coin";
+  const price = coin?.price ?? h?.token?.usdPrice;
+  const icon = coin?.icon ?? h?.token?.icon;
   const busy = t.result.kind === "busy";
-  const value = h?.token?.usdPrice !== undefined && decimals ? (Number(held) / 10 ** decimals) * h.token.usdPrice : null;
+  const value = price !== undefined && decimals ? (Number(held) / 10 ** decimals) * price : null;
   const units = (dollars: number) => BigInt(Math.round(dollars * 1e6));
   const sellAmount = (p: number) => (p === 100 ? ("all" as const) : (held * BigInt(p)) / BigInt(100));
   /** Hover, keyboard focus or a finger landing on the button: prepare that trade now. */
@@ -46,12 +52,12 @@ export function SolanaTradePanel({ mint }: { mint: string }) {
     <section className="flex flex-col gap-4 rounded-xl border border-line p-4">
       <div className="flex items-center gap-3">
         {/* eslint-disable-next-line @next/next/no-img-element -- token icons come from any host */}
-        {h?.token?.icon ? <img src={h.token.icon} alt="" className="h-9 w-9 rounded-full" /> : <span className="h-9 w-9 rounded-full bg-line" aria-hidden="true" />}
+        {icon ? <img src={icon} alt="" className="h-9 w-9 rounded-full" /> : <span className="h-9 w-9 rounded-full bg-line" aria-hidden="true" />}
         <div className="min-w-0 flex-1">
           <p className="truncate text-[15px] text-chrome">
-            {h?.token?.name ?? "…"} <span className="text-dim">${symbol}</span>
+            {coin?.name || h?.token?.name || "…"} <span className="text-dim">${symbol}</span>
           </p>
-          <p className="font-mono text-[12px] text-muted">{h?.token?.usdPrice !== undefined ? `$${h.token.usdPrice.toPrecision(4)}` : "price …"}</p>
+          <p className="font-mono text-[12px] text-muted">{price !== undefined ? fmtPrice(price) : "price …"}</p>
         </div>
         <div className="text-right text-[12px]">
           <p className="text-dim">You hold</p>
