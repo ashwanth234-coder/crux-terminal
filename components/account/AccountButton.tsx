@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSyncExternalStore } from "react";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { useSolanaAutoDeposit } from "@/hooks/useSolanaAutoDeposit";
+import { useOneBalance } from "@/hooks/useSolanaTrading";
 import { fmtUsdc } from "@/lib/launch";
 
 const noopSubscribe = () => () => {};
@@ -16,6 +17,9 @@ export function AccountButton() {
   const a = useCruxAccount();
   // USDC landing on the login's Solana address moves into the account by itself (mounted here: the header is on every page).
   const moving = useSolanaAutoDeposit();
+  // One balance: the account's USDC plus Solana USDC. On Base Sepolia the account's is test money and Solana's real,
+  // so they're shown apart (never added) until Base mainnet.
+  const one = useOneBalance();
   const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
   const base = "inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-[4px] border px-3 text-[11px] font-medium transition-colors duration-200";
 
@@ -43,7 +47,22 @@ export function AccountButton() {
       <span className={`h-1.5 w-1.5 rounded-full ${moving.kind === "moving" ? "animate-pulse bg-signal" : protectedNow ? "bg-up" : "bg-down"}`} aria-hidden="true" />
       {/* Says what it opens: the CRUX Account page (balance, deposit, withdraw, holdings, creator rewards). */}
       <span className="hidden font-sans uppercase tracking-[0.14em] text-dim xl:inline">Account</span>
-      {a.usdc !== null ? `$${fmtUsdc(a.usdc)}` : "Account"}
+      {a.usdc === null ? (
+        "Account"
+      ) : one.testnet ? (
+        <>
+          ${fmtUsdc(a.usdc)}
+          <span className="font-sans text-[10px] uppercase tracking-[0.12em] text-dim">test</span>
+          {one.solana !== null && one.solana > BigInt(0) && (
+            <>
+              <span className="text-dim">·</span>${fmtUsdc(one.solana)}
+              <span className="font-sans text-[10px] uppercase tracking-[0.12em] text-up">real</span>
+            </>
+          )}
+        </>
+      ) : (
+        `$${fmtUsdc(a.usdc + (one.solana ?? BigInt(0)))}`
+      )}
     </Link>
   );
 }
