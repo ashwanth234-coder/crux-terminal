@@ -9,6 +9,7 @@ import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { TESTNET } from "@/lib/chains";
 import { TESTNET_USDC } from "@/lib/intents";
 import { RELAY_URL } from "@/lib/session";
+import { useBnbTrading } from "@/hooks/useBnbTrading";
 import { buySolanaFromAccount, cruxAccountSolanaAbi, linkSolanaWallet, quoteMinOut, walletBytes32 } from "@/lib/solanaAccount";
 
 export type SolanaHoldings = {
@@ -183,5 +184,8 @@ export function useSolanaTrading(mint: string | null) {
 export function useOneBalance(): { account: bigint | null; solana: bigint | null; testnet: boolean } {
   const crux = useCruxAccount();
   const { holdings } = useSolanaTrading(null);
-  return { account: crux.usdc, solana: holdings?.usdc ?? null, testnet: TESTNET.testnet === true };
+  const bnb = useBnbTrading(null).holdings;
+  // The real cash (6 decimals): Solana USDC plus BNB Chain USDT (18 decimals, scaled down).
+  const real = holdings || bnb ? (holdings?.usdc ?? BigInt(0)) + (bnb ? bnb.usdt / BigInt(1e12) : BigInt(0)) : null;
+  return { account: crux.usdc, solana: real, testnet: TESTNET.testnet === true };
 }

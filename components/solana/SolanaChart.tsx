@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CandlestickSeries, createChart, HistogramSeries, type IChartApi, type UTCTimestamp } from "lightweight-charts";
-import { solanaCandles, type Timeframe } from "@/lib/solanaCoins";
+import { coinCandles, type ChartNetwork, type Timeframe } from "@/lib/solanaCoins";
 
 const FRAMES: Timeframe[] = ["1m", "5m", "15m", "1h", "4h", "1d"];
 
@@ -14,11 +14,11 @@ function themeColor(name: string, fallback: string) {
 }
 
 /** A Solana coin's price chart: USD candles and volume from its deepest pool, refreshed every 30 s. */
-export function SolanaChart({ mint }: { mint: string }) {
+export function SolanaChart({ mint, network = "solana" }: { mint: string; network?: ChartNetwork }) {
   const host = useRef<HTMLDivElement>(null);
   const chart = useRef<IChartApi | null>(null);
   const [tf, setTf] = useState<Timeframe>("5m");
-  const candles = useQuery({ queryKey: ["solana-candles", mint, tf], queryFn: () => solanaCandles(mint, tf), refetchInterval: 30_000, staleTime: 15_000 });
+  const candles = useQuery({ queryKey: ["coin-candles", network, mint, tf], queryFn: () => coinCandles(network, mint, tf), refetchInterval: 30_000, staleTime: 15_000 });
 
   useEffect(() => {
     if (!host.current || !candles.data) return;

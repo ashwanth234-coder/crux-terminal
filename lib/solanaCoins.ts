@@ -155,25 +155,28 @@ const FRAMES: Record<Timeframe, { unit: "minute" | "hour" | "day"; aggregate: nu
   "1d": { unit: "day", aggregate: 1 },
 };
 
+/** GeckoTerminal's name for each chain the terminal charts. */
+export type ChartNetwork = "solana" | "bsc";
 const poolCache = new Map<string, string>();
 /** The coin's deepest pool on GeckoTerminal (its candles follow that pool). */
-async function topPool(mint: string): Promise<string | null> {
-  const known = poolCache.get(mint);
+async function topPool(network: ChartNetwork, token: string): Promise<string | null> {
+  const key = `${network}:${token}`;
+  const known = poolCache.get(key);
   if (known) return known;
-  const r = await fetch(`https://api.geckoterminal.com/api/v2/networks/solana/tokens/${mint}/pools?page=1`, { headers: { accept: "application/json" } });
+  const r = await fetch(`https://api.geckoterminal.com/api/v2/networks/${network}/tokens/${token}/pools?page=1`, { headers: { accept: "application/json" } });
   if (!r.ok) return null;
   const pool = ((await r.json()) as { data?: { attributes?: { address?: string } }[] }).data?.[0]?.attributes?.address ?? null;
-  if (pool) poolCache.set(mint, pool);
+  if (pool) poolCache.set(key, pool);
   return pool;
 }
 
-/** USD candles for the coin, oldest first, from its deepest pool. Empty when there's no pool or the API is busy. */
-export async function solanaCandles(mint: string, tf: Timeframe): Promise<Candle[]> {
-  const pool = await topPool(mint);
+/** USD candles for a coin, oldest first, from its deepest pool. Empty when there's no pool or the API is busy. */
+export async function coinCandles(network: ChartNetwork, token: string, tf: Timeframe): Promise<Candle[]> {
+  const pool = await topPool(network, token);
   if (!pool) return [];
   const f = FRAMES[tf];
-  const q = new URLSearchParams({ aggregate: String(f.aggregate), limit: "300", currency: "usd", token: mint });
-  const r = await fetch(`https://api.geckoterminal.com/api/v2/networks/solana/pools/${pool}/ohlcv/${f.unit}?${q}`, { headers: { accept: "application/json" } });
+  const q = new URLSearchParams({ aggregate: String(f.aggregate), limit: "300", currency: "usd", token });
+  const r = await fetch(`https://api.geckoterminal.com/api/v2/networks/${network}/pools/${pool}/ohlcv/${f.unit}?${q}`, { headers: { accept: "application/json" } });
   if (!r.ok) return [];
   const rows = ((await r.json()) as { data?: { attributes?: { ohlcv_list?: number[][] } } }).data?.attributes?.ohlcv_list ?? [];
   return rows
@@ -185,3 +188,6 @@ export async function solanaCandles(mint: string, tf: Timeframe): Promise<Candle
 export const fmtPrice = (p: number) => (p >= 1 ? `$${p.toLocaleString("en-US", { maximumFractionDigits: 2 })}` : `$${p.toPrecision(4)}`);
 /** $1.2M, $34K. */
 export const fmtCompact = (n: number) => `$${Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(n)}`;
+
+/** USD candles for a Solana coin. */
+export const solanaCandles = (mint: string, tf: Timeframe) => coinCandles("solana", mint, tf);

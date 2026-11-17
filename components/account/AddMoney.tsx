@@ -6,7 +6,7 @@ import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { useSolanaTrading } from "@/hooks/useSolanaTrading";
 import { IS_TESTNET } from "@/lib/network";
 
-type Net = "base" | "solana";
+type Net = "base" | "solana" | "bnb";
 
 /**
  * Add money (plan phase E): one question, "which network are you sending on?", then the one address for it, with
@@ -37,7 +37,8 @@ function AddMoneySheet({ onClose }: { onClose: () => void }) {
   const crux = useCruxAccount();
   const { holdings } = useSolanaTrading(null);
   const [net, setNet] = useState<Net>("base");
-  const address = net === "base" ? crux.account : (holdings?.wallet ?? null);
+  // BNB Chain: the login's own wallet (Crux's account contract can't trade there); its USDT is the BNB-side cash.
+  const address = net === "base" ? crux.account : net === "bnb" ? crux.owner : (holdings?.wallet ?? null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -48,6 +49,7 @@ function AddMoneySheet({ onClose }: { onClose: () => void }) {
   const nets: { key: Net; label: string; note: string }[] = [
     { key: "base", label: "Base", note: IS_TESTNET ? "Test USDC on Base Sepolia for now" : "USDC on Base" },
     { key: "solana", label: "Solana", note: "USDC on Solana" },
+    { key: "bnb", label: "BNB Chain", note: "USDT on BNB Chain" },
   ];
 
   return (
@@ -69,7 +71,7 @@ function AddMoneySheet({ onClose }: { onClose: () => void }) {
         </div>
 
         <p className="mt-3 text-[13px] text-muted">Which network are you sending USDC on?</p>
-        <div className="mt-2 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Network">
+        <div className="mt-2 grid grid-cols-3 gap-2" role="radiogroup" aria-label="Network">
           {nets.map((n) => (
             <button
               key={n.key}
@@ -88,8 +90,8 @@ function AddMoneySheet({ onClose }: { onClose: () => void }) {
         {address ? <SendTo address={address} /> : <p className="mt-5 text-[13px] text-dim">Getting your address…</p>}
 
         <p className="mt-4 text-[11.5px] leading-relaxed text-dim">
-          Send <span className="text-chrome">USDC only</span>, on the network you picked. It lands in your Crux balance by itself
-          {net === "solana" ? " and is ready for Solana coins straight away. No SOL needed." : "."}
+          Send <span className="text-chrome">{net === "bnb" ? "USDT only" : "USDC only"}</span>, on the network you picked. It lands in your Crux balance by itself
+          {net === "solana" ? " and is ready for Solana coins straight away. No SOL needed." : net === "bnb" ? " and is ready for BNB Chain coins straight away. No BNB needed." : "."}
         </p>
       </div>
     </div>

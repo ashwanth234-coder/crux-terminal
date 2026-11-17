@@ -6,6 +6,7 @@ import { useId, useRef, useState } from "react";
 import { isAddress } from "viem";
 import { PHASE_WORDS } from "@/lib/phaseWords";
 import { fmtPrice, isSolanaAddress, searchSolanaCoins } from "@/lib/solanaCoins";
+import { chainOf0x, searchBnbCoins } from "@/lib/bnbCoins";
 
 export type Hit = { key: string; version: number; auctionId: number; token: string; pool: string | null; name: string; symbol: string; phase: string };
 
@@ -26,7 +27,7 @@ export function search(launches: Hit[], q: string): Hit[] {
 export const PHASE: Record<string, string> = PHASE_WORDS;
 
 /** One row of the search list: a Crux launch (Base) or a Solana coin, opened the same way. */
-type Row = { key: string; href: string; symbol: string; name: string; chain: "Base" | "Solana"; right: string };
+type Row = { key: string; href: string; symbol: string; name: string; chain: "Base" | "Solana" | "BNB"; right: string };
 
 /**
  * Top-bar token search, every chain in one list (one account trades them all): Crux launches on Base and Solana coins
@@ -62,6 +63,12 @@ export function TokenSearch({ className = "", autoFocus = false, onDone }: { cla
     enabled: wanted && !direct && q.replace(/^\$/, "").length >= 2,
     staleTime: 60_000,
   });
+  const bnb = useQuery({
+    queryKey: ["bnb-search", q.toLowerCase()],
+    queryFn: () => searchBnbCoins(q),
+    enabled: wanted && !direct && q.replace(/^\$/, "").length >= 2,
+    staleTime: 60_000,
+  });
   const hits: Row[] = direct
     ? []
     : [
@@ -81,6 +88,14 @@ export function TokenSearch({ className = "", autoFocus = false, onDone }: { cla
           chain: "Solana" as const,
           right: c.price !== undefined ? fmtPrice(c.price) : "",
         })),
+        ...(bnb.data ?? []).map((c) => ({
+          key: `bnb:${c.address}`,
+          href: `/bnb/${c.address}`,
+          symbol: c.symbol || "COIN",
+          name: c.name,
+          chain: "BNB" as const,
+          right: c.price !== undefined ? fmtPrice(c.price) : "",
+        })),
       ];
 
   const go = (href: string) => {
@@ -91,8 +106,13 @@ export function TokenSearch({ className = "", autoFocus = false, onDone }: { cla
     router.push(href);
     onDone?.();
   };
+  /** A full address: Solana's opens its coin; a 0x one opens on BNB Chain when that's where it trades, else on Base. */
+  const goAddress = async (address: string) => {
+    if (isSolanaAddress(address)) return go(`/sol/${address}`);
+    go((await chainOf0x(address)) === "bnb" ? `/bnb/${address}` : `/token/${address}`);
+  };
   const submit = () => {
-    if (direct) go(direct);
+    if (direct) void goAddress(q);
     else if (hits[active]) go(hits[active].href);
   };
 
@@ -121,10 +141,9 @@ export function TokenSearch({ className = "", autoFocus = false, onDone }: { cla
           onPaste={(e) => {
             // A pasted contract address opens its coin at once: no list, no Enter.
             const pasted = e.clipboardData.getData("text").trim();
-            const href = isAddress(pasted, { strict: false }) ? `/token/${pasted}` : isSolanaAddress(pasted) ? `/sol/${pasted}` : null;
-            if (href) {
+            if (isAddress(pasted, { strict: false }) || isSolanaAddress(pasted)) {
               e.preventDefault();
-              go(href);
+              void goAddress(pasted);
             }
           }}
           onFocus={() => {
@@ -165,7 +184,7 @@ export function TokenSearch({ className = "", autoFocus = false, onDone }: { cla
         </button>
       </form>
 
-      {open && q.length > 0 && (direct || hits.length > 0 || feed.isFetching || solana.isFetching || feed.data) && (
+      {open && q.length > 0 && (direct || hits.length > 0 || feed.isFetching || solana.isFetching || bnb.isFetching || feed.data) && (
         <ul
           id={`${uid}-list`}
           role="listbox"
@@ -198,7 +217,7 @@ export function TokenSearch({ className = "", autoFocus = false, onDone }: { cla
               </li>
             ))
           ) : (
-            <li className="px-3 py-2.5 text-[12px] text-dim">{feed.isFetching || solana.isFetching ? "Searching…" : "No coin matches"}</li>
+            <li className="px-3 py-2.5 text-[12px] text-dim">{feed.isFetching || solana.isFetching || bnb.isFetching ? "Searching…" : "No coin matches"}</li>
           )}
         </ul>
       )}
