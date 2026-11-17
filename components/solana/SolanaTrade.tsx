@@ -5,9 +5,11 @@ import { buttonClass } from "@/components/ui/Button";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { useSolanaTrading } from "@/hooks/useSolanaTrading";
 
-const usd = (units6: bigint) => `$${(Number(units6) / 1e6).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-/** One Buy/Sell panel for a Solana coin: amounts, one button, the result in plain words. Routes are picked for you. */
+/**
+ * One Buy/Sell panel for a Solana coin, as one account: amounts, one button, the result in plain words. How it's paid
+ * (cash already on this side, or the Crux balance) is picked for you and never shown. Pointing at a button prepares
+ * that trade, so the click only sends it.
+ */
 export function SolanaTradePanel({ mint }: { mint: string }) {
   const crux = useCruxAccount();
   const t = useSolanaTrading(mint);
@@ -19,7 +21,14 @@ export function SolanaTradePanel({ mint }: { mint: string }) {
   const symbol = h?.token?.symbol ?? "coin";
   const busy = t.result.kind === "busy";
   const value = h?.token?.usdPrice !== undefined && decimals ? (Number(held) / 10 ** decimals) * h.token.usdPrice : null;
-  const buy = (dollars: number) => void t.buy(BigInt(Math.round(dollars * 1e6)), { turbo });
+  const units = (dollars: number) => BigInt(Math.round(dollars * 1e6));
+  const sellAmount = (p: number) => (p === 100 ? ("all" as const) : (held * BigInt(p)) / BigInt(100));
+  /** Hover, keyboard focus or a finger landing on the button: prepare that trade now. */
+  const warm = (side: "buy" | "sell", amount: bigint | "all") => ({
+    onMouseEnter: () => t.prepare(side, amount, { turbo }),
+    onFocus: () => t.prepare(side, amount, { turbo }),
+    onTouchStart: () => t.prepare(side, amount, { turbo }),
+  });
 
   if (!crux.loggedIn) {
     return (
@@ -32,6 +41,7 @@ export function SolanaTradePanel({ mint }: { mint: string }) {
     );
   }
 
+  const done = t.result.kind === "done" ? t.result : null;
   return (
     <section className="flex flex-col gap-4 rounded-xl border border-line p-4">
       <div className="flex items-center gap-3">
@@ -52,7 +62,7 @@ export function SolanaTradePanel({ mint }: { mint: string }) {
       <div>
         <div className="flex flex-wrap gap-2">
           {[1, 5, 20].map((d) => (
-            <button key={d} type="button" disabled={busy} onClick={() => buy(d)} className={buttonClass("primary", "sm", "font-semibold")}>
+            <button key={d} type="button" disabled={busy} onClick={() => void t.buy(units(d), { turbo })} {...warm("buy", units(d))} className={buttonClass("primary", "sm", "font-semibold")}>
               Buy ${d}
             </button>
           ))}
@@ -64,7 +74,13 @@ export function SolanaTradePanel({ mint }: { mint: string }) {
             onChange={(e) => setCustom(e.target.value.replace(/[^0-9.]/g, ""))}
             className="w-24 rounded-lg border border-line bg-void/60 px-2 py-1.5 font-mono text-[12px] text-chrome outline-none"
           />
-          <button type="button" disabled={busy || !Number(custom)} onClick={() => buy(Number(custom))} className={buttonClass("outline", "sm")}>
+          <button
+            type="button"
+            disabled={busy || !Number(custom)}
+            onClick={() => void t.buy(units(Number(custom)), { turbo })}
+            {...(Number(custom) ? warm("buy", units(Number(custom))) : {})}
+            className={buttonClass("outline", "sm")}
+          >
             Buy
           </button>
         </div>
@@ -74,7 +90,8 @@ export function SolanaTradePanel({ mint }: { mint: string }) {
               key={p}
               type="button"
               disabled={busy || held === BigInt(0)}
-              onClick={() => void t.sell(p === 100 ? "all" : (held * BigInt(p)) / BigInt(100), { turbo })}
+              onClick={() => void t.sell(sellAmount(p), { turbo })}
+              {...(held > BigInt(0) ? warm("sell", sellAmount(p)) : {})}
               className={buttonClass("outline", "sm")}
             >
               Sell {p}%
@@ -83,24 +100,23 @@ export function SolanaTradePanel({ mint }: { mint: string }) {
         </div>
         <label className="mt-3 flex items-center gap-2 text-[12px] text-muted">
           <input type="checkbox" checked={turbo} onChange={(e) => setTurbo(e.target.checked)} />
-          Turbo (lands faster)
+          Turbo (fastest landing)
         </label>
       </div>
 
-      <p className="text-[11.5px] text-dim">
-        {h && h.usdc > BigInt(0) ? `Buys use your ${usd(h.usdc)} cash first, then your Crux balance.` : "Buys are paid from your Crux balance."} Fee 0.5%, at least $0.05.
-      </p>
+      <p className="text-[11.5px] text-dim">Paid from your Crux balance. Fee 0.5%, at least $0.05.</p>
 
       {t.result.kind === "busy" && <p className="text-[13px] text-muted">{t.result.label}</p>}
       {t.result.kind === "error" && <p className="rounded-lg border border-down/50 px-3 py-2 text-[13px] text-down">{t.result.message}</p>}
-      {t.result.kind === "done" && (
+      {done && (
         <p className="rounded-lg border border-up/40 px-3 py-2 text-[13px] text-up">
-          {t.result.side === "buy" ? "Bought" : "Sold"} in {(t.result.ms / 1000).toFixed(1)} s
-          {t.result.how === "account" ? " · paid from your Crux balance (test run: it's checked, then your test USDC comes back)" : ""}
-          {t.result.signature && (
+          {done.side === "buy" ? "Bought" : "Sold"} in {(done.ms / 1000).toFixed(1)} s
+          <span className="text-muted">{done.confirmed ? " · confirmed ✓" : " · confirming…"}</span>
+          {done.how === "account" && <span className="text-muted"> · test run: your test USDC comes back</span>}
+          {done.signature && (
             <>
               {" · "}
-              <a href={`https://solscan.io/tx/${t.result.signature}`} target="_blank" rel="noopener noreferrer" className="underline decoration-line-2">
+              <a href={`https://solscan.io/tx/${done.signature}`} target="_blank" rel="noopener noreferrer" className="underline decoration-line-2">
                 receipt
               </a>
             </>

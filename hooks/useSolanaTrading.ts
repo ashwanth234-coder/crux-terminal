@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useIdentityToken, usePrivy, usePrivyClient_experimental } from "@privy-io/react-auth";
 import { useQuery } from "@tanstack/react-query";
 import { zeroAddress } from "viem";
@@ -23,7 +23,8 @@ export type SolanaHoldings = {
 export type SolanaTradeResult =
   | { kind: "idle" }
   | { kind: "busy"; label: string }
-  | { kind: "done"; side: "buy" | "sell"; how: "direct" | "account"; signature?: string; orderId?: string | null; fee?: bigint; ms: number }
+  /** `confirmed` turns true once Solana confirms it; "Bought" shows the moment it's sent, as fast terminals do. */
+  | { kind: "done"; side: "buy" | "sell"; how: "direct" | "account"; signature?: string; orderId?: string | null; fee?: bigint; ms: number; confirmed: boolean }
   | { kind: "error"; message: string };
 
 async function relay<T>(path: string, body: unknown): Promise<T> {
@@ -39,6 +40,9 @@ async function relay<T>(path: string, body: unknown): Promise<T> {
  *   - otherwise: paid from the Crux account's USDC (CruxAccountV3.tradeSolana), linking the Solana wallet silently the
  *     first time. On Base Sepolia that path is a dry run on Crux's side: checked, then refunded.
  * A sell is always direct; its USDC stays on Solana as part of the balance (Rule B).
+ *
+ * Speed: pointing at Buy or Sell prepares that exact trade on the server (routed and signed, not sent); the click then
+ * only sends it, and "Bought" shows the moment it's sent, confirmed a moment later.
  */
 export function useSolanaTrading(mint: string | null) {
   const crux = useCruxAccount();
@@ -46,6 +50,8 @@ export function useSolanaTrading(mint: string | null) {
   const privyClient = usePrivyClient_experimental();
   const { identityToken } = useIdentityToken();
   const [result, setResult] = useState<SolanaTradeResult>({ kind: "idle" });
+  /** When each trade was last prepared, so pointing at a button again doesn't prepare it twice (the server keeps it 8 s). */
+  const preparedAt = useRef(new Map<string, number>());
 
   const tokens = useCallback(async () => {
     const token = await getAccessToken();
@@ -76,6 +82,47 @@ export function useSolanaTrading(mint: string | null) {
     query: { enabled: crux.account !== null && crux.deployed, staleTime: 60_000 },
   });
 
+  /** Prepares a direct trade ahead of the click (the trader is pointing at its button). Quiet: errors show on the click. */
+  const prepare = useCallback(
+    (side: "buy" | "sell", amount: bigint | "all", opts: { turbo?: boolean } = {}) => {
+      if (!mint) return;
+      const h = holdings.data;
+      if (side === "buy" && (!h || typeof amount !== "bigint" || h.usdc < amount)) return; // paid from the account: nothing to prepare
+      const key = `${side}|${amount}|${opts.turbo === true}`;
+      const last = preparedAt.current.get(key) ?? 0;
+      if (Date.now() - last < 6_000) return;
+      preparedAt.current.set(key, Date.now());
+      void tokens()
+        .then((t) => relay("/v1/solana/prepare", { ...t, side, mint, amount: amount.toString(), turbo: opts.turbo === true, slippageBps: 300 }))
+        .catch(() => preparedAt.current.delete(key));
+    },
+    [mint, holdings.data, tokens],
+  );
+
+  /** Sends a direct trade; shows it as done the moment it's sent, then waits for Solana's confirmation. */
+  const direct = useCallback(
+    async (side: "buy" | "sell", amount: bigint | "all", opts: { turbo?: boolean }, t0: number) => {
+      preparedAt.current.delete(`${side}|${amount}|${opts.turbo === true}`);
+      const r = await relay<{ signature: string; fee: string; pending?: boolean }>("/v1/solana/trade", {
+        ...(await tokens()),
+        side,
+        mint,
+        amount: amount.toString(),
+        turbo: opts.turbo === true,
+        slippageBps: 300,
+      });
+      const sent = { kind: "done" as const, side, how: "direct" as const, signature: r.signature, fee: BigInt(r.fee), ms: Math.round(performance.now() - t0) };
+      setResult({ ...sent, confirmed: !r.pending });
+      if (r.pending) {
+        const s = await relay<{ status: string; error?: string }>("/v1/solana/status", { signature: r.signature });
+        if (s.status === "failed") throw new Error(s.error ?? "The trade didn't go through. Nothing was spent but the network fee.");
+        setResult({ ...sent, confirmed: s.status === "confirmed" });
+      }
+      void holdings.refetch();
+    },
+    [mint, tokens, holdings],
+  );
+
   const buy = useCallback(
     async (usdc6: bigint, opts: { turbo?: boolean } = {}) => {
       if (!mint) return;
@@ -84,8 +131,7 @@ export function useSolanaTrading(mint: string | null) {
       try {
         if (h && h.usdc >= usdc6) {
           setResult({ kind: "busy", label: "Buying…" });
-          const r = await relay<{ signature: string; fee: string }>("/v1/solana/trade", { ...(await tokens()), side: "buy", mint, amount: usdc6.toString(), turbo: opts.turbo === true, slippageBps: 300 });
-          setResult({ kind: "done", side: "buy", how: "direct", signature: r.signature, fee: BigInt(r.fee), ms: Math.round(performance.now() - t0) });
+          await direct("buy", usdc6, opts, t0);
         } else {
           if (!crux.sign || !crux.owner || !crux.account) throw new Error("Your account is still loading. Try again in a moment.");
           if ((crux.usdc ?? BigInt(0)) < usdc6) throw new Error("Not enough in your balance. Add money first.");
@@ -97,7 +143,7 @@ export function useSolanaTrading(mint: string | null) {
           }
           const minOut = await quoteMinOut(mint, usdc6 - (usdc6 * BigInt(50)) / BigInt(10_000));
           const r = await buySolanaFromAccount(crux.sign, crux.owner, crux.account, { usdc: TESTNET_USDC, amountIn: usdc6, mint, minAmountOut: minOut });
-          setResult({ kind: "done", side: "buy", how: "account", orderId: r.orderId, ms: Math.round(performance.now() - t0) });
+          setResult({ kind: "done", side: "buy", how: "account", orderId: r.orderId, ms: Math.round(performance.now() - t0), confirmed: true });
           crux.refresh();
         }
         void holdings.refetch();
@@ -105,7 +151,7 @@ export function useSolanaTrading(mint: string | null) {
         setResult({ kind: "error", message: (e as Error).message });
       }
     },
-    [mint, holdings, tokens, crux, linked],
+    [mint, holdings, crux, linked, direct],
   );
 
   /** Sells `amount` of the coin's base units, or "all" (the coin's account is then closed: Rule A). */
@@ -115,24 +161,15 @@ export function useSolanaTrading(mint: string | null) {
       const t0 = performance.now();
       setResult({ kind: "busy", label: "Selling…" });
       try {
-        const r = await relay<{ signature: string; fee: string }>("/v1/solana/trade", {
-          ...(await tokens()),
-          side: "sell",
-          mint,
-          amount: amount === "all" ? "all" : amount.toString(),
-          turbo: opts.turbo === true,
-          slippageBps: 300,
-        });
-        setResult({ kind: "done", side: "sell", how: "direct", signature: r.signature, fee: BigInt(r.fee), ms: Math.round(performance.now() - t0) });
-        void holdings.refetch();
+        await direct("sell", amount, opts, t0);
       } catch (e) {
         setResult({ kind: "error", message: (e as Error).message });
       }
     },
-    [mint, tokens, holdings],
+    [mint, direct],
   );
 
-  return { holdings: holdings.data ?? null, loading: holdings.isLoading, buy, sell, result, clear: () => setResult({ kind: "idle" }) };
+  return { holdings: holdings.data ?? null, loading: holdings.isLoading, prepare, buy, sell, result, clear: () => setResult({ kind: "idle" }) };
 }
 
 /**
