@@ -24,7 +24,7 @@ export function warnings(c: FreshCoin): string[] {
 /**
  * Discover's Trenches tab: the newest Solana coins, refreshed every 10 s, with what tells a runner from a rug (age,
  * money in the pool, holders, the last five minutes' buys and sells, and the warning signs). The left side of the
- * "barbell": fast, small, risky; pair it with auto-exit on the coin's page.
+ * "barbell": fast, small, risky; pair it with the creator-sell alert on the coin's page.
  */
 export function TrenchesTable() {
   const q = useQuery({ queryKey: ["solana-fresh"], queryFn: () => freshSolanaCoins(), refetchInterval: 10_000, staleTime: 5_000 });
@@ -87,7 +87,7 @@ export function TrenchesTable() {
         </tbody>
       </table>
       <p className="border-t border-line px-4 py-2.5 text-[11.5px] text-dim">
-        Fresh coins are risky: most go to zero. Turn on auto-exit on a coin&rsquo;s page to sell the moment its creator sells.
+        Fresh coins are risky: most go to zero. On a coin&rsquo;s page, turn on &ldquo;Notify me when the creator sells&rdquo;.
       </p>
     </div>
   );

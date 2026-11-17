@@ -6,7 +6,7 @@ import { buttonClass } from "@/components/ui/Button";
 import { fmtPrice, solanaCoin, solanaFeeText } from "@/lib/solanaCoins";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { useSolanaTrading } from "@/hooks/useSolanaTrading";
-import { useAutoExit } from "@/hooks/useAutoExit";
+import { useCreatorAlert } from "@/hooks/useCreatorAlert";
 
 /**
  * One Buy/Sell panel for a Solana coin, as one account: amounts, one button, the result in plain words. How it's paid
@@ -16,7 +16,7 @@ import { useAutoExit } from "@/hooks/useAutoExit";
 export function SolanaTradePanel({ mint }: { mint: string }) {
   const crux = useCruxAccount();
   const t = useSolanaTrading(mint);
-  const exit = useAutoExit(mint);
+  const alert = useCreatorAlert(mint);
   const [custom, setCustom] = useState("");
   const [turbo, setTurbo] = useState(false);
   // The coin's name, icon and price: the same lookup the coin page makes (shared cache), read in the browser.
@@ -111,27 +111,20 @@ export function SolanaTradePanel({ mint }: { mint: string }) {
           Turbo (fastest landing)
         </label>
         <label className="mt-2 flex items-start gap-2 text-[12px] text-muted">
-          <input type="checkbox" className="mt-0.5" checked={exit.on} disabled={exit.busy} onChange={(e) => void exit.set(e.target.checked)} />
+          <input type="checkbox" className="mt-0.5" checked={alert.on} disabled={alert.busy} onChange={(e) => void alert.set(e.target.checked)} />
           <span>
-            Auto-exit: sell everything the moment the coin&rsquo;s creator sells
-            {exit.on && <span className="text-up"> · watching</span>}
-            {exit.busy && <span className="text-dim"> · …</span>}
+            Notify me when the creator sells
+            {alert.on && <span className="text-up"> · watching</span>}
+            {alert.busy && <span className="text-dim"> · …</span>}
           </span>
         </label>
-        {exit.error && <p className="mt-1 text-[11.5px] text-down">{exit.error}</p>}
-        {exit.lastExit && (
-          <p className="mt-1 text-[11.5px] text-signal">
-            Auto-exit sold: {exit.lastExit.reason}.
-            {exit.lastExit.signature && (
-              <>
-                {" "}
-                <a href={`https://solscan.io/tx/${exit.lastExit.signature}`} target="_blank" rel="noopener noreferrer" className="underline decoration-line-2">
-                  receipt
-                </a>
-              </>
-            )}
+        {alert.error && <p className="mt-1 text-[11.5px] text-down">{alert.error}</p>}
+        {alert.note && <p className="mt-1 text-[11.5px] text-dim">{alert.note}</p>}
+        {alert.events.slice(0, 3).map((e) => (
+          <p key={e.at} className="mt-1 text-[11.5px] text-signal">
+            {new Date(e.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · {e.all ? "The creator sold everything they held." : `The creator sold ${e.soldPct}% of their coins.`}
           </p>
-        )}
+        ))}
       </div>
 
       <p className="text-[11.5px] text-dim">Paid from your Crux balance. {solanaFeeText(mint)}</p>
