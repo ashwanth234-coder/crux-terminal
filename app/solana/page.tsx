@@ -1,11 +1,6 @@
-import type { Metadata } from "next";
-import { SolanaTrade } from "@/components/solana/SolanaTrade";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Solana · Crux",
-  description: "Buy and sell Solana coins from your one Crux account. Crux pays every Solana fee.",
-};
-
+/** The first Solana test page; coins now have their own pages (/sol/[mint]) and the header search finds them. */
 export default function SolanaPage() {
-  return <SolanaTrade />;
+  redirect("/sol/DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263");
 }

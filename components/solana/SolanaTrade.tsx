@@ -2,56 +2,14 @@
 
 import { useState } from "react";
 import { buttonClass } from "@/components/ui/Button";
-import { Shell } from "@/components/launch/LaunchView";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { useSolanaTrading } from "@/hooks/useSolanaTrading";
 
-/** BONK: a liquid default to try a first trade with. */
-const DEFAULT_MINT = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263";
-
 const usd = (units6: bigint) => `$${(Number(units6) / 1e6).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-/**
- * Buy and sell a Solana coin from the one Crux account (plan: docs/one-account-everywhere.md, phase C). The same panel
- * (SolanaTradePanel) goes on every Solana coin's page in phase D.
- */
-export function SolanaTrade() {
-  const crux = useCruxAccount();
-  const [mint, setMint] = useState(DEFAULT_MINT);
-  const [draft, setDraft] = useState(DEFAULT_MINT);
-  return (
-    <Shell mode="live">
-      <div className="mx-auto flex max-w-[560px] flex-col gap-5">
-        <h1 className="font-display-md text-[28px] text-chrome">Trade a Solana coin</h1>
-        {!crux.loggedIn ? (
-          <button type="button" onClick={crux.login} className={buttonClass("primary", "md", "font-semibold")}>
-            Log in with email or Google
-          </button>
-        ) : (
-          <>
-            <div className="flex gap-2">
-              <input
-                aria-label="Coin address"
-                value={draft}
-                onChange={(e) => setDraft(e.target.value.trim())}
-                spellCheck={false}
-                placeholder="Paste a coin address"
-                className="min-w-0 flex-1 rounded-lg border border-line bg-void/60 px-3 py-2 font-mono text-[12px] text-chrome outline-none focus:border-line-2"
-              />
-              <button type="button" onClick={() => setMint(draft)} className={buttonClass("outline", "sm")}>
-                Open
-              </button>
-            </div>
-            <SolanaTradePanel mint={mint} />
-          </>
-        )}
-      </div>
-    </Shell>
-  );
-}
 
 /** One Buy/Sell panel for a Solana coin: amounts, one button, the result in plain words. Routes are picked for you. */
 export function SolanaTradePanel({ mint }: { mint: string }) {
+  const crux = useCruxAccount();
   const t = useSolanaTrading(mint);
   const [custom, setCustom] = useState("");
   const [turbo, setTurbo] = useState(false);
@@ -62,6 +20,17 @@ export function SolanaTradePanel({ mint }: { mint: string }) {
   const busy = t.result.kind === "busy";
   const value = h?.token?.usdPrice !== undefined && decimals ? (Number(held) / 10 ** decimals) * h.token.usdPrice : null;
   const buy = (dollars: number) => void t.buy(BigInt(Math.round(dollars * 1e6)), { turbo });
+
+  if (!crux.loggedIn) {
+    return (
+      <section className="flex flex-col gap-3 rounded-xl border border-line p-4">
+        <p className="text-[13px] text-muted">Trade this coin from your one Crux account. No SOL, no bridging.</p>
+        <button type="button" onClick={crux.login} className={buttonClass("primary", "md", "font-semibold")}>
+          Log in to trade
+        </button>
+      </section>
+    );
+  }
 
   return (
     <section className="flex flex-col gap-4 rounded-xl border border-line p-4">

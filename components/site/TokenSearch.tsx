@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useId, useRef, useState } from "react";
 import { isAddress } from "viem";
 import { PHASE_WORDS } from "@/lib/phaseWords";
+import { fmtPrice, isSolanaAddress, searchSolanaCoins } from "@/lib/solanaCoins";
 
 export type Hit = { key: string; version: number; auctionId: number; token: string; pool: string | null; name: string; symbol: string; phase: string };
 
@@ -24,9 +25,13 @@ export function search(launches: Hit[], q: string): Hit[] {
 
 export const PHASE: Record<string, string> = PHASE_WORDS;
 
+/** One row of the search list: a Crux launch (Base) or a Solana coin, opened the same way. */
+type Row = { key: string; href: string; symbol: string; name: string; chain: "Base" | "Solana"; right: string };
+
 /**
- * Top-bar token search: a ticker or name opens a dropdown of matching Crux launches; a full 0x contract address
- * (token or pool) jumps straight to /token/[address] on Enter or the button, without waiting for the list.
+ * Top-bar token search, every chain in one list (one account trades them all): Crux launches on Base and Solana coins
+ * (Jupiter's verified list), each with a small chain badge and nothing else about chains. A full 0x address jumps to
+ * /token/[address]; a full Solana address to /sol/[mint].
  */
 export function TokenSearch({ className = "" }: { className?: string }) {
   const router = useRouter();
@@ -50,18 +55,44 @@ export function TokenSearch({ className = "" }: { className?: string }) {
   });
 
   const q = value.trim();
-  const direct = isAddress(q, { strict: false });
-  const hits = direct ? [] : search(feed.data ?? [], q);
+  const direct = isAddress(q, { strict: false }) ? `/token/${q}` : isSolanaAddress(q) ? `/sol/${q}` : null;
+  const solana = useQuery({
+    queryKey: ["solana-search", q.toLowerCase()],
+    queryFn: () => searchSolanaCoins(q),
+    enabled: wanted && !direct && q.replace(/^\$/, "").length >= 2,
+    staleTime: 60_000,
+  });
+  const hits: Row[] = direct
+    ? []
+    : [
+        ...search(feed.data ?? [], q).map((h) => ({
+          key: h.key,
+          href: `/launch/v${h.version}/${h.auctionId}`,
+          symbol: h.symbol || "TOKEN",
+          name: h.name,
+          chain: "Base" as const,
+          right: PHASE[h.phase] ?? h.phase,
+        })),
+        ...(solana.data ?? []).map((c) => ({
+          key: `sol:${c.mint}`,
+          href: `/sol/${c.mint}`,
+          symbol: c.symbol || "COIN",
+          name: c.name,
+          chain: "Solana" as const,
+          right: c.price !== undefined ? fmtPrice(c.price) : "",
+        })),
+      ];
 
   const go = (href: string) => {
     setOpen(false);
     setValue("");
-    box.current?.blur();
+    // The search box has focus whenever a result is picked; blurring what's focused closes the keyboard on phones.
+    (document.activeElement as HTMLElement | null)?.blur();
     router.push(href);
   };
   const submit = () => {
-    if (direct) go(`/token/${q}`);
-    else if (hits[active]) go(`/launch/v${hits[active].version}/${hits[active].auctionId}`);
+    if (direct) go(direct);
+    else if (hits[active]) go(hits[active].href);
   };
 
   return (
@@ -83,7 +114,7 @@ export function TokenSearch({ className = "" }: { className?: string }) {
           type="search"
           autoComplete="off"
           spellCheck={false}
-          placeholder="Ticker or 0x… address"
+          placeholder="Search any coin"
           value={value}
           onFocus={() => {
             setWanted(true);
@@ -123,7 +154,7 @@ export function TokenSearch({ className = "" }: { className?: string }) {
         </button>
       </form>
 
-      {open && q.length > 0 && (direct || hits.length > 0 || feed.isFetching || feed.data) && (
+      {open && q.length > 0 && (direct || hits.length > 0 || feed.isFetching || solana.isFetching || feed.data) && (
         <ul
           id={`${uid}-list`}
           role="listbox"
@@ -142,18 +173,21 @@ export function TokenSearch({ className = "" }: { className?: string }) {
                 aria-selected={i === active}
                 onMouseDown={(e) => e.preventDefault()}
                 onMouseEnter={() => setActive(i)}
-                onClick={() => go(`/launch/v${h.version}/${h.auctionId}`)}
+                onClick={() => go(h.href)}
                 className={`flex cursor-pointer items-center justify-between gap-3 px-3 py-2 ${i === active ? "bg-tint/[0.04]" : ""}`}
               >
-                <span className="min-w-0">
-                  <span className="text-[13px] text-chrome">${h.symbol || "TOKEN"}</span>{" "}
-                  <span className="truncate text-[11.5px] text-dim">{h.name}</span>
+                <span className="min-w-0 truncate">
+                  <span className="text-[13px] text-chrome">${h.symbol}</span>{" "}
+                  <span className="text-[11.5px] text-dim">{h.name}</span>
                 </span>
-                <span className="shrink-0 font-mono text-[10.5px] uppercase tracking-[0.1em] text-dim">{PHASE[h.phase] ?? h.phase}</span>
+                <span className="flex shrink-0 items-center gap-2">
+                  <span className="font-mono text-[10.5px] text-dim">{h.right}</span>
+                  <span className="rounded border border-line px-1.5 py-px text-[9.5px] uppercase tracking-[0.1em] text-muted">{h.chain}</span>
+                </span>
               </li>
             ))
           ) : (
-            <li className="px-3 py-2.5 text-[12px] text-dim">{feed.isFetching ? "Loading launches…" : "No Crux launch matches"}</li>
+            <li className="px-3 py-2.5 text-[12px] text-dim">{feed.isFetching || solana.isFetching ? "Searching…" : "No coin matches"}</li>
           )}
         </ul>
       )}
