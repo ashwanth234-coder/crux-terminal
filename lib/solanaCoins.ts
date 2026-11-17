@@ -30,7 +30,8 @@ type JupToken = {
 
 const toCoin = (t: JupToken): SolanaCoin => ({
   mint: t.id,
-  name: t.name ?? "",
+  // SOL trades as its wrapped form; traders know it as Solana.
+  name: t.id === "So11111111111111111111111111111111111111112" ? "Solana" : (t.name ?? ""),
   // Some coins put the $ in their own symbol ("$WIF"); the UI adds one.
   symbol: (t.symbol ?? "").replace(/^\$/, ""),
   icon: t.icon,
@@ -41,6 +42,29 @@ const toCoin = (t: JupToken): SolanaCoin => ({
   verified: t.isVerified === true,
   decimals: t.decimals,
 });
+
+/**
+ * Solana majors (verified on Jupiter, deep liquidity, 2026-11-17): the right side of the "barbell", for size traders.
+ * They pay the lower fee; crux-solver soltraderelay.ts SOLANA_MAJOR_MINTS holds the same list (keep them in step).
+ */
+export const SOLANA_MAJORS = [
+  "So11111111111111111111111111111111111111112", // SOL
+  "cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij", // cbBTC
+  "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN", // JUP
+  "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", // BONK
+  "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm", // WIF
+  "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R", // RAY
+];
+/** Crux's fee on a Solana coin, as the trade panel states it. */
+export const solanaFeeText = (mint: string) => (SOLANA_MAJORS.includes(mint) ? "Fee 0.15%, at least $0.05." : "Fee 0.5%, at least $0.05.");
+
+/** Several coins' facts at once (Jupiter's search takes a comma-separated list of mints). */
+export async function solanaCoins(mints: string[]): Promise<SolanaCoin[]> {
+  const r = await fetch(`https://lite-api.jup.ag/tokens/v2/search?query=${mints.join(",")}`);
+  if (!r.ok) return [];
+  const list = ((await r.json()) as JupToken[]).map(toCoin);
+  return mints.map((m) => list.find((c) => c.mint === m)).filter((c): c is SolanaCoin => c !== undefined);
+}
 
 /** A Solana address (base58, 32-44 characters, no 0/O/I/l). */
 export const isSolanaAddress = (s: string) => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(s.trim());

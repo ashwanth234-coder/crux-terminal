@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { buttonClass } from "@/components/ui/Button";
-import { fmtPrice, solanaCoin } from "@/lib/solanaCoins";
+import { fmtPrice, solanaCoin, solanaFeeText } from "@/lib/solanaCoins";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { useSolanaTrading } from "@/hooks/useSolanaTrading";
 
@@ -110,7 +110,7 @@ export function SolanaTradePanel({ mint }: { mint: string }) {
         </label>
       </div>
 
-      <p className="text-[11.5px] text-dim">Paid from your Crux balance. Fee 0.5%, at least $0.05.</p>
+      <p className="text-[11.5px] text-dim">Paid from your Crux balance. {solanaFeeText(mint)}</p>
 
       {t.result.kind === "busy" && <p className="text-[13px] text-muted">{t.result.label}</p>}
       {t.result.kind === "error" && <p className="rounded-lg border border-down/50 px-3 py-2 text-[13px] text-down">{t.result.message}</p>}

@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import { MajorsTable } from "@/components/launch/MajorsTable";
 import { erc20Abi, formatUnits, parseAbi, zeroAddress, type Address } from "viem";
 import { useReadContracts } from "wagmi";
 import { Header } from "@/components/site/Header";
@@ -23,6 +25,8 @@ type Launch = { token: Address; curve: Address; pair: Address; creator: Address 
  * how far it is to graduation or its pool's liquidity, and its age. Each row opens the token's terminal.
  */
 export function TokenList() {
+  // Two ends of the "barbell": fresh launches (fast, small) and majors (deep, for size).
+  const [tab, setTab] = useState<"new" | "majors">("new");
   return (
     <>
       <Header />
@@ -30,13 +34,34 @@ export function TokenList() {
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div>
             <h1 className="font-display text-[clamp(1.8rem,3.4vw,2.4rem)] text-bright">Discover</h1>
-            <p className="mt-1 text-[13px] text-muted">Every token launched on Crux, newest first. {NETWORK_LONG}.</p>
+            <p className="mt-1 text-[13px] text-muted">
+              {tab === "new" ? `Every token launched on Crux, newest first. ${NETWORK_LONG}.` : "Deep-liquidity coins for bigger trades, at a lower fee."}
+            </p>
           </div>
           <Link href="/launch/v9/new" className={buttonClass("primary", "sm", "rounded-lg")}>
             Launch a token
           </Link>
         </div>
-        <TokenTable />
+        <div role="tablist" aria-label="What to show" className="mt-5 flex gap-1 border-b border-line">
+          {(
+            [
+              ["new", "New launches"],
+              ["majors", "Majors"],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={tab === key}
+              onClick={() => setTab(key)}
+              className={`-mb-px border-b-2 px-3 py-2 text-[13px] ${tab === key ? "border-signal text-chrome" : "border-transparent text-dim hover:text-chrome"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {tab === "new" ? <TokenTable /> : <MajorsTable />}
       </main>
     </>
   );
