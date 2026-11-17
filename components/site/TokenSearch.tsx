@@ -33,7 +33,7 @@ type Row = { key: string; href: string; symbol: string; name: string; chain: "Ba
  * (Jupiter's verified list), each with a small chain badge and nothing else about chains. A full 0x address jumps to
  * /token/[address]; a full Solana address to /sol/[mint].
  */
-export function TokenSearch({ className = "" }: { className?: string }) {
+export function TokenSearch({ className = "", autoFocus = false, onDone }: { className?: string; autoFocus?: boolean; onDone?: () => void }) {
   const router = useRouter();
   const uid = useId();
   const box = useRef<HTMLInputElement>(null);
@@ -89,6 +89,7 @@ export function TokenSearch({ className = "" }: { className?: string }) {
     // The search box has focus whenever a result is picked; blurring what's focused closes the keyboard on phones.
     (document.activeElement as HTMLElement | null)?.blur();
     router.push(href);
+    onDone?.();
   };
   const submit = () => {
     if (direct) go(direct);
@@ -114,8 +115,18 @@ export function TokenSearch({ className = "" }: { className?: string }) {
           type="search"
           autoComplete="off"
           spellCheck={false}
-          placeholder="Search any coin"
+          placeholder="Search or paste a coin address"
           value={value}
+          autoFocus={autoFocus}
+          onPaste={(e) => {
+            // A pasted contract address opens its coin at once: no list, no Enter.
+            const pasted = e.clipboardData.getData("text").trim();
+            const href = isAddress(pasted, { strict: false }) ? `/token/${pasted}` : isSolanaAddress(pasted) ? `/sol/${pasted}` : null;
+            if (href) {
+              e.preventDefault();
+              go(href);
+            }
+          }}
           onFocus={() => {
             setWanted(true);
             setOpen(true);
@@ -192,5 +203,34 @@ export function TokenSearch({ className = "" }: { className?: string }) {
         </ul>
       )}
     </div>
+  );
+}
+
+/**
+ * Search on a phone (or any screen too narrow for the header's box): a search button that opens a full-width search
+ * bar under the header. Pasting an address there opens the coin straight away, as on desktop.
+ */
+export function MobileSearch({ className = "" }: { className?: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label="Search coins"
+        className={`grid h-9 w-9 place-items-center rounded-[4px] border border-line-2 text-chrome ${className}`}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-3.5-3.5" />
+        </svg>
+      </button>
+      {open && (
+        <div className="fixed inset-x-0 top-14 z-[90] border-b border-line bg-panel px-4 py-3">
+          <TokenSearch autoFocus onDone={() => setOpen(false)} />
+        </div>
+      )}
+    </>
   );
 }

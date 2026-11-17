@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { useConnection } from "wagmi";
 import { Logo } from "@/components/site/Logo";
 import { SiteNav } from "@/components/site/SiteNav";
-import { TokenSearch } from "@/components/site/TokenSearch";
+import { MobileSearch, TokenSearch } from "@/components/site/TokenSearch";
 import { WalletChip } from "@/components/terminal/WalletChip";
 import { AccountButton } from "@/components/account/AccountButton";
 import { LanguageSwitcher } from "@/components/site/LanguageSwitcher";
@@ -31,7 +31,8 @@ export function TerminalShell({ children }: { children: ReactNode }) {
           </nav>
         </div>
         <div className="flex items-center gap-3">
-          <TokenSearch className="hidden w-[200px] xl:block" />
+          <TokenSearch className="hidden w-[220px] md:block" />
+          <MobileSearch className="md:hidden" />
           <StatusTag status={IS_TESTNET ? "testnet" : "live"} label={`${NETWORK_NAME}`} className="hidden 2xl:inline-flex" />
           <LanguageSwitcher className="hidden 2xl:flex" />
           <ThemeToggle />

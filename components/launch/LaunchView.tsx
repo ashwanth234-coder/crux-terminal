@@ -9,7 +9,7 @@ import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { Logo } from "@/components/site/Logo";
 import { LaunchTokenButton } from "@/components/launch/LaunchTokenButton";
 import { SiteNav } from "@/components/site/SiteNav";
-import { TokenSearch } from "@/components/site/TokenSearch";
+import { MobileSearch, TokenSearch } from "@/components/site/TokenSearch";
 import { WalletChip } from "@/components/terminal/WalletChip";
 import { AccountButton } from "@/components/account/AccountButton";
 import { LanguageSwitcher } from "@/components/site/LanguageSwitcher";
@@ -122,7 +122,8 @@ export function Shell({ mode, children }: { mode: LaunchModel["mode"] | null; ch
                 className="hidden 2xl:inline-flex"
               />
             )}
-            <TokenSearch className="hidden w-[200px] xl:block" />
+            <TokenSearch className="hidden w-[220px] md:block" />
+            <MobileSearch className="md:hidden" />
             <LanguageSwitcher className="hidden 2xl:flex" />
             <ThemeToggle />
             <AccountButton />

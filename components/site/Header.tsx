@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { WalletChip } from "@/components/terminal/WalletChip";
 import { AccountButton } from "@/components/account/AccountButton";
+import { MobileSearch, TokenSearch } from "@/components/site/TokenSearch";
 import { LanguageSwitcher } from "@/components/site/LanguageSwitcher";
 import { ThemeToggle } from "@/components/site/ThemeToggle";
 import { StatusTag } from "@/components/ui/StatusTag";
@@ -53,6 +54,8 @@ export function Header() {
         <div className="flex items-center justify-end gap-2">
           <LanguageSwitcher className="hidden min-[1440px]:flex" />
           <ThemeToggle className="hidden md:grid" />
+          <TokenSearch className="hidden w-[220px] md:block" />
+          <MobileSearch className="md:hidden" />
           <AccountButton />
           <WalletChip variant="header" />
           <button
