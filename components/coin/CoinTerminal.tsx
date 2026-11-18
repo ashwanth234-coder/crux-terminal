@@ -54,7 +54,8 @@ export function CoinTerminal({ network, token, coin, trade, path }: { network: C
     queryFn: () => poolTrades(network, pool!, token),
     enabled: Boolean(pool),
     // GeckoTerminal allows ~30 reads a minute per visitor: trades every 10 s, candles every 30 s.
-    refetchInterval: 10_000,
+    // The live feed (lib/coinFeed, via the chart) brings each trade as it lands; this only fills in history.
+    refetchInterval: 30_000,
     staleTime: 5_000,
   });
 

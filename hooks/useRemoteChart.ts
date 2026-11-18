@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { watchCoinTrades } from "@/lib/coinFeed";
+import type { CoinTrade } from "@/lib/coinMarket";
 import type { Address, Hex } from "viem";
 import { toCandles, type Candle } from "@/lib/candles";
 import { poolTrades } from "@/lib/coinMarket";
@@ -73,6 +75,7 @@ async function remoteCandles(network: ChartNetwork, pool: string, token: string,
  * smallest candle is one minute); from a minute up, from GeckoTerminal's candles, merged when the size isn't one it has.
  */
 export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
+  const [liveFeed, setLiveFeed] = useState(false);
   const pool = useQuery({ queryKey: ["coin-pool-addr", coin?.network, coin?.token], queryFn: () => topPool(coin!.network, coin!.token), enabled: coin !== null, staleTime: 60_000 });
   const addr = pool.data ?? null;
   const trades = useQuery({
@@ -80,9 +83,27 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
     queryKey: ["coin-trades", coin?.network, addr],
     queryFn: () => poolTrades(coin!.network, addr!, coin!.token),
     enabled: coin !== null && addr !== null,
-    refetchInterval: 10_000,
+    // With the live feed on, this only fills in history now and then; the feed brings each trade as it lands.
+    refetchInterval: () => (liveFeed ? 60_000 : 10_000),
     staleTime: 5_000,
   });
+
+  // Every trade on the coin's market, pushed by Crux's server the moment it lands (crux-solver coinfeed.ts), merged
+  // into the trades list the chart and the trades tab both read.
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!coin || !addr) return;
+    const key = ["coin-trades", coin.network, addr];
+    return watchCoinTrades(coin.network, coin.token, (fresh) => {
+      setLiveFeed(true);
+      qc.setQueryData<CoinTrade[]>(key, (old) => {
+        const have = new Set((old ?? []).map((t) => t.tx));
+        const add = fresh.filter((t) => !have.has(t.tx));
+        if (add.length === 0) return old;
+        return [...add, ...(old ?? [])].sort((a, b) => b.time - a.time).slice(0, 600);
+      });
+    });
+  }, [coin, addr, qc]);
   const fine = interval < 60;
   const tick = useQuery({
     queryKey: ["coin-tick", coin?.network, addr, coin?.token],
@@ -135,16 +156,20 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
       return toCandles(fills, interval);
     }
     if (!candles.data) return undefined;
-    // The newest candle moves with trades that landed after GeckoTerminal last counted it.
+    // Trades that landed after GeckoTerminal last counted its candles move the newest one, and open the next ones.
     const out = candles.data.map((c) => ({ ...c }));
-    const last = out[out.length - 1];
-    if (last && swapData) {
+    if (out.length && swapData) {
       for (const t of [...swapData.trades].reverse()) {
-        if (t.time < last.time + interval && t.time >= last.time) {
+        const last = out[out.length - 1];
+        if (t.time < last.time) continue;
+        const usd = Number(t.usdc) / 1e6;
+        const b = Math.floor(t.time / interval) * interval;
+        if (b === last.time) {
           last.close = t.price;
           last.high = Math.max(last.high, t.price);
           last.low = Math.min(last.low, t.price);
-        }
+          last.volume += usd;
+        } else out.push({ time: b, open: last.close, high: Math.max(last.close, t.price), low: Math.min(last.close, t.price), close: t.price, volume: usd, trades: 1 });
       }
     }
     return out;
