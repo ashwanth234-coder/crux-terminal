@@ -3,26 +3,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { watchCoinTrades } from "@/lib/coinFeed";
+import { relay } from "@/hooks/useSolanaTrading";
 import type { CoinTrade } from "@/lib/coinMarket";
 import type { Address, Hex } from "viem";
 import { toCandles, type Candle } from "@/lib/candles";
-import { poolTrades } from "@/lib/coinMarket";
 import { topPool, type ChartNetwork } from "@/lib/solanaCoins";
 import type { PoolTrade } from "@/hooks/usePoolSwaps";
 
-/** A Solana or BNB Chain coin the Crux pro chart draws (its deepest pool, read from GeckoTerminal). */
+/** A Solana or BNB Chain coin the Crux pro chart draws (its busiest market; history and live trades from Crux's server). */
 export type RemoteCoin = { network: ChartNetwork; token: string };
-
-const GT = "https://api.geckoterminal.com/api/v2/networks";
-/** GeckoTerminal's candle sizes, in seconds, and how it names them. */
-const FRAMES: [number, "minute" | "hour" | "day", number][] = [
-  [86_400, "day", 1],
-  [14_400, "hour", 4],
-  [3_600, "hour", 1],
-  [900, "minute", 15],
-  [300, "minute", 5],
-  [60, "minute", 1],
-];
 
 /**
  * The coin's price right now, read every few seconds so the newest candle moves between trade reads: Jupiter's price
@@ -48,25 +37,10 @@ const tickLog = new Map<string, { time: number; price: number }[]>();
 
 /** USD candles at `interval` seconds: the largest size GeckoTerminal has that divides it, merged up when needed. */
 async function remoteCandles(network: ChartNetwork, pool: string, token: string, interval: number): Promise<Candle[]> {
-  const [size, unit, aggregate] = FRAMES.find(([s]) => interval % s === 0) ?? FRAMES[FRAMES.length - 1];
-  const q = new URLSearchParams({ aggregate: String(aggregate), limit: "1000", currency: "usd", token });
-  const r = await fetch(`${GT}/${network}/pools/${pool}/ohlcv/${unit}?${q}`, { headers: { accept: "application/json" } });
-  if (!r.ok) throw new Error(`candles ${r.status}`);
-  const rows = ((await r.json()) as { data?: { attributes?: { ohlcv_list?: number[][] } } }).data?.attributes?.ohlcv_list ?? [];
-  const base = rows.map(([time, open, high, low, close, volume]) => ({ time, open, high, low, close, volume, trades: 0 })).sort((a, b) => a.time - b.time);
-  if (size === interval) return base;
-  const out: Candle[] = [];
-  for (const c of base) {
-    const t = Math.floor(c.time / interval) * interval;
-    const last = out[out.length - 1];
-    if (last && last.time === t) {
-      last.high = Math.max(last.high, c.high);
-      last.low = Math.min(last.low, c.low);
-      last.close = c.close;
-      last.volume += c.volume;
-    } else out.push({ ...c, time: t });
-  }
-  return out;
+  // Crux's server reads them once for every page and caches them (crux-solver coinfeed.ts): a page never calls the
+  // free chart-data API itself, so no viewer's own limit with it can blank the chart.
+  const r = await relay<{ candles: number[][] }>("/v1/coin-candles", { chain: network, coin: token, pool, interval });
+  return r.candles.map(([time, open, high, low, close, volume]) => ({ time, open, high, low, close, volume, trades: 0 }));
 }
 
 /**
@@ -82,8 +56,9 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
     // The same query the terminal's trades tab reads (one request for both).
     // Keyed by the coin when it has no listed market yet (minutes old): the live feed still brings its trades.
     queryKey: ["coin-trades", coin?.network, addr ?? coin?.token],
-    queryFn: () => poolTrades(coin!.network, addr!, coin!.token),
-    enabled: coin !== null && addr !== null,
+    // Filled by the live feed: the market's latest trades when it opens, then each one as it lands.
+    queryFn: () => [] as CoinTrade[],
+    enabled: false,
     // With the live feed on, this only fills in history now and then; the feed brings each trade as it lands.
     refetchInterval: () => (liveFeed ? 60_000 : 10_000),
     staleTime: 5_000,

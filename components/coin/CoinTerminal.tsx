@@ -7,7 +7,7 @@ import { TerminalShell } from "@/components/pro/TerminalShell";
 import { ChartGrid } from "@/components/chart/ChartGrid";
 import { zeroAddress, type Address } from "viem";
 import type { AuctionV2 } from "@/lib/launchV2";
-import { explorer, poolStats, poolTrades, type CoinTrade, type PoolStats } from "@/lib/coinMarket";
+import { explorer, poolStats, type CoinTrade, type PoolStats } from "@/lib/coinMarket";
 import { fmtCompact, fmtPrice, type ChartNetwork } from "@/lib/solanaCoins";
 
 export type CoinFacts = { symbol?: string; name?: string; icon?: string; price?: number; change24h?: number; mcap?: number; liquidity?: number };
@@ -52,12 +52,9 @@ export function CoinTerminal({ network, token, coin, trade, path }: { network: C
   const trades = useQuery({
     // The same key the chart writes live trades to (the coin itself while it has no listed market).
     queryKey: ["coin-trades", network, pool ?? token],
-    queryFn: () => poolTrades(network, pool!, token),
-    enabled: Boolean(pool),
-    // GeckoTerminal allows ~30 reads a minute per visitor: trades every 10 s, candles every 30 s.
-    // The live feed (lib/coinFeed, via the chart) brings each trade as it lands; this only fills in history.
-    refetchInterval: 30_000,
-    staleTime: 5_000,
+    // Filled by the live feed (hooks/useRemoteChart): history when it opens, then each trade as it lands.
+    queryFn: () => [] as CoinTrade[],
+    enabled: false,
   });
 
   // Terminal in the nav reopens this coin next time.
