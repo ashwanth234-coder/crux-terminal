@@ -30,11 +30,11 @@ export function TerminalShell({ children }: { children: ReactNode }) {
             <SiteNav variant="inline" hide={["Docs", "Protocol"]} />
           </nav>
         </div>
-        <div className="flex items-center gap-3">
-          <TokenSearch className="hidden w-[220px] md:block" />
+        <div className="flex min-w-0 items-center gap-3">
+          <TokenSearch className="hidden w-[220px] min-w-[140px] shrink md:block" />
           <MobileSearch className="md:hidden" />
           <StatusTag status={IS_TESTNET ? "testnet" : "live"} label={`${NETWORK_NAME}`} className="hidden 2xl:inline-flex" />
-          <LanguageSwitcher className="hidden 2xl:flex" />
+          <LanguageSwitcher compact className="hidden md:flex" />
           <ThemeToggle />
           <AccountButton />
           <span className="flex items-center gap-1">

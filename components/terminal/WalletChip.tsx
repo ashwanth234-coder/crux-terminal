@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 import { useConnection, useDisconnect } from "wagmi";
 import { ArrowUpRight } from "@/components/ui/Button";
 import { useConnectModal } from "@/providers/Web3Provider";
+import { useCruxAccount } from "@/hooks/useCruxAccount";
 
 const noopSubscribe = () => () => {};
 
@@ -27,6 +28,10 @@ export function WalletChip({ variant = "compact" }: { variant?: "header" | "comp
   const isPending = isConnecting || isReconnecting;
   const connected = hydrated && isConnected && Boolean(address);
   const title = isConnected ? "Disconnect wallet" : "Connect wallet";
+  // One account: once logged in to a Crux account, the bars show Add money and the balance, not a second "Connect
+  // wallet" beside them (it also pushed Add money off the edge). A wallet already connected still shows, to disconnect.
+  const crux = useCruxAccount();
+  if (variant === "header" && hydrated && crux.loggedIn && !connected) return null;
 
   if (variant === "header") {
     return (

@@ -70,7 +70,7 @@ function AddMoneySheet({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <p className="mt-3 text-[13px] text-muted">Which network are you sending USDC on?</p>
+        <p className="mt-3 text-[13px] text-muted">Which network are you sending from?</p>
         <div className="mt-2 grid grid-cols-3 gap-2" role="radiogroup" aria-label="Network">
           {nets.map((n) => (
             <button

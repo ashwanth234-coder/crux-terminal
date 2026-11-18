@@ -26,7 +26,7 @@ export function SiteNav({ variant, onNavigate, hide = [] }: { variant: "inline" 
   const t = useT();
   const items = NAV_LINKS.filter((l) => !hide.includes(l.label));
   return (
-    <ul className={variant === "inline" ? "flex items-center gap-6 lg:gap-9" : "flex flex-col"}>
+    <ul className={variant === "inline" ? "flex items-center gap-6 lg:gap-7" : "flex flex-col"}>
       {items.map((link) => (
         <li key={link.label}>
           {link.href === null ? (
