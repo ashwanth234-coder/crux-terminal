@@ -205,8 +205,14 @@ export function deepestPair(network: ChartNetwork, token: string): Promise<DexPa
       // Pools with a 0x… address (or any Solana one): the chart's source reads those.
       (p) => (p.baseToken.address.toLowerCase() === t || p.quoteToken.address.toLowerCase() === t) && (network === "solana" || /^0x[0-9a-fA-F]{40}$/.test(p.pairAddress)),
     );
-    // The busiest market (most traded today; the server's live feed follows the same one), money in it breaking ties.
-    return pairs.sort((x, y) => (y.volume?.h24 ?? 0) - (x.volume?.h24 ?? 0) || (y.liquidity?.usd ?? 0) - (x.liquidity?.usd ?? 0))[0] ?? null;
+    // The market trading right now (last 5 minutes, then the hour, then today; the server's live feed picks the same):
+    // a coin that just moved from its pump.fun curve to PumpSwap still shows the curve as today's busiest.
+    const v = (p: DexPair) => [p.volume?.m5 ?? 0, p.volume?.h1 ?? 0, p.volume?.h24 ?? 0, p.liquidity?.usd ?? 0];
+    return pairs.sort((x, y) => {
+      const a = v(x);
+      const b = v(y);
+      return b[0] - a[0] || b[1] - a[1] || b[2] - a[2] || b[3] - a[3];
+    })[0] ?? null;
   })();
   pairCache.set(key, { at: Date.now(), pair });
   pair.catch(() => pairCache.delete(key));
