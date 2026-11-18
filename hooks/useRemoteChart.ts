@@ -128,7 +128,8 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
   }, [trades.data]);
 
   const base = useMemo(() => {
-    if (fine) {
+    // Under a minute, or a market with no stored candles (some markets aren't charted anywhere): from the trades.
+    if (fine || (candles.data && candles.data.length === 0)) {
       if (!swapData) return undefined;
       const fills = [...swapData.trades].reverse().map((t) => ({ time: t.time, price: t.price, usdc: t.usdc }));
       return toCandles(fills, interval);
