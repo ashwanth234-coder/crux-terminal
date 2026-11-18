@@ -3,6 +3,8 @@
 import { startTransition, useState, type ReactNode } from "react";
 import { buttonClass } from "@/components/ui/Button";
 import { TradeSettingsButton } from "@/components/pro/TradeSettingsButton";
+import { Menu } from "@/components/ui/Menu";
+import { CoinOrderForm, CoinOrderList, type OrderKind } from "@/components/coin/CoinOrderForm";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { useSolanaTrading } from "@/hooks/useSolanaTrading";
 import { useBnbTrading } from "@/hooks/useBnbTrading";
@@ -17,6 +19,11 @@ const coins = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 
 
 /** What a chain gives the ticket: cash, the bag, and how to prepare and send a trade. */
 type Venue = {
+  chain: "solana" | "bsc";
+  coin: string;
+  /** The cash a limit buy spends (it trades with no page open, from this chain's own cash), and its decimals. */
+  orderCash: number | null;
+  cashDecimals: number;
   symbol: string;
   price?: number;
   /** Dollars ready to buy with (null while reading). */
@@ -44,6 +51,7 @@ function Ticket(v: Venue) {
   const [side, setSide] = useState<Side>("buy");
   const [shownSide, setShownSide] = useState<Side>("buy");
   const [amount, setAmount] = useState("");
+  const [orderType, setOrderType] = useState<OrderKind>("market");
   const bps = slippageFor(settings, side);
   const scale = 10 ** v.decimals;
   const heldCoins = Number(v.held) / scale;
@@ -77,6 +85,7 @@ function Ticket(v: Venue) {
             startTransition(() => {
               setSide(s);
               setAmount("");
+              setOrderType("market");
             });
           }}
           className={`h-8 flex-1 rounded-[4px] border text-[13px] ${shownSide === s ? (s === "buy" ? "border-up/60 text-up" : "border-down/60 text-down") : "border-line-2 text-muted"}`}
@@ -88,9 +97,35 @@ function Ticket(v: Venue) {
   );
 
   return (
+    <>
     <section className="rounded-xl border border-line bg-panel p-4">
       {tabs}
 
+      <Menu<OrderKind>
+        className="mt-3"
+        label="Order type"
+        value={orderType}
+        onChange={setOrderType}
+        options={
+          side === "buy"
+            ? [
+                { value: "market", label: "Market: buy now" },
+                { value: "dip", label: "Buy the dip" },
+              ]
+            : [
+                { value: "market", label: "Market: sell now" },
+                { value: "takeProfit", label: "Take profit" },
+                { value: "stopLoss", label: "Stop loss" },
+                { value: "trailing", label: "Trailing stop" },
+                { value: "bracket", label: "Take profit + stop loss" },
+              ]
+        }
+      />
+
+      {orderType !== "market" ? (
+        <CoinOrderForm kind={orderType} chain={v.chain} coin={v.coin} symbol={v.symbol} price={v.price} held={v.held} decimals={v.decimals} cash={v.orderCash} cashDecimals={v.cashDecimals} />
+      ) : (
+      <>
       <div className="mt-3">
         <div className="flex items-center justify-between">
           <p className="text-[11px] uppercase tracking-[0.14em] text-dim">
@@ -179,12 +214,16 @@ function Ticket(v: Venue) {
         {side === "buy" ? `Buy $${v.symbol}` : `Sell $${v.symbol}`}
       </button>
       {tooMuch && <p className="mt-2 text-[12px] text-down">{side === "buy" ? "More than your cash ready. Add money first." : `You hold ${coins(heldCoins)} $${v.symbol}.`}</p>}
+      </>
+      )}
 
       {v.status && <div className="mt-3">{v.status}</div>}
       {v.extras && <div className="mt-3 border-t border-line pt-3">{v.extras}</div>}
       <p className="mt-3 text-[11px] leading-snug text-dim">{v.footnote}</p>
       {v.price !== undefined && <p className="sr-only">Price {fmtPrice(v.price)}</p>}
     </section>
+    <CoinOrderList coin={v.coin} decimals={v.decimals} cashDecimals={v.cashDecimals} />
+    </>
   );
 }
 
@@ -232,6 +271,11 @@ export function SolanaTicket({ mint, symbol, price }: { mint: string; symbol?: s
   const r = t.result;
   return (
     <Ticket
+      chain="solana"
+      coin={mint}
+      // A limit buy trades with the page closed, from Solana cash only (the Crux balance needs this page to pay).
+      orderCash={h ? Number(h.usdc) / 1e6 : null}
+      cashDecimals={6}
       symbol={symbol || h?.token?.symbol || "coin"}
       price={price ?? h?.token?.usdPrice}
       cash={cash}
@@ -281,6 +325,10 @@ export function BnbTicket({ address, symbol, price }: { address: string; symbol?
   const r = t.result;
   return (
     <Ticket
+      chain="bsc"
+      coin={address}
+      orderCash={h ? Number(h.usdt) / 1e18 : null}
+      cashDecimals={18}
       symbol={symbol || "coin"}
       price={price}
       cash={h ? Number(h.usdt) / 1e18 : null}
