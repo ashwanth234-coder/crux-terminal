@@ -4,12 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCreateWallet, usePrivy, useSignTypedData, useWallets } from "@privy-io/react-auth";
 import { useCreateWallet as useCreateSolanaWallet, useWallets as useSolanaWallets } from "@privy-io/react-auth/solana";
 import { erc20Abi, getAddress, zeroAddress, type Address, type Hex } from "viem";
-import { useBytecode, useReadContract, useReadContracts } from "wagmi";
+import { useBytecode, usePublicClient, useReadContract, useReadContracts } from "wagmi";
 import {
   ACCOUNT_FACTORY,
   ACCOUNT_FACTORY_V2,
   ACCOUNT_FACTORY_V3,
   ACCOUNT_FACTORY_V3_PREVIOUS,
+  findPreviousAccount,
   accountFactoryAbi,
   cruxAccountAbi,
   mineAccountV3,
@@ -79,9 +80,9 @@ export type CruxAccountState = {
 
 export type LegacyAccount = { account: Address; label: "V1" | "V2" | "previous"; usdc: bigint | null; withdrawalAddress: Address | null };
 
-// The current factory's account is remembered under v4 (one-account move, 2026-11-17); v3 holds the previous one's.
-const v3Key = (owner: Address) => `crux.account.v4.${owner.toLowerCase()}`;
-const previousKey = (owner: Address) => `crux.account.v3.${owner.toLowerCase()}`;
+// The current factory's account is remembered under v5 (FactoryV5, 2026-11-18); v4 holds the previous one's (FactoryV4).
+const v3Key = (owner: Address) => `crux.account.v5.${owner.toLowerCase()}`;
+const previousKey = (owner: Address) => `crux.account.v4.${owner.toLowerCase()}`;
 function loadV3(owner: Address, key = v3Key): V3Account | null {
   try {
     const raw = localStorage.getItem(key(owner));
@@ -178,8 +179,33 @@ export function useCruxAccount(): CruxAccountState {
     }
     setCreated({ owner, v3: mined });
   };
-  // The previous 5afe account (before the one-account move): readable and withdrawable, never traded from again.
-  const previous = owner && ACCOUNT_FACTORY_V3_PREVIOUS ? loadV3(owner, previousKey) : null;
+  // The previous 5afe account: readable and withdrawable, never traded from again. Saved in this browser, or looked up
+  // on-chain once per login when it isn't (another device, cleared storage), then saved.
+  const savedPrevious = owner && ACCOUNT_FACTORY_V3_PREVIOUS ? loadV3(owner, previousKey) : null;
+  const client = usePublicClient({ chainId: TESTNET.id });
+  const [lookup, setLookup] = useState<{ owner: Address; v3: V3Account | null } | null>(null);
+  const lookedFor = useRef<Address | null>(null);
+  useEffect(() => {
+    if (!owner || !client || !ACCOUNT_FACTORY_V3_PREVIOUS || savedPrevious || lookedFor.current === owner) return;
+    lookedFor.current = owner;
+    void findPreviousAccount(client as never, owner)
+      .then((found) => {
+        if (found) {
+          try {
+            localStorage.setItem(previousKey(owner), JSON.stringify({ ...found, nonce: found.nonce.toString() }));
+          } catch {
+            // Private mode: looked up again next visit.
+          }
+        }
+        setLookup({ owner, v3: found });
+      })
+      .catch(() => {
+        lookedFor.current = null; // the next render tries again
+      });
+  }, [owner, client, savedPrevious]);
+  const previous = savedPrevious ?? (lookup && lookup.owner === owner ? lookup.v3 : null);
+  // Still finding out whether there's a previous account: no setup form yet (it would ask for a wallet already chosen).
+  const lookingUp = Boolean(owner && ACCOUNT_FACTORY_V3_PREVIOUS && !savedPrevious && !(lookup && lookup.owner === owner));
   if (previous) rememberV3(previous);
   // A trader who already chose their withdrawal wallet gets the new account with it, silently: no setup step again.
   const autoMined = useRef(false);
@@ -295,7 +321,7 @@ export function useCruxAccount(): CruxAccountState {
     v3: v3Live ? v3 : null,
     setup: {
       // Not while the new account is being mined from the previous one's withdrawal wallet.
-      needed: authenticated && owner !== null && v3Live && v3 === null && previous === null,
+      needed: authenticated && owner !== null && v3Live && v3 === null && previous === null && !lookingUp,
       // The wallet the older accounts withdraw to: the same one keeps things simple.
       suggested: previous?.withdrawalAddress ?? older.map((_, i) => nonZero(legacyReads.data?.[i * 2 + 1]?.result)).find((x) => x !== null) ?? null,
       create: createV3,

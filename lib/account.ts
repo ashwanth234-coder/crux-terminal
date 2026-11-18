@@ -1,4 +1,4 @@
-import { getAddress, getContractAddress, isAddress, keccak256, parseAbi, type Address, type Hex } from "viem";
+import { getAddress, getContractAddress, isAddress, keccak256, parseAbi, parseAbiItem, type Address, type Hex, type PublicClient } from "viem";
 import { TESTNET } from "@/lib/chains";
 import { searchV3Nonce } from "@/lib/mineV3";
 import { postRelay } from "@/lib/session";
@@ -43,6 +43,31 @@ export const ACCOUNT_FACTORY_V3 = getAddress(
  * buys). Its accounts stay readable and can withdraw, so their money can be moved; nothing new is created there.
  */
 export const ACCOUNT_FACTORY_V3_PREVIOUS: Address | null = NETWORK.crux.accountFactoryV3Previous ?? null;
+const ACCOUNT_CREATED = parseAbiItem("event AccountCreated(address indexed owner, address indexed account, address withdrawalAddress, uint256 nonce)");
+
+/**
+ * The login's account in the previous 5afe factory, looked up on-chain (its AccountCreated event, by owner) for a browser
+ * that never saved it: without this, a new device or cleared storage showed "Create your account" with no earlier
+ * wallet and no "move what's left" (2026-11-18). The latest one wins. Null when it has none there.
+ */
+export async function findPreviousAccount(client: PublicClient, owner: Address): Promise<V3Account | null> {
+  const factory = ACCOUNT_FACTORY_V3_PREVIOUS;
+  const from = NETWORK.crux.accountFactoryV3PreviousDeployBlock;
+  if (!factory || from === undefined) return null;
+  const head = await client.getBlockNumber();
+  const step = BigInt(45_000);
+  let found: V3Account | null = null;
+  for (let a = from; a <= head; a += step) {
+    const b = a + step - BigInt(1) < head ? a + step - BigInt(1) : head;
+    const logs = await client.getLogs({ address: factory, event: ACCOUNT_CREATED, args: { owner }, fromBlock: a, toBlock: b });
+    const last = logs.at(-1);
+    if (last?.args.account && last.args.withdrawalAddress && last.args.nonce !== undefined) {
+      found = { account: getAddress(last.args.account), withdrawalAddress: getAddress(last.args.withdrawalAddress), nonce: last.args.nonce };
+    }
+  }
+  return found;
+}
+
 /** The CruxAccountV2 every V3 account clones: the factory's first contract creation. */
 export const ACCOUNT_IMPLEMENTATION_V3 = getContractAddress({ from: ACCOUNT_FACTORY_V3, nonce: BigInt(1) });
 /** How long a change of withdrawal address waits (CruxAccount.WITHDRAWAL_CHANGE_DELAY). */
