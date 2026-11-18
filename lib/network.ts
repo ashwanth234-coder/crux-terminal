@@ -79,9 +79,9 @@ const BASE_SEPOLIA: Network = {
     factoryV6: a("0xD07fBb34076D88d2391E831aABfd40AcA3F57940"),
     factoryV7: a("0xeacB98371D5597c20A9ECDf6f09726817489722e"),
     factoryV8: a("0xdB9f226fb44D5E8d25e2aACA4f7080c83011CfB5"),
-    // One-account move (2026-11-17): launches from FactoryV4 accounts. The first V9 (0x4a28…d8e7) is retired.
-    factoryV9: a("0x7E6686E36d70fA96546829726566C8A627c005fA"),
-    routerV9: a("0x74FA6B852533E59a55813c3f74d64CE6AAEa830D"),
+    // Bound to CruxAccountFactoryV5 (2026-11-18). Retired: 0x7E66…05fA (FactoryV4 accounts), 0x4a28…d8e7 (the first).
+    factoryV9: a("0x5091Bc334D9F4acc1A5Ed1AeC5DE49F4873e66d9"),
+    routerV9: a("0xd64bc663a58EB51C5650CcEf424DD44aaBbbc3F2"),
     accountFactory: a("0xDdB0DF1CfcdEd073A72A489351f22cfF646f8C6E"),
     accountFactoryV2: a("0xf8962965f04e20B95dAdD931fDe00121906a97DC"),
     // CruxAccountFactoryV5 since 2026-11-18 (same interface; accounts add withdrawals on the network you pick). The
