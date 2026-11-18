@@ -152,6 +152,8 @@ export function AccountPanel() {
       <Frame label={a.label} onLogout={() => void a.logout()}>
         <section className="mx-auto max-w-[560px] rounded-xl border border-line p-6">
           <h2 className="text-[17px] font-medium text-chrome">Create your Crux account</h2>
+          {/* Which login key was checked for an earlier account, so "I had one" can be told apart from a different key. */}
+          {a.owner && <p className="mt-1 font-mono text-[10.5px] text-dim">No earlier Crux account for login key {a.owner.slice(0, 6)}…{a.owner.slice(-4)}</p>}
           <p className="mt-2 text-[13.5px] leading-relaxed text-muted">
             One account that trades, takes standing orders and launches tokens, with no gas and no pop-ups. Its address ends in{" "}
             <span className="font-mono text-chrome">5afe</span>, like every token you launch from it.
