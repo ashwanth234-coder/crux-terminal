@@ -11,6 +11,7 @@ import {
   ACCOUNT_FACTORY_V3,
   ACCOUNT_FACTORY_V3_PREVIOUS,
   findPreviousAccount,
+  hasCruxAccount,
   accountFactoryAbi,
   cruxAccountAbi,
   mineAccountV3,
@@ -100,7 +101,51 @@ export function useCruxAccount(): CruxAccountState {
   const { ready: walletsReady, wallets } = useWallets();
   const { signTypedData } = useSignTypedData();
   const { createWallet } = useCreateWallet();
-  const embedded = wallets.find((w) => w.walletClientType === "privy");
+  // The login key. Some early logins have two embedded keys (Privy made two at once): the one that owns a Crux account
+  // is the login key, found once per login and remembered here (it moved to the other one on 2026-11-18 when Privy
+  // listed them the other way round, and the page asked to create an account the login already had).
+  const privyKeys = wallets.filter((w) => w.walletClientType === "privy");
+  const keyList = privyKeys.map((w) => w.address.toLowerCase()).join(",");
+  const keyStore = user?.id ? `crux.loginkey.${user.id}` : null;
+  let savedKey: string | null = null;
+  try {
+    savedKey = keyStore ? localStorage.getItem(keyStore) : null;
+  } catch {
+    savedKey = null;
+  }
+  const client = usePublicClient({ chainId: TESTNET.id });
+  const [pickedKey, setPickedKey] = useState<{ user: string; key: string } | null>(null);
+  const [pickRetry, setPickRetry] = useState(0);
+  const pickingFor = useRef<string | null>(null);
+  const savedValid = savedKey !== null && privyKeys.some((w) => w.address.toLowerCase() === savedKey!.toLowerCase());
+  useEffect(() => {
+    const userId = user?.id;
+    if (!userId || privyKeys.length < 2 || !client || savedValid || pickingFor.current === `${userId}|${keyList}`) return;
+    pickingFor.current = `${userId}|${keyList}`;
+    void (async () => {
+      let pick = getAddress(privyKeys[0].address);
+      for (const w of privyKeys) {
+        const k = getAddress(w.address);
+        if (loadV3(k) || loadV3(k, previousKey) || (await hasCruxAccount(client as never, k))) {
+          pick = k;
+          break;
+        }
+      }
+      try {
+        localStorage.setItem(`crux.loginkey.${userId}`, pick);
+      } catch {
+        // Private mode: found again next visit.
+      }
+      setPickedKey({ user: userId, key: pick });
+    })().catch(() => {
+      pickingFor.current = null;
+      setTimeout(() => setPickRetry((n) => n + 1), 3_000);
+    });
+    // privyKeys is a fresh array each render; keyList says when it really changed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, keyList, client, savedValid, pickRetry]);
+  const loginKey = savedValid ? savedKey : pickedKey && pickedKey.user === user?.id ? pickedKey.key : null;
+  const embedded = privyKeys.length < 2 ? privyKeys[0] : privyKeys.find((w) => loginKey !== null && w.address.toLowerCase() === loginKey.toLowerCase());
   // Privy creates the login key on login, but a new email sometimes sits without one ("Setting up your login key…"
   // for minutes). If it still has none 2 s after login, create it here, once.
   const hasKey = Boolean(user?.linkedAccounts.some((x) => x.type === "wallet" && "walletClientType" in x && x.walletClientType === "privy"));
@@ -182,7 +227,6 @@ export function useCruxAccount(): CruxAccountState {
   // The previous 5afe account: readable and withdrawable, never traded from again. Saved in this browser, or looked up
   // on-chain once per login when it isn't (another device, cleared storage), then saved.
   const savedPrevious = owner && ACCOUNT_FACTORY_V3_PREVIOUS ? loadV3(owner, previousKey) : null;
-  const client = usePublicClient({ chainId: TESTNET.id });
   const [lookup, setLookup] = useState<{ owner: Address; v3: V3Account | null } | null>(null);
   const lookedFor = useRef<Address | null>(null);
   useEffect(() => {

@@ -39,6 +39,8 @@ export type Network = {
     accountFactoryV3?: Address;
     /** The 5afe account factory before the current one (one-account move, 2026-11-17): its accounts can only withdraw. */
     accountFactoryV3Previous?: Address;
+    /** The block the current 5afe factory was deployed in: where looking up a login's account there starts. */
+    accountFactoryV3DeployBlock?: bigint;
     /** The block that previous factory was deployed in: where looking up a login's account there starts. */
     accountFactoryV3PreviousDeployBlock?: bigint;
     /** The EIP-712 verifyingContract of alert and layout signatures (any fixed address; the solver's is the same). */
@@ -91,6 +93,7 @@ const BASE_SEPOLIA: Network = {
     accountFactoryV3: a("0x510F86D29D166242b59D2c2C2afd40759a7CBd26"),
     accountFactoryV3Previous: a("0x19049da3A3834A5d65305f9271BFa290E56ea377"),
     accountFactoryV3PreviousDeployBlock: BigInt(59676567),
+    accountFactoryV3DeployBlock: BigInt(60318758),
     signingDomain: a("0xf8962965f04e20B95dAdD931fDe00121906a97DC"),
     prover: a("0x7cb1aDd4975CbF1a5a3FA4fd60F11b010E4b29e8"),
     solver: a("0xDEbbE137f2AB252e28d1070F687010C0909d0492"),

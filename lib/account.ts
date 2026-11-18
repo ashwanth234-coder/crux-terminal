@@ -54,6 +54,21 @@ export async function findPreviousAccount(client: PublicClient, owner: Address):
   const factory = ACCOUNT_FACTORY_V3_PREVIOUS;
   const from = NETWORK.crux.accountFactoryV3PreviousDeployBlock;
   if (!factory || from === undefined) return null;
+  return findAccountIn(client, factory, from, owner);
+}
+
+/**
+ * Whether `owner` (one of the login's keys) has a Crux account in the current or the previous 5afe factory. A login
+ * with two embedded keys (Privy made two at once for some early logins) trades from the one that does.
+ */
+export async function hasCruxAccount(client: PublicClient, owner: Address): Promise<boolean> {
+  const from = NETWORK.crux.accountFactoryV3DeployBlock;
+  if (from !== undefined && (await findAccountIn(client, ACCOUNT_FACTORY_V3, from, owner))) return true;
+  return (await findPreviousAccount(client, owner)) !== null;
+}
+
+/** The latest account `factory` created for `owner` (its AccountCreated event), looked for from block `from`. */
+async function findAccountIn(client: PublicClient, factory: Address, from: bigint, owner: Address): Promise<V3Account | null> {
   const head = await client.getBlockNumber();
   const step = BigInt(45_000);
   let found: V3Account | null = null;
