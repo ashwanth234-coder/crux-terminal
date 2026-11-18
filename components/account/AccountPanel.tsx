@@ -17,6 +17,10 @@ import {
   finalizeWithdrawalChange,
   setWithdrawalAddress,
   withdrawFromAccount,
+  withdrawNetworkFee,
+  withdrawToNetwork,
+  WITHDRAW_NETWORKS,
+  type WithdrawNetwork,
 } from "@/lib/account";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import { FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7, FACTORY_V8, TESTNET_USDC } from "@/lib/intents";
@@ -102,6 +106,8 @@ export function AccountPanel() {
   const legacyHeld = a.legacy.map((l, k) => ({ ...l, tokens: heldBy(k) })).filter((l) => (l.usdc ?? BigInt(0)) > BigInt(0) || l.tokens.length > 0);
   const walletTokens = wallet ? heldBy(a.legacy.length) : [];
   const [withdrawTo, setWithdrawTo] = useState("");
+  /** Where a withdrawal arrives: Base (null), or another network, always the same bound wallet there. */
+  const [withdrawNet, setWithdrawNet] = useState<WithdrawNetwork | null>(null);
 
   const run = async (kind: Busy, fn: () => Promise<unknown>, done: string) => {
     setBusy(kind);
@@ -400,7 +406,32 @@ export function AccountPanel() {
           </div>
           {tab === "withdraw" && (
             <>
-          <p className="text-[12.5px] text-muted">{bound ? <>{USDC_WORD_CAP} to <span className="font-mono text-chrome">{short(bound)}</span>, the only place it can go. Free: Crux pays the gas.</> : (
+          {bound && WITHDRAW_NETWORKS.length > 0 && (
+            <div className="mb-3">
+              <p className="text-[12px] text-dim">Where should it arrive?</p>
+              <div className="mt-1.5 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Network it arrives on">
+                {[null, ...WITHDRAW_NETWORKS].map((n) => (
+                  <button
+                    key={n?.chainId ?? "base"}
+                    type="button"
+                    role="radio"
+                    aria-checked={withdrawNet?.chainId === n?.chainId}
+                    onClick={() => setWithdrawNet(n)}
+                    className={`rounded-lg border px-3 py-2 text-left ${withdrawNet?.chainId === n?.chainId ? "border-chrome/60 bg-tint/[0.05]" : "border-line hover:border-line-2"}`}
+                  >
+                    <span className="block text-[13.5px] text-chrome">{n ? n.label : "Base"}</span>
+                    <span className="block text-[11px] text-dim">{n ? `As ${n.coin} · fee $0.20 + 0.1%` : `As ${USDC_WORD} · free`}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <p className="text-[12.5px] text-muted">{bound ? (withdrawNet ? (
+            <>
+              To your wallet <span className="font-mono text-chrome">{short(bound)}</span> on {withdrawNet.label}, the same address there. It arrives in seconds as {withdrawNet.coin}
+              {units ? <>: you get <span className="font-mono text-chrome">${fmtUsdc(units > withdrawNetworkFee(units) ? units - withdrawNetworkFee(units) : BigInt(0))}</span></> : null}.
+            </>
+          ) : <>{USDC_WORD_CAP} to <span className="font-mono text-chrome">{short(bound)}</span>, the only place it can go. Free: Crux pays the gas.</>) : (
             <>
               Set where withdrawals go first:{" "}
               <button type="button" onClick={() => setTab("address")} className="text-chrome underline decoration-line-2 hover:text-signal">
@@ -429,9 +460,10 @@ export function AccountPanel() {
             type="button"
             disabled={!bound || !units || overBalance || busy !== null}
             onClick={() => run("withdraw", async () => {
-              await withdrawFromAccount(sign, owner, account, TESTNET_USDC, units!);
+              if (withdrawNet) await withdrawToNetwork(sign, owner, account, units!, withdrawNet);
+              else await withdrawFromAccount(sign, owner, account, TESTNET_USDC, units!);
               setAmount("");
-            }, `Withdrew $${fmtUsdc(units!)} to ${short(bound!)}.`)}
+            }, withdrawNet ? `Sent $${fmtUsdc(units!)}. It arrives at ${short(bound!)} on ${withdrawNet.label} in a few seconds.` : `Withdrew $${fmtUsdc(units!)} to ${short(bound!)}.`)}
             className={buttonClass("primary", "md", "mt-3 w-full font-semibold")}
           >
             {busy === "withdraw" ? "Withdrawing…" : overBalance ? "More than the account holds" : "Withdraw"}

@@ -84,9 +84,10 @@ const BASE_SEPOLIA: Network = {
     routerV9: a("0x74FA6B852533E59a55813c3f74d64CE6AAEa830D"),
     accountFactory: a("0xDdB0DF1CfcdEd073A72A489351f22cfF646f8C6E"),
     accountFactoryV2: a("0xf8962965f04e20B95dAdD931fDe00121906a97DC"),
-    // CruxAccountFactoryV4 since the one-account move (same interface; accounts add Solana buys).
-    accountFactoryV3: a("0x19049da3A3834A5d65305f9271BFa290E56ea377"),
-    accountFactoryV3Previous: a("0xBD7AF76bcc2D080364a0c3C138ef82efCF8E12DF"),
+    // CruxAccountFactoryV5 since 2026-11-18 (same interface; accounts add withdrawals on the network you pick). The
+    // previous one, FactoryV4 (0x1904…a377), stays readable so its money can be moved; V3's (0xBD7A…12DF) is retired.
+    accountFactoryV3: a("0x510F86D29D166242b59D2c2C2afd40759a7CBd26"),
+    accountFactoryV3Previous: a("0x19049da3A3834A5d65305f9271BFa290E56ea377"),
     signingDomain: a("0xf8962965f04e20B95dAdD931fDe00121906a97DC"),
     prover: a("0x7cb1aDd4975CbF1a5a3FA4fd60F11b010E4b29e8"),
     solver: a("0xDEbbE137f2AB252e28d1070F687010C0909d0492"),

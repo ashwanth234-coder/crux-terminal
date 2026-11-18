@@ -163,7 +163,28 @@ export const ACCOUNT_TYPES = {
     { name: "nonce", type: "uint256" },
     { name: "deadline", type: "uint256" },
   ],
+  WithdrawToChain: [
+    { name: "token", type: "address" },
+    { name: "amount", type: "uint256" },
+    { name: "destinationChainId", type: "uint256" },
+    { name: "minAmountOut", type: "uint256" },
+    { name: "fillDeadline", type: "uint32" },
+    { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+  ],
 } as const;
+
+/**
+ * Networks a withdrawal can arrive on besides Base (CruxAccountV4.withdrawToChain; crux-solver withdrawals.ts): always
+ * the account's own withdrawal wallet, the same 0x address there. `coin` is what arrives.
+ */
+export type WithdrawNetwork = { chainId: number; label: string; coin: string; outAsset: string; decimals: number };
+export const WITHDRAW_NETWORKS: WithdrawNetwork[] = NETWORK.testnet
+  ? [{ chainId: 97, label: "BNB Chain", coin: "test USDC", outAsset: "eip155:97/erc20:0x64544969ed7EBf5f083679233325356EbE738930", decimals: 18 }]
+  : [];
+
+/** Crux's fee on a withdrawal to another network, in USDC units: $0.20 + 0.1% (crux-solver withdrawals.ts). */
+export const withdrawNetworkFee = (amount: bigint) => BigInt(200_000) + (amount * BigInt(10)) / BigInt(10_000);
 
 type PrimaryType = keyof typeof ACCOUNT_TYPES;
 
@@ -336,6 +357,27 @@ export async function withdrawFromAccount(sign: AccountSigner, owner: Address, a
   const message = { token, amount, nonce: accountNonce(), deadline: deadline() };
   const signature = await sign(typed(account, "Withdraw", message));
   return postRelay("/v1/account/withdraw", { owner, ...accountFields(account), ...message, signature });
+}
+
+/**
+ * Withdraws `amount` USDC to the bound withdrawal wallet on another network: the account escrows it on Base, Crux pays
+ * the wallet there (amount less the fee), and is repaid only once that payment is proven. Returns the relay's reply.
+ */
+export async function withdrawToNetwork(sign: AccountSigner, owner: Address, account: Address, amount: bigint, net: WithdrawNetwork) {
+  const fee = withdrawNetworkFee(amount);
+  if (amount <= fee) throw new Error(`Withdrawals to ${net.label} need more than $${(Number(fee) / 1e6).toFixed(2)}.`);
+  const minAmountOut = (amount - fee) * BigInt(10) ** BigInt(net.decimals - 6);
+  const message = {
+    token: NETWORK.usdc,
+    amount,
+    destinationChainId: BigInt(net.chainId),
+    minAmountOut,
+    fillDeadline: Math.floor(Date.now() / 1000) + ACCOUNT_FILL_SECONDS,
+    nonce: accountNonce(),
+    deadline: deadline(),
+  };
+  const signature = await sign(typed(account, "WithdrawToChain", message));
+  return postRelay("/v1/account/withdraw-to-chain", { owner, ...accountFields(account), withdrawal: message, tokenOut: net.outAsset, signature });
 }
 
 export async function cancelWithdrawalChange(sign: AccountSigner, owner: Address, account: Address) {
