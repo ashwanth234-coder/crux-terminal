@@ -160,7 +160,7 @@ export function AccountPanel() {
             Choose the wallet withdrawals go to. The account is created bound to it, and it is the only place funds can leave to. It is part of the
             account&rsquo;s address, so use the same wallet on every device. Changing it later takes 48 hours.
           </p>
-          <label htmlFor="v3-withdrawal" className="mt-5 block text-[12px] text-dim">Withdrawal wallet (Base)</label>
+          <label htmlFor="v3-withdrawal" className="mt-5 block text-[12px] text-dim">Withdrawal wallet</label>
           <input
             id="v3-withdrawal"
             autoComplete="off"
@@ -177,7 +177,7 @@ export function AccountPanel() {
                 ? "The wallet your earlier Crux account withdraws to."
                 : choice && wallet && choice === getAddress(wallet)
                   ? "Your connected wallet."
-                  : "Any wallet you control on Base."}
+                  : `Any 0x wallet you hold yourself (MetaMask, Rabby…), not an exchange address. Withdrawals arrive there on the network you pick: ${["Base", ...WITHDRAW_NETWORKS.map((n) => n.label)].join(" or ")}.`}
           </p>
           {!typed && (
             <button type="button" onClick={openConnect} className={buttonClass("outline", "sm", "mt-3")}>
