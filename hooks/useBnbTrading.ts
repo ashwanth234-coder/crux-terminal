@@ -54,7 +54,7 @@ export function useBnbTrading(coin: string | null) {
   }, [crux.owner, addSigners]);
 
   const prepare = useCallback(
-    (side: "buy" | "sell", amount: bigint | "all") => {
+    (side: "buy" | "sell", amount: bigint | "all", slippageBps = 300) => {
       if (!coin) return;
       const h = holdings.data;
       if (side === "buy" && (!h || typeof amount !== "bigint" || h.usdt < amount)) return;
@@ -64,18 +64,18 @@ export function useBnbTrading(coin: string | null) {
       preparedAt.current.set(key, now);
       preparedAt.current.set("*", now);
       void token()
-        .then((t) => relay("/v1/bnb/prepare", { token: t, side, coin, amount: amount.toString() }))
+        .then((t) => relay("/v1/bnb/prepare", { token: t, side, coin, amount: amount.toString(), slippageBps }))
         .catch(() => preparedAt.current.delete(key));
     },
     [coin, holdings.data, token],
   );
 
   const trade = useCallback(
-    async (side: "buy" | "sell", amount: bigint | "all") => {
+    async (side: "buy" | "sell", amount: bigint | "all", slippageBps = 300) => {
       if (!coin) return;
       const t0 = performance.now();
       setResult({ kind: "busy", label: side === "buy" ? "Buying…" : "Selling…" });
-      const send = async () => relay<{ hash: string; pending?: boolean }>("/v1/bnb/trade", { token: await token(), side, coin, amount: amount.toString(), slippageBps: 300 });
+      const send = async () => relay<{ hash: string; pending?: boolean }>("/v1/bnb/trade", { token: await token(), side, coin, amount: amount.toString(), slippageBps });
       try {
         let r: { hash: string; pending?: boolean };
         try {
@@ -114,5 +114,5 @@ export function useBnbTrading(coin: string | null) {
     [coin, token, enable, holdings],
   );
 
-  return { holdings: holdings.data ?? null, prepare, buy: (usdt: bigint) => trade("buy", usdt), sell: (amount: bigint | "all") => trade("sell", amount), result };
+  return { holdings: holdings.data ?? null, prepare, buy: (usdt: bigint, slippageBps?: number) => trade("buy", usdt, slippageBps), sell: (amount: bigint | "all", slippageBps?: number) => trade("sell", amount, slippageBps), result };
 }

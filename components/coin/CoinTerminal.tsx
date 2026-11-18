@@ -115,7 +115,7 @@ export function CoinTerminal({ network, token, coin, trade, path }: { network: C
           {s && <Flow stats={s} />}
         </aside>
         <section aria-label="Trades and details" className="min-h-[260px] bg-void p-3 lg:col-start-1 lg:row-start-2 lg:min-h-0 lg:overflow-y-auto">
-          <Desk network={network} token={token} symbol={symbol} trades={trades.data ?? []} loading={stats.isLoading || trades.isLoading} noPool={stats.data === null} now={now} stats={s ?? undefined} />
+          <Desk network={network} token={token} symbol={symbol} trades={trades.data ?? []} loading={stats.isLoading || trades.isLoading} busy={trades.isError && !trades.data} noPool={stats.data === null} now={now} stats={s ?? undefined} />
         </section>
       </div>
       </div>
@@ -224,6 +224,7 @@ function Desk({
   symbol,
   trades,
   loading,
+  busy,
   noPool,
   now,
   stats,
@@ -233,6 +234,8 @@ function Desk({
   symbol: string;
   trades: CoinTrade[];
   loading: boolean;
+  /** The trades source is refusing for now (too many reads): retried by itself. */
+  busy: boolean;
   noPool: boolean;
   now: number;
   stats?: PoolStats;
@@ -304,6 +307,8 @@ function Desk({
         <p className="px-2 py-4 text-[12.5px] text-dim">This coin has no market yet, so there are no trades to show.</p>
       ) : loading ? (
         <p className="px-2 py-4 text-[12.5px] text-dim">Reading the latest trades…</p>
+      ) : busy ? (
+        <p className="px-2 py-4 text-[12.5px] text-dim">Trades are busy for a moment. Trying again…</p>
       ) : shown.length === 0 ? (
         <p className="px-2 py-4 text-[12.5px] text-dim">No trades to show{focus || bigOnly ? " with this filter" : " yet"}.</p>
       ) : (

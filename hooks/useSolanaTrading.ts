@@ -85,7 +85,7 @@ export function useSolanaTrading(mint: string | null) {
 
   /** Prepares a direct trade ahead of the click (the trader is pointing at its button). Quiet: errors show on the click. */
   const prepare = useCallback(
-    (side: "buy" | "sell", amount: bigint | "all", opts: { turbo?: boolean } = {}) => {
+    (side: "buy" | "sell", amount: bigint | "all", opts: { turbo?: boolean; slippageBps?: number } = {}) => {
       if (!mint) return;
       const h = holdings.data;
       if (side === "buy" && (!h || typeof amount !== "bigint" || h.usdc < amount)) return; // paid from the account: nothing to prepare
@@ -98,7 +98,7 @@ export function useSolanaTrading(mint: string | null) {
       preparedAt.current.set(key, Date.now());
       preparedAt.current.set("*", Date.now());
       void tokens()
-        .then((t) => relay("/v1/solana/prepare", { ...t, side, mint, amount: amount.toString(), turbo: opts.turbo === true, slippageBps: 300 }))
+        .then((t) => relay("/v1/solana/prepare", { ...t, side, mint, amount: amount.toString(), turbo: opts.turbo === true, slippageBps: opts.slippageBps ?? 300 }))
         .catch(() => preparedAt.current.delete(key));
     },
     [mint, holdings.data, tokens],
@@ -106,7 +106,7 @@ export function useSolanaTrading(mint: string | null) {
 
   /** Sends a direct trade; shows it as done the moment it's sent, then waits for Solana's confirmation. */
   const direct = useCallback(
-    async (side: "buy" | "sell", amount: bigint | "all", opts: { turbo?: boolean }, t0: number) => {
+    async (side: "buy" | "sell", amount: bigint | "all", opts: { turbo?: boolean; slippageBps?: number }, t0: number) => {
       preparedAt.current.delete(`${side}|${amount}|${opts.turbo === true}`);
       const r = await relay<{ signature: string; fee: string; pending?: boolean }>("/v1/solana/trade", {
         ...(await tokens()),
@@ -114,7 +114,7 @@ export function useSolanaTrading(mint: string | null) {
         mint,
         amount: amount.toString(),
         turbo: opts.turbo === true,
-        slippageBps: 300,
+        slippageBps: opts.slippageBps ?? 300,
       });
       const sent = { kind: "done" as const, side, how: "direct" as const, signature: r.signature, fee: BigInt(r.fee), ms: Math.round(performance.now() - t0) };
       setResult({ ...sent, confirmed: !r.pending });
@@ -129,7 +129,7 @@ export function useSolanaTrading(mint: string | null) {
   );
 
   const buy = useCallback(
-    async (usdc6: bigint, opts: { turbo?: boolean } = {}) => {
+    async (usdc6: bigint, opts: { turbo?: boolean; slippageBps?: number } = {}) => {
       if (!mint) return;
       const t0 = performance.now();
       const h = holdings.data;
@@ -161,7 +161,7 @@ export function useSolanaTrading(mint: string | null) {
 
   /** Sells `amount` of the coin's base units, or "all" (the coin's account is then closed: Rule A). */
   const sell = useCallback(
-    async (amount: bigint | "all", opts: { turbo?: boolean } = {}) => {
+    async (amount: bigint | "all", opts: { turbo?: boolean; slippageBps?: number } = {}) => {
       if (!mint) return;
       const t0 = performance.now();
       setResult({ kind: "busy", label: "Selling…" });

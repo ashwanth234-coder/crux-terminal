@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CoinTerminal } from "@/components/coin/CoinTerminal";
+import { BnbTicket } from "@/components/coin/CoinTradeTicket";
 import { buttonClass } from "@/components/ui/Button";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { useBnbTrading } from "@/hooks/useBnbTrading";
@@ -21,7 +22,7 @@ export function BnbCoinPage({ address }: { address: string }) {
       trade={
         <>
           {c === null && <p className="mb-3 text-[12.5px] text-down">This coin has no market on BNB Chain yet, so it can&rsquo;t be traded here.</p>}
-          <BnbTradePanel address={address} symbol={c?.symbol} price={c?.price} />
+          <BnbTicket address={address} symbol={c?.symbol} price={c?.price} />
         </>
       }
     />

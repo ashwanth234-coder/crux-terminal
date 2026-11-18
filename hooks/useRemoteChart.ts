@@ -22,6 +22,25 @@ const FRAMES: [number, "minute" | "hour" | "day", number][] = [
   [60, "minute", 1],
 ];
 
+/**
+ * The coin's price right now, read every few seconds so the newest candle moves between trade reads: Jupiter's price
+ * for Solana (generous free limits), the pool's DexScreener price for BNB Chain (~300 reads a minute).
+ */
+async function livePrice(network: ChartNetwork, pool: string, token: string): Promise<number | null> {
+  if (network === "solana") {
+    const r = await fetch(`https://lite-api.jup.ag/price/v3?ids=${token}`);
+    if (!r.ok) return null;
+    const p = ((await r.json()) as Record<string, { usdPrice?: number } | undefined>)[token]?.usdPrice;
+    return typeof p === "number" && p > 0 ? p : null;
+  }
+  const r = await fetch(`https://api.dexscreener.com/latest/dex/pairs/bsc/${pool}`);
+  if (!r.ok) return null;
+  const pair = ((await r.json()) as { pair?: { baseToken?: { address?: string }; priceUsd?: string } }).pair;
+  if (!pair?.priceUsd || pair.baseToken?.address?.toLowerCase() !== token.toLowerCase()) return null;
+  const p = Number(pair.priceUsd);
+  return p > 0 ? p : null;
+}
+
 /** USD candles at `interval` seconds: the largest size GeckoTerminal has that divides it, merged up when needed. */
 async function remoteCandles(network: ChartNetwork, pool: string, token: string, interval: number): Promise<Candle[]> {
   const [size, unit, aggregate] = FRAMES.find(([s]) => interval % s === 0) ?? FRAMES[FRAMES.length - 1];
@@ -62,6 +81,13 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
     staleTime: 5_000,
   });
   const fine = interval < 60;
+  const tick = useQuery({
+    queryKey: ["coin-tick", coin?.network, addr, coin?.token],
+    queryFn: () => livePrice(coin!.network, addr!, coin!.token),
+    enabled: coin !== null && addr !== null,
+    refetchInterval: coin?.network === "solana" ? 2_000 : 3_000,
+    staleTime: 1_000,
+  });
   const candles = useQuery({
     queryKey: ["coin-ohlcv", coin?.network, addr, interval],
     queryFn: () => remoteCandles(coin!.network, addr!, coin!.token, interval),
@@ -89,7 +115,7 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
     return { trades: list, truncated: false };
   }, [trades.data]);
 
-  const drawn = useMemo(() => {
+  const base = useMemo(() => {
     if (fine) {
       if (!swapData) return undefined;
       const fills = [...swapData.trades].reverse().map((t) => ({ time: t.time, price: t.price, usdc: t.usdc }));
@@ -110,6 +136,26 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
     }
     return out;
   }, [fine, swapData, candles.data, interval]);
+
+  // The live price moves the newest candle (or opens the next one when its period has begun), every tick.
+  const live = tick.data ?? null;
+  const tickAt = tick.dataUpdatedAt;
+  const drawn = useMemo(() => {
+    if (!base || live === null || base.length === 0 || !tickAt) return base;
+    const out = base.slice();
+    const last = { ...out[out.length - 1] };
+    const now = Math.floor(tickAt / 1000);
+    const bucket = Math.floor(now / interval) * interval;
+    if (bucket > last.time) {
+      out.push({ time: bucket, open: last.close, high: Math.max(last.close, live), low: Math.min(last.close, live), close: live, volume: 0, trades: 0 });
+    } else {
+      last.close = live;
+      last.high = Math.max(last.high, live);
+      last.low = Math.min(last.low, live);
+      out[out.length - 1] = last;
+    }
+    return out;
+  }, [base, live, tickAt, interval]);
 
   return {
     candles: drawn,
