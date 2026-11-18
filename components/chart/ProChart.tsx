@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from "react";
-import { formatUnits, getAddress, type Address } from "viem";
+import { formatUnits, getAddress, zeroAddress, type Address } from "viem";
 import { useConnection } from "wagmi";
 import { usePoolSwaps } from "@/hooks/usePoolSwaps";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
@@ -59,6 +59,7 @@ import { useChartAlerts } from "./useChartAlerts";
 import { useChartLayoutSync } from "./useChartLayoutSync";
 import { Toolbar } from "./Toolbar";
 import { NETWORK_LONG, NETWORK_NAME } from "@/lib/network";
+import { useRemoteChart, type RemoteCoin } from "@/hooks/useRemoteChart";
 
 /** A new chart in a multi-chart layout starts on a different timeframe: auto, 1 minute, 15 minutes, 1 hour. */
 const SLOT_INTERVALS: (number | "auto")[] = ["auto", 60, 900, 3_600];
@@ -126,7 +127,8 @@ export function ProChart({
   slot = 0,
   layoutSlot,
   sync,
-  external = false,
+  external: externalProp = false,
+  remote,
 }: {
   auction: AuctionV2;
   symbol: string;
@@ -143,6 +145,11 @@ export function ProChart({
    * transfers aren't read (a partial window would show wrong holders), so there are no trader marks.
    */
   external?: boolean;
+  /**
+   * A coin on another chain (Solana, BNB Chain): candles and trades come from its deepest pool there (hooks/useRemoteChart)
+   * instead of Base. Drawn like any outside token: every tool, indicator and layout, no launch milestones or holder marks.
+   */
+  remote?: RemoteCoin;
   /** The layout picker, shown in the toolbar. */
   layoutSlot?: ReactNode;
   /** In a multi-chart layout: what the charts share (crosshair, time range, timeframe). */
@@ -157,10 +164,11 @@ export function ProChart({
   }, [sync]);
   /** When another chart last moved this one, so applying its move isn't published back. */
   const remoteAt = useRef(0);
-  const swaps = usePoolSwaps(auction.pair, auction.settledAt, true);
+  const external = externalProp || remote !== undefined;
+  const swaps = usePoolSwaps(remote ? zeroAddress : auction.pair, auction.settledAt, true);
   // The same reads as the Holders tab (shared queries): who holds what, and every transfer to rebuild their trades.
   const transfers = useTokenTransfers(auction.token, factory, BigInt(id), auction.startTime - 86_400, !external);
-  const market = useLaunchMarket(auction.token, auction.pair);
+  const market = useLaunchMarket(remote ? zeroAddress : auction.token, remote ? zeroAddress : auction.pair);
   // The launch's own milestones, marked on the bars: graduation, the anti-sniper window closing, the creator's unlock.
   const vestDays = useCreatorVestingDays(external ? null : factory, external ? null : BigInt(id), 4);
   const { address: wallet } = useConnection();
@@ -242,7 +250,6 @@ export function ProChart({
   // A trade reaches the candles the frame after it arrives (was at most four redraws a second, which held a trade back
   // up to 250 ms here and as much again on the feed's candles below).
   const redrawMs = 16;
-  const swapData = useThrottled(swaps.data, redrawMs);
   // The shared feed's candles (crux-solver feedhub.ts): made once on the server for every viewer and kept current by
   // its frames, so the page neither reads the chain nor buckets trades. A pool it doesn't serve (another DEX's), or
   // while it's down, falls back to bucketing the trades here.
@@ -258,6 +265,11 @@ export function ProChart({
   const feedTick = useRef<(cs: FeedCandle[]) => void>(() => {});
   const onFeedFrame = useCallback((cs: FeedCandle[]) => feedTick.current(cs), []);
   const feed = useFeedCandles(external ? null : auction.pair, pickedInterval, onFeedFrame);
+  // Another chain's coin: its candles and trades from its own pool there.
+  const rc = useRemoteChart(remote ?? null, pickedInterval);
+  const swapData = useThrottled(remote ? rc.swapData : swaps.data, redrawMs);
+  const tradesPending = remote ? rc.isPending : swaps.isPending;
+  const tradesLoaded = remote ? rc.candles !== undefined : swaps.data !== undefined;
   const feedLive = feed.usable;
   const feedCandles = feedLive ? feed.candles : null;
   // The opening, the token's first trade (lib/openingTrade): a launch whose only activity is its opening still draws.
@@ -306,11 +318,15 @@ export function ProChart({
     [feed.firstTime, interval, gradPrice, opening, swapData],
   );
   const allCandles = useMemo(() => {
+    if (remote) {
+      const r = rc.candles ?? [];
+      return r.length > MAX_CANDLES ? r.slice(-MAX_CANDLES) : r;
+    }
     if (feedCandles) return fromFeed(feedCandles);
     // Every trade bucketed (only periods that traded become candles), then the newest MAX_CANDLES.
     const all = toCandles(fills, interval, gradPrice > 0 ? gradPrice : null);
     return all.length > MAX_CANDLES ? all.slice(-MAX_CANDLES) : all;
-  }, [fills, feedCandles, fromFeed, interval, gradPrice]);
+  }, [fills, feedCandles, fromFeed, interval, gradPrice, remote, rc.candles]);
   // Bar replay: the chart as it stood at `index`, played forward a candle at a time. Off: every candle, live.
   const [replay, setReplay] = useState<{ index: number | null; playing: boolean; speed: number } | null>(null);
   const replayIndex = replay?.index ?? null;
@@ -1298,7 +1314,7 @@ export function ProChart({
       className="absolute z-30 w-56 rounded-[3px] border border-signal/60 bg-panel-2 px-2 py-1 text-[12px] text-chrome outline-none placeholder:text-dim"
     />
   ) : null;
-  const live = swaps.data !== undefined && !swaps.isError;
+  const live = remote ? tradesLoaded && !rc.isError : swaps.data !== undefined && !swaps.isError;
 
   return (
     // A terminal frame, as on TradingView: one toolbar on top, the drawing rail on the left, the bottom bar under it all.
@@ -1593,9 +1609,12 @@ export function ProChart({
             {toast}
           </p>
         )}
-        {swaps.isPending && <p className="absolute inset-x-0 top-1/2 text-center text-[12px] text-dim">Reading trades from {NETWORK_NAME}…</p>}
-        {swaps.data && candles.length === 0 && (
-          <p className="absolute inset-x-0 top-1/2 px-6 text-center text-[12px] text-dim">{external ? "No swaps in this pool in the last few days." : `No trades since graduation. The pool opened at ${fmtTokenPrice(gradPrice)}.`}</p>
+        {tradesPending && <p className="absolute inset-x-0 top-1/2 text-center text-[12px] text-dim">{remote ? "Loading the chart…" : `Reading trades from ${NETWORK_NAME}…`}</p>}
+        {remote && rc.isError && !tradesLoaded && <p className="absolute inset-x-0 top-1/2 text-center text-[12px] text-dim">The chart is busy. Trying again…</p>}
+        {tradesLoaded && candles.length === 0 && (
+          <p className="absolute inset-x-0 top-1/2 px-6 text-center text-[12px] text-dim">
+            {remote ? (interval < 60 ? "No trades in the last few minutes. Pick 1m or longer to see more." : "No trades yet.") : external ? "No swaps in this pool in the last few days." : `No trades since graduation. The pool opened at ${fmtTokenPrice(gradPrice)}.`}
+          </p>
         )}
       </div>
       </div>
@@ -1661,7 +1680,9 @@ export function ProChart({
         }}
         note={
           <>
-            {external
+            {remote
+              ? "Prices from the coin's deepest market; under a minute, candles are made from its latest trades."
+              : external
               ? "Every swap in this Uniswap pool, its fee included."
               : "Every trade on the locked liquidity since graduation (batch fills during an anti-sniper window, then Uniswap V2 swaps), the 0.3% pool fee included."}{" "}
             {config.units === "mcap" ? "Market cap = price × total supply." : ""} Right-click the chart for more; Alt+R resets the view.

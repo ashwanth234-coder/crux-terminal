@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CoinRail } from "@/components/coin/CoinRail";
 import { TerminalShell } from "@/components/pro/TerminalShell";
-import { SolanaChart } from "@/components/solana/SolanaChart";
+import { ChartGrid } from "@/components/chart/ChartGrid";
+import { zeroAddress, type Address } from "viem";
+import type { AuctionV2 } from "@/lib/launchV2";
 import { explorer, poolStats, poolTrades, type CoinTrade, type PoolStats } from "@/lib/coinMarket";
 import { fmtCompact, fmtPrice, type ChartNetwork } from "@/lib/solanaCoins";
 
@@ -68,6 +70,32 @@ export function CoinTerminal({ network, token, coin, trade, path }: { network: C
   const s = stats.data;
   const price = coin?.price ?? s?.price;
   const symbol = coin?.symbol || "…";
+  // The Crux pro chart takes a launch's shape; for another chain's coin it needs only the supply (for market-cap
+  // units) and when trading began. Its candles and trades come from the coin's own pool (`remote`).
+  const mcap = coin?.mcap ?? s?.mcap;
+  const supply = mcap !== undefined && price ? Math.round(mcap / price) : 0;
+  const since = s?.createdAt ? Math.floor(s.createdAt / 1000) : 0;
+  const auction = useMemo<AuctionV2>(
+    () => ({
+      token: token as Address,
+      creator: zeroAddress,
+      startTime: since,
+      batchWindow: 0,
+      status: 1,
+      bidderCount: 0,
+      settledAt: since,
+      pair: zeroAddress,
+      totalSupply: BigInt(supply) * BigInt("1000000000000000000"),
+      saleSupply: BigInt(0),
+      graduationTarget: BigInt(0),
+      floorPrice: BigInt(0),
+      maxAllocationPerWallet: BigInt(0),
+      totalDeposits: BigInt(0),
+      clearingPrice: BigInt(0),
+    }),
+    [token, since, supply],
+  );
+  const remote = useMemo(() => ({ network, token }), [network, token]);
   const now = useNow();
 
   return (
@@ -79,8 +107,8 @@ export function CoinTerminal({ network, token, coin, trade, path }: { network: C
         <CoinRail current={path} />
       </div>
       <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)] gap-px bg-line max-lg:pb-6 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] lg:grid-rows-[minmax(0,1fr)_minmax(190px,30%)]">
-        <section aria-label="Chart" className="bg-void max-lg:h-[62svh] max-lg:min-h-[420px] lg:col-start-1 lg:row-start-1 lg:min-h-0">
-          <SolanaChart mint={token} network={network} fill />
+        <section aria-label="Chart" className="bg-void p-1.5 max-lg:h-[72svh] max-lg:min-h-[460px] lg:col-start-1 lg:row-start-1 lg:min-h-0">
+          <ChartGrid auction={auction} symbol={`$${coin?.symbol || "Coin"}`} name={coin?.name ?? null} factory={zeroAddress} id="0" external remote={remote} />
         </section>
         <aside aria-label="Buy and sell" className="bg-panel p-3 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:overflow-y-auto">
           {trade}
