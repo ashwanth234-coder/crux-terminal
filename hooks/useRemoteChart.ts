@@ -41,6 +41,9 @@ async function livePrice(network: ChartNetwork, pool: string, token: string): Pr
   return p > 0 ? p : null;
 }
 
+/** Every live price read this visit, per coin: the chart draws from these while the candle source is busy. */
+const tickLog = new Map<string, { time: number; price: number }[]>();
+
 /** USD candles at `interval` seconds: the largest size GeckoTerminal has that divides it, merged up when needed. */
 async function remoteCandles(network: ChartNetwork, pool: string, token: string, interval: number): Promise<Candle[]> {
   const [size, unit, aggregate] = FRAMES.find(([s]) => interval % s === 0) ?? FRAMES[FRAMES.length - 1];
@@ -83,7 +86,17 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
   const fine = interval < 60;
   const tick = useQuery({
     queryKey: ["coin-tick", coin?.network, addr, coin?.token],
-    queryFn: () => livePrice(coin!.network, addr!, coin!.token),
+    queryFn: async () => {
+      const p = await livePrice(coin!.network, addr!, coin!.token);
+      if (p !== null) {
+        const key = `${coin!.network}:${coin!.token}`;
+        const log = tickLog.get(key) ?? [];
+        log.push({ time: Math.floor(Date.now() / 1000), price: p });
+        if (log.length > 5_000) log.splice(0, log.length - 5_000);
+        tickLog.set(key, log);
+      }
+      return p;
+    },
     enabled: coin !== null && addr !== null,
     refetchInterval: coin?.network === "solana" ? 2_000 : 3_000,
     staleTime: 1_000,
@@ -140,7 +153,13 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
   // The live price moves the newest candle (or opens the next one when its period has begun), every tick.
   const live = tick.data ?? null;
   const tickAt = tick.dataUpdatedAt;
+  const busy = trades.isError || (!fine && candles.isError);
   const drawn = useMemo(() => {
+    // The candle source is busy: draw this visit's live prices instead of a blank chart.
+    if (!base && busy && coin && tickAt) {
+      const log = tickLog.get(`${coin.network}:${coin.token}`) ?? [];
+      return log.length ? toCandles(log.map((t) => ({ time: t.time, price: t.price, usdc: BigInt(0) })), interval) : undefined;
+    }
     if (!base || live === null || base.length === 0 || !tickAt) return base;
     const out = base.slice();
     const last = { ...out[out.length - 1] };
@@ -155,12 +174,12 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
       out[out.length - 1] = last;
     }
     return out;
-  }, [base, live, tickAt, interval]);
+  }, [base, live, tickAt, interval, busy, coin]);
 
   return {
     candles: drawn,
     swapData,
-    isPending: coin !== null && drawn === undefined && !pool.isError && !trades.isError && !candles.isError,
+    isPending: coin !== null && drawn === undefined && !pool.isError && !busy,
     isError: pool.isError || trades.isError || (!fine && candles.isError),
     noMarket: pool.data === null,
   };

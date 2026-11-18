@@ -139,9 +139,23 @@ export async function searchSolanaCoins(q: string, limit = 5): Promise<SolanaCoi
 /** One coin's facts by its mint, or null when Jupiter doesn't know it. */
 export async function solanaCoin(mint: string): Promise<SolanaCoin | null> {
   const r = await fetch(`https://lite-api.jup.ag/tokens/v2/search?query=${encodeURIComponent(mint)}`);
-  if (!r.ok) return null;
+  // A busy or failed read is retried, never taken as "not listed" (a fresh pump coin showed that, 2026-11-18).
+  if (!r.ok) throw new Error(`coin lookup ${r.status}`);
   const hit = ((await r.json()) as JupToken[]).find((t) => t.id === mint);
-  return hit ? toCoin(hit) : null;
+  if (hit) return toCoin(hit);
+  // Not in Jupiter's list yet (minutes-old coins): its market on DexScreener still names it.
+  const pair = await deepestPair("solana", mint);
+  if (!pair || pair.baseToken.address !== mint) return null;
+  return {
+    mint,
+    name: pair.baseToken.name ?? "",
+    symbol: (pair.baseToken.symbol ?? "").replace(/^\$/, ""),
+    price: pair.priceUsd ? Number(pair.priceUsd) : undefined,
+    change24h: pair.priceChange?.h24,
+    mcap: pair.marketCap ?? pair.fdv,
+    liquidity: pair.liquidity?.usd,
+    verified: false,
+  };
 }
 
 export type Candle = { time: number; open: number; high: number; low: number; close: number; volume: number };

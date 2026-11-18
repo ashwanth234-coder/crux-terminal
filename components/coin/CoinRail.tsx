@@ -29,7 +29,7 @@ export function CoinRail({ current }: { current: string }) {
   const [chain, setChain] = useState<Chain>("all");
   const majors = useQuery({ queryKey: ["solana-majors"], queryFn: () => solanaCoins(SOLANA_MAJORS), refetchInterval: 60_000, staleTime: 30_000 });
   const sol = useQuery({ queryKey: ["solana-fresh"], queryFn: () => freshSolanaCoins(), refetchInterval: 15_000, staleTime: 5_000, enabled: chain !== "bnb" });
-  const bnb = useQuery({ queryKey: ["bnb-fresh"], queryFn: () => freshBnbCoins(), refetchInterval: 30_000, staleTime: 10_000, enabled: chain !== "sol" });
+  const bnb = useQuery({ queryKey: ["bnb-fresh"], queryFn: () => freshBnbCoins(), refetchInterval: 30_000, staleTime: 10_000, enabled: chain === "bnb" });
 
   const big: Item[] = [
     ...(chain === "bnb" ? [] : (majors.data ?? []).map((c) => ({ key: `sol:${c.mint}`, href: `/sol/${c.mint}`, chain: "sol" as const, symbol: c.symbol, icon: c.icon, mcap: c.mcap, change: c.change24h }))),
@@ -37,7 +37,7 @@ export function CoinRail({ current }: { current: string }) {
   ];
   const fresh: Item[] = [
     ...(chain === "bnb" ? [] : (sol.data ?? []).slice(0, 25).map((c) => ({ key: `sol:${c.mint}`, href: `/sol/${c.mint}`, chain: "sol" as const, symbol: c.symbol, icon: c.icon, mcap: c.mcap, createdAt: c.createdAt }))),
-    ...(chain === "sol" ? [] : (bnb.data ?? []).slice(0, 25).map((c) => ({ key: `bnb:${c.address}`, href: `/bnb/${c.address}`, chain: "bnb" as const, symbol: c.symbol, icon: c.icon, mcap: c.mcap, createdAt: c.createdAt }))),
+    ...(chain !== "bnb" ? [] : (bnb.data ?? []).slice(0, 25).map((c) => ({ key: `bnb:${c.address}`, href: `/bnb/${c.address}`, chain: "bnb" as const, symbol: c.symbol, icon: c.icon, mcap: c.mcap, createdAt: c.createdAt }))),
   ].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
 
   const chips: [Chain, string][] = [
