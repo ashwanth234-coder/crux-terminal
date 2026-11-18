@@ -105,23 +105,19 @@ export function Shell({ mode, children }: { mode: LaunchModel["mode"] | null; ch
   return (
     <div className="min-h-svh">
       <header className="border-b border-line">
-        <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between gap-4 px-4 sm:px-8 lg:px-12">
-          <div className="flex items-center gap-6 sm:gap-10">
-            <Link href="/" aria-label="Crux home" className="shrink-0">
-              <Logo />
-            </Link>
-            <nav aria-label="Primary" className="hidden lg:block">
+        <div className="mx-auto flex h-16 max-w-[1760px] items-center justify-between gap-4 px-4 sm:px-8 lg:px-12">
+          <div className="flex shrink-0 items-center gap-6 sm:gap-10">
+            <span className="flex items-center gap-3">
+              <Link href="/" aria-label="Crux home" className="shrink-0">
+                <Logo />
+              </Link>
+              {mode && <StatusTag status={mode === "simulated" ? "demo" : IS_TESTNET ? "testnet" : "live"} className="hidden sm:inline-flex" />}
+            </span>
+            <nav aria-label="Primary" className="hidden min-[1440px]:block">
               <SiteNav variant="inline" hide={["Docs", "Protocol"]} />
             </nav>
           </div>
-          <div className="flex items-center gap-3">
-            {mode && (
-              <StatusTag
-                status={mode === "simulated" ? "demo" : IS_TESTNET ? "testnet" : "live"}
-                label={mode === "simulated" ? "Simulated preview" : `${NETWORK_NAME}`}
-                className="hidden 2xl:inline-flex"
-              />
-            )}
+          <div className="flex min-w-0 items-center gap-3">
             <TokenSearch className="hidden w-[220px] min-w-[140px] shrink md:block" />
             <MobileSearch className="md:hidden" />
             <LanguageSwitcher compact className="hidden md:flex" />
@@ -131,7 +127,7 @@ export function Shell({ mode, children }: { mode: LaunchModel["mode"] | null; ch
           </div>
         </div>
         {/* Below lg the routes sit on their own slim row, scrolling sideways if they must */}
-        <nav aria-label="Primary" className="overflow-x-auto border-t border-line px-4 sm:px-8 lg:hidden">
+        <nav aria-label="Primary" className="overflow-x-auto border-t border-line px-4 sm:px-8 min-[1440px]:hidden">
           <SiteNav variant="inline" />
         </nav>
       </header>

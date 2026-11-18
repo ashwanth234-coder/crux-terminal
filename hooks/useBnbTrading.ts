@@ -84,8 +84,14 @@ export function useBnbTrading(coin: string | null) {
           // The first BNB trade: add Crux's signer to the wallet (silent), then send it again.
           if (!/Turn on BNB Chain trading/i.test((e as Error).message)) throw e;
           setResult({ kind: "busy", label: "Turning on BNB Chain trading (once)…" });
-          await enable();
-          r = await send();
+          await enable().catch((err: Error) => {
+            console.warn("bnb: adding Crux's signer failed", err);
+            throw new Error("Couldn't turn on BNB Chain trading. Reload the page and try again.");
+          });
+          r = await send().catch((err: Error) => {
+            if (/Turn on BNB Chain trading/i.test(err.message)) throw new Error("BNB Chain trading didn't turn on yet. Wait a few seconds and press Buy again.");
+            throw err;
+          });
         }
         const sent = { kind: "done" as const, side, hash: r.hash, ms: Math.round(performance.now() - t0) };
         setResult({ ...sent, confirmed: false });

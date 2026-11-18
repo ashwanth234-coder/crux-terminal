@@ -50,7 +50,7 @@ export function AccountButton() {
       >
         <span className={`h-1.5 w-1.5 rounded-full ${moving.kind === "moving" ? "animate-pulse bg-signal" : protectedNow ? "bg-up" : "bg-down"}`} aria-hidden="true" />
         {/* Says what it opens: the CRUX Account page (balance, deposit, withdraw, holdings, creator rewards). */}
-        <span className="hidden font-sans uppercase tracking-[0.14em] text-dim xl:inline">Account</span>
+        <span className="hidden font-sans uppercase tracking-[0.14em] text-dim min-[1800px]:inline">Account</span>
         {a.usdc === null ? (
           "Account"
         ) : one.testnet ? (
