@@ -22,6 +22,7 @@ import {
   WITHDRAW_NETWORKS,
   type WithdrawNetwork,
 } from "@/lib/account";
+import { ExportWallets } from "@/components/account/ExportWallets";
 import { TESTNET, TESTNET_EXPLORER } from "@/lib/chains";
 import { FACTORY, FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7, FACTORY_V8, TESTNET_USDC } from "@/lib/intents";
 import { fmtTokens, fmtUsdc, formatRemaining } from "@/lib/launch";
@@ -575,6 +576,8 @@ export function AccountPanel() {
         </details>
       )}
 
+
+      <ExportWallets />
 
       <p className="text-[11.5px] leading-relaxed text-dim">
         How it&apos;s protected: your login signs every trade and withdrawal, and Crux pays the gas. Your money can only be traded on Crux, with
