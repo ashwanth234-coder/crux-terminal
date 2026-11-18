@@ -98,8 +98,10 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
     return watchCoinTrades(coin.network, coin.token, (fresh) => {
       setLiveFeed(true);
       qc.setQueryData<CoinTrade[]>(key, (old) => {
-        const have = new Set((old ?? []).map((t) => t.tx));
-        const add = fresh.filter((t) => !have.has(t.tx));
+        // A trade read from a market's balances carries no transaction: its own id keeps it apart.
+        const keyOf = (t: CoinTrade) => t.tx || t.id;
+        const have = new Set((old ?? []).map(keyOf));
+        const add = fresh.filter((t) => !have.has(keyOf(t)));
         if (add.length === 0) return old;
         return [...add, ...(old ?? [])].sort((a, b) => b.time - a.time).slice(0, 600);
       });

@@ -336,12 +336,18 @@ function Desk({
                   <td className={`${td} text-right text-muted`}>{amount(t.amount)}</td>
                   <td className={`${td} text-right text-chrome`}>{fmtPrice(t.price)}</td>
                   <td className={td}>
-                    <button type="button" onClick={() => setFocus(focus === t.trader ? null : t.trader)} className="text-muted hover:text-chrome" title="Only this trader's trades">
-                      {short(t.trader)}
-                    </button>
-                    <a href={x.tx(t.tx)} target="_blank" rel="noopener noreferrer" className="ml-2 text-dim hover:text-chrome" aria-label="Open the trade">
-                      ↗
-                    </a>
+                    {t.trader ? (
+                      <button type="button" onClick={() => setFocus(focus === t.trader ? null : t.trader)} className="text-muted hover:text-chrome" title="Only this trader's trades">
+                        {short(t.trader)}
+                      </button>
+                    ) : (
+                      <span className="text-dim">live</span>
+                    )}
+                    {t.tx && (
+                      <a href={x.tx(t.tx)} target="_blank" rel="noopener noreferrer" className="ml-2 text-dim hover:text-chrome" aria-label="Open the trade">
+                        ↗
+                      </a>
+                    )}
                   </td>
                 </tr>
               ))}
