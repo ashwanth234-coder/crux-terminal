@@ -49,8 +49,24 @@ async function latestV9(): Promise<string | null> {
   return count > 0 ? `/launch/v9/${count - 1}` : null;
 }
 
+/** With no launch to open: Solana's own coin, always trading, in the coin terminal. */
+const DEFAULT_COIN = "/sol/So11111111111111111111111111111111111111112";
+
+/** The coin the trader last had open (set by the coin terminal), if it's a coin page path. */
+function lastCoin(request: Request): string | null {
+  const m = /(?:^|;\s*)crux_last_coin=([^;]+)/.exec(request.headers.get("cookie") ?? "");
+  if (!m) return null;
+  let path: string;
+  try {
+    path = decodeURIComponent(m[1]);
+  } catch {
+    return null;
+  }
+  return /^\/(sol\/[1-9A-HJ-NP-Za-km-z]{32,44}|bnb\/0x[0-9a-fA-F]{40})$/.test(path) ? path : null;
+}
+
 async function latestTerminal(): Promise<string> {
-  if (V9_ON) return (await latestV9()) ?? "/discover";
+  if (V9_ON) return (await latestV9()) ?? DEFAULT_COIN;
   const factories = ([[8, FACTORY_V8], [7, FACTORY_V7], [6, FACTORY_V6], [5, FACTORY_V5], [4, FACTORY_V4], [3, FACTORY_V3]] as const).filter(
     (c): c is readonly [8 | 7 | 6 | 5 | 4 | 3, `0x${string}`] => c[1] !== null,
   );
@@ -60,14 +76,20 @@ async function latestTerminal(): Promise<string> {
   return pick ? `/launch/v${pick.version}/${pick.id}` : FALLBACK;
 }
 
-/** /terminal: one click from the nav into the live pro trading view, resolved on-chain per request. */
+/**
+ * /terminal: one click from the nav into a live pro trading view: the coin the trader last had open, else the newest
+ * Crux launch (resolved on-chain per request), else SOL. Never a list page.
+ */
 export async function GET(request: Request) {
   await connection();
-  let path = FALLBACK;
-  try {
-    path = await latestTerminal();
-  } catch {
-    // Base Sepolia unreachable: the launch list still loads and retries on its own.
+  const last = lastCoin(request);
+  let path = last ?? (V9_ON ? DEFAULT_COIN : FALLBACK);
+  if (!last) {
+    try {
+      path = await latestTerminal();
+    } catch {
+      // Base Sepolia unreachable: open the default coin (or the launch list) instead.
+    }
   }
   return new Response(null, {
     status: 307,

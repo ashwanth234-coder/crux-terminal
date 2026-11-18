@@ -14,7 +14,8 @@ function themeColor(name: string, fallback: string) {
 }
 
 /** A Solana coin's price chart: USD candles and volume from its deepest pool, refreshed every 30 s. */
-export function SolanaChart({ mint, network = "solana" }: { mint: string; network?: ChartNetwork }) {
+/** `fill`: no card frame, and it fills its panel (the coin terminal's chart pane). */
+export function SolanaChart({ mint, network = "solana", fill = false }: { mint: string; network?: ChartNetwork; fill?: boolean }) {
   const host = useRef<HTMLDivElement>(null);
   const chart = useRef<IChartApi | null>(null);
   const [tf, setTf] = useState<Timeframe>("5m");
@@ -46,7 +47,7 @@ export function SolanaChart({ mint, network = "solana" }: { mint: string; networ
   }, [candles.data]);
 
   return (
-    <section className="rounded-xl border border-line p-3">
+    <section className={fill ? "flex h-full min-h-0 flex-col p-2" : "rounded-xl border border-line p-3"}>
       <div className="mb-2 flex gap-1">
         {FRAMES.map((f) => (
           <button
@@ -59,7 +60,7 @@ export function SolanaChart({ mint, network = "solana" }: { mint: string; networ
           </button>
         ))}
       </div>
-      <div ref={host} className="h-[360px] w-full md:h-[440px]">
+      <div ref={host} className={fill ? "min-h-0 w-full flex-1" : "h-[360px] w-full md:h-[440px]"}>
         {candles.isLoading && <p className="p-4 text-[12px] text-dim">Loading the chart…</p>}
         {candles.data?.length === 0 && <p className="p-4 text-[12px] text-dim">No chart for this coin yet.</p>}
       </div>

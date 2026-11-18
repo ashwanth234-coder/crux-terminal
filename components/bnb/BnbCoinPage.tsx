@@ -2,67 +2,34 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Shell } from "@/components/launch/LaunchView";
-import { SolanaChart } from "@/components/solana/SolanaChart";
+import { CoinTerminal } from "@/components/coin/CoinTerminal";
 import { buttonClass } from "@/components/ui/Button";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { useBnbTrading } from "@/hooks/useBnbTrading";
 import { bnbCoin, bnbFeeText } from "@/lib/bnbCoins";
-import { fmtCompact, fmtPrice } from "@/lib/solanaCoins";
 
-/** /bnb/[address]: a BNB Chain coin, traded from the one Crux account. Chart left, Buy/Sell right. */
+/** /bnb/[address]: a BNB Chain coin in the pro terminal, traded from the one Crux account. */
 export function BnbCoinPage({ address }: { address: string }) {
   const coin = useQuery({ queryKey: ["bnb-coin", address], queryFn: () => bnbCoin(address), refetchInterval: 30_000 });
   const c = coin.data;
-  const change = c?.change24h;
   return (
-    <Shell mode="live">
-      <div className="mx-auto flex max-w-[1180px] flex-col gap-4">
-        <header className="flex flex-wrap items-center gap-x-6 gap-y-2">
-          <div className="flex items-center gap-3">
-            {/* eslint-disable-next-line @next/next/no-img-element -- token icons come from any host */}
-            {c?.icon ? <img src={c.icon} alt="" className="h-10 w-10 rounded-full" /> : <span className="h-10 w-10 rounded-full bg-line" aria-hidden="true" />}
-            <div>
-              <h1 className="text-[20px] text-chrome">
-                ${c?.symbol || "…"} <span className="text-[13px] text-dim">{c?.name}</span>
-              </h1>
-              <span className="rounded border border-line px-1.5 py-px text-[9.5px] uppercase tracking-[0.1em] text-muted">BNB</span>
-            </div>
-          </div>
-          <div className="font-mono text-[22px] text-chrome">{c?.price !== undefined ? fmtPrice(c.price) : "…"}</div>
-          {change !== undefined && (
-            <div className={`font-mono text-[13px] ${change >= 0 ? "text-up" : "text-down"}`}>
-              {change >= 0 ? "+" : ""}
-              {change.toFixed(2)}% 24h
-            </div>
-          )}
-          <dl className="flex gap-5 text-[12px]">
-            {c?.mcap !== undefined && (
-              <div>
-                <dt className="text-dim">Market cap</dt>
-                <dd className="font-mono text-chrome">{fmtCompact(c.mcap)}</dd>
-              </div>
-            )}
-            {c?.liquidity !== undefined && (
-              <div>
-                <dt className="text-dim">Liquidity</dt>
-                <dd className="font-mono text-chrome">{fmtCompact(c.liquidity)}</dd>
-              </div>
-            )}
-          </dl>
-        </header>
-        {coin.data === null && <p className="text-[13px] text-down">This coin has no market on BNB Chain, so it can&rsquo;t be traded here.</p>}
-        <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-          <SolanaChart mint={address} network="bsc" />
+    <CoinTerminal
+      network="bsc"
+      token={address}
+      coin={c}
+      path={`/bnb/${address}`}
+      trade={
+        <>
+          {c === null && <p className="mb-3 text-[12.5px] text-down">This coin has no market on BNB Chain yet, so it can&rsquo;t be traded here.</p>}
           <BnbTradePanel address={address} symbol={c?.symbol} price={c?.price} />
-        </div>
-      </div>
-    </Shell>
+        </>
+      }
+    />
   );
 }
 
 /** The Buy/Sell panel for a BNB Chain coin: the same as Solana's, paid from the Crux balance's BNB-side cash. */
-function BnbTradePanel({ address, symbol = "coin", price }: { address: string; symbol?: string; price?: number }) {
+export function BnbTradePanel({ address, symbol = "coin", price }: { address: string; symbol?: string; price?: number }) {
   const crux = useCruxAccount();
   const t = useBnbTrading(address);
   const [custom, setCustom] = useState("");

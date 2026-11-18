@@ -157,18 +157,49 @@ const FRAMES: Record<Timeframe, { unit: "minute" | "hour" | "day"; aggregate: nu
 
 /** GeckoTerminal's name for each chain the terminal charts. */
 export type ChartNetwork = "solana" | "bsc";
-const poolCache = new Map<string, string>();
-/** The coin's deepest pool on GeckoTerminal (its candles follow that pool). */
-async function topPool(network: ChartNetwork, token: string): Promise<string | null> {
-  const key = `${network}:${token}`;
-  const known = poolCache.get(key);
-  if (known) return known;
-  const r = await fetch(`https://api.geckoterminal.com/api/v2/networks/${network}/tokens/${token}/pools?page=1`, { headers: { accept: "application/json" } });
-  if (!r.ok) return null;
-  const pool = ((await r.json()) as { data?: { attributes?: { address?: string } }[] }).data?.[0]?.attributes?.address ?? null;
-  if (pool) poolCache.set(key, pool);
-  return pool;
+/** A coin's market as DexScreener lists it (its free API allows ~300 reads a minute, so it carries the live stats). */
+export type DexPair = {
+  dexId?: string;
+  pairAddress: string;
+  baseToken: { address: string; name?: string; symbol?: string };
+  quoteToken: { address: string; symbol?: string };
+  priceUsd?: string;
+  priceChange?: { m5?: number; h1?: number; h6?: number; h24?: number };
+  txns?: Record<"m5" | "h1" | "h6" | "h24", { buys?: number; sells?: number } | undefined>;
+  volume?: { m5?: number; h1?: number; h6?: number; h24?: number };
+  liquidity?: { usd?: number };
+  marketCap?: number;
+  fdv?: number;
+  pairCreatedAt?: number;
+};
+
+const DEX_CHAIN: Record<ChartNetwork, string> = { solana: "solana", bsc: "bsc" };
+const pairCache = new Map<string, { at: number; pair: Promise<DexPair | null> }>();
+/**
+ * The coin's deepest market (most money in it), with its live numbers: one read per coin every 15 s, shared by
+ * everything on the page asking at once. Its address is the pool the chart and trades follow.
+ */
+export function deepestPair(network: ChartNetwork, token: string): Promise<DexPair | null> {
+  const key = `${network}:${token.toLowerCase()}`;
+  const hit = pairCache.get(key);
+  if (hit && Date.now() - hit.at < 15_000) return hit.pair;
+  const pair = (async () => {
+    const r = await fetch(`https://api.dexscreener.com/token-pairs/v1/${DEX_CHAIN[network]}/${token}`);
+    if (!r.ok) throw new Error(`markets ${r.status}`);
+    const t = token.toLowerCase();
+    const pairs = ((await r.json()) as DexPair[]).filter(
+      // Pools with a 0x… address (or any Solana one): the chart's source reads those.
+      (p) => (p.baseToken.address.toLowerCase() === t || p.quoteToken.address.toLowerCase() === t) && (network === "solana" || /^0x[0-9a-fA-F]{40}$/.test(p.pairAddress)),
+    );
+    return pairs.sort((x, y) => (y.liquidity?.usd ?? 0) - (x.liquidity?.usd ?? 0))[0] ?? null;
+  })();
+  pairCache.set(key, { at: Date.now(), pair });
+  pair.catch(() => pairCache.delete(key));
+  return pair;
 }
+
+/** The coin's deepest pool (its candles, stats and trades follow that pool). */
+export const topPool = async (network: ChartNetwork, token: string) => (await deepestPair(network, token))?.pairAddress ?? null;
 
 /** USD candles for a coin, oldest first, from its deepest pool. Empty when there's no pool or the API is busy. */
 export async function coinCandles(network: ChartNetwork, token: string, tf: Timeframe): Promise<Candle[]> {

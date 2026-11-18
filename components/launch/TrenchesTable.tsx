@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { freshBnbCoins } from "@/lib/coinMarket";
 import { fmtCompact, freshSolanaCoins, type FreshCoin } from "@/lib/solanaCoins";
 
 const age = (ms: number) => {
@@ -22,15 +24,86 @@ export function warnings(c: FreshCoin): string[] {
 }
 
 /**
- * Discover's Trenches tab: the newest Solana coins, refreshed every 10 s, with what tells a runner from a rug (age,
+ * Discover's Trenches tab: the newest Solana and BNB Chain coins, refreshed every 10-20 s, with what tells a runner from a rug (age,
  * money in the pool, holders, the last five minutes' buys and sells, and the warning signs). The left side of the
  * "barbell": fast, small, risky; pair it with the creator-sell alert on the coin's page.
  */
+type Chain = "all" | "sol" | "bnb";
+type Row = {
+  key: string;
+  chain: "sol" | "bnb";
+  href: string;
+  symbol: string;
+  name: string;
+  icon?: string;
+  createdAt: number;
+  mcap?: number;
+  liquidity?: number;
+  holders?: number;
+  buys5m?: number;
+  sells5m?: number;
+  /** null: not known for this chain's coins (no warning-sign data), so nothing is claimed either way. */
+  warnings: string[] | null;
+};
+
 export function TrenchesTable() {
-  const q = useQuery({ queryKey: ["solana-fresh"], queryFn: () => freshSolanaCoins(), refetchInterval: 10_000, staleTime: 5_000 });
-  const rows = q.data ?? [];
+  const [chain, setChain] = useState<Chain>("all");
+  const sol = useQuery({ queryKey: ["solana-fresh"], queryFn: () => freshSolanaCoins(), refetchInterval: 10_000, staleTime: 5_000, enabled: chain !== "bnb" });
+  // GeckoTerminal allows ~30 reads a minute per visitor: two pages every 20 s.
+  const bnb = useQuery({ queryKey: ["bnb-fresh"], queryFn: () => freshBnbCoins(), refetchInterval: 20_000, staleTime: 10_000, enabled: chain !== "sol" });
+  const solRows: Row[] = (sol.data ?? []).map((c) => ({
+    key: `sol:${c.mint}`,
+    chain: "sol",
+    href: `/sol/${c.mint}`,
+    symbol: c.symbol,
+    name: c.name,
+    icon: c.icon,
+    createdAt: c.createdAt,
+    mcap: c.mcap,
+    liquidity: c.liquidity,
+    holders: c.holders,
+    buys5m: c.buys5m,
+    sells5m: c.sells5m,
+    warnings: warnings(c),
+  }));
+  const bnbRows: Row[] = (bnb.data ?? []).map((c) => ({
+    key: `bnb:${c.address}`,
+    chain: "bnb",
+    href: `/bnb/${c.address}`,
+    symbol: c.symbol,
+    name: c.name,
+    icon: c.icon,
+    createdAt: c.createdAt,
+    mcap: c.mcap,
+    liquidity: c.liquidity,
+    buys5m: c.buys5m,
+    sells5m: c.sells5m,
+    warnings: null,
+  }));
+  const rows = (chain === "sol" ? solRows : chain === "bnb" ? bnbRows : [...solRows, ...bnbRows]).sort((a, b) => b.createdAt - a.createdAt);
+  const loading = (chain !== "bnb" && sol.isLoading) || (chain !== "sol" && bnb.isLoading);
+  const q = { isLoading: loading && rows.length === 0 };
+  const chips: [Chain, string][] = [
+    ["all", "All"],
+    ["sol", "Solana"],
+    ["bnb", "BNB Chain"],
+  ];
   return (
-    <div className="mt-6 overflow-x-auto rounded-xl border border-line">
+    <>
+    <div className="mt-6 flex gap-1" role="group" aria-label="Which coins">
+      {chips.map(([c, label]) => (
+        <button
+          key={c}
+          type="button"
+          aria-pressed={chain === c}
+          onClick={() => setChain(c)}
+          className={`rounded-[4px] px-3 py-1 text-[12px] transition-colors ${chain === c ? "bg-panel-2 text-chrome ring-1 ring-inset ring-signal/60" : "text-muted hover:text-chrome"}`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+    <div className="mt-3 overflow-x-auto rounded-xl border border-line">
       <table className="w-full min-w-[760px] border-collapse text-[13px]">
         <thead>
           <tr className="border-b border-line text-left text-[11px] uppercase tracking-[0.12em] text-dim">
@@ -59,28 +132,29 @@ export function TrenchesTable() {
             </tr>
           )}
           {rows.map((c) => {
-            const w = warnings(c);
+            const w = c.warnings;
             return (
-              <tr key={c.mint} className="border-b border-line/60 last:border-0 hover:bg-tint/[0.03]">
+              <tr key={c.key} className="border-b border-line/60 last:border-0 hover:bg-tint/[0.03]">
                 <td className="px-4 py-2.5">
-                  <Link href={`/sol/${c.mint}`} className="flex items-center gap-2.5">
+                  <Link href={c.href} className="flex items-center gap-2.5">
                     {/* eslint-disable-next-line @next/next/no-img-element -- token icons come from any host */}
                     {c.icon ? <img src={c.icon} alt="" className="h-7 w-7 rounded-full" /> : <span className="h-7 w-7 rounded-full bg-line" aria-hidden="true" />}
                     <span className="min-w-0">
                       <span className="text-chrome">${c.symbol}</span> <span className="text-dim">{c.name.slice(0, 22)}</span>
                     </span>
+                    <span className="rounded-[3px] border border-line-2 px-1 py-px font-mono text-[9px] uppercase tracking-[0.1em] text-dim">{c.chain === "sol" ? "SOL" : "BNB"}</span>
                   </Link>
                 </td>
                 <td className="px-3 py-2.5 text-right font-mono text-muted">{age(c.createdAt)}</td>
                 <td className="px-3 py-2.5 text-right font-mono text-chrome">{c.mcap !== undefined ? fmtCompact(c.mcap) : "…"}</td>
                 <td className="px-3 py-2.5 text-right font-mono text-muted">{c.liquidity !== undefined ? fmtCompact(c.liquidity) : "…"}</td>
-                <td className="px-3 py-2.5 text-right font-mono text-muted">{c.holders ?? "…"}</td>
+                <td className="px-3 py-2.5 text-right font-mono text-muted">{c.holders ?? "—"}</td>
                 <td className="px-3 py-2.5 text-right font-mono">
                   <span className="text-up">{c.buys5m ?? 0}</span>
                   <span className="text-dim"> / </span>
                   <span className="text-down">{c.sells5m ?? 0}</span>
                 </td>
-                <td className="px-4 py-2.5 text-[11.5px]">{w.length ? <span className="text-signal">{w.join(" · ")}</span> : <span className="text-up">No warning signs</span>}</td>
+                <td className="px-4 py-2.5 text-[11.5px]">{w === null ? <span className="text-dim">Not checked yet</span> : w.length ? <span className="text-signal">{w.join(" · ")}</span> : <span className="text-up">No warning signs</span>}</td>
               </tr>
             );
           })}
@@ -90,5 +164,6 @@ export function TrenchesTable() {
         Fresh coins are risky: most go to zero. On a coin&rsquo;s page, turn on &ldquo;Notify me when the creator sells&rdquo;.
       </p>
     </div>
+    </>
   );
 }
