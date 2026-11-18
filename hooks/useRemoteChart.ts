@@ -80,7 +80,8 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
   const addr = pool.data ?? null;
   const trades = useQuery({
     // The same query the terminal's trades tab reads (one request for both).
-    queryKey: ["coin-trades", coin?.network, addr],
+    // Keyed by the coin when it has no listed market yet (minutes old): the live feed still brings its trades.
+    queryKey: ["coin-trades", coin?.network, addr ?? coin?.token],
     queryFn: () => poolTrades(coin!.network, addr!, coin!.token),
     enabled: coin !== null && addr !== null,
     // With the live feed on, this only fills in history now and then; the feed brings each trade as it lands.
@@ -92,8 +93,8 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
   // into the trades list the chart and the trades tab both read.
   const qc = useQueryClient();
   useEffect(() => {
-    if (!coin || !addr) return;
-    const key = ["coin-trades", coin.network, addr];
+    if (!coin || pool.isPending) return;
+    const key = ["coin-trades", coin.network, addr ?? coin.token];
     return watchCoinTrades(coin.network, coin.token, (fresh) => {
       setLiveFeed(true);
       qc.setQueryData<CoinTrade[]>(key, (old) => {
@@ -103,7 +104,7 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
         return [...add, ...(old ?? [])].sort((a, b) => b.time - a.time).slice(0, 600);
       });
     });
-  }, [coin, addr, qc]);
+  }, [coin, addr, qc, pool.isPending]);
   const fine = interval < 60;
   const tick = useQuery({
     queryKey: ["coin-tick", coin?.network, addr, coin?.token],

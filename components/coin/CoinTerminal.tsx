@@ -50,7 +50,8 @@ export function CoinTerminal({ network, token, coin, trade, path }: { network: C
   const stats = useQuery({ queryKey: ["coin-pool", network, token], queryFn: () => poolStats(network, token), refetchInterval: 20_000, staleTime: 10_000 });
   const pool = stats.data?.pool;
   const trades = useQuery({
-    queryKey: ["coin-trades", network, pool],
+    // The same key the chart writes live trades to (the coin itself while it has no listed market).
+    queryKey: ["coin-trades", network, pool ?? token],
     queryFn: () => poolTrades(network, pool!, token),
     enabled: Boolean(pool),
     // GeckoTerminal allows ~30 reads a minute per visitor: trades every 10 s, candles every 30 s.
@@ -116,7 +117,7 @@ export function CoinTerminal({ network, token, coin, trade, path }: { network: C
           {s && <Flow stats={s} />}
         </aside>
         <section aria-label="Trades and details" className="min-h-[260px] bg-void p-3 lg:col-start-1 lg:row-start-2 lg:min-h-0 lg:overflow-y-auto">
-          <Desk network={network} token={token} symbol={symbol} trades={trades.data ?? []} loading={stats.isLoading || trades.isLoading} busy={trades.isError && !trades.data} noPool={stats.data === null} now={now} stats={s ?? undefined} />
+          <Desk network={network} token={token} symbol={symbol} trades={trades.data ?? []} loading={stats.isLoading || trades.isLoading} busy={trades.isError && !trades.data} noPool={stats.data === null && !trades.data?.length} now={now} stats={s ?? undefined} />
         </section>
       </div>
       </div>
