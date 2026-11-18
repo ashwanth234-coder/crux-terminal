@@ -88,10 +88,18 @@ export function useBnbTrading(coin: string | null) {
             console.warn("bnb: adding Crux's signer failed", err);
             throw new Error("Couldn't turn on BNB Chain trading. Reload the page and try again.");
           });
-          r = await send().catch((err: Error) => {
-            if (/Turn on BNB Chain trading/i.test(err.message)) throw new Error("BNB Chain trading didn't turn on yet. Wait a few seconds and press Buy again.");
-            throw err;
-          });
+          // Privy takes a few seconds to honour the newly added signer (live 2026-11-18: refused 14 s after adding,
+          // accepted 6 s later), so the trade is sent again by itself until it is, one click for the user.
+          for (let attempt = 1; ; attempt++) {
+            await new Promise((ok) => setTimeout(ok, attempt === 1 ? 1_500 : 2_500));
+            try {
+              r = await send();
+              break;
+            } catch (err) {
+              if (!/Turn on BNB Chain trading/i.test((err as Error).message)) throw err;
+              if (attempt >= 8) throw new Error("BNB Chain trading is still turning on. Wait a few seconds and press again.");
+            }
+          }
         }
         const sent = { kind: "done" as const, side, hash: r.hash, ms: Math.round(performance.now() - t0) };
         setResult({ ...sent, confirmed: false });
