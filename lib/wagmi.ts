@@ -7,6 +7,7 @@ import { farcasterMiniApp } from "@farcaster/miniapp-wagmi-connector";
 import { robinhoodChain } from "./chains";
 import { SITE_URL } from "./site";
 import { cachedReads } from "./readCache";
+import { BASE_RPCS, BASE_RPC_OVERRIDE, NETWORK } from "./network";
 
 const wcProjectId = process.env.NEXT_PUBLIC_WC_PROJECT_ID;
 
@@ -28,28 +29,25 @@ const connectors: CreateConnectorFn[] = [
     : []),
 ];
 
+/**
+ * This build's Base network. An override (a local fork, a paid key) is read directly; unset reads go through the relay's
+ * shared cache, then this network's public RPCs, so one throttled node doesn't stall a page.
+ */
+const baseTransport = BASE_RPC_OVERRIDE
+  ? http(BASE_RPC_OVERRIDE)
+  : cachedReads(fallback(BASE_RPCS.map((u) => http(u, { batch: { batchSize: 50, wait: 16 }, timeout: 10_000, retryCount: 1 }))));
+
 export const wagmiConfig = createConfig({
   // Mainnets for live balances and Farcaster swaps; Base Sepolia for testnet settlement; Arbitrum Sepolia, Ethereum
   // Sepolia and BSC testnet to pay into cross-chain orders (lib/crosschain.ts).
   chains: [base, bsc, robinhoodChain, baseSepolia, arbitrumSepolia, sepolia, bscTestnet],
   connectors,
   transports: {
-    [base.id]: http(),
     [bsc.id]: http(),
     [robinhoodChain.id]: http(),
-    // Optional override (e.g. a local Anvil fork for testing, read directly); unset reads through the relay's shared
-    // cache, then the chain's public RPC.
-    [baseSepolia.id]: process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC
-      ? http(process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC)
-      : // When the relay's cache can't answer: the chain's public RPC, then two others, so one throttled node doesn't
-        // stall a page.
-        cachedReads(
-          fallback(
-            [undefined, "https://base-sepolia-rpc.publicnode.com", "https://base-sepolia.gateway.tenderly.co"].map((u) =>
-              http(u, { batch: { batchSize: 50, wait: 16 }, timeout: 10_000, retryCount: 1 }),
-            ),
-          ),
-        ),
+    // This build's Base network reads through baseTransport; the other Base network gets plain public reads.
+    [base.id]: NETWORK.testnet ? http() : baseTransport,
+    [baseSepolia.id]: NETWORK.testnet ? baseTransport : http(),
     [arbitrumSepolia.id]: http(process.env.NEXT_PUBLIC_ARBITRUM_SEPOLIA_RPC || "https://arbitrum-sepolia-rpc.publicnode.com"),
     [sepolia.id]: http(process.env.NEXT_PUBLIC_SEPOLIA_RPC || "https://ethereum-sepolia-rpc.publicnode.com"),
     [bscTestnet.id]: http(process.env.NEXT_PUBLIC_BSC_TESTNET_RPC || "https://bsc-testnet-rpc.publicnode.com"),

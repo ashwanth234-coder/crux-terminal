@@ -1,6 +1,7 @@
 "use client";
 
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { BASE_RPC_OVERRIDE } from "@/lib/network";
 import { useParams } from "next/navigation";
 import { createPublicClient, formatUnits, http, maxUint256, parseAbi, parseUnits, zeroAddress, type Address } from "viem";
 import { useConfig, useConnection, useReadContracts, useSwitchChain } from "wagmi";
@@ -41,7 +42,7 @@ const usd = (v: bigint) => Number(formatUnits(v, 6)).toLocaleString("en-US", { m
  * Reads a trade is priced from, straight from Base Sepolia's own node (NEXT_PUBLIC_BASE_SEPOLIA_RPC for a fork), not
  * through the relay's shared read cache, which answers from a couple of seconds back.
  */
-const freshReads = createPublicClient({ chain: TESTNET, transport: http(process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || undefined, { timeout: 8_000 }) });
+const freshReads = createPublicClient({ chain: TESTNET, transport: http(BASE_RPC_OVERRIDE, { timeout: 8_000 }) });
 
 /**
  * The clock for the trade panel's click handlers (they run on a press, never while rendering; the React compiler

@@ -1,7 +1,7 @@
-import { createPublicClient, erc20Abi, http, type Address } from "viem";
+import { createPublicClient, erc20Abi, fallback, http, type Address } from "viem";
 import { parseTokenMeta, tokenMetaAbi, type TokenMeta } from "@/lib/tokenMeta";
 import { FACTORY_V9, V9_ON, factoryV9Abi } from "@/lib/v9";
-import { NETWORK } from "./network.ts";
+import { BASE_RPCS, NETWORK } from "./network.ts";
 
 /**
  * Every V9 launch's ticker and metadata, read from CruxFactoryV9 on Base Sepolia (server side): what the anti-copycat
@@ -10,7 +10,7 @@ import { NETWORK } from "./network.ts";
  */
 const client = createPublicClient({
   chain: NETWORK.chain,
-  transport: http(process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || "https://base-sepolia-rpc.publicnode.com", { timeout: 8_000 }),
+  transport: fallback(BASE_RPCS.map((u) => http(u, { timeout: 8_000 }))),
 });
 
 export type V9GuardLaunch = { id: number; token: Address; symbol: string; metadata: TokenMeta };

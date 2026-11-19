@@ -1,5 +1,6 @@
-import { createPublicClient, erc20Abi, formatUnits, http, zeroAddress, type Address } from "viem";
+import { createPublicClient, erc20Abi, fallback, formatUnits, http, zeroAddress, type Address } from "viem";
 import { cruxBatchFactoryAbi, factoryV4Abi, factoryV6Abi } from "@/contracts/abis/batchAuction";
+import { BASE_RPCS } from "./network.ts";
 import { TESTNET_EXPLORER } from "@/lib/chains";
 import { FACTORY_V2, FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7, FACTORY_V8 } from "@/lib/intents";
 import { PRICE_DECIMALS, V2_VESTING_DAYS, phaseV2, toAuctionV2, type PhaseV2 } from "@/lib/launchV2";
@@ -14,7 +15,7 @@ import { NETWORK } from "./network.ts";
 
 const client = createPublicClient({
   chain: NETWORK.chain,
-  transport: http(process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || "https://base-sepolia-rpc.publicnode.com", { timeout: 8_000 }),
+  transport: fallback(BASE_RPCS.map((u) => http(u, { timeout: 8_000 }))),
 });
 
 export type FeedLaunch = {

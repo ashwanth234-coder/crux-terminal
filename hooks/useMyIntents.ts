@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { BASE_LOGS_RPCS } from "@/lib/network";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { createPublicClient, fallback, getAbiItem, getAddress, http, isAddressEqual, type Address, type Hex, type PublicClient } from "viem";
 import { useConnection, useReadContracts } from "wagmi";
@@ -14,11 +15,7 @@ const OPEN_EVENT = getAbiItem({ abi: originSettlerAbi, name: "Open" });
 
 // sepolia.base.org caps eth_getLogs at 200 blocks, so scans use RPCs that allow
 // wide ranges. publicnode allows 50k blocks per call; Tenderly is the fallback.
-const LOG_RPCS = [
-  process.env.NEXT_PUBLIC_BASE_SEPOLIA_LOGS_RPC,
-  "https://base-sepolia-rpc.publicnode.com",
-  "https://base-sepolia.gateway.tenderly.co",
-].filter((url): url is string => Boolean(url));
+const LOG_RPCS = BASE_LOGS_RPCS;
 const CHUNK = BigInt(45_000);
 const PARALLEL = 4;
 

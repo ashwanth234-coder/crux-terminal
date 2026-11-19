@@ -1,5 +1,6 @@
 import { connection } from "next/server";
 import { createPublicClient, http } from "viem";
+import { BASE_RPC_OVERRIDE } from "@/lib/network";
 import { cruxBatchFactoryAbi } from "@/contracts/abis/batchAuction";
 import { FACTORY_V3, FACTORY_V4, FACTORY_V5, FACTORY_V6, FACTORY_V7, FACTORY_V8 } from "@/lib/intents";
 import { phaseV2, toAuctionV2, type AuctionV2 } from "@/lib/launchV2";
@@ -14,7 +15,7 @@ const FALLBACK = "/launches";
 // Same Base Sepolia endpoint as the wagmi config: the override if set, else the chain's public RPC.
 const client = createPublicClient({
   chain: NETWORK.chain,
-  transport: http(process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || undefined, { timeout: 5_000 }),
+  transport: http(BASE_RPC_OVERRIDE, { timeout: 5_000 }),
 });
 
 type Candidate = { version: number; id: number; auction: AuctionV2 };

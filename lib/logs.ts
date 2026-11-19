@@ -2,11 +2,9 @@ import { cachedReads } from "./readCache";
 import { createPublicClient, fallback, http, type Hex } from "viem";
 
 import { blockTimeMs } from "@/lib/logTime";
-import { NETWORK } from "./network.ts";
+import { BASE_LOGS_RPCS, NETWORK } from "./network.ts";
 // sepolia.base.org caps eth_getLogs at 200 blocks; publicnode allows 50k per call, Tenderly is the fallback.
-const LOGS_RPCS = [process.env.NEXT_PUBLIC_BASE_SEPOLIA_LOGS_RPC, "https://base-sepolia-rpc.publicnode.com", "https://base-sepolia.gateway.tenderly.co"].filter(
-  (u): u is string => Boolean(u),
-);
+const LOGS_RPCS = BASE_LOGS_RPCS;
 
 /** Base Sepolia client for wide log scans (the terminal's tape and demand curve). */
 export const logClient = createPublicClient({ chain: NETWORK.chain, transport: cachedReads(fallback(LOGS_RPCS.map((u) => http(u, { timeout: 15_000 })))) });

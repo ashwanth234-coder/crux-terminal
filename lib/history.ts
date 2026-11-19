@@ -1,5 +1,6 @@
 import type { Address, Hex } from "viem";
 import type { PoolTrade } from "./tradeDecode";
+import { BASE_RPC_OVERRIDE } from "./network.ts";
 import type { TokenTransfer } from "../hooks/useTokenTransfers";
 
 /**
@@ -10,7 +11,7 @@ import type { TokenTransfer } from "../hooks/useTokenTransfers";
  */
 const RELAY = (process.env.NEXT_PUBLIC_CRUX_RELAY ?? "https://api.cruxprotocol.xyz").replace(/\/$/, "");
 /** Off when the terminal reads a custom RPC (a local fork), whose history the relay doesn't have. */
-const OFF = Boolean(process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC) || process.env.NEXT_PUBLIC_HISTORY === "off";
+const OFF = Boolean(BASE_RPC_OVERRIDE) || process.env.NEXT_PUBLIC_HISTORY === "off";
 
 type Json = {
   scannedTo: string;

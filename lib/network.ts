@@ -152,6 +152,27 @@ export function networkFrom(value: string | undefined): Network {
 export const NETWORK = networkFrom(process.env.NEXT_PUBLIC_NETWORK);
 
 /**
+ * This network's Base RPCs, an override first. Testnet keeps its NEXT_PUBLIC_BASE_SEPOLIA_* overrides; mainnet reads
+ * NEXT_PUBLIC_BASE_RPC / _LOGS_RPC / _WSS. Never one network's node for the other's contracts.
+ */
+const env = (v: string | undefined) => (v?.trim() ? v.trim() : undefined);
+const only = (xs: (string | undefined)[]) => xs.filter((x): x is string => Boolean(x));
+/** The override a build sets for its Base node (a fork, a paid key), if any. */
+export const BASE_RPC_OVERRIDE = NETWORK.testnet ? env(process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC) : env(process.env.NEXT_PUBLIC_BASE_RPC);
+/** Reads: the override, then public nodes. */
+export const BASE_RPCS: string[] = NETWORK.testnet
+  ? only([BASE_RPC_OVERRIDE, "https://sepolia.base.org", "https://base-sepolia-rpc.publicnode.com", "https://base-sepolia.gateway.tenderly.co"])
+  : only([BASE_RPC_OVERRIDE, "https://mainnet.base.org", "https://base-rpc.publicnode.com", "https://base.gateway.tenderly.co"]);
+/** Wide eth_getLogs ranges (the official node caps them at a few hundred blocks). */
+export const BASE_LOGS_RPCS: string[] = NETWORK.testnet
+  ? only([env(process.env.NEXT_PUBLIC_BASE_SEPOLIA_LOGS_RPC), "https://base-sepolia-rpc.publicnode.com", "https://base-sepolia.gateway.tenderly.co"])
+  : only([env(process.env.NEXT_PUBLIC_BASE_LOGS_RPC), "https://base-rpc.publicnode.com", "https://base.gateway.tenderly.co"]);
+/** Pushed logs and blocks. */
+export const BASE_WSS: string = NETWORK.testnet
+  ? (env(process.env.NEXT_PUBLIC_BASE_SEPOLIA_WSS) ?? "wss://base-sepolia-rpc.publicnode.com")
+  : (env(process.env.NEXT_PUBLIC_BASE_WSS) ?? "wss://base-rpc.publicnode.com");
+
+/**
  * `value` (an env override or this network's address); throws naming `what` when this network has none: a Crux
  * contract not deployed there yet.
  */

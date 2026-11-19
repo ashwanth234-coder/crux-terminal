@@ -1,6 +1,7 @@
 "use client";
 
 import { createPublicClient, webSocket, type Address, type PublicClient } from "viem";
+import { BASE_RPC_OVERRIDE, BASE_WSS } from "./network.ts";
 import { NETWORK } from "./network.ts";
 
 /**
@@ -9,8 +10,8 @@ import { NETWORK } from "./network.ts";
  * stays on underneath, so a dropped socket only means updates arrive at the polling pace. Off when the site reads a
  * custom RPC (a local fork), where the public socket would watch the wrong chain.
  */
-const WSS = process.env.NEXT_PUBLIC_BASE_SEPOLIA_WSS ?? "wss://base-sepolia-rpc.publicnode.com";
-const OFF = Boolean(process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC) || process.env.NEXT_PUBLIC_STREAM === "off";
+const WSS = BASE_WSS;
+const OFF = Boolean(BASE_RPC_OVERRIDE) || process.env.NEXT_PUBLIC_STREAM === "off";
 
 let client: PublicClient | null = null;
 
