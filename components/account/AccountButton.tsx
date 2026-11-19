@@ -18,8 +18,8 @@ export function AccountButton() {
   const a = useCruxAccount();
   // USDC landing on the login's Solana address moves into the account by itself (mounted here: the header is on every page).
   const moving = useSolanaAutoDeposit();
-  // One balance: the account's USDC plus Solana USDC. On Base Sepolia the account's is test money and Solana's real,
-  // so they're shown apart (never added) until Base mainnet.
+  // One balance: Base, Solana and BNB Chain cash plus the Protected Savings Vault (useOneBalance). On Base Sepolia the
+  // vault's is test money and the rest real, so they're shown apart (never added).
   const one = useOneBalance();
   const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
   const base = "inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-[4px] border px-3 text-[11px] font-medium transition-colors duration-200";
@@ -65,7 +65,7 @@ export function AccountButton() {
             )}
           </>
         ) : (
-          `$${fmtUsdc(a.usdc + (one.solana ?? BigInt(0)))}`
+          `$${fmtUsdc(one.total ?? a.usdc + (one.solana ?? BigInt(0)))}`
         )}
       </Link>
     </span>

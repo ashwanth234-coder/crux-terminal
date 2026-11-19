@@ -35,7 +35,8 @@ import { CreatorNote } from "@/components/launch/V9Creator";
 import { StandingOrderForm, type OrderType } from "@/components/pro/StandingOrderForm";
 import { SLIPPAGE_BPS, PRICE_WINDOW_MS, swapAfterRead, curveQuote, readyToSell, type CurveState, heldNow, minimumOut, poolMath, poolQuote, quickSellAmount, routerQuote, type Flight } from "@/lib/tradeMath";
 import { FACTORY_V9, ROUTER_V9, V9_ON, curvePrice, curveV9Abi, factoryV9Abi, phaseV9, registerV9Curve, routerV9Abi, type PhaseV9 } from "@/lib/v9";
-import { NETWORK_NAME } from "@/lib/network";
+import { IS_TESTNET, NETWORK_NAME } from "@/lib/network";
+import { useWalletTrading } from "@/hooks/useBnbTrading";
 
 const usd = (v: bigint) => Number(formatUnits(v, 6)).toLocaleString("en-US", { maximumFractionDigits: 2 });
 /**
@@ -353,6 +354,10 @@ function TradePanel({
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   const accountReady = Boolean(crux.account && crux.sign && crux.owner);
   const via = from === "account" && accountReady ? "account" : "wallet";
+  // Base mainnet (Option A): one-click trades pay from the login's own Base wallet (its USDC, Crux paying gas), at
+  // Base speed, instead of the Crux account (now the optional Protected Savings Vault). Base Sepolia keeps the account.
+  const baseWallet = useWalletTrading("base", token);
+  const loginMode = !IS_TESTNET && via === "account" && crux.owner !== null;
   const opening = phase === "opening";
   // Between the opening's end and its settlement (the solver or keeper settles it within seconds) nothing can be
   // priced yet: say so, rather than "too small".
@@ -371,7 +376,7 @@ function TradePanel({
 
   // What the trader holds where this trade pays from (their CRUX Account or wallet), and what all their tokens sell
   // for: a sell is typed in USDC, and its tokens are worked out from these.
-  const holder = via === "account" ? crux.account : address;
+  const holder = loginMode ? crux.owner : via === "account" ? crux.account : address;
   const held = useReadContracts({
     allowFailure: true,
     query: { enabled: Boolean(holder), refetchInterval: 5_000 },
@@ -910,7 +915,25 @@ function TradePanel({
     [],
   );
 
+  /** A trade from the login's own Base wallet (Option A): one call to the relay, which routes, checks and sends it. */
+  const loginTrade = async (buy: boolean, amount: bigint) => {
+    setNote(null);
+    if (amount <= BigInt(0)) return setNote({ ok: false, text: buy ? "Enter an amount to buy." : "Nothing to sell yet." });
+    if (opening) return setNote({ ok: false, text: "The fair opening can't be joined from your balance yet. Trade when it ends." });
+    const r = buy ? await baseWallet.buy(amount, Number(SLIPPAGE_BPS)) : await baseWallet.sell(amount, Number(SLIPPAGE_BPS));
+    if (!r) return;
+    if (r.kind === "error") return setNote({ ok: false, text: r.message.split("\n")[0] });
+    if (r.kind !== "done") return;
+    void held.refetch();
+    setNote({ ok: true, text: `${buy ? `Bought $${usd(amount)} of` : "Sold your"} $${symbol} in ${(r.ms / 1000).toFixed(1)} s${r.confirmed ? "" : " · confirming…"}.` });
+  };
+
   const accountTrade = async (buy: boolean, amount: bigint, shown?: bigint, onQueued?: () => void) => {
+    if (loginMode) {
+      await loginTrade(buy, amount);
+      onQueued?.();
+      return;
+    }
     const clickAt = clock.perf();
     const clickWall = clock.now();
     setNote(null);
@@ -1034,7 +1057,7 @@ function TradePanel({
 
   const trade = () => {
     // A market trade from the CRUX Account doesn't lock the panel (accountTrade); the box empties for the next one.
-    if (via === "account" && !opening) {
+    if (via === "account" && (!opening || loginMode)) {
       const amt = amountIn;
       setAmount("");
       setPicked(null);

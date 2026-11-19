@@ -15,7 +15,7 @@ import { mineTokenSalt } from "@/lib/tokenSalt";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { postRelay } from "@/lib/session";
 import { FACTORY_V9, V9_ON, curveV9Abi, factoryV9Abi, launchFromAccountV9, type V9LaunchParams } from "@/lib/v9";
-import { NETWORK_LONG } from "@/lib/network";
+import { IS_TESTNET, NETWORK_LONG } from "@/lib/network";
 import { isReservedName } from "@/lib/antiVamp";
 
 const RESERVED_TEXT = "Crux is a reserved name. Crux has no token yet, so no coin can use it in its name or ticker.";
@@ -91,7 +91,8 @@ export function V9Create() {
     }
   };
   const [x, setX] = useState("");
-  const [fairOpening, setFairOpening] = useState(true);
+  // The fair opening needs Crux's own USDC to fill its buys, so the $0-float mainnet beta launches without it (hidden).
+  const [fairOpening, setFairOpening] = useState(IS_TESTNET);
   const [custom, setCustom] = useState(false);
   const [instantUnlock, setInstantUnlock] = useState(false);
   const [confirmUnlock, setConfirmUnlock] = useState(false);
@@ -118,7 +119,9 @@ export function V9Create() {
   const launch = async () => {
     setError(null);
     try {
-      const creator: Address | undefined = via === "account" ? crux.account! : address;
+      // Base mainnet (Option A): the login's own wallet is the creator (its rewards and first buys stay with the one
+      // balance); Base Sepolia launches from the Crux account. Either way the login signs and Crux pays the gas.
+      const creator: Address | undefined = via === "account" ? (IS_TESTNET ? crux.account! : crux.owner!) : address;
       if (!creator) throw new Error("Log in or connect a wallet to launch.");
       // Copycat and reserved-name check first, whichever way it launches (the relay checks again).
       const copycat = await checkCopycat(symbol.trim().toUpperCase(), name.trim(), image.trim(), x.trim());
@@ -233,12 +236,14 @@ export function V9Create() {
             <input value={x} onChange={(e) => setX(e.target.value)} className={field} />
           </label>
 
-          <label className="flex items-start gap-2 text-muted">
-            <input type="checkbox" checked={fairOpening} onChange={(e) => setFairOpening(e.target.checked)} className="mt-0.5" />
-            <span>
-              <span className="text-chrome">60-second fair opening</span> (recommended): everyone who buys in the first minute pays one price, so there&apos;s nothing to snipe.
-            </span>
-          </label>
+          {IS_TESTNET && (
+            <label className="flex items-start gap-2 text-muted">
+              <input type="checkbox" checked={fairOpening} onChange={(e) => setFairOpening(e.target.checked)} className="mt-0.5" />
+              <span>
+                <span className="text-chrome">60-second fair opening</span> (recommended): everyone who buys in the first minute pays one price, so there&apos;s nothing to snipe.
+              </span>
+            </label>
+          )}
 
           <div className="rounded-lg border border-line p-3 text-muted">
             <p>

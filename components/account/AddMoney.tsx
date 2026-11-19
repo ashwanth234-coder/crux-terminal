@@ -38,7 +38,9 @@ function AddMoneySheet({ onClose }: { onClose: () => void }) {
   const { holdings } = useSolanaTrading(null);
   const [net, setNet] = useState<Net>("base");
   // BNB Chain: the login's own wallet (Crux's account contract can't trade there); its USDT is the BNB-side cash.
-  const address = net === "base" ? crux.account : net === "bnb" ? crux.owner : (holdings?.wallet ?? null);
+  // Base mainnet (Option A): the same login wallet, so Base cash trades at Base speed; the Crux account is the optional
+  // Protected Savings Vault, funded from the account page. Base Sepolia keeps the account (test USDC).
+  const address = net === "base" ? (IS_TESTNET ? crux.account : crux.owner) : net === "bnb" ? crux.owner : (holdings?.wallet ?? null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -91,7 +93,13 @@ function AddMoneySheet({ onClose }: { onClose: () => void }) {
 
         <p className="mt-4 text-[11.5px] leading-relaxed text-dim">
           Send <span className="text-chrome">{net === "bnb" ? "USDT only" : "USDC only"}</span>, on the network you picked. It lands in your Crux balance by itself
-          {net === "solana" ? " and is ready for Solana coins straight away. No SOL needed." : net === "bnb" ? " and is ready for BNB Chain coins straight away. No BNB needed." : "."}
+          {net === "solana"
+            ? " and is ready for Solana coins straight away. No SOL needed."
+            : net === "bnb"
+              ? " and is ready for BNB Chain coins straight away. No BNB needed."
+              : IS_TESTNET
+                ? "."
+                : " and is ready for Base coins and launches straight away. No ETH needed."}
         </p>
       </div>
     </div>

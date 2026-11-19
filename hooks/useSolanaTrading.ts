@@ -9,7 +9,7 @@ import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { TESTNET } from "@/lib/chains";
 import { TESTNET_USDC } from "@/lib/intents";
 import { RELAY_URL } from "@/lib/session";
-import { useBnbTrading } from "@/hooks/useBnbTrading";
+import { useBnbTrading, useWalletTrading } from "@/hooks/useBnbTrading";
 import { buySolanaFromAccount, cruxAccountSolanaAbi, linkSolanaWallet, quoteMinOut, walletBytes32 } from "@/lib/solanaAccount";
 
 export type SolanaHoldings = {
@@ -178,14 +178,35 @@ export function useSolanaTrading(mint: string | null) {
 }
 
 /**
- * The one balance: the Crux account's USDC plus the USDC in the login's Solana wallet. Until Base mainnet the account
- * holds test USDC and Solana holds real USDC, so they're reported apart and never added together.
+ * The one balance. On Base mainnet (Option A): the login's own wallets' cash (Base USDC, Solana USDC, BNB Chain USDT)
+ * plus the Protected Savings Vault (the Crux account on Base), all real money, added together. On Base Sepolia the
+ * vault holds test USDC and the wallets real money, so they're reported apart and never added.
+ * `perChain` is cash ready to trade on each chain (6 decimals); `account` is the vault.
  */
-export function useOneBalance(): { account: bigint | null; solana: bigint | null; testnet: boolean } {
+export function useOneBalance(): {
+  account: bigint | null;
+  solana: bigint | null;
+  testnet: boolean;
+  perChain: { base: bigint | null; solana: bigint | null; bnb: bigint | null };
+  total: bigint | null;
+} {
   const crux = useCruxAccount();
   const { holdings } = useSolanaTrading(null);
   const bnb = useBnbTrading(null).holdings;
-  // The real cash (6 decimals): Solana USDC plus BNB Chain USDT (18 decimals, scaled down).
-  const real = holdings || bnb ? (holdings?.usdc ?? BigInt(0)) + (bnb ? bnb.usdt / BigInt(1e12) : BigInt(0)) : null;
-  return { account: crux.usdc, solana: real, testnet: TESTNET.testnet === true };
+  const baseWallet = useWalletTrading("base", null).holdings;
+  const testnet = TESTNET.testnet === true;
+  // BNB Chain's USDT counts 18 decimals: scaled to 6.
+  const bnb6 = bnb ? bnb.cash / BigInt(1e12) : null;
+  const base6 = !testnet && baseWallet ? baseWallet.cash : null;
+  const sol6 = holdings?.usdc ?? null;
+  // The real cash outside the vault (6 decimals).
+  const real = holdings || bnb || base6 !== null ? (sol6 ?? BigInt(0)) + (bnb6 ?? BigInt(0)) + (base6 ?? BigInt(0)) : null;
+  const parts = [crux.usdc, real].filter((x): x is bigint => x !== null);
+  return {
+    account: crux.usdc,
+    solana: real,
+    testnet,
+    perChain: { base: base6, solana: sol6, bnb: bnb6 },
+    total: testnet || parts.length === 0 ? null : parts.reduce((x, y) => x + y, BigInt(0)),
+  };
 }
