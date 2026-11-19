@@ -174,7 +174,7 @@ export function V9Create() {
         <h1 className="font-display text-[clamp(1.8rem,3.4vw,2.4rem)] text-bright">Launch a token</h1>
         <p className="mt-2 text-[13.5px] leading-relaxed text-muted">
           Your token trades on its own curve from the first second (after an optional fair opening), then graduates into a Uniswap pool on Base
-          {threshold ? ` at $${Number(threshold) / 1e6}` : ""} with its liquidity burned. Free to launch. {NETWORK_LONG}.
+          {threshold ? ` at $${(Number(threshold) / 1e6).toLocaleString("en-US")}` : ""} with its liquidity burned. Free to launch. {NETWORK_LONG}.
         </p>
 
         <div className="mt-6 space-y-4 text-[13px]">
