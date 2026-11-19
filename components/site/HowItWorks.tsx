@@ -1,31 +1,17 @@
 import { Chapter } from "./Chapter";
-import { NETWORK_NAME } from "@/lib/network";
 
-// A launch, start to finish. Each step is live on Base Sepolia today.
+// A launch in three steps, one line each.
 const STEPS = [
-  {
-    name: "Launch",
-    body: "Name it and launch it: free, no gas, no wallet pop-ups, a copycat check on the ticker, and an address ending in 5afe. The creator's 2.4% vests over 30 days by default, and creators earn 30% of the 1% trading fee, in USDC.",
-    fact: "Free to launch",
-  },
-  {
-    name: "An optional fair opening",
-    body: "With the opening on, everyone who buys in the first minute pays the same price, so being first buys nothing and snipers get no head start. Then it trades on its own curve, priced in USDC, from the first second.",
-    fact: "One price at open",
-  },
-  {
-    name: "It graduates to Uniswap",
-    body: "When its curve reaches its target, it graduates to one Uniswap pool on Base, with the pool's liquidity burned. Anyone can buy it from the chain they're on through Crux.",
-    fact: "LP burned",
-  },
+  { name: "Launch", body: "Name it, launch it. Free, no gas. Creators earn 30% of trading fees.", fact: "Free" },
+  { name: "Fair opening", body: "Optional: everyone in the first minute pays the same price. No snipers.", fact: "One price" },
+  { name: "Graduate", body: "Hits its target, moves to Uniswap on Base. Liquidity burned.", fact: "LP burned" },
 ];
 
-/** Promises every launch keeps, enforced on-chain (vesting by the Crux launch form). */
-const TRUST = ["Creator vests 30 days by default", "LP burned at graduation", "Optional one-price opening", "Priced in USDC", "Withdrawals only to your wallet"];
+const TRUST = ["Creator vests 30 days", "LP burned", "Anti-sniper opening", "Priced in USDC", "Withdraw only to your wallet"];
 
 export function HowItWorks() {
   return (
-    <Chapter id="protocol" title="How a launch works." intro={`Three steps, each a contract live on ${NETWORK_NAME} today.`}>
+    <Chapter id="protocol" title="How a launch works." intro="Three steps.">
       <ol className="border-t border-line">
         {STEPS.map((s, i) => (
           <li key={s.name} className="grid gap-2 border-b border-line py-7 md:grid-cols-12 md:items-baseline md:gap-6">

@@ -1,13 +1,6 @@
-import type { Metadata } from "next";
-import { MarketsView } from "@/components/markets/MarketsView";
-import { NETWORK_NAME } from "@/lib/network";
-import { IS_TESTNET } from "@/lib/network";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Markets · Crux",
-  description: `Crux launches, established tokens your Crux account can trade with no gas, and the busiest ${NETWORK_NAME} pools of the last hour.${IS_TESTNET ? " Testnet only." : ""}`,
-};
-
+/** /markets is retired: old links land on Discover. */
 export default function MarketsPage() {
-  return <MarketsView />;
+  redirect("/discover");
 }

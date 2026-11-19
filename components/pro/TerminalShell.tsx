@@ -44,6 +44,9 @@ export function TerminalShell({ children }: { children: ReactNode }) {
           </span>
         </div>
       </header>
+      <p role="note" className="shrink-0 border-b border-signal/30 bg-signal/[0.06] px-4 py-1 text-center text-[11.5px] text-chrome sm:px-5">
+        The terminal is still being built. Some features may be missing or slow.
+      </p>
       <main className="flex min-h-0 flex-1 flex-col lg:overflow-hidden">{children}</main>
     </div>
   );

@@ -55,6 +55,22 @@ export const SOLANA_MAJORS = [
   "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm", // WIF
   "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R", // RAY
 ];
+
+/**
+ * Every Solana major the site lists (Majors tab, terminal rail): the low-fee list above plus more big coins, verified on
+ * Jupiter 2026-11-19. The extra ones pay the normal fee until crux-solver's list includes them.
+ */
+export const SOLANA_MAJORS_LISTED = [
+  ...SOLANA_MAJORS,
+  "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs", // ETH
+  "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn", // JitoSOL
+  "6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN", // TRUMP
+  "9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump", // Fartcoin
+  "7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr", // POPCAT
+  "rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof", // RENDER
+  "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3", // PYTH
+  "jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL", // JTO
+];
 /** A freshly launched Solana coin, with the facts that tell a rug from a runner (the Trenches tab). */
 export type FreshCoin = SolanaCoin & {
   createdAt: number;

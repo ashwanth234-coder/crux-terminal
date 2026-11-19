@@ -3,18 +3,12 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { freshBnbCoins } from "@/lib/coinMarket";
-import { fmtCompact, freshSolanaCoins, solanaCoins, SOLANA_MAJORS } from "@/lib/solanaCoins";
+import { BNB_MAJORS, bnbMajors, freshBnbCoins, type MajorCoin } from "@/lib/coinMarket";
+import { fmtCompact, freshSolanaCoins, solanaCoins, SOLANA_MAJORS_LISTED } from "@/lib/solanaCoins";
 
 type Chain = "all" | "sol" | "bnb";
 type Item = { key: string; href: string; chain: "sol" | "bnb"; symbol: string; icon?: string; mcap?: number; change?: number; createdAt?: number };
 
-/** BNB Chain's big coins, always listed. */
-const BNB_MAJORS: Item[] = [
-  { key: "bnb:cake", href: "/bnb/0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82", chain: "bnb", symbol: "CAKE" },
-  { key: "bnb:btcb", href: "/bnb/0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c", chain: "bnb", symbol: "BTCB" },
-  { key: "bnb:eth", href: "/bnb/0x2170Ed0880ac9A755fd29B2688956BD959F933F8", chain: "bnb", symbol: "ETH" },
-];
 
 const age = (ms: number) => {
   const s = Math.max(1, Math.floor((Date.now() - ms) / 1000));
@@ -27,13 +21,16 @@ const age = (ms: number) => {
  */
 export function CoinRail({ current }: { current: string }) {
   const [chain, setChain] = useState<Chain>("all");
-  const majors = useQuery({ queryKey: ["solana-majors"], queryFn: () => solanaCoins(SOLANA_MAJORS), refetchInterval: 60_000, staleTime: 30_000 });
+  const majors = useQuery({ queryKey: ["solana-majors"], queryFn: () => solanaCoins(SOLANA_MAJORS_LISTED), refetchInterval: 30_000, staleTime: 15_000 });
+  const bnbBig = useQuery({ queryKey: ["bnb-majors"], queryFn: bnbMajors, refetchInterval: 30_000, staleTime: 15_000, enabled: chain !== "sol" });
   const sol = useQuery({ queryKey: ["solana-fresh"], queryFn: () => freshSolanaCoins(), refetchInterval: 15_000, staleTime: 5_000, enabled: chain !== "bnb" });
   const bnb = useQuery({ queryKey: ["bnb-fresh"], queryFn: () => freshBnbCoins(), refetchInterval: 30_000, staleTime: 10_000, enabled: chain === "bnb" });
 
   const big: Item[] = [
     ...(chain === "bnb" ? [] : (majors.data ?? []).map((c) => ({ key: `sol:${c.mint}`, href: `/sol/${c.mint}`, chain: "sol" as const, symbol: c.symbol, icon: c.icon, mcap: c.mcap, change: c.change24h }))),
-    ...(chain === "sol" ? [] : BNB_MAJORS),
+    ...(chain === "sol"
+      ? []
+      : (bnbBig.data ?? BNB_MAJORS.map((m): MajorCoin => ({ ...m, name: m.symbol }))).map((c) => ({ key: `bnb:${c.address}`, href: `/bnb/${c.address}`, chain: "bnb" as const, symbol: c.symbol, icon: c.icon, mcap: c.mcap, change: c.change24h }))),
   ];
   const fresh: Item[] = [
     ...(chain === "bnb" ? [] : (sol.data ?? []).slice(0, 25).map((c) => ({ key: `sol:${c.mint}`, href: `/sol/${c.mint}`, chain: "sol" as const, symbol: c.symbol, icon: c.icon, mcap: c.mcap, createdAt: c.createdAt }))),

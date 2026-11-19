@@ -11,6 +11,40 @@ const get = async <T,>(url: string): Promise<T | null> => {
 };
 const num = (s: string | number | null | undefined) => (s === null || s === undefined || s === "" ? undefined : Number(s));
 
+/** BNB Chain's big coins (deep PancakeSwap pools, checked on DexScreener 2026-11-19). */
+export const BNB_MAJORS = [
+  { address: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", symbol: "BNB" },
+  { address: "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c", symbol: "BTCB" },
+  { address: "0x2170Ed0880ac9A755fd29B2688956BD959F933F8", symbol: "ETH" },
+  { address: "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82", symbol: "CAKE" },
+  { address: "0x1D2F0da169ceB9fC7B3144628dB156f3F6c60dBE", symbol: "XRP" },
+  { address: "0xF8A0BF9cF54Bb92F17374d9e9A321E6a111a51bD", symbol: "LINK" },
+  { address: "0xbA2aE424d960c26247Dd6c32edC70B295c744C43", symbol: "DOGE" },
+];
+
+export type MajorCoin = { address: string; symbol: string; name: string; icon?: string; price?: number; change24h?: number; mcap?: number; liquidity?: number };
+
+/** The BNB majors' live facts, from each one's deepest DexScreener market (one read for all of them). */
+export async function bnbMajors(): Promise<MajorCoin[]> {
+  type Pair = { baseToken: { address: string; name?: string }; priceUsd?: string; priceChange?: { h24?: number }; marketCap?: number; fdv?: number; liquidity?: { usd?: number }; info?: { imageUrl?: string } };
+  const pairs = (await get<Pair[]>(`https://api.dexscreener.com/tokens/v1/bsc/${BNB_MAJORS.map((m) => m.address).join(",")}`)) ?? [];
+  return BNB_MAJORS.map((m) => {
+    const best = pairs
+      .filter((p) => p.baseToken.address.toLowerCase() === m.address.toLowerCase())
+      .sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0))[0];
+    return {
+      address: m.address,
+      symbol: m.symbol,
+      name: m.symbol === "BNB" ? "BNB" : (best?.baseToken.name ?? m.symbol),
+      icon: best?.info?.imageUrl,
+      price: best?.priceUsd ? Number(best.priceUsd) : undefined,
+      change24h: best?.priceChange?.h24,
+      mcap: best?.marketCap ?? best?.fdv,
+      liquidity: best?.liquidity?.usd,
+    };
+  });
+}
+
 type Txns = { buys?: number; sells?: number; buyers?: number; sellers?: number };
 type PoolAttrs = {
   address: string;

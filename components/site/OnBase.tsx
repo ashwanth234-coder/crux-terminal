@@ -1,58 +1,24 @@
 import { Chapter } from "./Chapter";
-import { ORIGIN_NAMES } from "@/lib/networks";
-import { NETWORK_NAME } from "@/lib/network";
-import { IS_TESTNET } from "@/lib/network";
 
-// How Crux is built on Base, for readers who want the mechanism. Each claim is live on Base Sepolia today.
+// Built on Base, in four short claims.
 const PARTS = [
-  {
-    n: "01",
-    title: "One pool, not five.",
-    body: "Each launch trades on its own USDC curve, then graduates to exactly one Uniswap pool on Base, with its liquidity burned. A buyer on Solana and a buyer on Base trade against the same depth at the same price.",
-    tag: "Uniswap · Base",
-  },
-  {
-    n: "02",
-    title: "Intents, not bridges.",
-    body: `A buy from ${ORIGIN_NAMES} is an ERC-7683 order. A solver fills it on Base from its own USDC within seconds and is repaid on the chain you paid from.`,
-    tag: "ERC-7683 · Hyperlane",
-  },
-  {
-    n: "03",
-    title: "A smart account on Base.",
-    body: "Your CRUX Account is a contract on Base at an address fixed by your login and your withdrawal wallet. A login key signs your trades, gas is paid for you, and money can only leave to the wallet you bound.",
-    tag: "Smart account · Gas paid",
-  },
-  {
-    n: "04",
-    title: "Fairness in the contract.",
-    body: "A launch can open with a one-minute fair opening: everyone in it pays the same price, so there is no first block to snipe. The creator's tokens vest on-chain, and the curve's graduation and fee split are enforced by the contracts.",
-    tag: "Fair opening · On-chain vesting",
-  },
+  { n: "01", title: "One pool.", body: "Every coin has one Uniswap pool on Base. Same price on every chain.", tag: "Uniswap · Base" },
+  { n: "02", title: "Fills in seconds.", body: "Buy from any chain. Filled on Base in about 3 seconds.", tag: "~3 s fills" },
+  { n: "03", title: "Your account, your wallet.", body: "Money only ever leaves to the wallet you choose.", tag: "Smart account" },
+  { n: "04", title: "Fair by contract.", body: "Optional one-price opening. Creator coins vest on-chain.", tag: "Anti-sniper · Vesting" },
 ];
 
-/** Measured on Base Sepolia, on the solver that runs today. */
 const FACTS = [
-  { value: "5", label: "chains pay in" },
-  { value: "1", label: "pool per token, on Base" },
-  { value: "~3 s", label: "typical account fill" },
-  { value: "30%", label: "of the fee to creators" },
+  { value: "5", label: "chains" },
+  { value: "1", label: "pool per coin" },
+  { value: "~3 s", label: "fills" },
+  { value: "30%", label: "of fees to creators" },
 ];
 
-/** The architecture in four parts: every chain pays in, Base is where it all settles. */
+/** Built on Base: four claims and the numbers. */
 export function OnBase() {
   return (
-    <Chapter
-      id="base"
-      title={
-        <>
-          Every chain pays in.
-          <br />
-          Base settles it all.
-        </>
-      }
-      intro="Crux doesn't split a token's liquidity across chains. Each token has one pool on Base, and every other chain reaches it through intents filled on Base."
-    >
+    <Chapter id="base" title="Built on Base." intro="Every trade settles on Base.">
       <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {PARTS.map((p) => (
           <li key={p.n} className="flex flex-col rounded-xl border border-line bg-panel p-6">
@@ -72,10 +38,6 @@ export function OnBase() {
           </div>
         ))}
       </dl>
-      <p className="mt-8 max-w-2xl text-[15px] leading-relaxed text-chrome/90">
-        Wherever the money comes from, every trade on Crux ends as a transaction on Base.{" "}
-        <span className="text-dim">Measured on {NETWORK_NAME}{IS_TESTNET ? " (testnet)" : ""}.</span>
-      </p>
     </Chapter>
   );
 }

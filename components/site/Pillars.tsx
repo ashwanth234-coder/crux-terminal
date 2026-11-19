@@ -1,32 +1,19 @@
 import { Chapter } from "./Chapter";
 import { IS_TESTNET } from "@/lib/network";
 
-// What the CRUX Account gives you. The first two are live on testnet; the third says plainly what waits for mainnet.
+const LIVE = IS_TESTNET ? "Live on testnet" : "Live";
+
+// What the CRUX Account gives you, one line each.
 const PILLARS = [
-  {
-    n: "01",
-    title: "Fund from anywhere.",
-    body: "USDC from five chains lands in one CRUX Account, with no fee and no bridge. Withdrawals only ever go to the wallet you bind.",
-    tag: IS_TESTNET ? "Live on testnet" : "Live",
-  },
-  {
-    n: "02",
-    title: "Trade and launch in one place.",
-    body: "Launch a token, buy at open, set take-profit and stop-loss, all from the same balance. No gas, no pop-ups.",
-    tag: IS_TESTNET ? "Live on testnet" : "Live",
-  },
-  {
-    n: "03",
-    title: "Every token, every chain.",
-    body: "Every launch has one deep pool on Base, and anyone can buy it from the chain they're on today: Ethereum, Solana, BNB Chain or Arbitrum.",
-    tag: "Buy from any chain today",
-  },
+  { n: "01", title: "Fund from anywhere.", body: "USDC from five chains, one balance. Withdrawals only to your wallet.", tag: LIVE },
+  { n: "02", title: "Launch and trade.", body: "Launch, buy, take profit, stop loss. One balance, no gas.", tag: LIVE },
+  { n: "03", title: "Every chain.", body: "Buy any Crux coin from Ethereum, Solana, BNB Chain or Arbitrum.", tag: LIVE },
 ];
 
-/** The CRUX Account, in three cards: fund it from anywhere, do everything from it, reach every chain. */
+/** The CRUX Account, in three cards. */
 export function Pillars() {
   return (
-    <Chapter id="account" title="One account for everything." intro="Sign in with email or Google. Your CRUX Account is a smart account on Base that only ever pays out to your own wallet.">
+    <Chapter id="account" title="One account for everything." intro="Sign in with email or Google.">
       <ul className="grid gap-4 md:grid-cols-3">
         {PILLARS.map((p) => (
           <li key={p.n} className="flex flex-col rounded-xl border border-line bg-panel p-6">

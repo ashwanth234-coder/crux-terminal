@@ -30,8 +30,8 @@ export function TokenList() {
   const [tab, setTab] = useState<"new" | "trenches" | "majors">("new");
   const blurb = {
     new: `Every token launched on Crux, newest first. ${NETWORK_LONG}.`,
-    trenches: "The newest coins, seconds old. Fast and risky: check the warning signs before you buy.",
-    majors: "Deep-liquidity coins for bigger trades, at a lower fee.",
+    trenches: "Seconds-old coins. High risk.",
+    majors: "The biggest coins on Solana and BNB Chain.",
   }[tab];
   return (
     <>

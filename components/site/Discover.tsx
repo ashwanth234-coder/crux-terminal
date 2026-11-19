@@ -95,7 +95,7 @@ export function Discover() {
 /** The homepage's live markets: the newest launches, each opening its terminal. */
 function LiveLaunches() {
   return (
-    <Chapter id="discover" title="Live markets." intro={`Every Crux launch, read from ${NETWORK_NAME} as you look.`}>
+    <Chapter id="discover" title="Live launches." intro="Newest first.">
       <TokenTable limit={6} />
       <Link href="/discover" className="mt-4 inline-block text-[13px] text-chrome underline decoration-line-2 hover:text-signal">
         See every launch →
@@ -116,8 +116,8 @@ function BatchDiscover() {
   return (
     <Chapter
       id="discover"
-      title="Live markets."
-      intro={`Every Crux launch, read from ${NETWORK_NAME} as you look.`}
+      title="Live launches."
+      intro="Newest first."
     >
       {!configured ? (
         <Empty title="No factory configured." body="This build has no Crux factory address, so there are no on-chain launches to list." />
