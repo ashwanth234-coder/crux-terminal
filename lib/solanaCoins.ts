@@ -26,7 +26,25 @@ type JupToken = {
   liquidity?: number;
   isVerified?: boolean;
   stats24h?: { priceChange?: number };
+  stats1h?: { priceChange?: number };
 };
+
+/** Stablecoins and dollar tokens: never worth listing in a trader's coin list. */
+export const isStable = (symbol: string) => /usd|^dai$|^eurc?$|^xaut$|^paxg$/i.test(symbol);
+
+/** A trending coin with its last-hour move. */
+export type TrendingCoin = SolanaCoin & { change1h?: number };
+
+/** Solana's most-traded coins of the last hour (Jupiter), stablecoins and thin pools left out. */
+export async function trendingSolanaCoins(minLiquidity = 20_000): Promise<TrendingCoin[]> {
+  const r = await fetch("https://lite-api.jup.ag/tokens/v2/toptrending/1h?limit=50");
+  if (!r.ok) return [];
+  const list = (await r.json()) as JupToken[];
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((t) => ({ ...toCoin(t), change1h: t.stats1h?.priceChange }))
+    .filter((c) => !isStable(c.symbol) && (c.liquidity ?? 0) >= minLiquidity);
+}
 
 const toCoin = (t: JupToken): SolanaCoin => ({
   mint: t.id,
@@ -117,7 +135,7 @@ export async function freshSolanaCoins(minLiquidity = 1_000): Promise<FreshCoin[
       buys5m: t.stats5m?.numBuys,
       sells5m: t.stats5m?.numSells,
     }))
-    .filter((c) => (c.liquidity ?? 0) >= minLiquidity)
+    .filter((c) => (c.liquidity ?? 0) >= minLiquidity && !isStable(c.symbol))
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 

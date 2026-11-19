@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { CruxEmblem } from "./CruxEmblem";
 import { ChainStrip } from "./ChainStrip";
-import { EnterCrux } from "./EnterCrux";
+import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
+import { TERMINAL_HREF } from "@/lib/site";
 import { LIVE_NAMES } from "@/lib/networks";
 
 /** The promise in one line: one CRUX Account, funded from every chain, that launches and trades. */
@@ -19,12 +20,19 @@ export function Hero() {
           <p className="mt-6 max-w-lg text-[16px] leading-relaxed text-muted md:mt-8 md:text-[18px]">
             Launch and trade on {LIVE_NAMES}. No gas. No bridges. No pop-ups.
           </p>
-          <div className="mt-9 flex flex-wrap items-center gap-x-8 gap-y-4 md:mt-12">
-            <EnterCrux href="/account" label="Create your account" />
-            <Link href="/launches" className="text-[14px] font-medium text-muted transition-colors hover:text-chrome">
-              Browse launches
+          {/* The two products: launch a coin, and trade any coin in the terminal. */}
+          <div className="mt-9 flex flex-wrap items-center gap-3 md:mt-12">
+            <Link href="/launch/v9/new" className={buttonClass("primary", "md", "font-semibold")}>
+              Launch a coin <ArrowUpRight />
             </Link>
+            {/* A plain anchor: /terminal is a redirect. */}
+            <a href={TERMINAL_HREF} className={buttonClass("outline", "md", "font-semibold")}>
+              Open terminal <ArrowUpRight />
+            </a>
           </div>
+          <Link href="/account" className="mt-4 inline-block text-[13px] text-muted transition-colors hover:text-chrome">
+            New here? Create your account →
+          </Link>
           <ChainStrip className="mt-12 md:mt-16" />
         </div>
 

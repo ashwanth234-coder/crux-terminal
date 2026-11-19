@@ -2,7 +2,7 @@
  * Live market facts for a Solana or BNB Chain coin's terminal (its deepest pool on GeckoTerminal's free API, read in the
  * browser): the stats bar, the trades tape, and BNB Chain's fresh coins for the Trenches tab.
  */
-import { deepestPair, type ChartNetwork } from "@/lib/solanaCoins";
+import { deepestPair, isStable, type ChartNetwork } from "@/lib/solanaCoins";
 
 const GT = "https://api.geckoterminal.com/api/v2/networks";
 const get = async <T,>(url: string): Promise<T | null> => {
@@ -22,7 +22,36 @@ export const BNB_MAJORS = [
   { address: "0xbA2aE424d960c26247Dd6c32edC70B295c744C43", symbol: "DOGE" },
 ];
 
-export type MajorCoin = { address: string; symbol: string; name: string; icon?: string; price?: number; change24h?: number; mcap?: number; liquidity?: number };
+/** BNB Chain's trending coins of the last hour (GeckoTerminal), stablecoins and wrapped BNB left out. */
+export async function trendingBnbCoins(): Promise<(MajorCoin & { change1h?: number })[]> {
+  type Included = { id: string; attributes: { address: string; name?: string; symbol?: string; image_url?: string | null } };
+  const j = await get<{ data?: PoolData[]; included?: Included[] }>(`${GT}/bsc/trending_pools?include=base_token&duration=1h`);
+  const tokens = new Map((j?.included ?? []).map((i) => [i.id, i.attributes]));
+  const seen = new Set<string>();
+  const out: (MajorCoin & { change1h?: number })[] = [];
+  for (const d of j?.data ?? []) {
+    if ((d.relationships?.dex?.data?.id ?? "").startsWith("four-meme")) continue;
+    const tok = tokens.get(d.relationships?.base_token?.data?.id ?? "");
+    const symbol = (tok?.symbol ?? "").replace(/^\$/, "");
+    if (!tok || seen.has(tok.address.toLowerCase()) || isStable(symbol) || /^WBNB$/i.test(symbol)) continue;
+    seen.add(tok.address.toLowerCase());
+    const a = d.attributes;
+    out.push({
+      address: tok.address,
+      symbol,
+      name: tok.name ?? symbol,
+      icon: tok.image_url && !tok.image_url.includes("missing") ? tok.image_url : undefined,
+      price: num(a.base_token_price_usd),
+      change1h: num(a.price_change_percentage?.h1),
+      change24h: num(a.price_change_percentage?.h24),
+      mcap: num(a.market_cap_usd) ?? num(a.fdv_usd),
+      liquidity: num(a.reserve_in_usd),
+    });
+  }
+  return out;
+}
+
+export type MajorCoin ={ address: string; symbol: string; name: string; icon?: string; price?: number; change24h?: number; mcap?: number; liquidity?: number };
 
 /** The BNB majors' live facts, from each one's deepest DexScreener market (one read for all of them). */
 export async function bnbMajors(): Promise<MajorCoin[]> {
