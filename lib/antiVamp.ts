@@ -99,10 +99,17 @@ export type GuardLaunch = {
   art: Artwork | null;
 };
 
-export type ConflictKind = "ticker" | "artwork" | "artwork-near" | "x";
+export type ConflictKind = "reserved" | "ticker" | "artwork" | "artwork-near" | "x";
 export type Conflict = { kind: ConflictKind; symbol: string; token: string; href: string };
 
+/**
+ * Crux's own name: no launch may use it in its ticker or name (CRUX, $CRUX, Crux Protocol, CRUXAI, C.R.U.X, KRUX…),
+ * so nobody passes a coin off as Crux's token. Crux has no token yet.
+ */
+export const isReservedName = (s: string | null | undefined) => /[ck]ru+x/.test(normalizeTicker(s ?? ""));
+
 const LABEL: Record<ConflictKind, string> = {
+  reserved: "Crux is a reserved name",
   ticker: "Ticker reserved on CRUX",
   artwork: "Exact artwork already used",
   "artwork-near": "Near-identical artwork already used",
@@ -120,10 +127,11 @@ export function holdsTicker(l: Pick<GuardLaunch, "phase" | "closesAt">, now: num
 }
 
 /** Everything a proposed launch would copy from an existing Crux token, at `now`. */
-export function checkLaunch(proposal: { symbol: string; x?: string | null; art?: Artwork | null }, launches: GuardLaunch[], now: number): Conflict[] {
+export function checkLaunch(proposal: { symbol: string; name?: string | null; x?: string | null; art?: Artwork | null }, launches: GuardLaunch[], now: number): Conflict[] {
   const ticker = normalizeTicker(proposal.symbol);
   const x = normalizeXUrl(proposal.x);
   const out: Conflict[] = [];
+  if (isReservedName(proposal.symbol) || isReservedName(proposal.name)) out.push({ kind: "reserved", symbol: "CRUX", token: "", href: "" });
   for (const l of launches) {
     const at = { symbol: l.symbol, token: l.token, href: l.href };
     if (ticker && normalizeTicker(l.symbol) === ticker && holdsTicker(l, now)) out.push({ kind: "ticker", ...at });

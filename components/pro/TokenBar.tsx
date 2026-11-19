@@ -1,5 +1,6 @@
 "use client";
 
+import { NotOfficial } from "@/components/ui/NotOfficial";
 import { useState, type ReactNode } from "react";
 import { formatUnits, parseAbi, zeroAddress } from "viem";
 import { useReadContracts } from "wagmi";
@@ -259,6 +260,7 @@ export function TokenBar({
             <h1 className="font-display-md text-[24px] leading-none text-bright lg:text-[20px]" title={name ?? undefined}>
               {ticker}
             </h1>
+            <NotOfficial symbol={symbol} name={name} />
             <button
               type="button"
               onClick={() => void copyCa()}

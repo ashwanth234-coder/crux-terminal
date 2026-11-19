@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { MajorsTable } from "@/components/launch/MajorsTable";
+import { NotOfficial } from "@/components/ui/NotOfficial";
 import { TrenchesTable } from "@/components/launch/TrenchesTable";
 import { erc20Abi, formatUnits, parseAbi, zeroAddress, type Address } from "viem";
 import { useReadContracts } from "wagmi";
@@ -160,7 +161,9 @@ function Row({ id, l }: { id: bigint; l: Launch }) {
         <Link href={`/launch/v9/${id}`} className="flex items-center gap-3">
           <TokenAvatar token={l.token} image={meta.image} symbol={symbol} size={32} />
           <span className="min-w-0">
-            <span className="block text-chrome">${symbol}</span>
+            <span className="flex items-center gap-1.5 text-chrome">
+              ${symbol} <NotOfficial symbol={symbol} name={name} />
+            </span>
             {name && <span className="block truncate text-[11.5px] text-dim">{name}</span>}
           </span>
         </Link>

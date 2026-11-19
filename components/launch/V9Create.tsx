@@ -16,6 +16,9 @@ import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { postRelay } from "@/lib/session";
 import { FACTORY_V9, V9_ON, curveV9Abi, factoryV9Abi, launchFromAccountV9, type V9LaunchParams } from "@/lib/v9";
 import { NETWORK_LONG } from "@/lib/network";
+import { isReservedName } from "@/lib/antiVamp";
+
+const RESERVED_TEXT = "Crux is a reserved name. Crux has no token yet, so no coin can use it in its name or ticker.";
 
 const metadataOf = (o: { name: string; description: string; image: string; x: string }) => {
   const json = JSON.stringify({ name: o.name, description: o.description, image: o.image, links: o.x ? { x: o.x } : {} });
@@ -47,11 +50,12 @@ async function squareImage(file: File): Promise<string> {
 }
 
 /** The anti-copycat check the relay runs, run here too for a wallet launch (the factory itself doesn't check). */
-async function checkCopycat(symbol: string, image: string, x: string): Promise<string | null> {
+async function checkCopycat(symbol: string, name: string, image: string, x: string): Promise<string | null> {
+  if (isReservedName(symbol) || isReservedName(name)) return RESERVED_TEXT;
   try {
-    const res = await fetch("/api/launch-check", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ symbol, image, x }) });
+    const res = await fetch("/api/launch-check", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ symbol, name, image, x }) });
     const j = (await res.json()) as { ok?: boolean; line?: string };
-    return j.ok === false ? `${j.line ?? "This copies an existing Crux token"}. Change the ticker, artwork or X link.` : null;
+    return j.ok === false ? `${j.line ?? "This copies an existing Crux token"}. Change the name, ticker, artwork or X link.` : null;
   } catch {
     return null;
   }
@@ -108,13 +112,17 @@ export function V9Create() {
     );
   }
 
-  const ready = name.trim() !== "" && symbol.trim() !== "" && (!instantUnlock || confirmUnlock);
+  const reserved = isReservedName(name) || isReservedName(symbol);
+  const ready = name.trim() !== "" && symbol.trim() !== "" && !reserved && (!instantUnlock || confirmUnlock);
 
   const launch = async () => {
     setError(null);
     try {
       const creator: Address | undefined = via === "account" ? crux.account! : address;
       if (!creator) throw new Error("Log in or connect a wallet to launch.");
+      // Copycat and reserved-name check first, whichever way it launches (the relay checks again).
+      const copycat = await checkCopycat(symbol.trim().toUpperCase(), name.trim(), image.trim(), x.trim());
+      if (copycat) throw new Error(copycat);
       const meta = metadataOf({ name: name.trim(), description: description.trim(), image: image.trim(), x: x.trim() });
       const options = { instantUnlock, openingWindow: fairOpening ? 60 : 0, openingCap: BigInt(0) };
       // The token's 5afe address: the factory's init-code hash for this launch and creator, then a salt that ends in 5afe.
@@ -134,8 +142,6 @@ export function V9Create() {
         router.push(`/launch/v9/${id}`);
         return;
       }
-      const copycat = await checkCopycat(params.symbol, image.trim(), x.trim());
-      if (copycat) throw new Error(copycat);
       if (chainId !== TESTNET.id) await switchChain({ chainId: TESTNET.id });
       setBusy("Confirm the launch in your wallet…");
       const tx = await simulateThenWrite(config, address!, { chainId: TESTNET.id, address: FACTORY_V9, abi: factoryV9Abi, functionName: "launch", args: [params, options] });
@@ -180,6 +186,11 @@ export function V9Create() {
             Ticker
             <input value={symbol} maxLength={10} onChange={(e) => setSymbol(e.target.value.replace(/[^A-Za-z0-9]/g, ""))} className={`${field} font-mono uppercase`} />
           </label>
+          {reserved && (
+            <p role="alert" className="text-[12.5px] text-down">
+              {RESERVED_TEXT}
+            </p>
+          )}
           <label className="block text-muted">
             Description <span className="text-dim">(optional)</span>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className={field} />

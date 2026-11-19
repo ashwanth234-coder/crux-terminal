@@ -1,5 +1,6 @@
 "use client";
 
+import { NotOfficial } from "@/components/ui/NotOfficial";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CoinRail } from "@/components/coin/CoinRail";
@@ -141,6 +142,7 @@ function CoinBar({ network, token, coin, price, stats, now }: { network: ChartNe
           <div className="flex items-center gap-2">
             <h1 className="font-display-md text-[20px] leading-none text-chrome">${coin?.symbol || "…"}</h1>
             <span className="truncate text-[12.5px] text-muted">{coin?.name}</span>
+            <NotOfficial symbol={coin?.symbol} name={coin?.name} />
           </div>
           <div className="mt-1 flex items-center gap-1.5">
             <span className="rounded-[3px] border border-line-2 px-1.5 py-px font-mono text-[9.5px] uppercase tracking-[0.12em] text-muted">

@@ -21,18 +21,22 @@ export async function OPTIONS() {
 
 export async function POST(request: Request) {
   await connection();
-  let body: { symbol?: unknown; image?: unknown; x?: unknown };
+  let body: { symbol?: unknown; name?: unknown; image?: unknown; x?: unknown };
   try {
     body = await request.json();
   } catch {
-    return json({ error: "Send JSON: { symbol, image?, x? }" }, 400);
+    return json({ error: "Send JSON: { symbol, name?, image?, x? }" }, 400);
   }
   const str = (v: unknown, max: number) => (typeof v === "string" && v.length <= max ? v.trim() : "");
   const symbol = str(body.symbol, 32);
+  const name = str(body.name, 64);
   // An https URL, or an uploaded display image (a small data: URI).
   const image = str(body.image, MAX_IMAGE_DATA_URI);
   const x = str(body.x, 512);
   if (!normalizeTicker(symbol)) return json({ error: "symbol is required" }, 400);
+  // Crux's own name is refused at once, even when the chain can't be read.
+  const reserved = checkLaunch({ symbol, name }, [], 0);
+  if (reserved.length > 0) return json({ ok: false, line: conflictLine(reserved), conflicts: reserved, artwork: image ? "unique" : "none" });
 
   let launches;
   let v9Launches;
@@ -76,7 +80,7 @@ export async function POST(request: Request) {
       )),
     ]),
   ]);
-  const conflicts = checkLaunch({ symbol, x, art }, guarded, now);
+  const conflicts = checkLaunch({ symbol, name, x, art }, guarded, now);
   const artwork = !image ? "none" : !art ? "unreadable" : conflicts.some((c) => c.kind.startsWith("artwork")) ? "matched" : "unique";
   return json({ ok: conflicts.length === 0, line: conflictLine(conflicts), conflicts, artwork });
 }

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkLaunch, conflictLine, dHashOf, hammingHex, normalizeTicker, normalizeXUrl, type GuardLaunch } from "./antiVamp.ts";
+import { checkLaunch, conflictLine, dHashOf, hammingHex, isReservedName, normalizeTicker, normalizeXUrl, type GuardLaunch } from "./antiVamp.ts";
 
 const NOW = 1_800_000_000;
 const launch = (over: Partial<GuardLaunch> = {}): GuardLaunch => ({
@@ -62,4 +62,15 @@ test("an X account reused across active tokens is refused, and the banner names 
   assert.deepEqual(c.map((x) => x.kind), ["ticker", "artwork", "x"]);
   assert.equal(conflictLine(c), "Ticker reserved on CRUX · Exact artwork already used · X account already used");
   assert.equal(c[0].href, "/launch/v7/0");
+});
+
+test("Crux's own name is reserved in tickers and names, in any spelling", () => {
+  for (const s of ["CRUX", "$crux", "Crux Protocol", "CRUXAI", "C.R.U.X", "Kruux"]) {
+    assert.equal(isReservedName(s), true, s);
+  }
+  for (const s of ["PEPE", "Crocs", "Cross", "Macro", "Crypto X", null, ""]) assert.equal(isReservedName(s), false, String(s));
+  assert.deepEqual(
+    checkLaunch({ symbol: "MOON", name: "Crux Official" }, [], 0).map((c) => c.kind),
+    ["reserved"],
+  );
 });
