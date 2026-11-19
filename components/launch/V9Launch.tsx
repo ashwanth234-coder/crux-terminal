@@ -37,6 +37,7 @@ import { SLIPPAGE_BPS, PRICE_WINDOW_MS, swapAfterRead, curveQuote, readyToSell, 
 import { FACTORY_V9, ROUTER_V9, V9_ON, curvePrice, curveV9Abi, factoryV9Abi, phaseV9, registerV9Curve, routerV9Abi, type PhaseV9 } from "@/lib/v9";
 import { IS_TESTNET, NETWORK_NAME } from "@/lib/network";
 import { useWalletTrading } from "@/hooks/useBnbTrading";
+import { useCashMove } from "@/hooks/useCashMove";
 
 const usd = (v: bigint) => Number(formatUnits(v, 6)).toLocaleString("en-US", { maximumFractionDigits: 2 });
 /**
@@ -358,6 +359,14 @@ function TradePanel({
   // Base speed, instead of the Crux account (now the optional Protected Savings Vault). Base Sepolia keeps the account.
   const baseWallet = useWalletTrading("base", token);
   const loginMode = !IS_TESTNET && via === "account" && crux.owner !== null;
+  // One balance: the quick-buy size moves to Base as soon as the page opens, so the first buy is instant.
+  const cash = useCashMove();
+  const tradeSettings = useTradeSettings();
+  const quickUsd6 = BigInt(Math.round((tradeSettings.buyPresets[0] ?? 0) * 1e6));
+  const { premove } = cash;
+  useEffect(() => {
+    if (loginMode) premove("base", quickUsd6);
+  }, [loginMode, premove, quickUsd6]);
   const opening = phase === "opening";
   // Between the opening's end and its settlement (the solver or keeper settles it within seconds) nothing can be
   // priced yet: say so, rather than "too small".
@@ -920,6 +929,14 @@ function TradePanel({
     setNote(null);
     if (amount <= BigInt(0)) return setNote({ ok: false, text: buy ? "Enter an amount to buy." : "Nothing to sell yet." });
     if (opening) return setNote({ ok: false, text: "The fair opening can't be joined from your balance yet. Trade when it ends." });
+    // A buy bigger than the Base cash moves the rest from Solana or BNB Chain first (~1–3 s).
+    if (buy) {
+      try {
+        await cash.ensure("base", amount);
+      } catch (e) {
+        return setNote({ ok: false, text: (e as Error).message });
+      }
+    }
     const r = buy ? await baseWallet.buy(amount, Number(SLIPPAGE_BPS)) : await baseWallet.sell(amount, Number(SLIPPAGE_BPS));
     if (!r) return;
     if (r.kind === "error") return setNote({ ok: false, text: r.message.split("\n")[0] });

@@ -134,7 +134,9 @@ export function useSolanaTrading(mint: string | null) {
       const t0 = performance.now();
       const h = holdings.data;
       try {
-        if (h && h.usdc >= usdc6) {
+        // Base mainnet (Option A): always the direct trade from Solana cash (moved here first by useCashMove when
+        // needed; the server checks the balance). The account-paid route needs Crux's own money on Solana: Sepolia only.
+        if ((h && h.usdc >= usdc6) || TESTNET.testnet !== true) {
           setResult({ kind: "busy", label: "Buying…" });
           await direct("buy", usdc6, opts, t0);
         } else {

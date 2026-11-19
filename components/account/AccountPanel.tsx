@@ -579,11 +579,28 @@ export function AccountPanel() {
 
       <ExportWallets />
 
-      <p className="text-[11.5px] leading-relaxed text-dim">
-        How it&apos;s protected: your login signs every trade and withdrawal, and Crux pays the gas. Your money can only be traded on Crux, with
-        every trade and refund coming back to this account, or sent to your own wallet. Someone who stole your login could trade but never take
-        funds out: changing the withdrawal wallet waits 48 hours, and you can cancel it.{IS_TESTNET ? " Testnet only." : ""}
-      </p>
+      {IS_TESTNET ? (
+        <p className="text-[11.5px] leading-relaxed text-dim">
+          How it&apos;s protected: your login signs every trade and withdrawal, and Crux pays the gas. Your money can only be traded on Crux, with
+          every trade and refund coming back to this account, or sent to your own wallet. Someone who stole your login could trade but never take
+          funds out: changing the withdrawal wallet waits 48 hours, and you can cancel it. Testnet only.
+        </p>
+      ) : (
+        <div className="space-y-2 text-[11.5px] leading-relaxed text-dim">
+          <p>
+            Your balance: cash and coins sit in your own wallets on Base, Solana and BNB Chain (you can export their keys above). Crux&apos;s server
+            signs trades for them within fixed rules: swaps that pay your own wallet, and moves between your own wallets. Crux pays the gas.
+          </p>
+          <p>
+            Speed: a buy is instant when your cash is already on that coin&apos;s chain. Otherwise your cash moves there first, a few seconds and
+            about $0.02–0.08, and opening a coin moves your first quick-buy size ahead of time.
+          </p>
+          <p>
+            Protected Savings Vault (this Crux account on Base): stricter. Money in it can only be traded on Crux or sent to your bound wallet, and
+            changing that wallet waits 48 hours. Launches are on Base for now.
+          </p>
+        </div>
+      )}
     </Frame>
   );
 }

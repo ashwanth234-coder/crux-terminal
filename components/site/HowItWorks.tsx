@@ -1,13 +1,19 @@
 import { Chapter } from "./Chapter";
+import { IS_TESTNET } from "@/lib/network";
 
-// A launch in three steps, one line each.
+// A launch in three steps, one line each. The mainnet beta launches on Base only, without the fair opening (it needs
+// Crux's own money to fill), so mainnet says what it does today.
 const STEPS = [
-  { name: "Launch", body: "Name it, launch it. Free, no gas. Creators earn 30% of trading fees.", fact: "Free" },
-  { name: "Fair opening", body: "Optional: everyone in the first minute pays the same price. No snipers.", fact: "One price" },
+  { name: "Launch", body: IS_TESTNET ? "Name it, launch it. Free, no gas. Creators earn 30% of trading fees." : "Name it, launch it on Base. Free, no gas. Creators earn 30% of trading fees.", fact: "Free" },
+  IS_TESTNET
+    ? { name: "Fair opening", body: "Optional: everyone in the first minute pays the same price. No snipers.", fact: "One price" }
+    : { name: "Trade", body: "Buyers trade it from the first second, from cash on Base, Solana or BNB Chain.", fact: "3 chains" },
   { name: "Graduate", body: "Hits its target, moves to Uniswap on Base. Liquidity burned.", fact: "LP burned" },
 ];
 
-const TRUST = ["Creator vests 30 days", "LP burned", "Anti-sniper opening", "Priced in USDC", "Withdraw only to your wallet"];
+const TRUST = IS_TESTNET
+  ? ["Creator vests 30 days", "LP burned", "Anti-sniper opening", "Priced in USDC", "Withdraw only to your wallet"]
+  : ["Creator vests 30 days", "LP burned", "Priced in USDC", "Your own wallets", "Launches on Base"];
 
 export function HowItWorks() {
   return (

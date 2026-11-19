@@ -1,6 +1,8 @@
 "use client";
 
-import { startTransition, useState, type ReactNode } from "react";
+import { startTransition, useEffect, useState, type ReactNode } from "react";
+import { useCashMove, type CashChain } from "@/hooks/useCashMove";
+import { IS_TESTNET } from "@/lib/network";
 import { buttonClass } from "@/components/ui/Button";
 import { TradeSettingsButton } from "@/components/pro/TradeSettingsButton";
 import { Menu } from "@/components/ui/Menu";
@@ -259,15 +261,45 @@ function Result({ r, receipt, testRun }: { r: { kind: string; label?: string; me
   );
 }
 
+/**
+ * One balance for a chain's ticket (Option A, Base mainnet): the quick-buy size moves to this chain as soon as the
+ * page opens (so the buy is instant), and a buy bigger than this chain's cash moves the rest first, then buys.
+ */
+function useOneBalanceBuy(chain: CashChain) {
+  const m = useCashMove();
+  const settings = useTradeSettings();
+  const [error, setError] = useState<string | null>(null);
+  const quick = BigInt(Math.round((settings.buyPresets[0] ?? 0) * 1e6));
+  const { premove } = m;
+  useEffect(() => premove(chain, quick), [premove, chain, quick]);
+  const buy = async (usd6: bigint, run: () => void) => {
+    setError(null);
+    try {
+      if (!IS_TESTNET) await m.ensure(chain, usd6);
+      run();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  const status = m.moving ? (
+    <p className="text-[13px] text-muted">Moving your cash to {m.name(chain)}… a few seconds.</p>
+  ) : error ? (
+    <p className="rounded-lg border border-down/50 px-3 py-2 text-[13px] text-down">{error}</p>
+  ) : null;
+  return { buy, status, total: IS_TESTNET ? null : m.total };
+}
+
 /** The ticket for a Solana coin: paid from Solana cash first, else the Crux balance (picked for you, never shown). */
 export function SolanaTicket({ mint, symbol, price }: { mint: string; symbol?: string; price?: number }) {
   const crux = useCruxAccount();
   const t = useSolanaTrading(mint);
   const alert = useCreatorAlert(mint);
   const [turbo, setTurbo] = useState(false);
+  const one = useOneBalanceBuy("solana");
   if (!crux.loggedIn) return <LogIn text="Trade this coin from your one Crux account. No SOL, no bridging." />;
   const h = t.holdings;
-  const cash = h ? Number(h.usdc) / 1e6 + Number(crux.usdc ?? BigInt(0)) / 1e6 : null;
+  // Mainnet: the whole balance can buy (the rest moves here first); Sepolia: Solana cash plus the account's test USDC.
+  const cash = one.total !== null ? Number(one.total) / 1e6 : h ? Number(h.usdc) / 1e6 + Number(crux.usdc ?? BigInt(0)) / 1e6 : null;
   const r = t.result;
   return (
     <Ticket
@@ -283,9 +315,14 @@ export function SolanaTicket({ mint, symbol, price }: { mint: string; symbol?: s
       decimals={h?.coin?.decimals ?? h?.token?.decimals ?? 6}
       busy={r.kind === "busy"}
       prepare={(side, amount, slippageBps) => t.prepare(side, amount, { turbo, slippageBps })}
-      buy={(d, slippageBps) => void t.buy(BigInt(Math.round(d * 1e6)), { turbo, slippageBps })}
+      buy={(d, slippageBps) => {
+        const usd6 = BigInt(Math.round(d * 1e6));
+        void one.buy(usd6, () => void t.buy(usd6, { turbo, slippageBps }));
+      }}
       sell={(a, slippageBps) => void t.sell(a, { turbo, slippageBps })}
-      status={<Result r={r} receipt={r.kind === "done" && r.signature ? `https://solscan.io/tx/${r.signature}` : undefined} testRun={r.kind === "done" && r.how === "account"} />}
+      status={
+        one.status ?? <Result r={r} receipt={r.kind === "done" && r.signature ? `https://solscan.io/tx/${r.signature}` : undefined} testRun={r.kind === "done" && r.how === "account"} />
+      }
       footnote={`Paid from your Crux balance. ${solanaFeeText(mint)}`}
       extras={
         <>
@@ -318,6 +355,7 @@ export function SolanaTicket({ mint, symbol, price }: { mint: string; symbol?: s
 export function BnbTicket({ address, symbol, price }: { address: string; symbol?: string; price?: number }) {
   const crux = useCruxAccount();
   const t = useBnbTrading(address);
+  const one = useOneBalanceBuy("bnb");
   if (!crux.loggedIn) return <LogIn text="Trade this coin from your one Crux account. No BNB needed, no bridging." />;
   const h = t.holdings;
   // USDT on BNB Chain has 18 decimals.
@@ -331,16 +369,16 @@ export function BnbTicket({ address, symbol, price }: { address: string; symbol?
       cashDecimals={18}
       symbol={symbol || "coin"}
       price={price}
-      cash={h ? Number(h.usdt) / 1e18 : null}
+      cash={one.total !== null ? Number(one.total) / 1e6 : h ? Number(h.usdt) / 1e18 : null}
       held={h?.coin?.amount ?? BigInt(0)}
       decimals={h?.coin?.decimals ?? 18}
       busy={r.kind === "busy"}
       // The ticket names buy amounts in 6-decimal dollars; BNB Chain's cash counts 18.
       prepare={(side, amount, slippageBps) => t.prepare(side, side === "buy" && typeof amount === "bigint" ? amount * BigInt(1_000_000_000_000) : amount, slippageBps)}
-      buy={(d, slippageBps) => void t.buy(units(d), slippageBps)}
+      buy={(d, slippageBps) => void one.buy(BigInt(Math.round(d * 1e6)), () => void t.buy(units(d), slippageBps))}
       sell={(a, slippageBps) => void t.sell(a, slippageBps)}
-      status={<Result r={r} receipt={r.kind === "done" ? `https://bscscan.com/tx/${r.hash}` : undefined} />}
-      footnote={`Paid from your Crux balance (its BNB Chain cash). ${bnbFeeText} Crux pays the gas.`}
+      status={one.status ?? <Result r={r} receipt={r.kind === "done" ? `https://bscscan.com/tx/${r.hash}` : undefined} />}
+      footnote={`Paid from your Crux balance. ${bnbFeeText} Crux pays the gas.`}
     />
   );
 }

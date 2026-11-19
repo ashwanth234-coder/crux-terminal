@@ -7,11 +7,11 @@ const LIVE = IS_TESTNET ? "Live on testnet" : "Live";
 const PILLARS = [
   IS_TESTNET
     ? { n: "01", title: "Fund from anywhere.", body: "USDC from five chains, one balance. Withdrawals only to your wallet.", tag: LIVE }
-    : { n: "01", title: "One balance.", body: "Add USDC on Base. Withdrawals only to your wallet.", tag: LIVE },
+    : { n: "01", title: "One balance.", body: "Add USDC on Base or Solana, or USDT on BNB Chain. One total, in your own wallets.", tag: LIVE },
   { n: "02", title: "Launch and trade.", body: "Launch, buy, take profit, stop loss. One balance, no gas.", tag: LIVE },
   IS_TESTNET
     ? { n: "03", title: "Every chain.", body: "Buy any Crux coin from Ethereum, Solana, BNB Chain or Arbitrum.", tag: LIVE }
-    : { n: "03", title: "Three chains.", body: "Trade Base, Solana and BNB Chain coins from the same account.", tag: LIVE },
+    : { n: "03", title: "Three chains.", body: "Trade Base, Solana and BNB Chain coins. Instant where your cash is; a few seconds to move it.", tag: LIVE },
 ];
 
 /** The CRUX Account, in three cards. */
