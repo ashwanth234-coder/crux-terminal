@@ -1,15 +1,16 @@
 import { Chapter } from "./Chapter";
+import { IS_TESTNET } from "@/lib/network";
 
 // Built on Base, in four short claims.
 const PARTS = [
   { n: "01", title: "One pool.", body: "Every coin has one Uniswap pool on Base. Same price on every chain.", tag: "Uniswap · Base" },
-  { n: "02", title: "Fills in seconds.", body: "Buy from any chain. Filled on Base in about 3 seconds.", tag: "~3 s fills" },
+  { n: "02", title: "Fills in seconds.", body: "Every trade fills on Base in about 3 seconds.", tag: "~3 s fills" },
   { n: "03", title: "Your account, your wallet.", body: "Money only ever leaves to the wallet you choose.", tag: "Smart account" },
   { n: "04", title: "Fair by contract.", body: "Optional one-price opening. Creator coins vest on-chain.", tag: "Anti-sniper · Vesting" },
 ];
 
 const FACTS = [
-  { value: "5", label: "chains" },
+  { value: IS_TESTNET ? "5" : "3", label: "chains" },
   { value: "1", label: "pool per coin" },
   { value: "~3 s", label: "fills" },
   { value: "30%", label: "of fees to creators" },

@@ -3,6 +3,7 @@ import { CruxEmblem } from "./CruxEmblem";
 import { ChainStrip } from "./ChainStrip";
 import { ArrowUpRight, buttonClass } from "@/components/ui/Button";
 import { TERMINAL_HREF } from "@/lib/site";
+import { IS_TESTNET } from "@/lib/network";
 
 /** The promise in one line: one CRUX Account, funded from every chain, that launches and trades. */
 export function Hero() {
@@ -17,7 +18,8 @@ export function Hero() {
             Every chain.
           </h1>
           <p className="mt-6 max-w-lg text-[16px] leading-relaxed text-muted md:mt-8 md:text-[18px]">
-            <span className="text-chrome">5 chains. 1 account.</span> Launch and trade them all, no gas, no bridges.
+            {/* Mainnet trades Base, Solana and BNB Chain today; Ethereum, Arbitrum and Robinhood Chain follow. */}
+            <span className="text-chrome">{IS_TESTNET ? "5 chains. 1 account." : "Base, Solana, BNB. 1 account."}</span> Launch and trade them all, no gas, no bridges.
           </p>
           {/* The two products: launch a coin, and trade any coin in the terminal. */}
           <div className="mt-9 flex flex-wrap items-center gap-3 md:mt-12">

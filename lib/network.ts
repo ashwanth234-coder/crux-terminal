@@ -122,7 +122,20 @@ const BASE_MAINNET: Network = {
     v3Router: a("0x2626664c2603336E57B271c5C0b26F421741e481"),
     v3Quoter: a("0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a"),
   },
-  crux: { retiredSolvers: [] },
+  // DeployMainnet (2026-11-19, block 59195558) and DeployMainnetAccountsV5 (2026-11-19, block 59502673). The first V9
+  // factory 0xA36E…89fB (CruxAccountV2 accounts, $20 beta graduation) is the showcase's and isn't listed here.
+  crux: {
+    settlerV4: a("0x57DaB49BA43Df7F99AFb5E017B109aab1772cD63"),
+    destinationV2: a("0x3a7483f3d15e70babbef2fdd68688cfff8b69d13"),
+    factoryV9: a("0x84f918e07FeD33027F27808BbF894c39F1180fB7"),
+    routerV9: a("0x7B3F9F373C9c273014A42765FE62C80F8586Dd8d"),
+    accountFactoryV3: a("0x94B774625bE883F8d6Cf0097cc664155da303Dc1"),
+    accountFactoryV3DeployBlock: BigInt(59502673),
+    signingDomain: a("0xf8962965f04e20B95dAdD931fDe00121906a97DC"),
+    prover: a("0x5c0f8603d52aa099d3aeabafc9d37d2b5d4c4feb"),
+    solver: a("0xDEbbE137f2AB252e28d1070F687010C0909d0492"),
+    retiredSolvers: [],
+  },
   tokens: {},
 };
 

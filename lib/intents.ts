@@ -27,8 +27,10 @@ const DESTINATION_V2_ADDRESS: Address | null = NETWORK.crux.destinationV2 ?? nul
 /** CruxDestinationSettler (v1): where v1 and v2 settlers' orders are filled. */
 const LEGACY_DESTINATION = (NETWORK.crux.legacyDestination ?? PLACEHOLDER_SETTLER) as Address;
 
-const settlerV1 = envAddress(process.env.NEXT_PUBLIC_CRUX_SETTLER);
-const settlerV2 = envAddress(process.env.NEXT_PUBLIC_CRUX_SETTLER_V2);
+/** The first testnet contracts, named only by env vars: never read on mainnet, where they don't exist. */
+const testnetOnly = (v: string | undefined) => (NETWORK.testnet ? envAddress(v) : null);
+const settlerV1 = testnetOnly(process.env.NEXT_PUBLIC_CRUX_SETTLER);
+const settlerV2 = testnetOnly(process.env.NEXT_PUBLIC_CRUX_SETTLER_V2);
 const settlerV3 = envAddress(process.env.NEXT_PUBLIC_CRUX_SETTLER_V3) ?? SETTLER_V3_ADDRESS;
 const settlerV4 = envAddress(process.env.NEXT_PUBLIC_CRUX_SETTLER_V4) ?? SETTLER_V4_ADDRESS;
 const destinationV2 = envAddress(process.env.NEXT_PUBLIC_CRUX_DESTINATION_V2) ?? DESTINATION_V2_ADDRESS;
@@ -65,7 +67,7 @@ const SETTLER_V2_DEPLOY_BLOCK = BigInt(48410403);
 /** crux-contracts/broadcast/DeploySettlerV3.s.sol/84532/run-latest.json */
 const SETTLER_V3_DEPLOY_BLOCK: bigint | null = BigInt(48619867);
 /** crux-contracts/broadcast/DeploySettlerV4.s.sol/84532/run-latest.json (deployed 2026-10-24). */
-const SETTLER_V4_DEPLOY_BLOCK: bigint | null = BigInt(49553568);
+const SETTLER_V4_DEPLOY_BLOCK: bigint | null = NETWORK.testnet ? BigInt(49553568) : BigInt(59195558); // Base mainnet: DeployMainnet, 2026-11-19
 
 /**
  * Block the active settler was deployed in. NEXT_PUBLIC_CRUX_SETTLER_V2_BLOCK may override v2's (for a redeploy);
@@ -98,13 +100,13 @@ export const PREVIOUS_SETTLERS: { address: Address; deployBlock: bigint }[] =
   SETTLER_VERSION === 4 && settlerV3 && SETTLER_V3_DEPLOY_BLOCK !== null ? [{ address: settlerV3, deployBlock: SETTLER_V3_DEPLOY_BLOCK }] : [];
 
 /** Launch + batch-auction factory on Base Sepolia, once deployed (NEXT_PUBLIC_CRUX_FACTORY). */
-export const FACTORY = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY);
+export const FACTORY = testnetOnly(process.env.NEXT_PUBLIC_CRUX_FACTORY);
 
 /** CruxFactoryV2 on Base Sepolia (NEXT_PUBLIC_CRUX_FACTORY_V2). */
-export const FACTORY_V2 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V2);
+export const FACTORY_V2 = testnetOnly(process.env.NEXT_PUBLIC_CRUX_FACTORY_V2);
 
 /** CruxFactoryV3 (price ticks, no bidder limit) on Base Sepolia, once deployed (NEXT_PUBLIC_CRUX_FACTORY_V3). */
-export const FACTORY_V3 = envAddress(process.env.NEXT_PUBLIC_CRUX_FACTORY_V3);
+export const FACTORY_V3 = testnetOnly(process.env.NEXT_PUBLIC_CRUX_FACTORY_V3);
 
 /** The Crux solver's wallet: fills intents (and swaps in launch pools to do it). NEXT_PUBLIC_CRUX_SOLVER overrides. */
 export const CRUX_SOLVER: Address = envAddress(process.env.NEXT_PUBLIC_CRUX_SOLVER) ?? need("The Crux solver wallet (NEXT_PUBLIC_CRUX_SOLVER)", NETWORK.crux.solver);
@@ -186,7 +188,7 @@ export const TESTNET_ESCROW_ASSETS: ReadonlySet<string> = new Set([
  * (NEXT_PUBLIC_CRUX_TEST_NOVA). Testnet buys ask for it so the solver can fill them.
  * Checksummed, because the asset id is keccak256 of this exact string.
  */
-const testNova = envAddress(process.env.NEXT_PUBLIC_CRUX_TEST_NOVA);
+const testNova = testnetOnly(process.env.NEXT_PUBLIC_CRUX_TEST_NOVA);
 export const TESTNET_NOVA_CAIP19 = testNova ? `eip155:84532/erc20:${getAddress(testNova)}` : null;
 
 /** The solver clears intents in batches this long (one price per batch), so a fill lands within about this long. */

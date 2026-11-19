@@ -5,9 +5,13 @@ const LIVE = IS_TESTNET ? "Live on testnet" : "Live";
 
 // What the CRUX Account gives you, one line each.
 const PILLARS = [
-  { n: "01", title: "Fund from anywhere.", body: "USDC from five chains, one balance. Withdrawals only to your wallet.", tag: LIVE },
+  IS_TESTNET
+    ? { n: "01", title: "Fund from anywhere.", body: "USDC from five chains, one balance. Withdrawals only to your wallet.", tag: LIVE }
+    : { n: "01", title: "One balance.", body: "Add USDC on Base. Withdrawals only to your wallet.", tag: LIVE },
   { n: "02", title: "Launch and trade.", body: "Launch, buy, take profit, stop loss. One balance, no gas.", tag: LIVE },
-  { n: "03", title: "Every chain.", body: "Buy any Crux coin from Ethereum, Solana, BNB Chain or Arbitrum.", tag: LIVE },
+  IS_TESTNET
+    ? { n: "03", title: "Every chain.", body: "Buy any Crux coin from Ethereum, Solana, BNB Chain or Arbitrum.", tag: LIVE }
+    : { n: "03", title: "Three chains.", body: "Trade Base, Solana and BNB Chain coins from the same account.", tag: LIVE },
 ];
 
 /** The CRUX Account, in three cards. */

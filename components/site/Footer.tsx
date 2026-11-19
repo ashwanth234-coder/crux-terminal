@@ -47,7 +47,14 @@ export function Footer() {
       </div>
 
       <div className="mx-auto flex max-w-[1440px] flex-col gap-3 border-t border-line px-4 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12">
-        <p className="text-[12px] text-dim">© 2026 Crux. All rights reserved.</p>
+        <div className="space-y-1">
+          <p className="text-[12px] text-dim">© 2026 Crux. All rights reserved.</p>
+          {/* The plain terms line while there are no legal pages: beta, own risk, no advice, no Crux token. */}
+          <p className="max-w-xl text-[11.5px] leading-snug text-dim">
+            Beta. Use at your own risk: coins can lose all their value, so only use money you can afford to lose. Nothing here is financial
+            advice. Crux has no token.
+          </p>
+        </div>
         <p className="text-[12px] text-dim">
           Contact{" "}
           <a href={`mailto:${CONTACT_EMAIL}`} className="text-chrome/80 underline decoration-line-2 underline-offset-4 transition-colors hover:text-signal hover:decoration-signal">

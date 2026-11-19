@@ -22,5 +22,6 @@ test("Base Sepolia keeps the addresses the site used before the switch", () => {
 test("on Base mainnet a Crux contract that isn't deployed stops the build, by name", () => {
   const m = NETWORKS["base-mainnet"];
   assert.equal(m.usdc, "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913");
-  assert.throws(() => need("CruxFactoryV9", m.crux.factoryV9, m), /CruxFactoryV9 isn't deployed on Base yet/);
+  assert.equal(need("CruxFactoryV9", m.crux.factoryV9, m), "0x84f918e07FeD33027F27808BbF894c39F1180fB7");
+  assert.throws(() => need("CruxFactoryV8", m.crux.factoryV8, m), /CruxFactoryV8 isn't deployed on Base yet/);
 });
