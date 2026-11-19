@@ -55,6 +55,22 @@ export function Footer() {
           </a>
         </p>
       </div>
+
+      {/* The sign-off: CRUX, edge to edge, on the brand orange. SVG text stretched to the full width at any screen size. */}
+      <div className="bg-signal px-[3vw] pb-[2vw] pt-[3vw]" aria-hidden="true">
+        <svg viewBox="0 0 1000 300" className="block w-full" role="presentation">
+          <text
+            x="0"
+            y="268"
+            textLength="1000"
+            lengthAdjust="spacingAndGlyphs"
+            fill="var(--on-signal, #000)"
+            style={{ fontFamily: "var(--font-sans)", fontWeight: 800, fontSize: 370, letterSpacing: "-0.02em" }}
+          >
+            CRUX
+          </text>
+        </svg>
+      </div>
     </footer>
   );
 }
