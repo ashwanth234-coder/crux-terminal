@@ -161,7 +161,9 @@ export async function freshBnbCoins(minLiquidity = 1_000): Promise<FreshBnbCoin[
 }
 
 /** Where a transaction or wallet opens, per chain. */
-export const explorer = (network: ChartNetwork) =>
-  network === "solana"
-    ? { tx: (h: string) => `https://solscan.io/tx/${h}`, account: (a: string) => `https://solscan.io/account/${a}`, token: (a: string) => `https://solscan.io/token/${a}` }
-    : { tx: (h: string) => `https://bscscan.com/tx/${h}`, account: (a: string) => `https://bscscan.com/address/${a}`, token: (a: string) => `https://bscscan.com/token/${a}` };
+export const explorer = (network: ChartNetwork) => {
+  if (network === "solana")
+    return { tx: (h: string) => `https://solscan.io/tx/${h}`, account: (a: string) => `https://solscan.io/account/${a}`, token: (a: string) => `https://solscan.io/token/${a}` };
+  const host = network === "base" ? "https://basescan.org" : "https://bscscan.com";
+  return { tx: (h: string) => `${host}/tx/${h}`, account: (a: string) => `${host}/address/${a}`, token: (a: string) => `${host}/token/${a}` };
+};

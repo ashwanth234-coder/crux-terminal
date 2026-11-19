@@ -24,7 +24,7 @@ async function livePrice(network: ChartNetwork, pool: string, token: string): Pr
     const p = ((await r.json()) as Record<string, { usdPrice?: number } | undefined>)[token]?.usdPrice;
     return typeof p === "number" && p > 0 ? p : null;
   }
-  const r = await fetch(`https://api.dexscreener.com/latest/dex/pairs/bsc/${pool}`);
+  const r = await fetch(`https://api.dexscreener.com/latest/dex/pairs/${network}/${pool}`);
   if (!r.ok) return null;
   const pair = ((await r.json()) as { pair?: { baseToken?: { address?: string }; priceUsd?: string } }).pair;
   if (!pair?.priceUsd || pair.baseToken?.address?.toLowerCase() !== token.toLowerCase()) return null;

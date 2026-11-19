@@ -170,7 +170,8 @@ const FRAMES: Record<Timeframe, { unit: "minute" | "hour" | "day"; aggregate: nu
 };
 
 /** GeckoTerminal's name for each chain the terminal charts. */
-export type ChartNetwork = "solana" | "bsc";
+/** "base" is Base MAINNET (the mirror showcase); the rest of the app reads Base Sepolia through its own config. */
+export type ChartNetwork = "solana" | "bsc" | "base";
 /** A coin's market as DexScreener lists it (its free API allows ~300 reads a minute, so it carries the live stats). */
 export type DexPair = {
   dexId?: string;
@@ -187,7 +188,7 @@ export type DexPair = {
   pairCreatedAt?: number;
 };
 
-const DEX_CHAIN: Record<ChartNetwork, string> = { solana: "solana", bsc: "bsc" };
+const DEX_CHAIN: Record<ChartNetwork, string> = { solana: "solana", bsc: "bsc", base: "base" };
 const pairCache = new Map<string, { at: number; pair: Promise<DexPair | null> }>();
 /**
  * The coin's deepest market (most money in it), with its live numbers: one read per coin every 15 s, shared by

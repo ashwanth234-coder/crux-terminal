@@ -15,7 +15,7 @@ export type CoinFacts = { symbol?: string; name?: string; icon?: string; price?:
 /** The cookie /terminal reads to reopen the last coin a trader had open (app/terminal/route.ts). */
 export const LAST_COIN_COOKIE = "crux_last_coin";
 
-const CHAIN_LABEL: Record<ChartNetwork, string> = { solana: "Solana", bsc: "BNB Chain" };
+const CHAIN_LABEL: Record<ChartNetwork, string> = { solana: "Solana", bsc: "BNB Chain", base: "Base" };
 
 const ago = (now: number, t: number) => {
   const s = Math.max(0, Math.floor((now - t) / 1000));

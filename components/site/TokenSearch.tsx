@@ -7,6 +7,7 @@ import { isAddress } from "viem";
 import { PHASE_WORDS } from "@/lib/phaseWords";
 import { fmtPrice, isSolanaAddress, searchSolanaCoins } from "@/lib/solanaCoins";
 import { chainOf0x, searchBnbCoins } from "@/lib/bnbCoins";
+import { findShowcase, showcasePath } from "@/lib/showcase";
 
 export type Hit = { key: string; version: number; auctionId: number; token: string; pool: string | null; name: string; symbol: string; phase: string };
 
@@ -56,7 +57,9 @@ export function TokenSearch({ className = "", autoFocus = false, onDone }: { cla
   });
 
   const q = value.trim();
-  const direct = isAddress(q, { strict: false }) ? `/token/${q}` : isSolanaAddress(q) ? `/sol/${q}` : null;
+  // Any of the showcase coin's three addresses opens its showcase page.
+  const showcase = findShowcase(q);
+  const direct = showcase ? showcasePath(showcase) : isAddress(q, { strict: false }) ? `/token/${q}` : isSolanaAddress(q) ? `/sol/${q}` : null;
   const solana = useQuery({
     queryKey: ["solana-search", q.toLowerCase()],
     queryFn: () => searchSolanaCoins(q),
@@ -108,6 +111,8 @@ export function TokenSearch({ className = "", autoFocus = false, onDone }: { cla
   };
   /** A full address: Solana's opens its coin; a 0x one opens on BNB Chain when that's where it trades, else on Base. */
   const goAddress = async (address: string) => {
+    const sc = findShowcase(address);
+    if (sc) return go(showcasePath(sc));
     if (isSolanaAddress(address)) return go(`/sol/${address}`);
     go((await chainOf0x(address)) === "bnb" ? `/bnb/${address}` : `/token/${address}`);
   };
