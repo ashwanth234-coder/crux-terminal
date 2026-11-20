@@ -486,6 +486,10 @@ function TradePanel({
     at: held.dataUpdatedAt,
   };
   const { tokens: tokensHeld, usdc: usdcHeld } = heldNow(heldRead as never, via === "account" ? flights : []);
+  // What a buy can spend: from the login's wallets (Option A) that's the cash on every chain, since the rest moves to
+  // Base before the buy (the vault isn't moved); otherwise what the paying address holds here.
+  const walletsCash = (cash.perChain.base ?? BigInt(0)) + (cash.perChain.solana ?? BigInt(0)) + (cash.perChain.bnb ?? BigInt(0));
+  const spendable = loginMode ? (usdcHeld > walletsCash ? usdcHeld : walletsCash) : usdcHeld;
   // The read and the trades as of now, for a Sell All that waits for the buys on their way (lib/tradeMath heldNow).
   const heldReadRef = useRef(heldRead);
   /** The block the pool's reserves were last read at (a quick sell waits for one that holds the burst's fills). */
@@ -653,7 +657,7 @@ function TradePanel({
   });
   const myDeposit = (mine.data?.[0]?.result as bigint | undefined) ?? BigInt(0);
 
-  const overHeld = holder !== undefined && held.data !== undefined && (selling ? amountIn > tokensHeld : amountIn > usdcHeld);
+  const overHeld = holder !== undefined && held.data !== undefined && (selling ? amountIn > tokensHeld : amountIn > spendable);
   const quoted = quote.data !== undefined && !quote.isFetching;
   // The price read itself failing (a node down for a moment) is not a zero quote.
   const quoteFailed = quote.isError || quote.data?.[0]?.status === "failure";
@@ -665,7 +669,9 @@ function TradePanel({
       : overHeld
         ? selling
           ? `Your $${symbol}${via === "account" ? " in your CRUX Account" : ""} sells for about $${usd(tokensHeldUsd ?? BigInt(0))}. Try that or less, or press Max.`
-          : `Not enough USDC${via === "account" ? " in your CRUX Account" : ""} ($${usd(usdcHeld)}).`
+          : loginMode
+            ? `Not enough in your balance ($${usd(spendable)}). Add money first.`
+            : `Not enough USDC${via === "account" ? " in your CRUX Account" : ""} ($${usd(usdcHeld)}).`
         : settling
           ? "The fair opening just ended: trading opens in a few seconds."
           : !opening && quoteFailed
@@ -1203,7 +1209,7 @@ function TradePanel({
                     <button
                       key={d}
                       type="button"
-                      disabled={busy !== null || (held.data !== undefined && usdcHeld < units)}
+                      disabled={busy !== null || (held.data !== undefined && spendable < units)}
                       onPointerEnter={() => presign(true, units)}
                       onClick={() => quick(units)}
                       className="h-9 rounded-lg border border-up/40 font-mono text-[12.5px] text-up transition-colors hover:border-up hover:bg-up/[0.06] disabled:opacity-35"
@@ -1263,7 +1269,9 @@ function TradePanel({
           <span>
             {selling
               ? `You hold ${tokensText(tokensHeld)} $${symbol}${tokensHeldUsd !== undefined ? ` (about $${usd(tokensHeldUsd)})` : ""}`
-              : `USDC: $${usd(usdcHeld)}`}
+              : loginMode
+                ? `Balance: $${usd(spendable)}${cash.moving ? " · moving cash to Base…" : ""}`
+                : `USDC: $${usd(usdcHeld)}`}
           </span>
         </div>
       )}
