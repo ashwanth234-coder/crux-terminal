@@ -889,6 +889,12 @@ function TradePanel({
     fillSeconds: MARKET_FILL_SECONDS,
   });
   const presign = (buy: boolean, amount: bigint) => {
+    // From the Base wallet (Option A): the server routes and checks this exact trade ahead of the click (kept 8 s),
+    // so the press only sends it. Nothing is signed for the vault.
+    if (loginMode) {
+      if (!opening && amount > BigInt(0)) baseWallet.prepare(buy ? "buy" : "sell", amount, Number(SLIPPAGE_BPS));
+      return;
+    }
     if (!accountReady || opening || amount <= BigInt(0)) return;
     const q = localQuote(buy, amount);
     if (!q || q.got === BigInt(0)) return;

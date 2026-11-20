@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useIdentityToken, usePrivy, usePrivyClient_experimental } from "@privy-io/react-auth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { zeroAddress } from "viem";
 import { useReadContract } from "wagmi";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
@@ -27,6 +27,11 @@ export type SolanaTradeResult =
   /** `confirmed` turns true once Solana confirms it; "Bought" shows the moment it's sent, as fast terminals do. */
   | { kind: "done"; side: "buy" | "sell"; how: "direct" | "account"; signature?: string; orderId?: string | null; fee?: bigint; ms: number; confirmed: boolean }
   | { kind: "error"; message: string };
+
+/** Re-reads every chain's wallet balance (all coins' pages and the header's one balance) right after a trade. */
+export function refreshBalances(qc: QueryClient) {
+  void qc.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === "string" && /^crux-(solana|bnb|base)-holdings$/.test(q.queryKey[0] as string) });
+}
 
 export async function relay<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${RELAY_URL}${path}`, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, body: JSON.stringify(body) });
@@ -53,6 +58,7 @@ export function useSolanaTrading(mint: string | null) {
   const [result, setResult] = useState<SolanaTradeResult>({ kind: "idle" });
   /** When each trade was last prepared, so pointing at a button again doesn't prepare it twice (the server keeps it 8 s). */
   const preparedAt = useRef(new Map<string, number>());
+  const qc = useQueryClient();
 
   const tokens = useCallback(async () => {
     const token = await getAccessToken();
@@ -123,9 +129,9 @@ export function useSolanaTrading(mint: string | null) {
         if (s.status === "failed") throw new Error(s.error ?? "The trade didn't go through. Nothing was spent but the network fee.");
         setResult({ ...sent, confirmed: s.status === "confirmed" });
       }
-      void holdings.refetch();
+      refreshBalances(qc);
     },
-    [mint, tokens, holdings],
+    [mint, tokens, qc],
   );
 
   const buy = useCallback(

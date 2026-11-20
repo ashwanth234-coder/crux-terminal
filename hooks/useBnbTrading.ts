@@ -2,9 +2,9 @@
 
 import { useCallback, useRef, useState } from "react";
 import { usePrivy, useSigners } from "@privy-io/react-auth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
-import { relay } from "@/hooks/useSolanaTrading";
+import { refreshBalances, relay } from "@/hooks/useSolanaTrading";
 import { RELAY_URL } from "@/lib/session";
 
 /** `usdt`/`bnb` are BNB Chain's names; `cash`/`gas` are the same numbers on any chain (Base: USDC, 6 decimals). */
@@ -35,6 +35,7 @@ export function useBnbTrading(coin: string | null) {
 /** Coins on `chain` from the login's own wallet there (see useBnbTrading); its cash counts `walletChainInfo(chain).decimals`. */
 export function useWalletTrading(chain: WalletChain, coin: string | null) {
   const c = CHAINS[chain];
+  const qc = useQueryClient();
   const crux = useCruxAccount();
   const { getAccessToken } = usePrivy();
   const { addSigners } = useSigners();
@@ -123,7 +124,7 @@ export function useWalletTrading(chain: WalletChain, coin: string | null) {
         if (s.status === "failed") throw new Error(`The trade didn't go through on ${c.name}. Nothing was spent but gas, which Crux paid.`);
         const done = { ...sent, confirmed: s.status === "confirmed" };
         setResult(done);
-        void holdings.refetch();
+        refreshBalances(qc);
         return done as BnbTradeResult;
       } catch (e) {
         const err = { kind: "error" as const, message: (e as Error).message };
@@ -131,7 +132,7 @@ export function useWalletTrading(chain: WalletChain, coin: string | null) {
         return err as BnbTradeResult;
       }
     },
-    [coin, token, enable, holdings, c],
+    [coin, token, enable, qc, c],
   );
 
   return { holdings: holdings.data ?? null, refetch: holdings.refetch, prepare, buy: (usdt: bigint, slippageBps?: number) => trade("buy", usdt, slippageBps), sell: (amount: bigint | "all", slippageBps?: number) => trade("sell", amount, slippageBps), result };
