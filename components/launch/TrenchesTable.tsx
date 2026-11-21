@@ -24,14 +24,16 @@ export function warnings(c: FreshCoin): string[] {
 }
 
 /**
- * Discover's Trenches tab: the newest Solana and BNB Chain coins, refreshed every 10-20 s, with what tells a runner from a rug (age,
+ * Discover's Trenches tab: the newest Solana and BNB Chain coins and Crux's own Base launches, refreshed every 10-20 s, with what tells a runner from a rug (age,
  * money in the pool, holders, the last five minutes' buys and sells, and the warning signs). The left side of the
  * "barbell": fast, small, risky; pair it with the creator-sell alert on the coin's page.
  */
-type Chain = "all" | "sol" | "bnb";
+type Chain = "all" | "sol" | "bnb" | "base";
+/** A Crux launch on Base, as /api/launches lists it (lib/launchFeed.ts). */
+type FeedRow = { version: number; auctionId: number; token: string; name: string; symbol: string; startTime: number; raised: string; totalSupply: string; priceUsd?: number; creatorVestingDays: number; metadata: { image: string | null } };
 type Row = {
   key: string;
-  chain: "sol" | "bnb";
+  chain: "sol" | "bnb" | "base";
   href: string;
   symbol: string;
   name: string;
@@ -48,9 +50,21 @@ type Row = {
 
 export function TrenchesTable() {
   const [chain, setChain] = useState<Chain>("all");
-  const sol = useQuery({ queryKey: ["solana-fresh"], queryFn: () => freshSolanaCoins(), refetchInterval: 10_000, staleTime: 5_000, enabled: chain !== "bnb" });
+  const sol = useQuery({ queryKey: ["solana-fresh"], queryFn: () => freshSolanaCoins(), refetchInterval: 10_000, staleTime: 5_000, enabled: chain === "all" || chain === "sol" });
   // GeckoTerminal allows ~30 reads a minute per visitor: two pages every 20 s.
-  const bnb = useQuery({ queryKey: ["bnb-fresh"], queryFn: () => freshBnbCoins(), refetchInterval: 20_000, staleTime: 10_000, enabled: chain !== "sol" });
+  const bnb = useQuery({ queryKey: ["bnb-fresh"], queryFn: () => freshBnbCoins(), refetchInterval: 20_000, staleTime: 10_000, enabled: chain === "all" || chain === "bnb" });
+  // Base: Crux's own launches (the same cached list as search and the terminal's rail).
+  const base = useQuery({
+    queryKey: ["launch-feed"],
+    queryFn: async () => {
+      const r = await fetch("/api/launches");
+      if (!r.ok) throw new Error(`launches ${r.status}`);
+      return ((await r.json()) as { launches: FeedRow[] }).launches;
+    },
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+    enabled: chain === "all" || chain === "base",
+  });
   const solRows: Row[] = (sol.data ?? []).map((c) => ({
     key: `sol:${c.mint}`,
     chain: "sol",
@@ -80,13 +94,34 @@ export function TrenchesTable() {
     sells5m: c.sells5m,
     warnings: null,
   }));
-  const rows = (chain === "sol" ? solRows : chain === "bnb" ? bnbRows : [...solRows, ...bnbRows]).sort((a, b) => b.createdAt - a.createdAt);
-  const loading = (chain !== "bnb" && sol.isLoading) || (chain !== "sol" && bnb.isLoading);
+  const baseRows: Row[] = (base.data ?? [])
+    .filter((c) => c.version === 9)
+    .map((c) => {
+      const mcap = (c.priceUsd ?? 0) * Number(c.totalSupply);
+      return {
+        key: `base:${c.token}`,
+        chain: "base" as const,
+        href: `/launch/v9/${c.auctionId}`,
+        symbol: c.symbol || "TOKEN",
+        name: c.name,
+        icon: c.metadata.image ?? undefined,
+        createdAt: c.startTime * 1000,
+        mcap: mcap > 0 ? mcap : undefined,
+        // On its curve, the money in it is what buyers paid in.
+        liquidity: Number(c.raised),
+        // What Crux knows for sure about its own launches: whether the creator's coins are locked.
+        warnings: c.creatorVestingDays === 0 ? ["Creator can sell at once"] : null,
+      };
+    });
+  const pick = { all: [...solRows, ...bnbRows, ...baseRows], sol: solRows, bnb: bnbRows, base: baseRows }[chain];
+  const rows = [...pick].sort((a, b) => b.createdAt - a.createdAt);
+  const loading = ((chain === "all" || chain === "sol") && sol.isLoading) || ((chain === "all" || chain === "bnb") && bnb.isLoading) || ((chain === "all" || chain === "base") && base.isLoading);
   const q = { isLoading: loading && rows.length === 0 };
   const chips: [Chain, string][] = [
     ["all", "All"],
     ["sol", "Solana"],
     ["bnb", "BNB Chain"],
+    ["base", "Base"],
   ];
   return (
     <>
@@ -142,7 +177,7 @@ export function TrenchesTable() {
                     <span className="min-w-0">
                       <span className="text-chrome">${c.symbol}</span> <span className="text-dim">{c.name.slice(0, 22)}</span>
                     </span>
-                    <span className="rounded-[3px] border border-line-2 px-1 py-px font-mono text-[9px] uppercase tracking-[0.1em] text-dim">{c.chain === "sol" ? "SOL" : "BNB"}</span>
+                    <span className="rounded-[3px] border border-line-2 px-1 py-px font-mono text-[9px] uppercase tracking-[0.1em] text-dim">{c.chain === "sol" ? "SOL" : c.chain === "bnb" ? "BNB" : "BASE"}</span>
                   </Link>
                 </td>
                 <td className="px-3 py-2.5 text-right font-mono text-muted">{age(c.createdAt)}</td>
