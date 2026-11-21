@@ -25,7 +25,8 @@ export function search(launches: Hit[], q: string): Hit[] {
   return scored.sort((a, b) => a.score - b.score).slice(0, 8).map((x) => x.l);
 }
 
-export const PHASE: Record<string, string> = PHASE_WORDS;
+/** A V9 launch reads "On its curve" until it graduates (then "Live"). */
+export const PHASE: Record<string, string> = { ...PHASE_WORDS, curve: "On its curve" };
 
 /** One row of the search list: a Crux launch (Base) or a Solana coin, opened the same way. */
 type Row = { key: string; href: string; symbol: string; name: string; chain: "Base" | "Solana" | "BNB"; right: string };

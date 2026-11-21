@@ -54,7 +54,7 @@ export function SymbolSwitch({ symbol }: { symbol: string }) {
     ? []
     : text
       ? search(launches, text)
-      : [...launches.filter((l) => l.phase === "open" || l.phase === "scheduled"), ...launches.filter((l) => l.phase === "graduated")].slice(0, 10);
+      : [...launches.filter((l) => l.phase === "open" || l.phase === "scheduled" || l.phase === "curve"), ...launches.filter((l) => l.phase === "graduated")].slice(0, 10);
   const match = (s: string) => !text || s.toLowerCase().includes(text.toLowerCase());
   const curated = (markets.data?.curated ?? []).filter((m) => match(m.symbol));
   const seen = new Set(curated.map((m) => m.token.toLowerCase()));

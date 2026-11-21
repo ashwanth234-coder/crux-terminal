@@ -1,4 +1,4 @@
-import { createPublicClient, erc20Abi, fallback, formatUnits, http, zeroAddress, type Address } from "viem";
+import { createPublicClient, erc20Abi, fallback, formatUnits, http, parseAbi, zeroAddress, type Address } from "viem";
 import { cruxBatchFactoryAbi, factoryV4Abi, factoryV6Abi } from "@/contracts/abis/batchAuction";
 import { BASE_RPCS } from "./network.ts";
 import { TESTNET_EXPLORER } from "@/lib/chains";
@@ -7,6 +7,7 @@ import { PRICE_DECIMALS, V2_VESTING_DAYS, phaseV2, toAuctionV2, type PhaseV2 } f
 import { SITE_URL } from "@/lib/site";
 import { parseTokenMeta, tokenMetaAbi, type TokenMeta } from "@/lib/tokenMeta";
 import { NETWORK } from "./network.ts";
+import { FACTORY_V9, V9_ON, curvePrice, curveV9Abi, factoryV9Abi } from "@/lib/v9";
 
 /**
  * Every Crux launch, read straight from the batch factories on Base Sepolia: what /api/launches and
@@ -21,14 +22,15 @@ const client = createPublicClient({
 export type FeedLaunch = {
   /** "v3#0": factory version and auction id. */
   key: string;
-  version: 2 | 3 | 4 | 5 | 6 | 7 | 8;
+  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
   auctionId: number;
   token: Address;
   name: string;
   symbol: string;
   decimals: 18;
   creator: Address;
-  phase: PhaseV2;
+  /** V9 adds "curve": trading on its bonding curve, before graduation. */
+  phase: PhaseV2 | "curve";
   /** Unix seconds. */
   startTime: number;
   closesAt: number;
@@ -51,6 +53,8 @@ export type FeedLaunch = {
    */
   antiSniperSeconds: number;
   metadata: TokenMeta;
+  /** V9: the price now (curve or pool), USD per token. */
+  priceUsd?: number;
   urls: { terminal: string; token: string; pool: string | null };
 };
 
@@ -124,9 +128,93 @@ async function factoryLaunches(factory: Address, version: 2 | 3 | 4 | 5 | 6 | 7 
   });
 }
 
-/** Newest first, V7 before V6 before V5 before V4 before V3 before V2. */
+const pairAbi = parseAbi(["function getReserves() view returns (uint112, uint112, uint32)", "function token0() view returns (address)"]);
+
+/**
+ * V9 launches (bonding curve, then Uniswap): what Base mainnet has. "raised" is the USDC on the curve, "graduationTarget"
+ * its threshold, "startTime" its launch time; "priceUsd" the price now.
+ */
+async function v9Launches(): Promise<FeedLaunch[]> {
+  const count = Number(await client.readContract({ address: FACTORY_V9, abi: factoryV9Abi, functionName: "launchCount" }));
+  if (count === 0) return [];
+  const ids = Array.from({ length: count }, (_, i) => i);
+  const launches = (await client.multicall({
+    allowFailure: false,
+    contracts: ids.map((id) => ({ address: FACTORY_V9, abi: factoryV9Abi, functionName: "getLaunch", args: [BigInt(id)] }) as const),
+  })) as { token: Address; curve: Address; pair: Address; creator: Address }[];
+  const PER = 10;
+  const reads = await client.multicall({
+    contracts: launches.flatMap((l) => [
+      { address: l.token, abi: erc20Abi, functionName: "name" } as const,
+      { address: l.token, abi: erc20Abi, functionName: "symbol" } as const,
+      { address: l.token, abi: tokenMetaAbi, functionName: "metadataURI" } as const,
+      { address: l.token, abi: erc20Abi, functionName: "totalSupply" } as const,
+      { address: l.curve, abi: curveV9Abi, functionName: "graduated" } as const,
+      { address: l.curve, abi: curveV9Abi, functionName: "realUsdc" } as const,
+      { address: l.curve, abi: curveV9Abi, functionName: "threshold" } as const,
+      { address: l.curve, abi: curveV9Abi, functionName: "spotPrice" } as const,
+      { address: l.curve, abi: curveV9Abi, functionName: "launchedAt" } as const,
+      { address: l.curve, abi: curveV9Abi, functionName: "creatorVesting" } as const,
+    ]),
+  });
+  const r = (i: number, k: number) => (reads[i * PER + k]?.status === "success" ? reads[i * PER + k].result : undefined);
+  const grads = launches.map((_, i) => r(i, 4) === true);
+  const pools = await client.multicall({
+    contracts: launches.flatMap((l, i) =>
+      grads[i] && l.pair !== zeroAddress
+        ? [{ address: l.pair, abi: pairAbi, functionName: "getReserves" } as const, { address: l.pair, abi: pairAbi, functionName: "token0" } as const]
+        : [],
+    ),
+  });
+  let pi = 0;
+  return launches.map((l, i) => {
+    const graduated = grads[i] && l.pair !== zeroAddress;
+    let price = curvePrice((r(i, 7) as bigint | undefined) ?? BigInt(0));
+    if (graduated) {
+      const res = pools[pi++]?.result as readonly [bigint, bigint, number] | undefined;
+      const t0 = pools[pi++]?.result as Address | undefined;
+      if (res && t0) {
+        const [tok, usd] = t0.toLowerCase() === l.token.toLowerCase() ? [res[0], res[1]] : [res[1], res[0]];
+        price = tok > BigInt(0) ? Number(formatUnits(usd, 6)) / Number(formatUnits(tok, 18)) : 0;
+      }
+    }
+    const launchedAt = Number((r(i, 8) as bigint | undefined) ?? BigInt(0));
+    return {
+      key: `v9#${i}`,
+      version: 9 as const,
+      auctionId: i,
+      token: l.token,
+      name: (r(i, 0) as string | undefined) ?? "",
+      symbol: (r(i, 1) as string | undefined) ?? "",
+      decimals: 18 as const,
+      creator: l.creator,
+      phase: graduated ? ("graduated" as const) : ("curve" as const),
+      startTime: launchedAt,
+      closesAt: launchedAt,
+      graduationTarget: formatUnits((r(i, 6) as bigint | undefined) ?? BigInt(0), 6),
+      raised: formatUnits((r(i, 5) as bigint | undefined) ?? BigInt(0), 6),
+      clearingPriceUsd: null,
+      totalSupply: formatUnits((r(i, 3) as bigint | undefined) ?? BigInt(0), 18),
+      pool: graduated ? l.pair : null,
+      lpBurned: graduated,
+      creatorVestingDays: Number((r(i, 9) as bigint | undefined) ?? BigInt(0)) / 86_400,
+      graduatedAt: null,
+      antiSniperSeconds: 0,
+      metadata: parseTokenMeta(r(i, 2) as string | undefined),
+      priceUsd: price,
+      urls: {
+        terminal: `${SITE_URL}/launch/v9/${i}`,
+        token: `${TESTNET_EXPLORER}/token/${l.token}`,
+        pool: graduated ? `${TESTNET_EXPLORER}/address/${l.pair}` : null,
+      },
+    };
+  });
+}
+
+/** Newest first, V9 before V7 before V6 before V5 before V4 before V3 before V2. */
 export async function readLaunches(now = Math.floor(Date.now() / 1000)): Promise<FeedLaunch[]> {
   const sets = await Promise.all([
+    V9_ON ? v9Launches() : [],
     FACTORY_V7 ? factoryLaunches(FACTORY_V7, 7, now) : [],
     FACTORY_V8 ? factoryLaunches(FACTORY_V8, 8, now) : [],
     FACTORY_V6 ? factoryLaunches(FACTORY_V6, 6, now) : [],

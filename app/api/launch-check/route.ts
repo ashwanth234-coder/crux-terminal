@@ -42,7 +42,7 @@ export async function POST(request: Request) {
   let v9Launches;
   try {
     // V9 launches count too (when V9 is on): a V9 ticker can't copy a V8 one, nor another V9 one.
-    [launches, v9Launches] = await Promise.all([readLaunches(), readV9Launches()]);
+    [launches, v9Launches] = await Promise.all([readLaunches().then((ls) => ls.flatMap((l) => (l.version === 9 || l.phase === "curve" ? [] : [{ ...l, phase: l.phase as Exclude<typeof l.phase, "curve"> }]))), readV9Launches()]);
   } catch {
     return json({ error: `Couldn't read ${NETWORK_NAME} right now. Retry shortly.` }, 503);
   }
