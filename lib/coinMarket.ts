@@ -11,6 +11,17 @@ const get = async <T,>(url: string): Promise<T | null> => {
 };
 const num = (s: string | number | null | undefined) => (s === null || s === undefined || s === "" ? undefined : Number(s));
 
+/**
+ * In a browser, the coin lists come from this site's own /api/market (one cached GeckoTerminal read shared by every
+ * visitor); on the server, from GeckoTerminal itself.
+ */
+const inBrowser = typeof window !== "undefined";
+async function viaSite<T>(network: "bsc" | "base", kind: "new" | "trending"): Promise<T[]> {
+  const r = await fetch(`/api/market?network=${network}&kind=${kind}`);
+  if (!r.ok) return [];
+  return ((await r.json()) as { coins?: T[] }).coins ?? [];
+}
+
 /** BNB Chain's big coins (deep PancakeSwap pools, checked on DexScreener 2026-11-19). */
 export const BNB_MAJORS = [
   { address: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", symbol: "BNB" },
@@ -48,6 +59,7 @@ export async function trendingBnbCoins(): Promise<(MajorCoin & { change1h?: numb
 
 /** A chain's trending coins of the last hour (GeckoTerminal), stablecoins and wrapped gas coins left out. */
 export async function trendingEvmCoins(network: EvmNetwork): Promise<(MajorCoin & { change1h?: number })[]> {
+  if (inBrowser) return viaSite(network, "trending");
   type Included = { id: string; attributes: { address: string; name?: string; symbol?: string; image_url?: string | null } };
   const j = await get<{ data?: PoolData[]; included?: Included[] }>(`${GT}/${network}/trending_pools?include=base_token&duration=1h`);
   const tokens = new Map((j?.included ?? []).map((i) => [i.id, i.attributes]));
@@ -223,6 +235,7 @@ export async function freshBnbCoins(minLiquidity = 1_000): Promise<FreshBnbCoin[
 
 /** A chain's newest coins with a tradeable pool (see freshBnbCoins), newest first. */
 export async function freshEvmCoins(network: EvmNetwork, minLiquidity = 1_000): Promise<FreshBnbCoin[]> {
+  if (inBrowser) return viaSite(network, "new");
   type Included = { id: string; attributes: { address: string; name?: string; symbol?: string; image_url?: string | null } };
   const pages = await Promise.all(
     [1, 2].map((p) => get<{ data?: PoolData[]; included?: Included[] }>(`${GT}/${network}/new_pools?include=base_token&page=${p}`).catch(() => null)),
