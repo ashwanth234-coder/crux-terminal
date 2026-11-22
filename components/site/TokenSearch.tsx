@@ -6,7 +6,7 @@ import { useId, useRef, useState } from "react";
 import { isAddress } from "viem";
 import { PHASE_WORDS } from "@/lib/phaseWords";
 import { fmtPrice, isSolanaAddress, searchSolanaCoins } from "@/lib/solanaCoins";
-import { chainOf0x, searchBnbCoins } from "@/lib/bnbCoins";
+import { chainOf0x, searchBaseCoins, searchBnbCoins } from "@/lib/bnbCoins";
 import { findShowcase, showcasePath } from "@/lib/showcase";
 
 export type Hit = { key: string; version: number; auctionId: number; token: string; pool: string | null; name: string; symbol: string; phase: string };
@@ -73,6 +73,13 @@ export function TokenSearch({ className = "", autoFocus = false, onDone }: { cla
     enabled: wanted && !direct && q.replace(/^\$/, "").length >= 2,
     staleTime: 60_000,
   });
+  const baseCoins = useQuery({
+    queryKey: ["base-search", q.toLowerCase()],
+    queryFn: () => searchBaseCoins(q),
+    enabled: wanted && !direct && q.replace(/^\$/, "").length >= 2,
+    staleTime: 60_000,
+  });
+  const cruxTokens = new Set((feed.data ?? []).map((h) => h.token.toLowerCase()));
   const hits: Row[] = direct
     ? []
     : [
@@ -92,6 +99,16 @@ export function TokenSearch({ className = "", autoFocus = false, onDone }: { cla
           chain: "Solana" as const,
           right: c.price !== undefined ? fmtPrice(c.price) : "",
         })),
+        ...(baseCoins.data ?? [])
+          .filter((c) => !cruxTokens.has(c.address.toLowerCase()))
+          .map((c) => ({
+            key: `base:${c.address}`,
+            href: `/base/${c.address}`,
+            symbol: c.symbol || "COIN",
+            name: c.name,
+            chain: "Base" as const,
+            right: c.price !== undefined ? fmtPrice(c.price) : "",
+          })),
         ...(bnb.data ?? []).map((c) => ({
           key: `bnb:${c.address}`,
           href: `/bnb/${c.address}`,
@@ -190,7 +207,7 @@ export function TokenSearch({ className = "", autoFocus = false, onDone }: { cla
         </button>
       </form>
 
-      {open && q.length > 0 && (direct || hits.length > 0 || feed.isFetching || solana.isFetching || bnb.isFetching || feed.data) && (
+      {open && q.length > 0 && (direct || hits.length > 0 || feed.isFetching || solana.isFetching || bnb.isFetching || baseCoins.isFetching || feed.data) && (
         <ul
           id={`${uid}-list`}
           role="listbox"
@@ -223,7 +240,7 @@ export function TokenSearch({ className = "", autoFocus = false, onDone }: { cla
               </li>
             ))
           ) : (
-            <li className="px-3 py-2.5 text-[12px] text-dim">{feed.isFetching || solana.isFetching || bnb.isFetching ? "Searching…" : "No coin matches"}</li>
+            <li className="px-3 py-2.5 text-[12px] text-dim">{feed.isFetching || solana.isFetching || bnb.isFetching || baseCoins.isFetching ? "Searching…" : "No coin matches"}</li>
           )}
         </ul>
       )}

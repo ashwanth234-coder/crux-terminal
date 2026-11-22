@@ -22,10 +22,34 @@ export const BNB_MAJORS = [
   { address: "0xbA2aE424d960c26247Dd6c32edC70B295c744C43", symbol: "DOGE" },
 ];
 
+/** Base's big coins (deep Uniswap / Aerodrome pools; Kyber routes them). ETH is wrapped ETH, which trades as ETH. */
+export const BASE_MAJORS = [
+  { address: "0x4200000000000000000000000000000000000006", symbol: "ETH" },
+  { address: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf", symbol: "cbBTC" },
+  { address: "0x940181a94A35A4569E4529A3CDfB74e38FD98631", symbol: "AERO" },
+  { address: "0x0b3e328455c4059EEb9e3f84b5543F74E24e7E1b", symbol: "VIRTUAL" },
+  { address: "0x1111111111166b7FE7bd91427724B487980aFc69", symbol: "ZORA" },
+  { address: "0x532f27101965dd16442E59d40670FaF5eBB142E4", symbol: "BRETT" },
+  { address: "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed", symbol: "DEGEN" },
+];
+
+/** An EVM chain the terminal lists coins for: BNB Chain ("bsc") or Base. */
+export type EvmNetwork = "bsc" | "base";
+/** Wrapped gas coins, stablecoins and wrapped BTC on the base side are a new pool, not a new coin. */
+const NOT_A_COIN: Record<EvmNetwork, RegExp> = {
+  bsc: /^(WBNB|USDT|USDC|BUSD|FDUSD|ETH|BTCB)$/i,
+  base: /^(WETH|ETH|USDC|USDbC|USDT|DAI|EURC|cbBTC|cbETH|wstETH|weETH)$/i,
+};
+
 /** BNB Chain's trending coins of the last hour (GeckoTerminal), stablecoins and wrapped BNB left out. */
 export async function trendingBnbCoins(): Promise<(MajorCoin & { change1h?: number })[]> {
+  return trendingEvmCoins("bsc");
+}
+
+/** A chain's trending coins of the last hour (GeckoTerminal), stablecoins and wrapped gas coins left out. */
+export async function trendingEvmCoins(network: EvmNetwork): Promise<(MajorCoin & { change1h?: number })[]> {
   type Included = { id: string; attributes: { address: string; name?: string; symbol?: string; image_url?: string | null } };
-  const j = await get<{ data?: PoolData[]; included?: Included[] }>(`${GT}/bsc/trending_pools?include=base_token&duration=1h`);
+  const j = await get<{ data?: PoolData[]; included?: Included[] }>(`${GT}/${network}/trending_pools?include=base_token&duration=1h`);
   const tokens = new Map((j?.included ?? []).map((i) => [i.id, i.attributes]));
   const seen = new Set<string>();
   const out: (MajorCoin & { change1h?: number })[] = [];
@@ -33,7 +57,7 @@ export async function trendingBnbCoins(): Promise<(MajorCoin & { change1h?: numb
     if ((d.relationships?.dex?.data?.id ?? "").startsWith("four-meme")) continue;
     const tok = tokens.get(d.relationships?.base_token?.data?.id ?? "");
     const symbol = (tok?.symbol ?? "").replace(/^\$/, "");
-    if (!tok || seen.has(tok.address.toLowerCase()) || isStable(symbol) || /^WBNB$/i.test(symbol)) continue;
+    if (!tok || seen.has(tok.address.toLowerCase()) || isStable(symbol) || NOT_A_COIN[network].test(symbol)) continue;
     seen.add(tok.address.toLowerCase());
     const a = d.attributes;
     out.push({
@@ -55,16 +79,22 @@ export type MajorCoin ={ address: string; symbol: string; name: string; icon?: s
 
 /** The BNB majors' live facts, from each one's deepest DexScreener market (one read for all of them). */
 export async function bnbMajors(): Promise<MajorCoin[]> {
+  return evmMajors("bsc");
+}
+
+/** A chain's majors' live facts (BNB_MAJORS / BASE_MAJORS), from each one's deepest DexScreener market. */
+export async function evmMajors(network: EvmNetwork): Promise<MajorCoin[]> {
   type Pair = { baseToken: { address: string; name?: string }; priceUsd?: string; priceChange?: { h24?: number }; marketCap?: number; fdv?: number; liquidity?: { usd?: number }; info?: { imageUrl?: string } };
-  const pairs = (await get<Pair[]>(`https://api.dexscreener.com/tokens/v1/bsc/${BNB_MAJORS.map((m) => m.address).join(",")}`)) ?? [];
-  return BNB_MAJORS.map((m) => {
+  const list = network === "base" ? BASE_MAJORS : BNB_MAJORS;
+  const pairs = (await get<Pair[]>(`https://api.dexscreener.com/tokens/v1/${network}/${list.map((m) => m.address).join(",")}`)) ?? [];
+  return list.map((m) => {
     const best = pairs
       .filter((p) => p.baseToken.address.toLowerCase() === m.address.toLowerCase())
       .sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0))[0];
     return {
       address: m.address,
       symbol: m.symbol,
-      name: m.symbol === "BNB" ? "BNB" : (best?.baseToken.name ?? m.symbol),
+      name: m.symbol === "BNB" || m.symbol === "ETH" ? m.symbol : (best?.baseToken.name ?? m.symbol),
       icon: best?.info?.imageUrl,
       price: best?.priceUsd ? Number(best.priceUsd) : undefined,
       change24h: best?.priceChange?.h24,
@@ -188,9 +218,14 @@ export type FreshBnbCoin = {
  * four.meme's curve are left out: Crux's BNB Chain route can't trade them until they move to PancakeSwap.
  */
 export async function freshBnbCoins(minLiquidity = 1_000): Promise<FreshBnbCoin[]> {
+  return freshEvmCoins("bsc", minLiquidity);
+}
+
+/** A chain's newest coins with a tradeable pool (see freshBnbCoins), newest first. */
+export async function freshEvmCoins(network: EvmNetwork, minLiquidity = 1_000): Promise<FreshBnbCoin[]> {
   type Included = { id: string; attributes: { address: string; name?: string; symbol?: string; image_url?: string | null } };
   const pages = await Promise.all(
-    [1, 2].map((p) => get<{ data?: PoolData[]; included?: Included[] }>(`${GT}/bsc/new_pools?include=base_token&page=${p}`).catch(() => null)),
+    [1, 2].map((p) => get<{ data?: PoolData[]; included?: Included[] }>(`${GT}/${network}/new_pools?include=base_token&page=${p}`).catch(() => null)),
   );
   const tokens = new Map(pages.flatMap((p) => p?.included ?? []).map((i) => [i.id, i.attributes]));
   const seen = new Set<string>();
@@ -201,8 +236,7 @@ export async function freshBnbCoins(minLiquidity = 1_000): Promise<FreshBnbCoin[
     const tok = tokens.get(d.relationships?.base_token?.data?.id ?? "");
     if (!tok) continue;
     const key = tok.address.toLowerCase();
-    // Stablecoins and wrapped BNB on the base side are a new pool, not a new coin.
-    if (seen.has(key) || /^(WBNB|USDT|USDC|BUSD|FDUSD|ETH|BTCB)$/i.test(tok.symbol ?? "")) continue;
+    if (seen.has(key) || NOT_A_COIN[network].test(tok.symbol ?? "")) continue;
     const a = d.attributes;
     const liquidity = num(a.reserve_in_usd);
     if ((liquidity ?? 0) < minLiquidity) continue;

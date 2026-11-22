@@ -9,7 +9,7 @@ import { Menu } from "@/components/ui/Menu";
 import { CoinOrderForm, CoinOrderList, type OrderKind } from "@/components/coin/CoinOrderForm";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
 import { useSolanaTrading } from "@/hooks/useSolanaTrading";
-import { useBnbTrading } from "@/hooks/useBnbTrading";
+import { useBnbTrading, useWalletTrading } from "@/hooks/useBnbTrading";
 import { useCreatorAlert } from "@/hooks/useCreatorAlert";
 import { slippageFor, useTradeSettings } from "@/hooks/useTradeSettings";
 import { fmtPrice, solanaFeeText } from "@/lib/solanaCoins";
@@ -21,7 +21,8 @@ const coins = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 
 
 /** What a chain gives the ticket: cash, the bag, and how to prepare and send a trade. */
 type Venue = {
-  chain: "solana" | "bsc";
+  /** Base has no limit orders yet (the relay's orders cover Solana and BNB Chain): market only. */
+  chain: "solana" | "bsc" | "base";
   coin: string;
   /** The cash a limit buy spends (it trades with no page open, from this chain's own cash), and its decimals. */
   orderCash: number | null;
@@ -109,7 +110,9 @@ function Ticket(v: Venue) {
         value={orderType}
         onChange={setOrderType}
         options={
-          side === "buy"
+          v.chain === "base"
+            ? [{ value: "market", label: side === "buy" ? "Market: buy now" : "Market: sell now" }]
+            : side === "buy"
             ? [
                 { value: "market", label: "Market: buy now" },
                 { value: "dip", label: "Buy the dip" },
@@ -125,7 +128,7 @@ function Ticket(v: Venue) {
       />
 
       {orderType !== "market" ? (
-        <CoinOrderForm kind={orderType} chain={v.chain} coin={v.coin} symbol={v.symbol} price={v.price} held={v.held} decimals={v.decimals} cash={v.orderCash} cashDecimals={v.cashDecimals} />
+        <CoinOrderForm kind={orderType} chain={v.chain === "base" ? "bsc" : v.chain} coin={v.coin} symbol={v.symbol} price={v.price} held={v.held} decimals={v.decimals} cash={v.orderCash} cashDecimals={v.cashDecimals} />
       ) : (
       <>
       <div className="mt-3">
@@ -378,6 +381,37 @@ export function BnbTicket({ address, symbol, price }: { address: string; symbol?
       buy={(d, slippageBps) => void one.buy(BigInt(Math.round(d * 1e6)), () => void t.buy(units(d), slippageBps))}
       sell={(a, slippageBps) => void t.sell(a, slippageBps)}
       status={one.status ?? <Result r={r} receipt={r.kind === "done" ? `https://bscscan.com/tx/${r.hash}` : undefined} />}
+      footnote={`Paid from your Crux balance. ${bnbFeeText} Crux pays the gas.`}
+    />
+  );
+}
+
+/** The ticket for any Base coin: paid from Base cash (USDC), moved there from Solana or BNB Chain first when short. */
+export function BaseTicket({ address, symbol, price }: { address: string; symbol?: string; price?: number }) {
+  const crux = useCruxAccount();
+  const t = useWalletTrading("base", address);
+  const one = useOneBalanceBuy("base");
+  if (!crux.loggedIn) return <LogIn text="Trade this coin from your one Crux account. No ETH needed, no bridging." />;
+  const h = t.holdings;
+  // Base USDC counts 6 decimals, as the ticket's dollars do.
+  const units = (d: number) => BigInt(Math.round(d * 1e6));
+  const r = t.result;
+  return (
+    <Ticket
+      chain="base"
+      coin={address}
+      orderCash={h ? Number(h.cash) / 1e6 : null}
+      cashDecimals={6}
+      symbol={symbol || "coin"}
+      price={price}
+      cash={one.total !== null ? Number(one.total) / 1e6 : h ? Number(h.cash) / 1e6 : null}
+      held={h?.coin?.amount ?? BigInt(0)}
+      decimals={h?.coin?.decimals ?? 18}
+      busy={r.kind === "busy"}
+      prepare={(side, amount, slippageBps) => t.prepare(side, amount, slippageBps)}
+      buy={(d, slippageBps) => void one.buy(units(d), () => void t.buy(units(d), slippageBps))}
+      sell={(a, slippageBps) => void t.sell(a, slippageBps)}
+      status={one.status ?? <Result r={r} receipt={r.kind === "done" ? `https://basescan.org/tx/${r.hash}` : undefined} />}
       footnote={`Paid from your Crux balance. ${bnbFeeText} Crux pays the gas.`}
     />
   );

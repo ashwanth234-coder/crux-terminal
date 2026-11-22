@@ -5,7 +5,7 @@ import { connection } from "next/server";
 import { isAddress } from "viem";
 import { Notice } from "@/components/launch/LaunchView";
 import { readLaunches } from "@/lib/launchFeed";
-import { NETWORK_LONG, NETWORK_NAME } from "@/lib/network";
+import { IS_TESTNET, NETWORK_LONG, NETWORK_NAME } from "@/lib/network";
 
 export const metadata: Metadata = {
   title: "Token · Crux",
@@ -35,6 +35,7 @@ async function Resolve({ params }: { params: Promise<{ address: string }> }) {
   } catch {
     return <Notice title={`Couldn't read ${NETWORK_NAME}`}>The chain didn&apos;t answer just now. Reload in a moment.</Notice>;
   }
-  // Outside the try: redirect() works by throwing. Any other token opens on its own Uniswap pool.
-  redirect(href ?? `/terminal/${address}`);
+  // Outside the try: redirect() works by throwing. Any other token: on Base mainnet its coin page (traded from the one
+  // balance); on Base Sepolia the terminal on its own Uniswap pool.
+  redirect(href ?? (IS_TESTNET ? `/terminal/${address}` : `/base/${address}`));
 }

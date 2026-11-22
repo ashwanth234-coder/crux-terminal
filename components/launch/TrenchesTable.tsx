@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { freshBnbCoins } from "@/lib/coinMarket";
+import { freshBnbCoins, freshEvmCoins } from "@/lib/coinMarket";
 import { fmtCompact, freshSolanaCoins, type FreshCoin } from "@/lib/solanaCoins";
 
 const age = (ms: number) => {
@@ -24,7 +24,7 @@ export function warnings(c: FreshCoin): string[] {
 }
 
 /**
- * Discover's Trenches tab: the newest Solana and BNB Chain coins and Crux's own Base launches, refreshed every 10-20 s, with what tells a runner from a rug (age,
+ * Discover's Trenches tab: the newest Solana, BNB Chain and Base coins (Crux's own Base launches among them), refreshed every 10-20 s, with what tells a runner from a rug (age,
  * money in the pool, holders, the last five minutes' buys and sells, and the warning signs). The left side of the
  * "barbell": fast, small, risky; pair it with the creator-sell alert on the coin's page.
  */
@@ -53,7 +53,8 @@ export function TrenchesTable() {
   const sol = useQuery({ queryKey: ["solana-fresh"], queryFn: () => freshSolanaCoins(), refetchInterval: 10_000, staleTime: 5_000, enabled: chain === "all" || chain === "sol" });
   // GeckoTerminal allows ~30 reads a minute per visitor: two pages every 20 s.
   const bnb = useQuery({ queryKey: ["bnb-fresh"], queryFn: () => freshBnbCoins(), refetchInterval: 20_000, staleTime: 10_000, enabled: chain === "all" || chain === "bnb" });
-  // Base: Crux's own launches (the same cached list as search and the terminal's rail).
+  const baseFresh = useQuery({ queryKey: ["base-fresh"], queryFn: () => freshEvmCoins("base"), refetchInterval: 20_000, staleTime: 10_000, enabled: chain === "all" || chain === "base" });
+  // Base: Crux's own launches too (the same cached list as search and the terminal's rail).
   const base = useQuery({
     queryKey: ["launch-feed"],
     queryFn: async () => {
@@ -113,9 +114,27 @@ export function TrenchesTable() {
         warnings: c.creatorVestingDays === 0 ? ["Creator can sell at once"] : null,
       };
     });
-  const pick = { all: [...solRows, ...bnbRows, ...baseRows], sol: solRows, bnb: bnbRows, base: baseRows }[chain];
+  const cruxTokens = new Set((base.data ?? []).map((c) => c.token.toLowerCase()));
+  const baseFreshRows: Row[] = (baseFresh.data ?? [])
+    .filter((c) => !cruxTokens.has(c.address.toLowerCase()))
+    .map((c) => ({
+      key: `base:${c.address.toLowerCase()}`,
+      chain: "base" as const,
+      href: `/base/${c.address}`,
+      symbol: c.symbol,
+      name: c.name,
+      icon: c.icon,
+      createdAt: c.createdAt,
+      mcap: c.mcap,
+      liquidity: c.liquidity,
+      buys5m: c.buys5m,
+      sells5m: c.sells5m,
+      warnings: null,
+    }));
+  const allBase = [...baseRows, ...baseFreshRows];
+  const pick = { all: [...solRows, ...bnbRows, ...allBase], sol: solRows, bnb: bnbRows, base: allBase }[chain];
   const rows = [...pick].sort((a, b) => b.createdAt - a.createdAt);
-  const loading = ((chain === "all" || chain === "sol") && sol.isLoading) || ((chain === "all" || chain === "bnb") && bnb.isLoading) || ((chain === "all" || chain === "base") && base.isLoading);
+  const loading = ((chain === "all" || chain === "sol") && sol.isLoading) || ((chain === "all" || chain === "bnb") && bnb.isLoading) || ((chain === "all" || chain === "base") && (base.isLoading || baseFresh.isLoading));
   const q = { isLoading: loading && rows.length === 0 };
   const chips: [Chain, string][] = [
     ["all", "All"],

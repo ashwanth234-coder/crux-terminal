@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BNB_MAJORS, bnbMajors, freshBnbCoins, trendingBnbCoins, type MajorCoin } from "@/lib/coinMarket";
+import { BASE_MAJORS, BNB_MAJORS, bnbMajors, evmMajors, freshBnbCoins, freshEvmCoins, trendingBnbCoins, trendingEvmCoins, type MajorCoin } from "@/lib/coinMarket";
 import { fmtCompact, freshSolanaCoins, solanaCoins, SOLANA_MAJORS_LISTED, trendingSolanaCoins } from "@/lib/solanaCoins";
 
 type Chain = "all" | "sol" | "bnb" | "base";
@@ -25,7 +25,7 @@ const CHAINS: [Chain, string][] = [
 ];
 
 /** A Crux launch on Base, as /api/launches lists it (lib/launchFeed.ts). */
-type FeedRow = { version: number; auctionId: number; symbol: string; phase: string; startTime: number; raised: string; totalSupply: string; priceUsd?: number; metadata: { image: string | null } };
+type FeedRow = { version: number; auctionId: number; token: string; symbol: string; phase: string; startTime: number; raised: string; totalSupply: string; priceUsd?: number; metadata: { image: string | null } };
 
 const age = (ms: number) => {
   const s = Math.max(1, Math.floor((Date.now() - ms) / 1000));
@@ -55,6 +55,9 @@ export function CoinRail({ current }: { current: string }) {
   const solNew = useQuery({ queryKey: ["solana-fresh"], queryFn: () => freshSolanaCoins(), refetchInterval: 15_000, staleTime: 5_000, enabled: cat === "new" && wantSol });
   const bnbNew = useQuery({ queryKey: ["bnb-fresh"], queryFn: () => freshBnbCoins(), refetchInterval: 30_000, staleTime: 10_000, enabled: cat === "new" && wantBnb });
   const solHot = useQuery({ queryKey: ["solana-trending"], queryFn: () => trendingSolanaCoins(), refetchInterval: 30_000, staleTime: 15_000, enabled: hot && wantSol });
+  const baseTop = useQuery({ queryKey: ["base-majors"], queryFn: () => evmMajors("base"), refetchInterval: 30_000, staleTime: 15_000, enabled: cat === "top" && wantBase });
+  const baseNew = useQuery({ queryKey: ["base-fresh"], queryFn: () => freshEvmCoins("base"), refetchInterval: 30_000, staleTime: 10_000, enabled: cat === "new" && wantBase });
+  const baseHot = useQuery({ queryKey: ["base-trending"], queryFn: () => trendingEvmCoins("base"), refetchInterval: 60_000, staleTime: 30_000, enabled: hot && wantBase });
   // Crux's own launches on Base (shared with the search box: the same cached list).
   const baseFeed = useQuery({
     queryKey: ["launch-feed"],
@@ -78,29 +81,34 @@ export function CoinRail({ current }: { current: string }) {
     return { key: `base:${c.auctionId}`, href: `/launch/v9/${c.auctionId}`, chain: "base", symbol: c.symbol || "TOKEN", icon: c.metadata.image ?? undefined, mcap: mcap > 0 ? mcap : undefined, ...extra };
   };
   const baseLoading = wantBase && baseFeed.isLoading;
+  // Any other Base coin (GeckoTerminal / DexScreener): its own coin page, traded from the one balance.
+  const baseCoin = (c: { address: string; symbol: string; icon?: string; mcap?: number }, extra: Partial<Item> = {}): Item => ({ key: `base:${c.address.toLowerCase()}`, href: `/base/${c.address}`, chain: "base", symbol: c.symbol, icon: c.icon, mcap: c.mcap, ...extra });
+  const cruxTokens = new Set(baseLaunches.map((c) => c.token.toLowerCase()));
+  const notCrux = <T extends { address: string }>(l: T[]) => l.filter((c) => !cruxTokens.has(c.address.toLowerCase()));
 
   let items: Item[] = [];
   let loading = false;
   if (cat === "top") {
     const s = wantSol ? (solTop.data ?? []).map((c) => sol(c, { change: c.change24h })) : [];
     const b = wantBnb ? (bnbTop.data ?? BNB_MAJORS.map((m): MajorCoin => ({ ...m, name: m.symbol }))).map((c) => bnb(c, { change: c.change24h })) : [];
-    const ba = baseLaunches.map((c) => baseItem(c));
+    const ba = wantBase ? [...baseLaunches.map((c) => baseItem(c)), ...notCrux(baseTop.data ?? BASE_MAJORS.map((m): MajorCoin => ({ ...m, name: m.symbol }))).map((c) => baseCoin(c, { change: c.change24h }))] : [];
     items = [...s, ...b, ...ba].sort((x, y) => (y.mcap ?? 0) - (x.mcap ?? 0));
     loading = (wantSol && solTop.isLoading) || baseLoading;
   } else if (cat === "new") {
     const s = wantSol ? (solNew.data ?? []).slice(0, 30).map((c) => sol(c, { createdAt: c.createdAt })) : [];
     const b = wantBnb ? (bnbNew.data ?? []).slice(0, 30).map((c) => bnb(c, { createdAt: c.createdAt })) : [];
-    const ba = baseLaunches.map((c) => baseItem(c, { createdAt: c.startTime * 1000 }));
+    const ba = [...baseLaunches.map((c) => baseItem(c, { createdAt: c.startTime * 1000 })), ...notCrux((baseNew.data ?? []).slice(0, 30)).map((c) => baseCoin(c, { createdAt: c.createdAt }))];
     items = [...s, ...b, ...ba].sort((x, y) => (y.createdAt ?? 0) - (x.createdAt ?? 0));
-    loading = (wantSol && solNew.isLoading) || (wantBnb && bnbNew.isLoading) || baseLoading;
+    loading = (wantSol && solNew.isLoading) || (wantBnb && bnbNew.isLoading) || baseLoading || (wantBase && baseNew.isLoading);
   } else {
     const s = wantSol ? (solHot.data ?? []).map((c) => sol(c, { change: c.change1h })) : [];
     const b = wantBnb ? (bnbHot.data ?? []).map((c) => bnb(c, { change: c.change1h })) : [];
-    // Base launches have no hourly change yet: Trending lists them by money raised (with their market cap); Gainers
-    // leaves them out.
-    const ba = cat === "gainers" ? [] : [...baseLaunches].sort((x, y) => Number(y.raised) - Number(x.raised)).map((c) => baseItem(c));
-    items = cat === "gainers" ? [...s, ...b].filter((c) => (c.change ?? 0) > 0).sort((x, y) => (y.change ?? 0) - (x.change ?? 0)) : interleave(s, b, ba);
-    loading = (wantSol && solHot.isLoading) || (wantBnb && bnbHot.isLoading) || baseLoading;
+    // Crux's Base launches have no hourly change yet: Trending lists them first by money raised (with their market
+    // cap), then Base's trending coins; Gainers takes only coins with an hourly change.
+    const hotBase = notCrux(baseHot.data ?? []).map((c) => baseCoin(c, { change: c.change1h }));
+    const ba = cat === "gainers" ? hotBase : [...[...baseLaunches].sort((x, y) => Number(y.raised) - Number(x.raised)).map((c) => baseItem(c)), ...hotBase];
+    items = cat === "gainers" ? [...s, ...b, ...ba].filter((c) => (c.change ?? 0) > 0).sort((x, y) => (y.change ?? 0) - (x.change ?? 0)) : interleave(s, b, ba);
+    loading = (wantSol && solHot.isLoading) || (wantBnb && bnbHot.isLoading) || baseLoading || (wantBase && baseHot.isLoading);
   }
 
   const chip = (on: boolean) => `rounded-[4px] px-2 py-1 text-[11.5px] transition-colors ${on ? "bg-panel-2 text-chrome ring-1 ring-inset ring-signal/60" : "text-muted hover:text-chrome"}`;

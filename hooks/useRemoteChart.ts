@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { watchCoinTrades } from "@/lib/coinFeed";
 import { relay } from "@/hooks/useSolanaTrading";
-import type { CoinTrade } from "@/lib/coinMarket";
+import { poolTrades, type CoinTrade } from "@/lib/coinMarket";
 import type { Address, Hex } from "viem";
 import { toCandles, type Candle } from "@/lib/candles";
 import { topPool, type ChartNetwork } from "@/lib/solanaCoins";
@@ -82,6 +82,32 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
       });
     });
   }, [coin, addr, qc, pool.isPending]);
+
+  // Base: Crux's server streams no live trades for Base coins yet (only Solana and BNB Chain), so the market's latest
+  // trades are read from GeckoTerminal every 15 s (4 reads a minute, well inside its free limit per viewer).
+  useEffect(() => {
+    if (!coin || coin.network !== "base" || !addr) return;
+    const key = ["coin-trades", coin.network, addr];
+    let stop = false;
+    const read = () =>
+      poolTrades("base", addr, coin.token)
+        .then((fresh) => {
+          if (stop || fresh.length === 0) return;
+          qc.setQueryData<CoinTrade[]>(key, (old) => {
+            const have = new Set((old ?? []).map((t) => t.tx || t.id));
+            const add = fresh.filter((t) => !have.has(t.tx || t.id));
+            if (add.length === 0) return old;
+            return [...add, ...(old ?? [])].sort((a, b) => b.time - a.time).slice(0, 600);
+          });
+        })
+        .catch(() => undefined);
+    void read();
+    const t = setInterval(read, 15_000);
+    return () => {
+      stop = true;
+      clearInterval(t);
+    };
+  }, [coin, addr, qc]);
   const fine = interval < 60;
   const tick = useQuery({
     queryKey: ["coin-tick", coin?.network, addr, coin?.token],

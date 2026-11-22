@@ -24,11 +24,11 @@ type Pair = {
   info?: { imageUrl?: string };
 };
 
-/** The deepest BNB Chain pair of each coin, as a coin. */
-function coinsOf(pairs: Pair[]): BnbCoin[] {
+/** The deepest pair of each coin on one chain (DexScreener's "bsc" or "base"), as a coin. */
+function coinsOf(pairs: Pair[], chainId: "bsc" | "base" = "bsc"): BnbCoin[] {
   const best = new Map<string, Pair>();
   for (const p of pairs) {
-    if (p.chainId !== "bsc") continue;
+    if (p.chainId !== chainId) continue;
     const k = p.baseToken.address.toLowerCase();
     const have = best.get(k);
     if (!have || (p.liquidity?.usd ?? 0) > (have.liquidity?.usd ?? 0)) best.set(k, p);
@@ -46,23 +46,23 @@ function coinsOf(pairs: Pair[]): BnbCoin[] {
 }
 
 /** BNB Chain coins matching a ticker, name or address, with real liquidity, deepest first. */
-export async function searchBnbCoins(q: string, limit = 4): Promise<BnbCoin[]> {
+export async function searchBnbCoins(q: string, limit = 4, chainId: "bsc" | "base" = "bsc"): Promise<BnbCoin[]> {
   const s = q.trim().replace(/^\$/, "");
   if (s.length < 2) return [];
   const r = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(s)}`);
   if (!r.ok) return [];
   const pairs = ((await r.json()) as { pairs?: Pair[] }).pairs ?? [];
-  return coinsOf(pairs)
+  return coinsOf(pairs, chainId)
     .filter((c) => (c.liquidity ?? 0) >= 50_000)
     .sort((a, b) => (b.liquidity ?? 0) - (a.liquidity ?? 0))
     .slice(0, limit);
 }
 
 /** One coin's facts by its address on BNB Chain, or null when no BNB Chain market has it. */
-export async function bnbCoin(address: string): Promise<BnbCoin | null> {
+export async function bnbCoin(address: string, chainId: "bsc" | "base" = "bsc"): Promise<BnbCoin | null> {
   const r = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${address}`);
   if (!r.ok) return null;
-  const hit = coinsOf(((await r.json()) as { pairs?: Pair[] }).pairs ?? []).find((c) => c.address.toLowerCase() === address.toLowerCase());
+  const hit = coinsOf(((await r.json()) as { pairs?: Pair[] }).pairs ?? [], chainId).find((c) => c.address.toLowerCase() === address.toLowerCase());
   return hit ?? null;
 }
 
@@ -82,3 +82,8 @@ export async function chainOf0x(address: string): Promise<"bnb" | "base"> {
 
 /** Crux's fee on a BNB Chain coin, as the trade panel states it (majors aren't set up on BNB Chain yet). */
 export const bnbFeeText = "Fee 0.5%, at least $0.05.";
+
+/** Base coins matching a ticker, name or address, with real liquidity, deepest first (DexScreener). */
+export const searchBaseCoins = (q: string, limit = 4) => searchBnbCoins(q, limit, "base");
+/** One coin's facts by its address on Base, or null when no Base market has it. */
+export const baseCoin = (address: string) => bnbCoin(address, "base");
