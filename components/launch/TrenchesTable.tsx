@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { freshBnbCoins, freshEvmCoins } from "@/lib/coinMarket";
 import { fmtCompact, freshSolanaCoins, type FreshCoin } from "@/lib/solanaCoins";
+import { evmSafety } from "@/lib/tokenSafety";
 
 const age = (ms: number) => {
   const s = Math.max(1, Math.floor((Date.now() - ms) / 1000));
@@ -66,6 +67,10 @@ export function TrenchesTable() {
     staleTime: 15_000,
     enabled: chain === "all" || chain === "base",
   });
+  // BNB Chain and Base coins' warning signs and holders (GoPlus; Solana's come with Jupiter's data). Keyed by the
+  // coins listed, so a new coin is checked when it appears; already-checked ones come from a 10-minute cache.
+  const bnbList = (bnb.data ?? []).map((c) => c.address.toLowerCase());
+  const bnbSafe = useQuery({ queryKey: ["evm-safety", "bsc", bnbList.join()], queryFn: () => evmSafety("bsc", bnbList), enabled: bnbList.length > 0, refetchInterval: 30_000, staleTime: 20_000, placeholderData: (prev) => prev });
   const solRows: Row[] = (sol.data ?? []).map((c) => ({
     key: `sol:${c.mint}`,
     chain: "sol",
@@ -93,7 +98,8 @@ export function TrenchesTable() {
     liquidity: c.liquidity,
     buys5m: c.buys5m,
     sells5m: c.sells5m,
-    warnings: null,
+    holders: bnbSafe.data?.[c.address.toLowerCase()]?.holders,
+    warnings: bnbSafe.data?.[c.address.toLowerCase()]?.warnings ?? null,
   }));
   const baseRows: Row[] = (base.data ?? [])
     .filter((c) => c.version === 9)
@@ -115,6 +121,8 @@ export function TrenchesTable() {
       };
     });
   const cruxTokens = new Set((base.data ?? []).map((c) => c.token.toLowerCase()));
+  const baseList = (baseFresh.data ?? []).map((c) => c.address.toLowerCase()).filter((a) => !cruxTokens.has(a));
+  const baseSafe = useQuery({ queryKey: ["evm-safety", "base", baseList.join()], queryFn: () => evmSafety("base", baseList), enabled: baseList.length > 0, refetchInterval: 30_000, staleTime: 20_000, placeholderData: (prev) => prev });
   const baseFreshRows: Row[] = (baseFresh.data ?? [])
     .filter((c) => !cruxTokens.has(c.address.toLowerCase()))
     .map((c) => ({
@@ -129,7 +137,8 @@ export function TrenchesTable() {
       liquidity: c.liquidity,
       buys5m: c.buys5m,
       sells5m: c.sells5m,
-      warnings: null,
+      holders: baseSafe.data?.[c.address.toLowerCase()]?.holders,
+      warnings: baseSafe.data?.[c.address.toLowerCase()]?.warnings ?? null,
     }));
   const allBase = [...baseRows, ...baseFreshRows];
   const pick = { all: [...solRows, ...bnbRows, ...allBase], sol: solRows, bnb: bnbRows, base: allBase }[chain];
