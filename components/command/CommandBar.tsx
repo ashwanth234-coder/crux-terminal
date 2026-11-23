@@ -19,6 +19,7 @@ import { evmSafety } from "@/lib/tokenSafety";
 import { fmtCompact, fmtPrice } from "@/lib/solanaCoins";
 import { IS_TESTNET } from "@/lib/network";
 import { YourCoins } from "@/components/portfolio/YourCoins";
+import { buyCheckOf } from "@/hooks/useBuyCheck";
 import { trendingSolanaCoins } from "@/lib/solanaCoins";
 import { trendingEvmCoins } from "@/lib/coinMarket";
 
@@ -513,8 +514,24 @@ function PlanCard({
   }, [coins, launchesReady, launchList, steps]);
 
   const chosen = (i: number): FoundCoin | undefined => coins?.[i]?.[pick[i]];
-  const problems = coins ? planProblems(steps, steps.map((_, i) => chosen(i))) : [];
-  const canRun = coins !== null && problems.length === 0 && crux.loggedIn;
+
+  // Every coin a step buys goes through the buy check (lib/buySafety): traps block the card, warning signs must be
+  // seen and ticked. Crux's own launches are exempt (fixed supply, no tax); a scan or copy filtered its coin already.
+  const buying = coins
+    ? [...new Map(steps.flatMap((s, i) => ((s.kind === "buy" || s.kind === "dip") && chosen(i) && !chosen(i)!.crux ? [[`${chosen(i)!.chain}:${chosen(i)!.address}`, chosen(i)!] as const] : []))).values()]
+    : [];
+  const checks = useQuery({
+    queryKey: ["plan-buy-checks", buying.map((c) => `${c.chain}:${c.address}`).join()],
+    enabled: buying.length > 0 && !auto,
+    staleTime: 5 * 60_000,
+    queryFn: async () => Promise.all(buying.map(async (c) => ({ coin: c, check: await buyCheckOf(c.chain, c.address) }))),
+  });
+  const [ackWarnings, setAckWarnings] = useState(false);
+  const blocked = (checks.data ?? []).flatMap((x) => x.check.blocks.map((b) => `Crux won't buy ${x.coin.symbol}: ${b.charAt(0).toLowerCase()}${b.slice(1)}.`));
+  const warned = (checks.data ?? []).flatMap((x) => x.check.warnings.map((w) => `${x.coin.symbol}: ${w}`));
+  const checking = buying.length > 0 && !auto && checks.isLoading;
+  const problems = coins ? [...planProblems(steps, steps.map((_, i) => chosen(i))), ...blocked] : [];
+  const canRun = coins !== null && problems.length === 0 && crux.loggedIn && !checking && (auto || warned.length === 0 || ackWarnings);
   // The step running now. A scan's buy starts as soon as its coin is set (the scan itself was confirmed).
   const active = running !== null ? running : auto && canRun && outcomes.length === 0 ? 0 : null;
   const done = active === null && outcomes.length > 0;
@@ -607,6 +624,24 @@ function PlanCard({
             </li>
           ))}
         </ul>
+      )}
+      {checking && <p className="mt-3 text-[12.5px] text-dim">{"Checking the coin's safety…"}</p>}
+      {!auto && warned.length > 0 && active === null && !done && (
+        <div className="mt-3 rounded-lg border border-signal/60 px-3 py-2 text-[12.5px]">
+          <p className="font-medium text-signal">Warning signs:</p>
+          <ul className="mt-1 space-y-0.5">
+            {warned.map((w) => (
+              <li key={w}>⚠ {w}</li>
+            ))}
+          </ul>
+          <label className="mt-2 flex items-center gap-2 text-muted">
+            <input type="checkbox" checked={ackWarnings} onChange={(e) => setAckWarnings(e.target.checked)} />
+            {"I've seen the warning signs and want to buy anyway"}
+          </label>
+        </div>
+      )}
+      {!auto && !checking && buying.length > 0 && warned.length === 0 && blocked.length === 0 && active === null && !done && (
+        <p className="mt-3 text-[12.5px] text-up">✓ No warning signs found. No check can rule out a rug, so size your buy.</p>
       )}
       {!crux.loggedIn && <p className="mt-3 text-[12.5px] text-down">Log in first: I trade from your Crux balance.</p>}
       {done && onCommand && outcomes.every((o) => o?.ok) && <Choices options={nextSteps(steps, steps.map((_, i) => chosen(i)))} onCommand={onCommand} />}

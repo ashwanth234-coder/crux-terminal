@@ -15,6 +15,8 @@ import { slippageFor, useTradeSettings } from "@/hooks/useTradeSettings";
 import { fmtPrice, solanaFeeText } from "@/lib/solanaCoins";
 import { bnbFeeText } from "@/lib/bnbCoins";
 import { usePositions } from "@/hooks/usePositions";
+import { useBuyCheck } from "@/hooks/useBuyCheck";
+import { buyClear, type BuyCheck } from "@/lib/buySafety";
 import { pnlOf, pnlText } from "@/lib/pnl";
 
 type Side = "buy" | "sell";
@@ -37,6 +39,8 @@ type Venue = {
   decimals: number;
   /** What the bag cost per whole coin, on average (positions), when Crux recorded the buys. */
   entry?: number;
+  /** The coin's buy check (lib/buySafety): null while it's read. Every buy waits for it and goes through it. */
+  check: BuyCheck | null;
   busy: boolean;
   prepare: (side: Side, amount: bigint | "all", slippageBps: number) => void;
   buy: (dollars: number, slippageBps: number) => void;
@@ -53,6 +57,17 @@ type Venue = {
  * it gets, and the result. Pointing at a button prepares that exact trade on the server, so the click only sends it.
  */
 function Ticket(v: Venue) {
+  // The buy check: a trap is refused; warning signs are shown and must be accepted once ("Buy anyway").
+  const [accepted, setAccepted] = useState(false);
+  const [gate, setGate] = useState<{ run: () => void } | null>(null);
+  const [gateNote, setGateNote] = useState<string | null>(null);
+  const safeBuy = (dollars: number, slippageBps: number) => {
+    setGateNote(null);
+    if (v.check === null) return setGateNote("Checking this coin's safety first… try again in a second.");
+    if (v.check.blocks.length > 0) return setGate({ run: () => undefined });
+    if (buyClear(v.check, accepted)) return v.buy(dollars, slippageBps);
+    setGate({ run: () => v.buy(dollars, slippageBps) });
+  };
   const settings = useTradeSettings();
   const [side, setSide] = useState<Side>("buy");
   const [shownSide, setShownSide] = useState<Side>("buy");
@@ -147,7 +162,7 @@ function Ticket(v: Venue) {
                   type="button"
                   disabled={v.busy || (v.cash !== null && v.cash < d)}
                   onPointerEnter={() => v.prepare("buy", BigInt(Math.round(d * 1e6)), bps)}
-                  onClick={() => (instant ? v.buy(d, bps) : setAmount(String(d)))}
+                  onClick={() => (instant ? safeBuy(d, bps) : setAmount(String(d)))}
                   className="h-9 rounded-lg border border-up/40 font-mono text-[12.5px] text-up transition-colors hover:border-up hover:bg-up/[0.06] disabled:opacity-35"
                 >
                   ${d}
@@ -215,7 +230,7 @@ function Ticket(v: Venue) {
           else if (sellUnits !== null) v.prepare("sell", sellUnits, bps);
         }}
         onClick={() => {
-          if (side === "buy") v.buy(n, bps);
+          if (side === "buy") safeBuy(n, bps);
           else if (sellUnits !== null) v.sell(sellUnits, bps);
         }}
         className={`${buttonClass("primary", "md", "rounded-lg")} mt-3 w-full ${side === "sell" ? "!bg-down !text-void hover:!bg-down/90" : ""}`}
@@ -226,6 +241,21 @@ function Ticket(v: Venue) {
       </>
       )}
 
+      {side === "buy" && orderType === "market" && (
+        <SafetyPanel
+          check={v.check}
+          symbol={v.symbol}
+          asking={gate !== null}
+          note={gateNote}
+          onAccept={() => {
+            setAccepted(true);
+            const run = gate?.run;
+            setGate(null);
+            run?.();
+          }}
+          onCancel={() => setGate(null)}
+        />
+      )}
       {v.status && <div className="mt-3">{v.status}</div>}
       {v.extras && <div className="mt-3 border-t border-line pt-3">{v.extras}</div>}
       <p className="mt-3 text-[11px] leading-snug text-dim">{v.footnote}</p>
@@ -265,6 +295,52 @@ function Result({ r, receipt, testRun }: { r: { kind: string; label?: string; me
         </>
       )}
     </p>
+  );
+}
+
+/**
+ * The coin's safety, under the buy button: a one-line verdict, and when a buy needs it, the warning signs with "Buy
+ * anyway" (or, for a trap, why Crux won't buy it).
+ */
+function SafetyPanel({ check, symbol, asking, note, onAccept, onCancel }: { check: BuyCheck | null; symbol: string; asking: boolean; note: string | null; onAccept: () => void; onCancel: () => void }) {
+  if (check === null) return <p className="mt-2 text-[12px] text-dim">{note ?? "Checking this coin's safety…"}</p>;
+  if (check.blocks.length > 0) {
+    return (
+      <div className="mt-3 rounded-lg border border-down/60 px-3 py-2 text-[12.5px] text-down">
+        <p className="font-medium">{`Crux won't buy $${symbol}:`}</p>
+        <ul className="mt-1 space-y-0.5">
+          {check.blocks.map((b) => (
+            <li key={b}>⚠ {b}</li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+  if (check.warnings.length === 0) return <p className="mt-2 text-[12px] text-up">✓ No warning signs found. No check can rule out a rug, so size your buy.</p>;
+  if (!asking) {
+    return (
+      <p className="mt-2 text-[12px] text-signal">
+        {`⚠ ${check.warnings.length} warning sign${check.warnings.length === 1 ? "" : "s"}: ${check.warnings[0]}${check.warnings.length > 1 ? ", …" : ""}. You'll be asked before buying.`}
+      </p>
+    );
+  }
+  return (
+    <div className="mt-3 rounded-lg border border-signal/60 px-3 py-2 text-[12.5px]">
+      <p className="font-medium text-signal">{`Before you buy $${symbol}, look at these warning signs:`}</p>
+      <ul className="mt-1 space-y-0.5 text-chrome">
+        {check.warnings.map((w) => (
+          <li key={w}>⚠ {w}</li>
+        ))}
+      </ul>
+      <div className="mt-2 flex gap-2">
+        <button type="button" onClick={onAccept} className={buttonClass("outline", "sm", "flex-1 !border-signal/60")}>
+          Buy anyway
+        </button>
+        <button type="button" onClick={onCancel} className={buttonClass("ghost", "sm")}>
+          Cancel
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -313,6 +389,7 @@ export function SolanaTicket({ mint, symbol, price }: { mint: string; symbol?: s
   const crux = useCruxAccount();
   const t = useSolanaTrading(mint);
   const pos = usePositions();
+  const check = useBuyCheck("solana", mint);
   const alert = useCreatorAlert(mint);
   const [turbo, setTurbo] = useState(false);
   const one = useOneBalanceBuy("solana");
@@ -333,6 +410,7 @@ export function SolanaTicket({ mint, symbol, price }: { mint: string; symbol?: s
       cash={cash}
       held={h?.coin?.amount ?? BigInt(0)}
       decimals={h?.coin?.decimals ?? h?.token?.decimals ?? 6}
+      check={check}
       entry={pos.entryOf("solana", mint, h?.coin?.decimals ?? h?.token?.decimals ?? 6)}
       busy={r.kind === "busy"}
       prepare={(side, amount, slippageBps) => t.prepare(side, amount, { turbo, slippageBps })}
@@ -377,6 +455,7 @@ export function BnbTicket({ address, symbol, price }: { address: string; symbol?
   const crux = useCruxAccount();
   const t = useBnbTrading(address);
   const pos = usePositions();
+  const check = useBuyCheck("bnb", address);
   const one = useOneBalanceBuy("bnb");
   if (!crux.loggedIn) return <LogIn text="Trade this coin from your one Crux account. No BNB needed, no bridging." />;
   const h = t.holdings;
@@ -394,6 +473,7 @@ export function BnbTicket({ address, symbol, price }: { address: string; symbol?
       cash={one.total !== null ? Number(one.total) / 1e6 : h ? Number(h.usdt) / 1e18 : null}
       held={h?.coin?.amount ?? BigInt(0)}
       decimals={h?.coin?.decimals ?? 18}
+      check={check}
       entry={pos.entryOf("bsc", address, h?.coin?.decimals ?? 18)}
       busy={r.kind === "busy"}
       // The ticket names buy amounts in 6-decimal dollars; BNB Chain's cash counts 18.
@@ -411,6 +491,7 @@ export function BaseTicket({ address, symbol, price }: { address: string; symbol
   const crux = useCruxAccount();
   const t = useWalletTrading("base", address);
   const pos = usePositions();
+  const check = useBuyCheck("base", address);
   const one = useOneBalanceBuy("base");
   if (!crux.loggedIn) return <LogIn text="Trade this coin from your one Crux account. No ETH needed, no bridging." />;
   const h = t.holdings;
@@ -428,6 +509,7 @@ export function BaseTicket({ address, symbol, price }: { address: string; symbol
       cash={one.total !== null ? Number(one.total) / 1e6 : h ? Number(h.cash) / 1e6 : null}
       held={h?.coin?.amount ?? BigInt(0)}
       decimals={h?.coin?.decimals ?? 18}
+      check={check}
       entry={pos.entryOf("base", address, h?.coin?.decimals ?? 18)}
       busy={r.kind === "busy"}
       prepare={(side, amount, slippageBps) => t.prepare(side, amount, slippageBps)}

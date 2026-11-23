@@ -3,7 +3,10 @@
  * cruxprotocol.xyz). Solana coins get theirs from Jupiter (lib/solanaCoins.ts). A coin GoPlus hasn't scanned yet (often
  * the first minutes) comes back unknown: nothing is claimed either way.
  */
-export type EvmSafety = { warnings: string[]; holders?: number };
+import type { MapHolder } from "./holderMap.ts";
+
+/** `top`: GoPlus's top 10 holders, for the holder map (locked / contract holders count as pools). */
+export type EvmSafety = { warnings: string[]; holders?: number; top?: MapHolder[] };
 
 const CHAIN_ID = { bsc: 56, base: 8453 } as const;
 type Network = keyof typeof CHAIN_ID;
@@ -25,7 +28,22 @@ type GoPlus = {
   is_open_source?: string;
   creator_percent?: string;
   holder_count?: string;
+  creator_address?: string;
+  holders?: { address?: string; percent?: string; is_contract?: number; is_locked?: number }[];
 };
+
+/** GoPlus's top holders as holder-map rows. Pure. */
+export function topHoldersOf(g: GoPlus): MapHolder[] {
+  const creator = g.creator_address?.toLowerCase();
+  return (g.holders ?? [])
+    .filter((h) => h.address && Number(h.percent) > 0)
+    .map((h) => {
+      const a = h.address!.toLowerCase();
+      const kind: MapHolder["kind"] = h.is_locked === 1 || h.is_contract === 1 || ZERO.test(a) ? "pool" : a === creator ? "creator" : "wallet";
+      return { owner: h.address!, pct: Number(h.percent) * 100, kind };
+    })
+    .sort((x, y) => y.pct - x.pct);
+}
 
 const ZERO = /^0x0{40}$|^0x0{36}dead$/i;
 const on = (v?: string) => v === "1";
@@ -79,7 +97,7 @@ export async function evmSafety(network: Network, addresses: string[]): Promise<
       if (!j) return;
       const g = j.result?.[a];
       const known = g && (g.is_open_source !== undefined || g.is_honeypot !== undefined);
-      cache.set(`${network}:${a}`, { at: now, v: known ? { warnings: warningsOf(g), holders: Number(g.holder_count ?? 0) > 0 ? Number(g.holder_count) : undefined } : null });
+      cache.set(`${network}:${a}`, { at: now, v: known ? { warnings: warningsOf(g), holders: Number(g.holder_count ?? 0) > 0 ? Number(g.holder_count) : undefined, top: topHoldersOf(g) } : null });
     } catch {
       // Unreachable now: the coin stays unknown and is asked again next time.
     }

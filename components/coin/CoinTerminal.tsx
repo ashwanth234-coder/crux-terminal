@@ -10,6 +10,7 @@ import { zeroAddress, type Address } from "viem";
 import type { AuctionV2 } from "@/lib/launchV2";
 import { explorer, poolStats, type CoinTrade, type PoolStats } from "@/lib/coinMarket";
 import { fmtCompact, fmtPrice, type ChartNetwork } from "@/lib/solanaCoins";
+import { HolderMap } from "@/components/coin/HolderMap";
 
 export type CoinFacts = { symbol?: string; name?: string; icon?: string; price?: number; change24h?: number; mcap?: number; liquidity?: number };
 
@@ -215,7 +216,7 @@ function Flow({ stats }: { stats: PoolStats }) {
   );
 }
 
-type Tab = "trades" | "details";
+type Tab = "trades" | "holders" | "details";
 const th = "px-2 py-1.5 text-[10.5px] font-normal uppercase tracking-[0.12em] text-dim";
 const td = "px-2 py-1.5 text-[12px]";
 
@@ -248,6 +249,7 @@ function Desk({
   const shown = useMemo(() => trades.filter((t) => (!focus || t.trader === focus) && (!bigOnly || t.usd >= 500)).slice(0, 100), [trades, focus, bigOnly]);
   const tabs: [Tab, string][] = [
     ["trades", "Trades"],
+    ["holders", "Holder map"],
     ["details", "Details"],
   ];
 
@@ -285,7 +287,11 @@ function Desk({
         )}
       </div>
 
-      {tab === "details" ? (
+      {tab === "holders" ? (
+        <div className="min-h-0 overflow-y-auto">
+          <HolderMap chain={network === "bsc" ? "bnb" : network} coin={token} accountUrl={x.account} />
+        </div>
+      ) : tab === "details" ? (
         <dl className="grid gap-x-8 gap-y-2 text-[12.5px] sm:grid-cols-2">
           <Detail label="Coin address">
             <a href={x.token(token)} target="_blank" rel="noopener noreferrer" className="font-mono text-chrome hover:underline">
