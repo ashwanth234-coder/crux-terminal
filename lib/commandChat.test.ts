@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readMessage, readScan } from "./commandChat.ts";
+import { askForCoin, readMessage, readScan } from "./commandChat.ts";
 import { pickScanCoin, scanRefusal, type ScanCoin } from "./coinScan.ts";
 
 test("a pasted address or a bare ticker looks the coin up", () => {
@@ -8,6 +8,29 @@ test("a pasted address or a bare ticker looks the coin up", () => {
   assert.deepEqual(readMessage("0x627C5aaC31a203565e52945e8c8bc66dFdC85afe"), { kind: "lookup", coin: "0x627C5aaC31a203565e52945e8c8bc66dFdC85afe", chain: undefined });
   assert.deepEqual(readMessage("$WIF"), { kind: "lookup", coin: "WIF", chain: undefined });
   assert.deepEqual(readMessage("check PEPE on bnb"), { kind: "lookup", coin: "PEPE", chain: "bnb" });
+});
+
+test("everyday words around a command are skipped, never read as a coin", () => {
+  assert.deepEqual(readMessage("can you buy BT now for $1 and sell all in 30 seconds"), {
+    kind: "plan",
+    steps: [
+      { kind: "buy", coin: "BT", usd: 1, chain: undefined },
+      { kind: "wait", seconds: 30 },
+      { kind: "sell", coin: "BT", pct: 100, chain: undefined },
+    ],
+  });
+  assert.deepEqual(readMessage("please sell all my BONK"), { kind: "plan", steps: [{ kind: "sell", coin: "BONK", pct: 100, chain: undefined }] });
+  assert.deepEqual(readMessage("I want to buy $5 of wif right now"), { kind: "plan", steps: [{ kind: "buy", coin: "WIF", usd: 5, chain: undefined }] });
+  assert.deepEqual(readMessage("could you check BONK?"), { kind: "lookup", coin: "BONK", chain: undefined });
+});
+
+test("a coin Crux can't find: the pasted address takes its place", () => {
+  const t = askForCoin("buy $1 of FOOCOIN and sell all in 30 seconds", "FOOCOIN");
+  assert.equal(t, "buy $1 of {} and sell all in 30 seconds");
+  const r = readMessage("DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", t);
+  assert.equal(r.kind, "plan");
+  if (r.kind === "plan") assert.deepEqual(r.steps.map((s) => (s.kind === "wait" ? "wait" : `${s.kind}:${s.coin}`)), ["buy:DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", "wait", "sell:DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"]);
+  assert.equal(askForCoin("sell all $foocoin", "FOOCOIN"), "sell all {}");
 });
 
 test("a buy without an amount asks how much, with buttons", () => {

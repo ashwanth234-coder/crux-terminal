@@ -60,18 +60,31 @@ function shareOf(s: string): number | null {
   return m ? num(m[1]) : null;
 }
 
-/** The coin named in a clause: an address, a $TICKER, or a word that isn't one of the command's own words. */
+/**
+ * Everyday words around a command ("can you", "please", "now", "I want to"): taken out before it's read, so they're
+ * never mistaken for a coin ("can you buy BT now" reads as "buy BT").
+ */
+const FILLER =
+  /\b(?:(?:can|could|would|will) you|please|pls|plz|kindly|i(?:'d| would)? like to|i (?:want|wanna|need) to|i want|i wanna|for me|right now|now|immediately|asap|quickly|just|hey|hi|crux|go ahead and|let's|lets)\b[,!.]?/gi;
+export const withoutFiller = (s: string) => s.replace(FILLER, " ").replace(/\s+/g, " ").replace(/^[\s,]+|[\s,?!.]+$/g, "").trim();
+
+/** Words a coin's name usually follows ("buy BT", "sell all of WIF", "stop loss on BONK"). */
+const BEFORE_COIN = new Set("of in into on buy ape get grab purchase sell dump exit close my".split(" "));
+
+/**
+ * The coin named in a clause: an address, a $TICKER, else a word that isn't one of the command's own words, the one
+ * right after "buy", "sell", "of" or "on" first.
+ */
 function coinOf(s: string): string | null {
   const addr = s.match(/\b(0x[a-fA-F0-9]{40})\b/) ?? s.match(/\b([1-9A-HJ-NP-Za-km-z]{32,44})\b/);
   if (addr) return addr[1];
   const ticker = s.match(/\$([A-Za-z][A-Za-z0-9]{0,14})\b/);
   if (ticker) return ticker[1].toUpperCase();
-  for (const w of s.split(/[\s,]+/)) {
-    const t = w.replace(/[^A-Za-z0-9]/g, "");
-    if (!t || NOT_COINS.has(t.toLowerCase()) || CHAIN_WORDS[t.toLowerCase()] || /^\d/.test(t) || /^\d+x$/i.test(t)) continue;
-    if (t.length >= 2 && t.length <= 15) return t.toUpperCase();
-  }
-  return null;
+  const words = s.split(/[\s,]+/).map((w) => w.replace(/[^A-Za-z0-9]/g, ""));
+  const candidate = (t: string) => !!t && t.length >= 2 && t.length <= 15 && !NOT_COINS.has(t.toLowerCase()) && !CHAIN_WORDS[t.toLowerCase()] && !/^\d/.test(t);
+  const after = words.findIndex((t, i) => candidate(t) && i > 0 && BEFORE_COIN.has(words[i - 1].toLowerCase()));
+  const pick = after >= 0 ? words[after] : words.find(candidate);
+  return pick ? pick.toUpperCase() : null;
 }
 
 function chainOf(s: string): CommandChain | undefined {
@@ -134,7 +147,7 @@ const sellShare = (s: string) => shareOf(s) ?? 100;
 
 /** Reads one command. Pure, for tests. */
 export function parseCommand(text: string): ParsedCommand {
-  const input = text.trim().replace(/\s+/g, " ");
+  const input = withoutFiller(text.trim().replace(/\s+/g, " "));
   if (!input) return { ok: false, error: "Type what you want to do." };
   if (input.length > 240) return { ok: false, error: "That's a long command. Try one or two steps at a time." };
   const chainAll = chainOf(input);

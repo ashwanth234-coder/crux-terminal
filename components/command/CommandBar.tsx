@@ -10,7 +10,7 @@ import { useCoinOrders, type PlaceCoinOrder } from "@/hooks/useCoinOrders";
 import { useSolanaTrading } from "@/hooks/useSolanaTrading";
 import { useWalletTrading } from "@/hooks/useBnbTrading";
 import { describeStep, waitText, type CommandStep, type TradeStep } from "@/lib/commandIntent";
-import { BUY_SIZES, describeScan, moneyShort, readMessage, type ChatOption, type Reply, type ScanRule } from "@/lib/commandChat";
+import { askForCoin, BUY_SIZES, describeScan, fillTemplate, moneyShort, readMessage, type ChatOption, type Reply, type ScanRule } from "@/lib/commandChat";
 import { CHAIN_NAME, findCoins, type FoundCoin, type LaunchLite } from "@/lib/commandCoins";
 import { pickScanCoin, scanSolana, SCAN_SAFETY_TEXT, solanaFacts, solanaWarnings } from "@/lib/coinScan";
 import { evmSafety } from "@/lib/tokenSafety";
@@ -87,7 +87,8 @@ export function CommandButton({ className = "" }: { className?: string }) {
   );
 }
 
-type Msg = { id: number; from: "you" | "crux"; text?: string; options?: ChatOption[]; reply?: Reply };
+/** `command`: what a reply was read from (the trader's words, with any question's answer filled in). */
+type Msg = { id: number; from: "you" | "crux"; text?: string; options?: ChatOption[]; reply?: Reply; command?: string };
 
 function CommandPanel({ open, onClose, onWorking }: { open: boolean; onClose: () => void; onWorking: (w: boolean) => void }) {
   const [msgs, setMsgs] = useState<Msg[]>([{ id: 0, from: "crux", text: "Hi! Tell me what to trade, or paste a coin's address and I'll check it for you.", options: STARTERS }]);
@@ -114,7 +115,7 @@ function CommandPanel({ open, onClose, onWorking }: { open: boolean; onClose: ()
       if (!t) return;
       const reply = readMessage(t, template);
       const you: Msg = { id: nextId.current++, from: "you", text: say ?? t };
-      const crux: Msg = { id: nextId.current++, from: "crux", reply };
+      const crux: Msg = { id: nextId.current++, from: "crux", reply, command: fillTemplate(t, template) };
       setMsgs((m) => [...m, you, crux]);
       setTemplate(reply.kind === "ask" ? reply.template : undefined);
       setInput("");
@@ -142,7 +143,17 @@ function CommandPanel({ open, onClose, onWorking }: { open: boolean; onClose: ()
             </p>
           ) : (
             <div key={m.id} className="max-w-[95%] rounded-xl border border-line-2 px-3 py-2.5 text-[14px] text-chrome">
-              {m.reply ? <CruxReply reply={m.reply} onCommand={send} onBusy={(on) => markBusy(m.id, on)} /> : <Said text={m.text ?? ""} options={m.options} onCommand={send} />}
+              {m.reply ? (
+                <CruxReply
+                  reply={m.reply}
+                  onCommand={send}
+                  onBusy={(on) => markBusy(m.id, on)}
+                  // A coin it can't find: the next message (its address) takes the coin word's place in this command.
+                  onMissingCoin={(word) => m.command && setTemplate(askForCoin(m.command, word))}
+                />
+              ) : (
+                <Said text={m.text ?? ""} options={m.options} onCommand={send} />
+              )}
             </div>
           ),
         )}
@@ -195,23 +206,23 @@ function Choices({ options, onCommand }: { options: ChatOption[]; onCommand: OnC
   );
 }
 
-function CruxReply({ reply, onCommand, onBusy }: { reply: Reply; onCommand: OnCommand; onBusy: (on: boolean) => void }) {
+function CruxReply({ reply, onCommand, onBusy, onMissingCoin }: { reply: Reply; onCommand: OnCommand; onBusy: (on: boolean) => void; onMissingCoin: (word: string) => void }) {
   switch (reply.kind) {
     case "ask":
       return <Said text={reply.text} options={reply.options} onCommand={onCommand} />;
     case "error":
       return <Said text={reply.text} tone="error" options={STARTERS.slice(0, 2)} onCommand={onCommand} />;
     case "lookup":
-      return <CoinCard query={reply.coin} chain={reply.chain} onCommand={onCommand} />;
+      return <CoinCard query={reply.coin} chain={reply.chain} onCommand={onCommand} onMissingCoin={onMissingCoin} />;
     case "plan":
-      return <PlanCard steps={reply.steps} onBusy={onBusy} />;
+      return <PlanCard steps={reply.steps} onBusy={onBusy} onMissingCoin={onMissingCoin} />;
     case "scan":
       return <ScanCard rule={reply.rule} onBusy={onBusy} />;
   }
 }
 
 /** A pasted address or a coin's name: its facts and warning signs, then what to do with it. */
-function CoinCard({ query, chain, onCommand }: { query: string; chain?: FoundCoin["chain"]; onCommand: OnCommand }) {
+function CoinCard({ query, chain, onCommand, onMissingCoin }: { query: string; chain?: FoundCoin["chain"]; onCommand: OnCommand; onMissingCoin: (word: string) => void }) {
   const launches = useLaunches();
   const ready = launches.data !== undefined || launches.isError;
   const found = useQuery({ queryKey: ["cmd-coin", query.toLowerCase(), chain ?? ""], enabled: ready, staleTime: 60_000, queryFn: () => findCoins(query, chain, launches.data ?? []) });
@@ -232,7 +243,7 @@ function CoinCard({ query, chain, onCommand }: { query: string; chain?: FoundCoi
   });
 
   if (!ready || found.isLoading) return <p className="text-muted">Looking it up…</p>;
-  if (!c) return <p className="text-down">{`I couldn't find a coin called ${query} with real trading. Check the address, or try its name.`}</p>;
+  if (!c) return <NotFound word={query} onMissingCoin={onMissingCoin} />;
 
   const on = ` on ${c.chain}`;
   const f = facts.data;
@@ -302,15 +313,33 @@ function CoinCard({ query, chain, onCommand }: { query: string; chain?: FoundCoi
   );
 }
 
+/** A coin Crux couldn't find: asks for its address, which the next message then stands in for. */
+function NotFound({ word, onMissingCoin }: { word: string; onMissingCoin?: (word: string) => void }) {
+  // Asked once, when this reply appears (later messages mustn't bring the question back).
+  const asked = useRef(false);
+  useEffect(() => {
+    if (asked.current) return;
+    asked.current = true;
+    onMissingCoin?.(word);
+  }, [word, onMissingCoin]);
+  return (
+    <p>
+      {`I couldn't find a coin called ${word} with real trading. `}
+      <span className="text-muted">{"Paste its address here and I'll use that."}</span>
+    </p>
+  );
+}
+
 /**
  * A command's steps to confirm, then run in order (each through the same paths as the coin pages). `preset`: coins
  * already chosen (a scan's find), skipping the search; `auto`: runs without a Confirm (the scan was confirmed).
  */
-function PlanCard({ steps, preset, auto = false, onBusy }: { steps: CommandStep[]; preset?: FoundCoin; auto?: boolean; onBusy: (on: boolean) => void }) {
+function PlanCard({ steps, preset, auto = false, onBusy, onMissingCoin }: { steps: CommandStep[]; preset?: FoundCoin; auto?: boolean; onBusy: (on: boolean) => void; onMissingCoin?: (word: string) => void }) {
   const crux = useCruxAccount();
   const launches = useLaunches();
   const [coins, setCoins] = useState<FoundCoin[][] | null>(preset ? steps.map((s) => (s.kind === "wait" ? [] : [preset])) : null);
   const [error, setError] = useState<string | null>(null);
+  const [missing, setMissing] = useState<string | null>(null);
   const [pick, setPick] = useState<number[]>(steps.map(() => 0));
   const [running, setRunning] = useState<number | null>(null);
   const [outcomes, setOutcomes] = useState<(Outcome | undefined)[]>([]);
@@ -334,10 +363,8 @@ function PlanCard({ steps, preset, auto = false, onBusy }: { steps: CommandStep[
       .then((found) => {
         if (!live) return;
         const missing = steps.findIndex((s, i) => s.kind !== "wait" && found[i].length === 0);
-        if (missing >= 0) {
-          const s = steps[missing] as TradeStep;
-          setError(`I couldn't find a coin called ${s.coin}${s.chain ? ` on ${CHAIN_NAME[s.chain]}` : ""} with real trading. Try pasting its address.`);
-        } else setCoins(found);
+        if (missing >= 0) setMissing((steps[missing] as TradeStep).coin);
+        else setCoins(found);
       })
       .catch(() => live && setError("Couldn't look the coins up just now. Try again in a moment."));
     return () => {
@@ -369,6 +396,7 @@ function PlanCard({ steps, preset, auto = false, onBusy }: { steps: CommandStep[
     [steps.length],
   );
 
+  if (missing) return <NotFound word={missing} onMissingCoin={onMissingCoin} />;
   if (error) return <p className="text-down">{error}</p>;
   if (!coins) return <p className="text-muted">Finding the coins…</p>;
   if (cancelled) return <p className="text-muted">Cancelled. Nothing was traded.</p>;

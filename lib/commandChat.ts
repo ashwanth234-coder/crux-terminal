@@ -1,4 +1,4 @@
-import { parseCommand, type CommandChain, type CommandStep } from "./commandIntent.ts";
+import { parseCommand, withoutFiller, type CommandChain, type CommandStep } from "./commandIntent.ts";
 
 /**
  * The conversation on top of the command reader (lib/commandIntent): every message gets a reply a trader can act on,
@@ -43,13 +43,26 @@ const CHAIN_WORDS: Record<string, CommandChain> = { base: "base", solana: "solan
 const num = (s: string) => Number(s.replace(/,/g, ""));
 const scaled = (n: string, unit?: string) => num(n) * (unit?.toLowerCase() === "m" ? 1_000_000 : unit?.toLowerCase() === "k" ? 1_000 : 1);
 
+/**
+ * The command a message stands for: an answer to a question ("Which coin?" → "BONK") goes into the command that asked
+ * (its "{}"); anything with its own verb is a new command. A "$" typed with an amount isn't doubled. Pure.
+ */
+export function fillTemplate(raw: string, template?: string): string {
+  const text = withoutFiller(raw.trim().replace(/\s+/g, " "));
+  if (!text || !template || VERBS.test(text)) return text;
+  return template.replace("{}", template.includes("${}") ? text.replace(/^\$/, "") : text);
+}
+
+/** A command with its coin word swapped for "{}", so the next message (a pasted address) can stand in for it. Pure. */
+export function askForCoin(command: string, coinWord: string): string {
+  const esc = coinWord.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return command.replace(new RegExp(`(^|[^A-Za-z0-9])\\$?${esc}(?![A-Za-z0-9])`, "i"), "$1{}");
+}
+
 /** Reads one chat message. `template`: a question's "{}" that this message answers. Pure, for tests. */
 export function readMessage(raw: string, template?: string): Reply {
-  let text = raw.trim().replace(/\s+/g, " ");
+  const text = fillTemplate(raw, template);
   if (!text) return { kind: "error", text: "Type what you want to do, or paste a coin's address." };
-  // Answering a question ("Which coin?" → "BONK"): the answer goes into the command that asked.
-  // A "$" typed with an amount isn't doubled ("buy ${}" + "$5").
-  if (template && !VERBS.test(text)) text = template.replace("{}", template.includes("${}") ? text.replace(/^\$/, "") : text);
 
   // A pasted address, or a coin's name on its own: its facts first, then what to do with it.
   const bare = text.replace(/^(?:check|look ?up|info(?: on)?|about|price of|what about|show(?: me)?)\s+/i, "").replace(/\s+on\s+(base|solana|sol|bnb|bsc)$/i, (_, c: string) => ` @${c}`);
