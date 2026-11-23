@@ -13,7 +13,8 @@ import { describeStep, waitText, type CommandStep, type TradeStep } from "@/lib/
 import { askForCoin, BUY_SIZES, describeCopy, describeScan, fillTemplate, moneyShort, readMessage, type ChatOption, type CopyRule, type Reply, type ScanRule } from "@/lib/commandChat";
 import { COPY_EVERY_MS, hasSold, holdingsOf, shortWallet, walletChanges, type Holdings } from "@/lib/walletCopy";
 import { CHAIN_NAME, findCoins, type FoundCoin, type LaunchLite } from "@/lib/commandCoins";
-import { pickScanCoin, scanSolana, SCAN_SAFETY_TEXT, solanaFacts, solanaWarnings } from "@/lib/coinScan";
+import { evmCandidates, pickScanCoin, scanSolana, SCAN_SAFETY_TEXT, solanaFacts, solanaWarnings } from "@/lib/coinScan";
+import { scanEvmCoins } from "@/lib/coinMarket";
 import { evmSafety } from "@/lib/tokenSafety";
 import { fmtCompact, fmtPrice } from "@/lib/solanaCoins";
 import { IS_TESTNET } from "@/lib/network";
@@ -252,7 +253,7 @@ function CoinCard({ query, chain, onCommand, onMissingCoin }: { query: string; c
   const on = ` on ${c.chain}`;
   const f = facts.data;
   const price = f?.price ?? c.price;
-  const orders = c.chain !== "base";
+  const orders = !c.crux;
   const options: ChatOption[] = [
     ...BUY_SIZES.map((d) => ({ label: `Buy $${d}`, command: `buy $${d} of ${c.address}${on}`, say: `Buy $${d} of ${c.symbol}` })),
     { label: "Sell half", command: `sell half of ${c.address}${on}`, say: `Sell half my ${c.symbol}` },
@@ -516,16 +517,40 @@ function ScanCard({ rule, onBusy }: { rule: ScanRule; onBusy: (on: boolean) => v
     if (phase !== "scanning") return;
     let live = true;
     const seen = new Set<string>();
+    // Base/BNB coins whose code showed warning signs (or isn't checked yet): not asked again this scan.
+    const refused = new Set<string>();
     void (async () => {
       while (live) {
-        const list = await scanSolana();
-        if (!live) return;
-        list.forEach((c) => seen.add(c.mint));
-        setChecked(seen.size);
         const t = Date.now();
-        const hit = pickScanCoin(list, rule, t);
+        let hit: FoundCoin | null = null;
+        for (const chain of rule.chains) {
+          if (hit || !live) break;
+          if (chain === "solana") {
+            const list = await scanSolana();
+            list.forEach((c) => seen.add(c.mint));
+            const s = pickScanCoin(list, rule, t);
+            if (s) hit = { chain: "solana", address: s.mint, symbol: s.symbol, name: s.name, price: s.price, liquidity: s.liquidity };
+          } else {
+            const network = chain === "bnb" ? "bsc" : "base";
+            const list = await scanEvmCoins(network).catch(() => []);
+            list.forEach((c) => seen.add(c.address.toLowerCase()));
+            // The most traded first; their code is checked (GoPlus) before one is bought.
+            const top = evmCandidates(list, rule, t, refused).slice(0, 5);
+            const safety = top.length ? await evmSafety(network, top.map((c) => c.address)).catch(() => ({}) as Record<string, null>) : {};
+            for (const c of top) {
+              const s = safety[c.address.toLowerCase()];
+              if (s && s.warnings.length === 0) {
+                hit = { chain, address: c.address, symbol: c.symbol, name: c.name, price: c.price, liquidity: c.liquidity };
+                break;
+              }
+              if (s) refused.add(c.address.toLowerCase());
+            }
+          }
+        }
+        if (!live) return;
+        setChecked(seen.size);
         if (hit) {
-          setFound({ chain: "solana", address: hit.mint, symbol: hit.symbol, name: hit.name, price: hit.price, liquidity: hit.liquidity });
+          setFound(hit);
           setPhase("found");
           return;
         }
@@ -598,7 +623,7 @@ function ScanCard({ rule, onBusy }: { rule: ScanRule; onBusy: (on: boolean) => v
       {phase === "found" && found && (
         <div className="mt-3 rounded-lg border border-line-2 p-3">
           <p className="text-[13px]">
-            Found <span className="font-medium">{found.symbol}</span>
+            Found <span className="font-medium">{found.symbol}</span> on {CHAIN_NAME[found.chain]}
             {found.liquidity ? ` (pool ${fmtCompact(found.liquidity)})` : ""}. Buying now.
           </p>
           <div className="mt-2">
@@ -780,8 +805,8 @@ export function planProblems(steps: CommandStep[], coins: (FoundCoin | undefined
     const c = coins[i];
     if (s.kind === "wait" || !c) return;
     if ((s.kind === "buy" || s.kind === "dip") && s.usd > BETA_MAX_BUY) p.add(`During the beta, one buy can be at most $${BETA_MAX_BUY}.`);
-    if (s.kind !== "buy" && s.kind !== "sell" && c.chain === "base") p.add("Price orders work for Solana and BNB Chain coins for now. Buy or sell Base coins right away instead.");
-    if ((s.kind === "takeProfit" || s.kind === "stopLoss" || s.kind === "dip") && c.chain !== "base" && !(c.price && c.price > 0)) p.add(`Couldn't read ${c.symbol}'s price to set the order.`);
+    if (s.kind !== "buy" && s.kind !== "sell" && c.crux) p.add("Price orders don't work on Crux launches still on their launch curve yet. Buy or sell them right away instead.");
+    if ((s.kind === "takeProfit" || s.kind === "stopLoss" || s.kind === "dip") && !c.crux && !(c.price && c.price > 0)) p.add(`Couldn't read ${c.symbol}'s price to set the order.`);
   });
   return [...p];
 }
@@ -852,7 +877,7 @@ async function unitsOf(held: () => bigint | null | undefined, pct: number, symbo
 
 /** A price order (Solana and BNB Chain coins): Crux watches the price and trades with the page closed. */
 async function placeOrder(place: (o: PlaceCoinOrder[]) => Promise<void>, s: TradeStep, c: FoundCoin, sellUnits: () => Promise<bigint | "all">): Promise<Outcome> {
-  const chain = c.chain === "bnb" ? "bsc" : "solana";
+  const chain = c.chain === "bnb" ? "bsc" : c.chain === "base" ? "base" : "solana";
   const price = c.price ?? 0;
   const cashUnits = (usd: number) => (c.chain === "bnb" ? BigInt(Math.round(usd * 1e6)) * BigInt(1_000_000_000_000) : BigInt(Math.round(usd * 1e6)));
   const base = { chain, coin: c.address, symbol: c.symbol, slippageBps: SLIPPAGE_BPS } as const;

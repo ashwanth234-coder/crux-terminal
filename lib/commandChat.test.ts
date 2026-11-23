@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { askForCoin, readMessage, readScan } from "./commandChat.ts";
-import { pickScanCoin, scanRefusal, type ScanCoin } from "./coinScan.ts";
+import { evmCandidates, evmScanRefusal, pickScanCoin, scanRefusal, type ScanCoin } from "./coinScan.ts";
 
 test("a pasted address or a bare ticker looks the coin up", () => {
   assert.deepEqual(readMessage("DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"), { kind: "lookup", coin: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", chain: undefined });
@@ -54,11 +54,11 @@ test("a buy without a coin asks which", () => {
 test("a scan, in the founder's words", () => {
   assert.deepEqual(readMessage("scan solana token for 1 hour today from now buy $5 of a coin which has 50k vol and sell it when you get 2x profit"), {
     kind: "scan",
-    rule: { minutes: 60, minVolume: 50_000, usd: 5, takeProfit: 2, stopLossPct: undefined, maxAgeHours: 24 },
+    rule: { chains: ["solana"], minutes: 60, minVolume: 50_000, usd: 5, takeProfit: 2, stopLossPct: undefined, maxAgeHours: 24, minAgeHours: 0 },
   });
   assert.deepEqual(readScan("scan for 30 minutes, buy $10 with volume over $100k, sell at 3x, stop loss 25%"), {
     kind: "scan",
-    rule: { minutes: 30, minVolume: 100_000, usd: 10, takeProfit: 3, stopLossPct: 25, maxAgeHours: 24 },
+    rule: { chains: ["solana"], minutes: 30, minVolume: 100_000, usd: 10, takeProfit: 3, stopLossPct: 25, maxAgeHours: 24, minAgeHours: 0 },
   });
 });
 
@@ -68,10 +68,10 @@ test("a scan asked for without the word scan, with launch age and percent profit
   if (r.kind !== "ask") return;
   assert.equal(r.text, "How much should I buy when I find a coin?");
   const filled = readMessage("$1", r.template);
-  assert.deepEqual(filled, { kind: "scan", rule: { minutes: 60, minVolume: 50_000, usd: 1, takeProfit: 1.2, stopLossPct: undefined, maxAgeHours: 1 } });
+  assert.deepEqual(filled, { kind: "scan", rule: { chains: ["solana"], minutes: 60, minVolume: 50_000, usd: 1, takeProfit: 1.2, stopLossPct: undefined, maxAgeHours: 1, minAgeHours: 0 } });
   assert.deepEqual(readMessage("find me a new coin under 30 min old with $100k volume, buy $5, sell when up 50%"), {
     kind: "scan",
-    rule: { minutes: 60, minVolume: 100_000, usd: 5, takeProfit: 1.5, stopLossPct: undefined, maxAgeHours: 0.5 },
+    rule: { chains: ["solana"], minutes: 60, minVolume: 100_000, usd: 5, takeProfit: 1.5, stopLossPct: undefined, maxAgeHours: 0.5, minAgeHours: 0 },
   });
 });
 
@@ -85,9 +85,34 @@ test("a scan without an amount asks for one", () => {
   if (filled.kind === "scan") assert.equal(filled.rule.usd, 5);
 });
 
-test("a scan refuses other chains and silly lengths", () => {
-  assert.equal(readMessage("scan base for 1 hour, buy $5").kind, "error");
+test("a scan on the chains named, or all of them; silly lengths refused", () => {
+  const base = readMessage("scan base for 1 hour, buy $5");
+  assert.equal(base.kind === "scan" && base.rule.chains.join(), "base");
+  const two = readMessage("scan base and bnb for 30 min, buy $5");
+  assert.equal(two.kind === "scan" && two.rule.chains.join(), "base,bnb");
   assert.equal(readMessage("scan solana for 10 hours, buy $5").kind, "error");
+});
+
+test("the founder's all-chains scan: older than an hour, 50k volume, $1, +20%", () => {
+  assert.deepEqual(readMessage("i wanted to buy a coin which has age of 1 hour plus with 50 k volume in all chains (3 in our case ) buy for 1 usd and sell when it my profit reaches 20%"), {
+    kind: "scan",
+    rule: { chains: ["solana", "base", "bnb"], minutes: 60, minVolume: 50_000, usd: 1, takeProfit: 1.2, stopLossPct: undefined, maxAgeHours: 24, minAgeHours: 1 },
+  });
+  const older = readMessage("scan every chain for coins older than 2 hours with $100k volume, buy $5, sell at 2x");
+  assert.equal(older.kind === "scan" && older.rule.minAgeHours, 2);
+  assert.equal(readMessage("scan all chains for coins at least 30 hours old, buy $5").kind, "error");
+});
+
+test("Base/BNB coins: the market rules, then the most traded first", () => {
+  const now = Date.now();
+  const c = { address: "0xA", symbol: "AAA", name: "", price: 0.1, liquidity: 50_000, volume1h: 80_000, createdAt: now - 3 * 3_600_000 };
+  const rule = { minVolume: 50_000, maxAgeHours: 24, minAgeHours: 1 };
+  assert.equal(evmScanRefusal(c, rule, now), null);
+  assert.equal(evmScanRefusal({ ...c, createdAt: now - 20 * 60_000 }, rule, now), "too new");
+  assert.equal(evmScanRefusal({ ...c, liquidity: 2_000 }, rule, now), "too little in its pool");
+  const busy = { ...c, address: "0xB", volume1h: 300_000 };
+  assert.deepEqual(evmCandidates([c, busy], rule, now).map((x) => x.address), ["0xB", "0xA"]);
+  assert.deepEqual(evmCandidates([c, busy], rule, now, new Set(["0xb"])).map((x) => x.address), ["0xA"]);
 });
 
 test("the scan's safety rules", () => {

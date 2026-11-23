@@ -11,8 +11,9 @@ import { parseCommand, withoutFiller, type CommandChain, type CommandStep } from
 /** A reply button: `command` is what Crux reads; the trader's bubble shows `say` (else the label), never raw addresses. */
 export type ChatOption = { label: string; command: string; say?: string };
 
-/** A scan: watch new Solana coins for `minutes`, buy one (at most) that passes the rules, then the exits. */
+/** A scan: watch new coins on `chains` for `minutes`, buy one (at most) that passes the rules, then the exits. */
 export type ScanRule = {
+  chains: CommandChain[];
   minutes: number;
   /** Dollars traded in the coin's last hour. */
   minVolume: number;
@@ -21,9 +22,14 @@ export type ScanRule = {
   takeProfit?: number;
   /** Sell everything if it drops this much under the buy price. */
   stopLossPct?: number;
-  /** Only coins launched within this many hours. */
+  /** Only coins launched within this many hours… */
   maxAgeHours: number;
+  /** …and at least this many hours ago (0: any). */
+  minAgeHours: number;
 };
+
+/** Every chain Crux trades, in the order a scan lists them. */
+export const ALL_CHAINS: CommandChain[] = ["solana", "base", "bnb"];
 
 /** Copy a Solana wallet's trades for `minutes`: buy `usd` of each coin it buys (at most `maxCopies`), then the exits. */
 export type CopyRule = {
@@ -185,7 +191,17 @@ const TIME_UNIT = "(hours?|hrs?|h|minutes?|mins?|m)";
 /** "scan solana for 1 hour, buy $5 of a coin with 50k volume, sell at 2x". Pure, for tests. */
 export function readScan(text: string): Reply {
   let lower = text.toLowerCase();
-  if (/\b(base|bnb|bsc|binance)\b/.test(lower)) return { kind: "error", text: "Scanning works for Solana coins for now. Try “scan solana for 1 hour, buy $5 of a coin with 50k volume, sell at 2x”." };
+
+  // Which chains: "all chains", "every chain", "3 chains", or the ones named; Solana when none is.
+  const named = ALL_CHAINS.filter((c) => (c === "solana" ? /\b(solana|sol)\b/ : c === "base" ? /\bbase\b/ : /\b(bnb|bsc|binance)\b/).test(lower));
+  const chains = /\b(all|every|any|each)\s+(?:the\s+)?(?:3\s+|three\s+)?chains?\b|\b(?:3|three)\s+chains\b|\ball of them\b/.test(lower) ? ALL_CHAINS : named.length ? named : (["solana"] as CommandChain[]);
+
+  // How old the coin must be at least: "1 hour plus", "older than 2 hours", "at least 30 min old".
+  const older =
+    lower.match(new RegExp(`\\b(\\d+(?:\\.\\d+)?)\\s*${TIME_UNIT}\\s*(?:\\+|plus\\b|or (?:more|older)\\b)`)) ??
+    lower.match(new RegExp(`\\b(?:older than|more than|over|at least|above|min(?:imum)?(?: age(?: of)?)?)\\s*(\\d+(?:\\.\\d+)?)\\s*${TIME_UNIT}\\b(?:\\s+old)?`));
+  const minAgeHours = older ? minutesOf(older[1], older[2]) / 60 : 0;
+  if (older) lower = lower.replace(older[0], " ");
 
   // How new the coin must be: "launched in 1 hour", "launched within the last 30 min", "under 2 hours old".
   const age =
@@ -221,13 +237,16 @@ export function readScan(text: string): Reply {
     };
   }
   const rule: ScanRule = {
+    chains,
     minutes,
     minVolume,
     usd: num(usd[1] ?? usd[2]),
     takeProfit: tp,
     stopLossPct: sl ? num(sl[1]) : undefined,
     maxAgeHours,
+    minAgeHours,
   };
+  if (minAgeHours >= maxAgeHours) return { kind: "error", text: `I look at coins up to ${maxAgeHours} hours old, so “at least ${minAgeHours} hours old” leaves nothing. Try a smaller age.` };
   if (!(maxAgeHours > 0 && maxAgeHours <= SCAN_LIMITS.maxAgeHours)) return { kind: "error", text: `I can look at coins launched within the last ${SCAN_LIMITS.maxAgeHours} hours at most.` };
   if (rule.minutes < SCAN_LIMITS.minMinutes || rule.minutes > SCAN_LIMITS.maxMinutes) return { kind: "error", text: `A scan runs between ${SCAN_LIMITS.minMinutes} minutes and ${SCAN_LIMITS.maxMinutes / 60} hours.` };
   if (!(rule.usd > 0)) return { kind: "error", text: "A scan's buy needs an amount above $0." };
@@ -243,12 +262,19 @@ export const moneyShort = (n: number) => (n >= 1_000_000 ? `$${+(n / 1_000_000).
 /** "1 hour", "30 minutes", "1.5 hours". */
 const span = (minutes: number) => (minutes >= 60 ? `${+(minutes / 60).toFixed(2)} hour${minutes === 60 ? "" : "s"}` : `${Math.round(minutes)} minutes`);
 
+const CHAIN_WORDS_PLAIN: Record<CommandChain, string> = { solana: "Solana", base: "Base", bnb: "BNB Chain" };
+const chainList = (cs: CommandChain[]) => {
+  const n = cs.map((c) => CHAIN_WORDS_PLAIN[c]);
+  return n.length <= 1 ? (n[0] ?? "") : `${n.slice(0, -1).join(", ")} and ${n[n.length - 1]}`;
+};
+
 export function describeScan(r: ScanRule): string[] {
+  const age = r.minAgeHours > 0 ? `launched between ${span(r.minAgeHours * 60)} and ${span(r.maxAgeHours * 60)} ago` : `launched within the last ${span(r.maxAgeHours * 60)}`;
   const profit = r.takeProfit ? (r.takeProfit < 2 ? `when it's up ${Math.round((r.takeProfit - 1) * 100)}%` : `at ${r.takeProfit}× the price I paid`) : null;
   const exits = [profit ? `sell it all ${profit}` : null, r.stopLossPct ? `sell it all if it drops ${r.stopLossPct}%` : null].filter(Boolean).join(", or ");
   return [
-    `Watch new Solana coins for ${span(r.minutes)} (keep this page open).`,
-    `Buy $${r.usd} of the first coin launched within the last ${span(r.maxAgeHours * 60)} with at least ${moneyShort(r.minVolume)} traded in its last hour that passes the safety checks. One coin at most.`,
+    `Watch coins on ${chainList(r.chains)} for ${span(r.minutes)} (keep this page open).`,
+    `Buy $${r.usd} of the first coin ${age} with at least ${moneyShort(r.minVolume)} traded in its last hour that passes the safety checks. One coin at most.`,
     exits ? `Then ${exits}. That part keeps running even with the page closed.` : "No exit set: you sell it yourself.",
   ];
 }

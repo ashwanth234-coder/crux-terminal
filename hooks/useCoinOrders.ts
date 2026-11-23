@@ -9,7 +9,7 @@ import { useCruxAccount } from "@/hooks/useCruxAccount";
 export type CoinOrderKind = "dip" | "takeProfit" | "stopLoss" | "trailing";
 export type CoinOrderView = {
   id: string;
-  chain: "solana" | "bsc";
+  chain: "solana" | "bsc" | "base";
   coin: string;
   symbol: string;
   kind: CoinOrderKind;
@@ -26,7 +26,7 @@ export type CoinOrderView = {
 };
 
 export type PlaceCoinOrder = {
-  chain: "solana" | "bsc";
+  chain: "solana" | "bsc" | "base";
   coin: string;
   symbol: string;
   kind: CoinOrderKind;

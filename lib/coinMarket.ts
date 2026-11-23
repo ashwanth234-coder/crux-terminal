@@ -16,7 +16,7 @@ const num = (s: string | number | null | undefined) => (s === null || s === unde
  * visitor); on the server, from GeckoTerminal itself.
  */
 const inBrowser = typeof window !== "undefined";
-async function viaSite<T>(network: "bsc" | "base", kind: "new" | "trending"): Promise<T[]> {
+async function viaSite<T>(network: "bsc" | "base", kind: "new" | "trending" | "scan"): Promise<T[]> {
   const r = await fetch(`/api/market?network=${network}&kind=${kind}`);
   if (!r.ok) return [];
   return ((await r.json()) as { coins?: T[] }).coins ?? [];
@@ -268,6 +268,46 @@ export async function freshEvmCoins(network: EvmNetwork, minLiquidity = 1_000): 
     });
   }
   return out.sort((x, y) => y.createdAt - x.createdAt);
+}
+
+/** A coin for the command bar's scan: its pool's price, money in it, last hour's trading and launch time. */
+export type ScanPool = { address: string; symbol: string; name: string; price?: number; mcap?: number; liquidity?: number; volume1h: number; createdAt?: number };
+
+/**
+ * The coins worth a scan on BNB Chain or Base (GeckoTerminal: the hour's trending pools and the newest, each coin once,
+ * its deepest pool). In the browser it reads the site's cached copy (/api/market kind=scan), like the other lists.
+ */
+export async function scanEvmCoins(network: EvmNetwork): Promise<ScanPool[]> {
+  if (inBrowser) return viaSite(network, "scan");
+  type Included = { id: string; attributes: { address: string; name?: string; symbol?: string } };
+  const pages = await Promise.all(
+    [`${GT}/${network}/trending_pools?include=base_token&duration=1h`, `${GT}/${network}/new_pools?include=base_token&page=1`].map((u) =>
+      get<{ data?: PoolData[]; included?: Included[] }>(u).catch(() => null),
+    ),
+  );
+  const tokens = new Map(pages.flatMap((p) => p?.included ?? []).map((i) => [i.id, i.attributes]));
+  const best = new Map<string, ScanPool>();
+  for (const d of pages.flatMap((p) => p?.data ?? [])) {
+    if ((d.relationships?.dex?.data?.id ?? "").startsWith("four-meme")) continue;
+    const tok = tokens.get(d.relationships?.base_token?.data?.id ?? "");
+    const symbol = (tok?.symbol ?? "").replace(/^\$/, "");
+    if (!tok || isStable(symbol) || NOT_A_COIN[network].test(symbol)) continue;
+    const a = d.attributes;
+    const coin: ScanPool = {
+      address: tok.address,
+      symbol,
+      name: tok.name ?? symbol,
+      price: num(a.base_token_price_usd),
+      mcap: num(a.market_cap_usd) ?? num(a.fdv_usd),
+      liquidity: num(a.reserve_in_usd),
+      volume1h: num(a.volume_usd?.h1) ?? 0,
+      createdAt: a.pool_created_at ? Date.parse(a.pool_created_at) : undefined,
+    };
+    const key = tok.address.toLowerCase();
+    const had = best.get(key);
+    if (!had || (had.liquidity ?? 0) < (coin.liquidity ?? 0)) best.set(key, coin);
+  }
+  return [...best.values()];
 }
 
 /** Where a transaction or wallet opens, per chain. */

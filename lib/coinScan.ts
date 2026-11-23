@@ -1,4 +1,5 @@
 import { isStable } from "./solanaCoins.ts";
+import type { ScanPool } from "./coinMarket.ts";
 
 /**
  * The command bar's scan (lib/commandChat ScanRule): new Solana coins from Jupiter's free lists (newest launches and
@@ -60,10 +61,35 @@ const toScan = (t: Jup): ScanCoin => ({
 });
 
 /** Why a coin fails the scan's rules, in plain words, or null when it passes. Pure, for tests. */
-export function scanRefusal(c: ScanCoin, rule: { minVolume: number; maxAgeHours: number }, now: number): string | null {
+export type AgeRule = { minVolume: number; maxAgeHours: number; minAgeHours?: number };
+
+/** The age, trading and money rules every chain shares. Pure. */
+function marketRefusal(c: { createdAt?: number; volume1h: number; liquidity?: number; price?: number; symbol: string }, rule: AgeRule, now: number): string | null {
   if (!c.createdAt || now - c.createdAt > rule.maxAgeHours * 3_600_000) return "too old";
+  if (now - c.createdAt < (rule.minAgeHours ?? 0) * 3_600_000) return "too new";
   if (isStable(c.symbol)) return "a stablecoin";
   if (c.volume1h < rule.minVolume) return "not enough trading";
+  if ((c.liquidity ?? 0) < SCAN_SAFETY.minLiquidity) return "too little in its pool";
+  if (!(c.price && c.price > 0)) return "no price yet";
+  return null;
+}
+
+/**
+ * A Base or BNB Chain coin's age, trading and pool rules (its code is checked next, by GoPlus, before it's bought).
+ * Pure, for tests.
+ */
+export function evmScanRefusal(c: ScanPool, rule: AgeRule, now: number): string | null {
+  return marketRefusal(c, rule, now);
+}
+
+/** The Base/BNB coins that pass the market rules, most traded first (then checked for warning signs). Pure. */
+export function evmCandidates(list: ScanPool[], rule: AgeRule, now: number, skip: Set<string> = new Set()): ScanPool[] {
+  return list.filter((c) => !skip.has(c.address.toLowerCase()) && evmScanRefusal(c, rule, now) === null).sort((a, b) => b.volume1h - a.volume1h);
+}
+
+export function scanRefusal(c: ScanCoin, rule: AgeRule, now: number): string | null {
+  const market = marketRefusal(c, rule, now);
+  if (market === "too old" || market === "too new" || market === "a stablecoin" || market === "not enough trading") return market;
   if (c.mintOff !== true) return "more can be printed";
   if (c.freezeOff !== true) return "coins can be frozen";
   if ((c.liquidity ?? 0) < SCAN_SAFETY.minLiquidity) return "too little in its pool";
@@ -112,6 +138,6 @@ export function solanaWarnings(c: ScanCoin): string[] {
 }
 
 /** The best coin that passes: the most traded in its last hour. Pure, for tests. */
-export function pickScanCoin(list: ScanCoin[], rule: { minVolume: number; maxAgeHours: number }, now: number, skip: Set<string> = new Set()): ScanCoin | null {
+export function pickScanCoin(list: ScanCoin[], rule: AgeRule, now: number, skip: Set<string> = new Set()): ScanCoin | null {
   return list.filter((c) => !skip.has(c.mint) && scanRefusal(c, rule, now) === null).sort((a, b) => b.volume1h - a.volume1h)[0] ?? null;
 }

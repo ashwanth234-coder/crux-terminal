@@ -1,5 +1,5 @@
 import { connection } from "next/server";
-import { freshEvmCoins, trendingEvmCoins, type EvmNetwork } from "@/lib/coinMarket";
+import { freshEvmCoins, scanEvmCoins, trendingEvmCoins, type EvmNetwork } from "@/lib/coinMarket";
 
 /**
  * GET /api/market?network=bsc|base&kind=new|trending: BNB Chain's and Base's newest and trending coins, read from
@@ -14,13 +14,13 @@ export async function GET(request: Request) {
   const q = new URL(request.url).searchParams;
   const network = q.get("network");
   const kind = q.get("kind");
-  if ((network !== "bsc" && network !== "base") || (kind !== "new" && kind !== "trending")) {
-    return Response.json({ error: "network must be bsc or base, kind new or trending" }, { status: 400 });
+  if ((network !== "bsc" && network !== "base") || (kind !== "new" && kind !== "trending" && kind !== "scan")) {
+    return Response.json({ error: "network must be bsc or base, kind new, trending or scan" }, { status: 400 });
   }
   const key = `${network}:${kind}`;
   let coins: unknown[] = [];
   try {
-    coins = kind === "new" ? await freshEvmCoins(network as EvmNetwork) : await trendingEvmCoins(network as EvmNetwork);
+    coins = kind === "new" ? await freshEvmCoins(network as EvmNetwork) : kind === "scan" ? await scanEvmCoins(network as EvmNetwork) : await trendingEvmCoins(network as EvmNetwork);
   } catch {
     coins = [];
   }
