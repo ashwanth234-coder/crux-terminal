@@ -288,7 +288,7 @@ function Desk({
       </div>
 
       {tab === "holders" ? (
-        <div className="min-h-0 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto md:overflow-hidden">
           <HolderMap chain={network === "bsc" ? "bnb" : network} coin={token} accountUrl={x.account} />
         </div>
       ) : tab === "details" ? (

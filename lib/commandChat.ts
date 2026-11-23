@@ -1,4 +1,4 @@
-import { parseCommand, withoutFiller, type CommandChain, type CommandStep } from "./commandIntent.ts";
+import { parseCommand, plainSymbols, withoutFiller, type CommandChain, type CommandStep } from "./commandIntent.ts";
 
 /**
  * The conversation on top of the command reader (lib/commandIntent): every message gets a reply a trader can act on,
@@ -163,7 +163,7 @@ export function readCopy(text: string): Reply {
   const w = text.match(/\b(0x[a-fA-F0-9]{40}|[1-9A-HJ-NP-Za-km-z]{32,44})\b/);
   if (!w) return { kind: "error", text: "Paste the wallet's address to copy." };
   if (w[1].startsWith("0x")) return { kind: "error", text: "Copying works for Solana wallets for now. Paste a Solana wallet's address." };
-  const lower = text.replace(w[1], " ").toLowerCase();
+  const lower = plainSymbols(text.replace(w[1], " ")).toLowerCase();
 
   const dur = lower.match(new RegExp(`\\b(?:for|next|over)\\s+(?:the\\s+next\\s+)?(\\d+(?:\\.\\d+)?)\\s*${TIME_UNIT}\\b`));
   const minutes = dur ? minutesOf(dur[1], dur[2]) : 60;
@@ -225,7 +225,7 @@ const TIME_UNIT = "(hours?|hrs?|h|minutes?|mins?|m)";
 
 /** "scan solana for 1 hour, buy $5 of a coin with 50k volume, sell at 2x". Pure, for tests. */
 export function readScan(text: string): Reply {
-  let lower = text.toLowerCase();
+  let lower = plainSymbols(text).toLowerCase();
 
   // Which chains: "all chains", "every chain", "3 chains", or the ones named; Solana when none is.
   const named = ALL_CHAINS.filter((c) => (c === "solana" ? /\b(solana|sol)\b/ : c === "base" ? /\bbase\b/ : /\b(bnb|bsc|binance)\b/).test(lower));
@@ -251,7 +251,7 @@ export function readScan(text: string): Reply {
   // Volume first, so its "$50k" isn't read as the buy amount.
   const vol =
     lower.match(/\$?\s?(\d+(?:\.\d+)?)\s*([km])?\s*(?:usd\s*)?(?:of\s+|in\s+)?(?:vol|volume)\b/) ??
-    lower.match(/\b(?:vol|volume)\s*(?:of|over|above|at least|>=?)?\s*\$?\s?(\d+(?:\.\d+)?)\s*([km])?\b/);
+    lower.match(/\b(?:vol|volume)\s*(?:of|is|:)?\s*(?:over|above|more than|greater than|bigger than|higher than|at least|min(?:imum)?(?: of)?|>=?)?\s*\$?\s?(\d+(?:\.\d+)?)\s*([km])?\b/);
   const minVolume = vol ? scaled(vol[1], vol[2]) : 50_000;
   const rest = vol ? lower.replace(vol[0], " ") : lower;
 

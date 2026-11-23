@@ -33,6 +33,17 @@ export function packBubbles(holders: MapHolder[], bundled: Set<string>): Placed[
   return out;
 }
 
+/** The view framed around the bubbles (a little room on every side), so they're centred and fill the space. Pure. */
+export function frameOf(placed: { x: number; y: number; r: number }[]): string {
+  if (placed.length === 0) return `0 0 ${W} ${H}`;
+  const pad = 8;
+  const x0 = Math.min(...placed.map((p) => p.x - p.r)) - pad;
+  const y0 = Math.min(...placed.map((p) => p.y - p.r)) - pad;
+  const x1 = Math.max(...placed.map((p) => p.x + p.r)) + pad;
+  const y1 = Math.max(...placed.map((p) => p.y + p.r)) + pad;
+  return `${x0.toFixed(1)} ${y0.toFixed(1)} ${(x1 - x0).toFixed(1)} ${(y1 - y0).toFixed(1)}`;
+}
+
 const COLOR = { pool: "var(--color-dim, #6b7280)", creator: "var(--color-down, #ef4444)", bundled: "var(--color-signal, #ff6a00)", wallet: "var(--color-up, #22c55e)" };
 
 /**
@@ -51,8 +62,11 @@ export function HolderMap({ chain, coin, accountUrl }: { chain: CheckChain; coin
   const creator = holders.find((h) => h.kind === "creator");
   const pools = holders.filter((h) => h.kind === "pool").reduce((s, h) => s + h.pct, 0);
   return (
-    <div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full max-h-[320px]" role="img" aria-label="Holder map: the biggest holders as bubbles">
+    // Desktop: the bubbles fill the panel's height on the left, the legend and summary scroll on the right. Phones: one
+    // under the other.
+    <div className="flex h-full min-h-0 flex-col gap-3 md:flex-row md:gap-5">
+      <div className="relative h-[240px] shrink-0 md:h-auto md:min-h-0 md:flex-1">
+      <svg viewBox={frameOf(placed)} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full" role="img" aria-label="Holder map: the biggest holders as bubbles">
         {placed.map((p) => {
           const fill = p.bundled ? COLOR.bundled : COLOR[p.kind];
           return (
@@ -69,7 +83,9 @@ export function HolderMap({ chain, coin, accountUrl }: { chain: CheckChain; coin
           );
         })}
       </svg>
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11.5px] text-muted">
+      </div>
+      <div className="min-h-0 md:w-[320px] md:shrink-0 md:overflow-y-auto md:pr-1">
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11.5px] text-muted">
         {(
           [
             ["Pool", COLOR.pool],
@@ -97,6 +113,7 @@ export function HolderMap({ chain, coin, accountUrl }: { chain: CheckChain; coin
         )}
         <li className="text-dim">{"Shows the biggest holders only; wallets linked by who funded them aren't traced yet."}</li>
       </ul>
+      </div>
     </div>
   );
 }

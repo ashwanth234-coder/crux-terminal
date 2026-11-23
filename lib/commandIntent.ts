@@ -66,7 +66,18 @@ function shareOf(s: string): number | null {
  */
 const FILLER =
   /\b(?:(?:can|could|would|will) you|please|pls|plz|kindly|i(?:'d| would)? like to|i (?:want|wanna|need) to|i want|i wanna|for me|right now|now|immediately|asap|quickly|just|hey|hi|crux|go ahead and|let's|lets)\b[,!.]?/gi;
-export const withoutFiller = (s: string) => s.replace(FILLER, " ").replace(/\s+/g, " ").replace(/^[\s,]+|[\s,?!.]+$/g, "").trim();
+/**
+ * Words for symbols, so every way of saying it reads the same: "20 percent" → "20%", "double" / "2 times" → "2x",
+ * "triple" → "3x", "half a dollar"-style amounts aside. Applied before anything is read.
+ */
+export const plainSymbols = (s: string) =>
+  s
+    .replace(/(\d)\s*(?:percent|per cent|pct|prcnt)\b/gi, "$1%")
+    .replace(/(\d)\s*(?:times|fold)\b/gi, "$1x")
+    .replace(/\b(?:doubles?|doubled)\b/gi, "2x")
+    .replace(/\b(?:triples?|tripled)\b/gi, "3x");
+
+export const withoutFiller = (s: string) => plainSymbols(s).replace(FILLER, " ").replace(/\s+/g, " ").replace(/^[\s,]+|[\s,?!.]+$/g, "").trim();
 
 /** Words a coin's name usually follows ("buy BT", "sell all of WIF", "stop loss on BONK"). */
 const BEFORE_COIN = new Set("of in into on buy ape get grab purchase sell dump exit close my".split(" "));
@@ -113,6 +124,17 @@ function readClause(raw: string, coin: string | null, chain: CommandChain | unde
   // Trailing stop: "trailing stop 15% on WIF".
   const trail = lower.match(/\btrail(?:ing)?(?:\s+stop)?\s*(?:of|at)?\s*(\d+(?:\.\d+)?)\s?%/);
   if (trail) return c ? { step: { kind: "trailing", coin: c, trailPct: num(trail[1]), pct: sellShare(withoutNumber(lower, trail[0], /\d+(?:\.\d+)?\s?%/)), chain } } : { needsCoin: true };
+
+  // Take profit as a percent: "sell all at 50% profit", "take profit at 20%", "sell when it's up 30%" → 1.5x, 1.2x, 1.3x.
+  // (Read before a plain sell, so "sell … at 50% profit" waits for the profit instead of selling now.)
+  const gain =
+    lower.match(/(\d+(?:\.\d+)?)\s?%\s*(?:profit|gain|up|in profit)\b/) ??
+    lower.match(/\b(?:take[- ]?profit|tp)\s*(?:at|@|of)?\s*\+?(\d+(?:\.\d+)?)\s?%/) ??
+    lower.match(/\b(?:when|if|once)\s+(?:it'?s|it is|it goes|i'?m|we'?re)\s+up\s*\+?(\d+(?:\.\d+)?)\s?%/);
+  if (gain) {
+    const multiple = 1 + num(gain[1]) / 100;
+    return c ? { step: { kind: "takeProfit", coin: c, multiple, pct: sellShare(withoutNumber(lower, gain[0], /\+?\d+(?:\.\d+)?\s?%/)), chain } } : { needsCoin: true };
+  }
 
   // Take profit: "take profit at 2x", "tp 3x", "sell half at 2x", "sell when it hits 5x".
   const tp = lower.match(/\b(?:take[- ]?profit|tp)\s*(?:at|@)?\s*(\d+(?:\.\d+)?)\s?x\b/) ?? lower.match(/\bsell\b.*?\b(?:at|@|when it (?:hits|reaches|does)|if it (?:hits|reaches|does))\s*(\d+(?:\.\d+)?)\s?x\b/);
@@ -202,7 +224,9 @@ export function describeStep(s: CommandStep, symbol = s.kind === "wait" ? "" : s
     case "sell":
       return `Sell ${share(s.pct)} ${symbol}`;
     case "takeProfit":
-      return `Sell ${share(s.pct)} ${symbol} when it reaches ${s.multiple}× today's price`;
+      return s.multiple < 2
+        ? `Sell ${share(s.pct)} ${symbol} when it's up ${Math.round((s.multiple - 1) * 100)}% from today's price`
+        : `Sell ${share(s.pct)} ${symbol} when it reaches ${s.multiple}× today's price`;
     case "stopLoss":
       return `Sell ${share(s.pct)} ${symbol} if it drops ${s.dropPct}%`;
     case "trailing":

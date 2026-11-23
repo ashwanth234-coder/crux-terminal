@@ -75,6 +75,31 @@ test("a scan asked for without the word scan, with launch age and percent profit
   });
 });
 
+test("words for symbols: '20 percent profit', 'volume more than 50k', 'double'", () => {
+  const r = readMessage("buy a coin which is less than 1 hour old with volume more than 50k and sell in 20 percent profit");
+  assert.equal(r.kind, "ask");
+  if (r.kind !== "ask") return;
+  assert.deepEqual(readMessage("1", r.template), {
+    kind: "scan",
+    rule: { chains: ["solana"], minutes: 60, minVolume: 50_000, usd: 1, takeProfit: 1.2, stopLossPct: 30, safetyStop: true, maxAgeHours: 1, minAgeHours: 0 },
+  });
+  const big = readMessage("scan for coins with volume greater than 120k, buy $5, sell when it doubles");
+  assert.equal(big.kind === "scan" && big.rule.minVolume, 120_000);
+  assert.equal(big.kind === "scan" && big.rule.takeProfit, 2);
+  // A profit in percent waits for the profit: never a plain "sell now".
+  assert.deepEqual(readMessage("buy $10 of WIF and sell all at 50 percent profit"), {
+    kind: "plan",
+    steps: [
+      { kind: "buy", coin: "WIF", usd: 10, chain: undefined },
+      { kind: "takeProfit", coin: "WIF", multiple: 1.5, pct: 100, chain: undefined },
+    ],
+  });
+  const half = readMessage("sell half my BONK when it's up 30%");
+  assert.deepEqual(half.kind === "plan" && half.steps, [{ kind: "takeProfit", coin: "BONK", multiple: 1.3, pct: 50, chain: undefined }]);
+  const tp = readMessage("take profit at 25% on BONK");
+  assert.deepEqual(tp.kind === "plan" && tp.steps, [{ kind: "takeProfit", coin: "BONK", multiple: 1.25, pct: 100, chain: undefined }]);
+});
+
 test("a scan without an amount asks for one", () => {
   const r = readMessage("scan solana for 1 hour, buy a coin with 50k volume, sell at 2x");
   assert.equal(r.kind, "ask");
