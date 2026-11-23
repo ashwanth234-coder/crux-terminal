@@ -13,7 +13,7 @@ import { describeStep, waitText, type CommandStep, type TradeStep } from "@/lib/
 import { askForCoin, BUY_SIZES, describeCopy, describeScan, fillTemplate, moneyShort, readMessage, type ChatOption, type CopyRule, type Reply, type ScanRule } from "@/lib/commandChat";
 import { COPY_EVERY_MS, hasSold, holdingsOf, shortWallet, walletChanges, type Holdings } from "@/lib/walletCopy";
 import { CHAIN_NAME, findCoins, type FoundCoin, type LaunchLite } from "@/lib/commandCoins";
-import { evmCandidates, pickScanCoin, scanSolana, SCAN_SAFETY_TEXT, solanaFacts, solanaWarnings } from "@/lib/coinScan";
+import { evmCandidates, pickScanCoin, scanSolana, SCAN_SAFETY, SCAN_SAFETY_TEXT, solanaFacts, solanaWarnings } from "@/lib/coinScan";
 import { scanEvmCoins } from "@/lib/coinMarket";
 import { evmSafety } from "@/lib/tokenSafety";
 import { fmtCompact, fmtPrice } from "@/lib/solanaCoins";
@@ -675,7 +675,8 @@ function ScanCard({ rule, onBusy }: { rule: ScanRule; onBusy: (on: boolean) => v
             const safety = top.length ? await evmSafety(network, top.map((c) => c.address)).catch(() => ({}) as Record<string, null>) : {};
             for (const c of top) {
               const s = safety[c.address.toLowerCase()];
-              if (s && s.warnings.length === 0) {
+              // No warning signs in its code, and enough holders (when GoPlus has counted them) that it isn't a few wallets.
+              if (s && s.warnings.length === 0 && (s.holders === undefined || s.holders >= SCAN_SAFETY.minHolders)) {
                 hit = { chain, address: c.address, symbol: c.symbol, name: c.name, price: c.price, liquidity: c.liquidity };
                 break;
               }

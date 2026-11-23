@@ -22,6 +22,8 @@ export type ScanRule = {
   takeProfit?: number;
   /** Sell everything if it drops this much under the buy price. */
   stopLossPct?: number;
+  /** The stop loss is Crux's default safety stop (the trader named none; "no stop loss" turns it off). */
+  safetyStop: boolean;
   /** Only coins launched within this many hours… */
   maxAgeHours: number;
   /** …and at least this many hours ago (0: any). */
@@ -61,6 +63,8 @@ export type Reply =
   | { kind: "error"; text: string };
 
 export const SCAN_LIMITS = { minMinutes: 5, maxMinutes: 180, maxAgeHours: 24 };
+/** A scan buys a coin it found itself: unless told otherwise, it's sold if it drops this much. */
+export const SAFETY_STOP_PCT = 30;
 export const COPY_LIMITS = { maxCopies: 10, defaultCopies: 3 };
 export const BUY_SIZES = [5, 10, 25];
 
@@ -267,13 +271,15 @@ export function readScan(text: string): Reply {
       template: text + ", buy $" + "{}",
     };
   }
+  const noStop = /\bno stop[- ]?loss\b|\bwithout (?:a )?stop[- ]?loss\b|\bno safety stop\b/.test(lower);
   const rule: ScanRule = {
     chains,
     minutes,
     minVolume,
     usd: num(usd[1] ?? usd[2]),
     takeProfit: tp,
-    stopLossPct: sl ? num(sl[1]) : undefined,
+    stopLossPct: sl ? num(sl[1]) : noStop ? undefined : SAFETY_STOP_PCT,
+    safetyStop: !sl && !noStop,
     maxAgeHours,
     minAgeHours,
   };
@@ -302,7 +308,7 @@ const chainList = (cs: CommandChain[]) => {
 export function describeScan(r: ScanRule): string[] {
   const age = r.minAgeHours > 0 ? `launched between ${span(r.minAgeHours * 60)} and ${span(r.maxAgeHours * 60)} ago` : `launched within the last ${span(r.maxAgeHours * 60)}`;
   const profit = r.takeProfit ? (r.takeProfit < 2 ? `when it's up ${Math.round((r.takeProfit - 1) * 100)}%` : `at ${r.takeProfit}× the price I paid`) : null;
-  const exits = [profit ? `sell it all ${profit}` : null, r.stopLossPct ? `sell it all if it drops ${r.stopLossPct}%` : null].filter(Boolean).join(", or ");
+  const exits = [profit ? `sell it all ${profit}` : null, r.stopLossPct ? `sell it all if it drops ${r.stopLossPct}%${r.safetyStop ? " (a safety stop; say “no stop loss” to skip it)" : ""}` : null].filter(Boolean).join(", or ");
   return [
     `Watch coins on ${chainList(r.chains)} for ${span(r.minutes)} (keep this page open).`,
     `Buy $${r.usd} of the first coin ${age} with at least ${moneyShort(r.minVolume)} traded in its last hour that passes the safety checks. One coin at most.`,

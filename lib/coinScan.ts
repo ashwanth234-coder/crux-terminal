@@ -20,6 +20,10 @@ export type ScanCoin = {
   creatorPct?: number;
   topHoldersPct?: number;
   organic?: string;
+  /** How many coins its creator launched (all time), and its price change over 24 h in percent. */
+  creatorLaunches?: number;
+  change24h?: number;
+  holders?: number;
 };
 
 type Jup = {
@@ -32,8 +36,10 @@ type Jup = {
   createdAt?: string;
   firstPool?: { createdAt?: string };
   organicScoreLabel?: string;
+  holderCount?: number;
   stats1h?: { buyVolume?: number; sellVolume?: number };
-  audit?: { mintAuthorityDisabled?: boolean; freezeAuthorityDisabled?: boolean; devBalancePercentage?: number; topHoldersPercentage?: number };
+  stats24h?: { priceChange?: number };
+  audit?: { mintAuthorityDisabled?: boolean; freezeAuthorityDisabled?: boolean; devBalancePercentage?: number; topHoldersPercentage?: number; devMints?: number };
 };
 
 /** The safety rules every scanned coin must pass (shown on the scan's card). */
@@ -41,8 +47,16 @@ export const SCAN_SAFETY = {
   minLiquidity: 10_000,
   maxCreatorPct: 20,
   maxTopHoldersPct: 60,
+  /**
+   * A creator who launched this many coins or more is a serial launcher: the pattern behind most pump-and-dumps
+   * ($MINELIUS, bought by a scan 2026-11-23 and dumped 76% within the hour: its creator had launched 90).
+   */
+  maxCreatorLaunches: 10,
+  /** Already up this much in 24 h: bought at the top of a pump. */
+  maxPump24hPct: 500,
+  minHolders: 300,
 };
-export const SCAN_SAFETY_TEXT = `Safety checks: nobody can print more or freeze coins, at least $${SCAN_SAFETY.minLiquidity / 1000}k in its pool, the creator holds under ${SCAN_SAFETY.maxCreatorPct}% and the top holders under ${SCAN_SAFETY.maxTopHoldersPct}%.`;
+export const SCAN_SAFETY_TEXT = `Safety checks: nobody can print more or freeze coins, at least $${SCAN_SAFETY.minLiquidity / 1000}k in its pool and ${SCAN_SAFETY.minHolders} holders, the creator holds under ${SCAN_SAFETY.maxCreatorPct}% and hasn't launched ${SCAN_SAFETY.maxCreatorLaunches}+ other coins, the top holders own under ${SCAN_SAFETY.maxTopHoldersPct}%, real (not bot) trading, and not already up ${SCAN_SAFETY.maxPump24hPct}%+ today.`;
 
 const toScan = (t: Jup): ScanCoin => ({
   mint: t.id,
@@ -58,6 +72,9 @@ const toScan = (t: Jup): ScanCoin => ({
   creatorPct: t.audit?.devBalancePercentage,
   topHoldersPct: t.audit?.topHoldersPercentage,
   organic: t.organicScoreLabel,
+  creatorLaunches: t.audit?.devMints,
+  change24h: t.stats24h?.priceChange,
+  holders: t.holderCount,
 });
 
 /** Why a coin fails the scan's rules, in plain words, or null when it passes. Pure, for tests. */
@@ -95,6 +112,10 @@ export function scanRefusal(c: ScanCoin, rule: AgeRule, now: number): string | n
   if ((c.liquidity ?? 0) < SCAN_SAFETY.minLiquidity) return "too little in its pool";
   if ((c.creatorPct ?? 0) >= SCAN_SAFETY.maxCreatorPct) return "the creator holds too much";
   if ((c.topHoldersPct ?? 0) >= SCAN_SAFETY.maxTopHoldersPct) return "a few wallets hold too much";
+  if ((c.creatorLaunches ?? 0) >= SCAN_SAFETY.maxCreatorLaunches) return "its creator launches coin after coin";
+  if ((c.change24h ?? 0) >= SCAN_SAFETY.maxPump24hPct) return "already pumped too hard today";
+  if (c.organic === "low") return "its trading looks like bots";
+  if (c.holders !== undefined && c.holders < SCAN_SAFETY.minHolders) return "too few holders";
   if (!(c.price && c.price > 0)) return "no price yet";
   return null;
 }
@@ -134,6 +155,10 @@ export function solanaWarnings(c: ScanCoin): string[] {
   if ((c.liquidity ?? 0) < SCAN_SAFETY.minLiquidity) w.push("Little money in its pool");
   if ((c.creatorPct ?? 0) >= SCAN_SAFETY.maxCreatorPct) w.push(`Creator holds ${Math.round(c.creatorPct ?? 0)}%`);
   if ((c.topHoldersPct ?? 0) >= SCAN_SAFETY.maxTopHoldersPct) w.push(`Top holders own ${Math.round(c.topHoldersPct ?? 0)}%`);
+  if ((c.creatorLaunches ?? 0) >= SCAN_SAFETY.maxCreatorLaunches) w.push(`Its creator has launched ${c.creatorLaunches} coins`);
+  if ((c.change24h ?? 0) >= SCAN_SAFETY.maxPump24hPct) w.push(`Already up ${Math.round(c.change24h ?? 0).toLocaleString("en-US")}% today`);
+  if (c.organic === "low") w.push("Its trading looks like bots");
+  if (c.holders !== undefined && c.holders < SCAN_SAFETY.minHolders) w.push(`Only ${c.holders} holders`);
   return w;
 }
 
