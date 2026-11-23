@@ -1229,6 +1229,7 @@ function TradePanel({
                     key={pct}
                     type="button"
                     disabled={busy !== null || tokensHeld === BigInt(0)}
+                    onPointerEnter={() => loginMode && presign(false, quickSellAmount(heldNow(heldReadRef.current as never, flightsRef.current).tokens, pct))}
                     onClick={() => quickSell(pct)}
                     className="h-9 rounded-lg border border-down/40 font-mono text-[12.5px] text-down transition-colors hover:border-down hover:bg-down/[0.06] disabled:opacity-35"
                   >
@@ -1298,6 +1299,7 @@ function TradePanel({
       <button
         type="button"
         disabled={busy !== null || amountIn === BigInt(0) || out === BigInt(0) || overHeld}
+        onPointerEnter={() => via === "account" && (side === "buy" || loginMode) && presign(side === "buy", amountIn)}
         onClick={() => void (opening && via === "wallet" ? deposit() : trade())}
         className={`${buttonClass("primary", "md", "rounded-lg")} mt-3 w-full`}
       >
