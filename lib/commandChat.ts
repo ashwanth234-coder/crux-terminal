@@ -227,9 +227,9 @@ const TIME_UNIT = "(hours?|hrs?|h|minutes?|mins?|m)";
 export function readScan(text: string): Reply {
   let lower = plainSymbols(text).toLowerCase();
 
-  // Which chains: "all chains", "every chain", "3 chains", or the ones named; Solana when none is.
+  // Which chains: the ones named ("scan solana…", "base and bnb"), else every chain Crux trades.
   const named = ALL_CHAINS.filter((c) => (c === "solana" ? /\b(solana|sol)\b/ : c === "base" ? /\bbase\b/ : /\b(bnb|bsc|binance)\b/).test(lower));
-  const chains = /\b(all|every|any|each)\s+(?:the\s+)?(?:3\s+|three\s+)?chains?\b|\b(?:3|three)\s+chains\b|\ball of them\b/.test(lower) ? ALL_CHAINS : named.length ? named : (["solana"] as CommandChain[]);
+  const chains = /\b(all|every|any|each)\s+(?:the\s+)?(?:3\s+|three\s+)?chains?\b|\b(?:3|three)\s+chains\b|\ball of them\b/.test(lower) ? ALL_CHAINS : named.length ? named : ALL_CHAINS;
 
   // How old the coin must be at least: "1 hour plus", "older than 2 hours", "at least 30 min old".
   const older =

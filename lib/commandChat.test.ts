@@ -58,7 +58,7 @@ test("a scan, in the founder's words", () => {
   });
   assert.deepEqual(readScan("scan for 30 minutes, buy $10 with volume over $100k, sell at 3x, stop loss 25%"), {
     kind: "scan",
-    rule: { chains: ["solana"], minutes: 30, minVolume: 100_000, usd: 10, takeProfit: 3, stopLossPct: 25, safetyStop: false, maxAgeHours: 24, minAgeHours: 0 },
+    rule: { chains: ["solana", "base", "bnb"], minutes: 30, minVolume: 100_000, usd: 10, takeProfit: 3, stopLossPct: 25, safetyStop: false, maxAgeHours: 24, minAgeHours: 0 },
   });
 });
 
@@ -71,7 +71,7 @@ test("a scan asked for without the word scan, with launch age and percent profit
   assert.deepEqual(filled, { kind: "scan", rule: { chains: ["solana"], minutes: 60, minVolume: 50_000, usd: 1, takeProfit: 1.2, stopLossPct: 30, safetyStop: true, maxAgeHours: 1, minAgeHours: 0 } });
   assert.deepEqual(readMessage("find me a new coin under 30 min old with $100k volume, buy $5, sell when up 50%"), {
     kind: "scan",
-    rule: { chains: ["solana"], minutes: 60, minVolume: 100_000, usd: 5, takeProfit: 1.5, stopLossPct: 30, safetyStop: true, maxAgeHours: 0.5, minAgeHours: 0 },
+    rule: { chains: ["solana", "base", "bnb"], minutes: 60, minVolume: 100_000, usd: 5, takeProfit: 1.5, stopLossPct: 30, safetyStop: true, maxAgeHours: 0.5, minAgeHours: 0 },
   });
 });
 
@@ -81,7 +81,7 @@ test("words for symbols: '20 percent profit', 'volume more than 50k', 'double'",
   if (r.kind !== "ask") return;
   assert.deepEqual(readMessage("1", r.template), {
     kind: "scan",
-    rule: { chains: ["solana"], minutes: 60, minVolume: 50_000, usd: 1, takeProfit: 1.2, stopLossPct: 30, safetyStop: true, maxAgeHours: 1, minAgeHours: 0 },
+    rule: { chains: ["solana", "base", "bnb"], minutes: 60, minVolume: 50_000, usd: 1, takeProfit: 1.2, stopLossPct: 30, safetyStop: true, maxAgeHours: 1, minAgeHours: 0 },
   });
   const big = readMessage("scan for coins with volume greater than 120k, buy $5, sell when it doubles");
   assert.equal(big.kind === "scan" && big.rule.minVolume, 120_000);
