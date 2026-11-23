@@ -25,8 +25,21 @@ export type ScanRule = {
   maxAgeHours: number;
 };
 
+/** Copy a Solana wallet's trades for `minutes`: buy `usd` of each coin it buys (at most `maxCopies`), then the exits. */
+export type CopyRule = {
+  wallet: string;
+  usd: number;
+  minutes: number;
+  maxCopies: number;
+  /** Sell all of a copied coin once the wallet sells it. */
+  followSells: boolean;
+  takeProfit?: number;
+  stopLossPct?: number;
+};
+
 export type Reply =
   | { kind: "plan"; steps: CommandStep[] }
+  | { kind: "copy"; rule: CopyRule }
   | { kind: "lookup"; coin: string; chain?: CommandChain }
   | { kind: "scan"; rule: ScanRule }
   /** A question. `template`: the next message fills its "{}" (e.g. the coin a buy was missing). */
@@ -34,6 +47,7 @@ export type Reply =
   | { kind: "error"; text: string };
 
 export const SCAN_LIMITS = { minMinutes: 5, maxMinutes: 180, maxAgeHours: 24 };
+export const COPY_LIMITS = { maxCopies: 10, defaultCopies: 3 };
 export const BUY_SIZES = [5, 10, 25];
 
 const ADDRESS = /^(0x[a-fA-F0-9]{40}|[1-9A-HJ-NP-Za-km-z]{32,44})$/;
@@ -64,6 +78,13 @@ export function readMessage(raw: string, template?: string): Reply {
   const text = fillTemplate(raw, template);
   if (!text) return { kind: "error", text: "Type what you want to do, or paste a coin's address." };
 
+  // "When <wallet> buys a coin, buy it…", "copy <wallet>": copy-trading (checked first: it names an address too).
+  if (isCopy(text)) return readCopy(text);
+  // "copy a wallet", "copy trade": which one?
+  if (/^(?:copy|follow|mirror|copytrade)\b/i.test(text) || /\bcopy[- ]?trad/i.test(text)) {
+    return { kind: "ask", text: "Which wallet should I copy? Paste its address.", template: "copy {}" };
+  }
+
   // A pasted address, or a coin's name on its own: its facts first, then what to do with it.
   const bare = text.replace(/^(?:check|look ?up|info(?: on)?|about|price of|what about|show(?: me)?)\s+/i, "").replace(/\s+on\s+(base|solana|sol|bnb|bsc)$/i, (_, c: string) => ` @${c}`);
   const [word, at] = bare.split(" @");
@@ -88,6 +109,65 @@ export function readMessage(raw: string, template?: string): Reply {
     return { kind: "ask", text: "Which coin? Type its name or paste its address.", template: text.replace(r.missing.clause, `${r.missing.clause} {}`) };
   }
   return { kind: "error", text: r.error };
+}
+
+/** Whether a message asks to copy a wallet's trades: a wallet address with "copy"/"follow", or "when … buys". Pure. */
+export function isCopy(text: string): boolean {
+  const wallet = /\b(0x[a-fA-F0-9]{40}|[1-9A-HJ-NP-Za-km-z]{32,44})\b/.test(text);
+  return wallet && (/\b(copy|copies|copying|follow|mirror|track|copytrade)\b/i.test(text) || /\b(when|whenever|if|once)\b.*\b(buys?|bought|apes?|gets?)\b/i.test(text));
+}
+
+/** "when <wallet> buys a coin, buy $5 and sell when it sells or at 20% profit". Pure, for tests. */
+export function readCopy(text: string): Reply {
+  const w = text.match(/\b(0x[a-fA-F0-9]{40}|[1-9A-HJ-NP-Za-km-z]{32,44})\b/);
+  if (!w) return { kind: "error", text: "Paste the wallet's address to copy." };
+  if (w[1].startsWith("0x")) return { kind: "error", text: "Copying works for Solana wallets for now. Paste a Solana wallet's address." };
+  const lower = text.replace(w[1], " ").toLowerCase();
+
+  const dur = lower.match(new RegExp(`\\b(?:for|next|over)\\s+(?:the\\s+next\\s+)?(\\d+(?:\\.\\d+)?)\\s*${TIME_UNIT}\\b`));
+  const minutes = dur ? minutesOf(dur[1], dur[2]) : 60;
+  const max = lower.match(/\b(?:up to|max(?:imum)?|at most|only)\s*(\d+)\s*(?:coins?|tokens?|copies|trades|buys)?\b/) ?? lower.match(/\b(\d+)\s*(?:coins?|tokens?|copies|trades)\b/);
+  const maxCopies = max ? num(max[1]) : COPY_LIMITS.defaultCopies;
+
+  const gain = lower.match(/(\d+(?:\.\d+)?)\s?%\s*(?:profit|gain|up)\b/) ?? lower.match(/\b(?:up|profit of|gain of|reaches|hits)\s*\+?(\d+(?:\.\d+)?)\s?%/);
+  const rest = gain ? lower.replace(gain[0], " ") : lower;
+  const tpx = rest.match(/(\d+(?:\.\d+)?)\s?x\b/);
+  const takeProfit = tpx ? num(tpx[1]) : gain ? 1 + num(gain[1]) / 100 : undefined;
+  const sl = rest.match(/\b(?:stop[- ]?loss|sl)\s*(?:at|of)?\s*-?(\d+(?:\.\d+)?)\s?%/) ?? rest.match(/\b(?:drops?|falls?|dips?)\s*(?:by)?\s*(\d+(?:\.\d+)?)\s?%/);
+  // "sell when it sells", "after they sell", "exit with them": on by default unless an exit was named without it.
+  const said = /\b(?:when|after|once|if)\s+(?:it|they|he|she|the wallet|that wallet|this wallet)\s+(?:sells?|dumps?|exits?)\b|\bwith (?:it|them)\b/.test(rest);
+  const followSells = said || (takeProfit === undefined && !sl);
+  const usd = rest.match(/\$\s?(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s?(?:usd[ct]?|dollars?|bucks)\b/);
+
+  if (!usd) {
+    return {
+      kind: "ask",
+      text: "How much should I buy each time that wallet buys?",
+      options: BUY_SIZES.map((d) => ({ label: `$${d}`, command: `${text}, buy $${d}` })),
+      template: text + ", buy $" + "{}",
+    };
+  }
+  const rule: CopyRule = { wallet: w[1], usd: num(usd[1] ?? usd[2]), minutes, maxCopies, followSells, takeProfit, stopLossPct: sl ? num(sl[1]) : undefined };
+  if (rule.minutes < SCAN_LIMITS.minMinutes || rule.minutes > SCAN_LIMITS.maxMinutes) return { kind: "error", text: `Copying runs between ${SCAN_LIMITS.minMinutes} minutes and ${SCAN_LIMITS.maxMinutes / 60} hours.` };
+  if (!(rule.maxCopies >= 1 && rule.maxCopies <= COPY_LIMITS.maxCopies)) return { kind: "error", text: `I copy between 1 and ${COPY_LIMITS.maxCopies} coins at a time.` };
+  if (!(rule.usd > 0)) return { kind: "error", text: "Each copy needs an amount above $0." };
+  if (rule.takeProfit !== undefined && !(rule.takeProfit > 1 && rule.takeProfit <= 1000)) return { kind: "error", text: "Take profit is above what you paid, for example 2x or 20% profit." };
+  if (rule.stopLossPct !== undefined && !(rule.stopLossPct > 0 && rule.stopLossPct < 100)) return { kind: "error", text: "A stop loss is between 1% and 99%." };
+  return { kind: "copy", rule };
+}
+
+/** The copy's rules in plain words, for its card. */
+export function describeCopy(r: CopyRule): string[] {
+  const exits = [
+    r.followSells ? "sell all of it when that wallet sells (half or more of what it bought)" : null,
+    r.takeProfit ? (r.takeProfit < 2 ? `sell it all when it's up ${Math.round((r.takeProfit - 1) * 100)}%` : `sell it all at ${r.takeProfit}× the price I paid`) : null,
+    r.stopLossPct ? `sell it all if it drops ${r.stopLossPct}%` : null,
+  ].filter(Boolean);
+  return [
+    `Watch wallet ${r.wallet.slice(0, 4)}…${r.wallet.slice(-4)} for ${span(r.minutes)} (keep this page open).`,
+    `Each time it buys a Solana coin that passes the safety checks, buy $${r.usd} of it. At most ${r.maxCopies} coin${r.maxCopies === 1 ? "" : "s"}.`,
+    exits.length ? `Then ${exits.join(", or ")}, whichever comes first.` : "No exit set: you sell them yourself.",
+  ];
 }
 
 /**

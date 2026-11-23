@@ -10,7 +10,8 @@ import { useCoinOrders, type PlaceCoinOrder } from "@/hooks/useCoinOrders";
 import { useSolanaTrading } from "@/hooks/useSolanaTrading";
 import { useWalletTrading } from "@/hooks/useBnbTrading";
 import { describeStep, waitText, type CommandStep, type TradeStep } from "@/lib/commandIntent";
-import { askForCoin, BUY_SIZES, describeScan, fillTemplate, moneyShort, readMessage, type ChatOption, type Reply, type ScanRule } from "@/lib/commandChat";
+import { askForCoin, BUY_SIZES, describeCopy, describeScan, fillTemplate, moneyShort, readMessage, type ChatOption, type CopyRule, type Reply, type ScanRule } from "@/lib/commandChat";
+import { COPY_EVERY_MS, hasSold, holdingsOf, shortWallet, walletChanges, type Holdings } from "@/lib/walletCopy";
 import { CHAIN_NAME, findCoins, type FoundCoin, type LaunchLite } from "@/lib/commandCoins";
 import { pickScanCoin, scanSolana, SCAN_SAFETY_TEXT, solanaFacts, solanaWarnings } from "@/lib/coinScan";
 import { evmSafety } from "@/lib/tokenSafety";
@@ -30,6 +31,7 @@ const STARTERS: ChatOption[] = [
   { label: "buy $5 of BT and sell it in 1 min", command: "buy $5 of BT and sell it in 1 min" },
   { label: "scan Solana for 1 hour, buy $5, sell at 2x", command: "scan solana for 1 hour, buy $5 of a coin with 50k volume, sell at 2x" },
   { label: "stop loss 20% on BONK", command: "stop loss 20% on BONK" },
+  { label: "copy a wallet's trades", command: "copy a wallet" },
 ];
 
 /** Crux's own launches (the header search's cached list): matched first when a command names a coin. */
@@ -218,6 +220,8 @@ function CruxReply({ reply, onCommand, onBusy, onMissingCoin }: { reply: Reply; 
       return <PlanCard steps={reply.steps} onBusy={onBusy} onMissingCoin={onMissingCoin} />;
     case "scan":
       return <ScanCard rule={reply.rule} onBusy={onBusy} />;
+    case "copy":
+      return <CopyCard rule={reply.rule} onBusy={onBusy} />;
   }
 }
 
@@ -601,6 +605,169 @@ function ScanCard({ rule, onBusy }: { rule: ScanRule; onBusy: (on: boolean) => v
             <PlanCard steps={steps} preset={found} auto onBusy={setBuying} />
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+const ignoreBusy = () => undefined;
+
+type CopyEvent = { id: number; text: string; tone: "info" | "skip"; steps?: CommandStep[]; coin?: FoundCoin };
+
+/**
+ * Copy-trading a Solana wallet: confirmed once, then the wallet's coins are read every few seconds while this page is
+ * open. Each coin it buys that passes the safety checks is bought for the trader (at most maxCopies), with the exits:
+ * sold when the wallet sells it, and/or price orders (those keep running with the page closed).
+ */
+function CopyCard({ rule, onBusy }: { rule: CopyRule; onBusy: (on: boolean) => void }) {
+  const crux = useCruxAccount();
+  const [phase, setPhase] = useState<"confirm" | "watching" | "done" | "stopped">("confirm");
+  const [reads, setReads] = useState(0);
+  const [endsAt, setEndsAt] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
+  const [events, setEvents] = useState<CopyEvent[]>([]);
+
+  useEffect(() => {
+    onBusy(phase === "watching");
+  }, [phase, onBusy]);
+
+  useEffect(() => {
+    if (phase !== "watching") return;
+    let live = true;
+    let id = 0;
+    const say = (e: Omit<CopyEvent, "id">) => setEvents((list) => [...list, { ...e, id: id++ }]);
+    // What the wallet held right after each copied buy (a sell is measured against it), and which are already sold.
+    const copied = new Map<string, { peak: bigint; sold: boolean; coin: FoundCoin }>();
+    const tried = new Set<string>();
+    void (async () => {
+      let before: Holdings | null = null;
+      while (live && !before) {
+        before = await holdingsOf(rule.wallet);
+        if (!before) await sleep(COPY_EVERY_MS);
+      }
+      setReads(1);
+      let n = 1;
+      while (live) {
+        if (Date.now() >= endsAt) {
+          setPhase("done");
+          return;
+        }
+        await sleep(COPY_EVERY_MS);
+        if (!live) return;
+        const after = await holdingsOf(rule.wallet);
+        if (!after || !live) continue;
+        setReads(++n);
+        const { bought } = walletChanges(before!, after);
+        for (const mint of bought) {
+          const c = copied.get(mint);
+          if (c) {
+            if (!c.sold && after.get(mint)! > c.peak) c.peak = after.get(mint)!;
+            continue;
+          }
+          if (tried.has(mint)) continue;
+          tried.add(mint);
+          if (copied.size >= rule.maxCopies) {
+            say({ text: `It bought another coin, but I've already copied ${rule.maxCopies}.`, tone: "skip" });
+            continue;
+          }
+          const f = await solanaFacts(mint);
+          if (!live) return;
+          if (!f || !(f.price && f.price > 0)) {
+            say({ text: "It bought a coin I couldn't read a price for, so I skipped it.", tone: "skip" });
+            continue;
+          }
+          const warn = solanaWarnings(f);
+          if (warn.length) {
+            say({ text: `It bought ${f.symbol || "a coin"}, but I skipped it: ${warn[0].toLowerCase()}.`, tone: "skip" });
+            continue;
+          }
+          const coin: FoundCoin = { chain: "solana", address: mint, symbol: f.symbol, name: f.name, price: f.price, liquidity: f.liquidity };
+          copied.set(mint, { peak: after.get(mint)!, sold: false, coin });
+          say({
+            text: `It bought ${f.symbol}. Copying with $${rule.usd}.`,
+            tone: "info",
+            coin,
+            steps: [
+              { kind: "buy", coin: mint, usd: rule.usd },
+              ...(rule.takeProfit ? [{ kind: "takeProfit", coin: mint, multiple: rule.takeProfit, pct: 100 } as const] : []),
+              ...(rule.stopLossPct ? [{ kind: "stopLoss", coin: mint, dropPct: rule.stopLossPct, pct: 100 } as const] : []),
+            ],
+          });
+        }
+        if (rule.followSells) {
+          for (const [mint, c] of copied) {
+            if (c.sold || !hasSold(c.peak, after.get(mint) ?? BigInt(0))) continue;
+            c.sold = true;
+            say({ text: `It sold ${c.coin.symbol}. Selling yours.`, tone: "info", coin: c.coin, steps: [{ kind: "sell", coin: mint, pct: 100 }] });
+          }
+        }
+        before = after;
+      }
+    })();
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    return () => {
+      live = false;
+      clearInterval(tick);
+    };
+  }, [phase, rule, endsAt]);
+
+  const problems = [rule.usd > BETA_MAX_BUY ? `During the beta, one buy can be at most $${BETA_MAX_BUY}.` : null, !crux.loggedIn ? "Log in first: I trade from your Crux balance." : null].filter((x): x is string => x !== null);
+  const left = Math.max(0, Math.ceil((endsAt - now) / 60_000));
+  return (
+    <div>
+      <p className="text-[12px] uppercase tracking-wide text-dim">Copy trades</p>
+      <ul className="mt-2 space-y-1">
+        {describeCopy(rule).map((l) => (
+          <li key={l}>{l}</li>
+        ))}
+      </ul>
+      <p className="mt-2 text-[12px] text-muted">{SCAN_SAFETY_TEXT.replace("Safety checks:", "Each coin is checked first:")}</p>
+      {phase === "confirm" && (
+        <>
+          {problems.map((p) => (
+            <p key={p} className="mt-2 text-[12.5px] text-down">
+              {p}
+            </p>
+          ))}
+          <button
+            type="button"
+            disabled={problems.length > 0}
+            onClick={() => {
+              setEndsAt(Date.now() + rule.minutes * 60_000);
+              setNow(Date.now());
+              setPhase("watching");
+            }}
+            className={buttonClass("primary", "sm", "mt-3 w-full")}
+          >
+            Start copying
+          </button>
+        </>
+      )}
+      {phase === "watching" && (
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <p className="font-mono text-[12.5px] text-signal">
+            Watching {shortWallet(rule.wallet)}… {reads} checks · {left} min left
+          </p>
+          <button type="button" onClick={() => setPhase("stopped")} className={buttonClass("outline", "sm")}>
+            Stop
+          </button>
+        </div>
+      )}
+      {phase === "done" && <p className="mt-3 text-[13px] text-muted">{"Time's up: I've stopped watching. Any price orders I set keep running."}</p>}
+      {phase === "stopped" && <p className="mt-3 text-[13px] text-muted">Stopped watching. Any price orders I set keep running.</p>}
+      {events.length > 0 && (
+        <ul className="mt-3 space-y-2">
+          {events.map((e) => (
+            <li key={e.id} className="rounded-lg border border-line-2 p-3">
+              <p className={`text-[13px] ${e.tone === "skip" ? "text-muted" : ""}`}>{e.text}</p>
+              {e.steps && e.coin && (
+                <div className="mt-2">
+                  <PlanCard steps={e.steps} preset={e.coin} auto onBusy={ignoreBusy} />
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
