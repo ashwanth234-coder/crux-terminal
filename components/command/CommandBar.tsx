@@ -668,12 +668,15 @@ function PlanCard({
 }
 
 /**
- * A scan: confirmed once, then it re-reads new Solana coins every 20 s while this page is open, buys the first that
- * passes the rules (at most one), and sets the exits as price orders (those keep running with the page closed).
+ * Finding a coin by its rules. "Buy a coin which…" (rule.watch false): every chain is searched once, right away, and
+ * the best match is shown to confirm like any trade (with its buy check); none → "Keep looking" turns it into a watch.
+ * "Scan / watch for 30 min": confirmed once, then the coins are re-read every 20 s while this page is open, the first
+ * that passes is bought (at most one), and the exits are set as price orders (those keep running with the page closed).
  */
 function ScanCard({ rule, onBusy }: { rule: ScanRule; onBusy: (on: boolean) => void }) {
   const crux = useCruxAccount();
-  const [phase, setPhase] = useState<"confirm" | "scanning" | "found" | "timeout" | "stopped">("confirm");
+  const [watching, setWatching] = useState(rule.watch);
+  const [phase, setPhase] = useState<"confirm" | "searching" | "none" | "scanning" | "found" | "timeout" | "stopped">(rule.watch ? "confirm" : "searching");
   const [checked, setChecked] = useState(0);
   const [endsAt, setEndsAt] = useState(0);
   const [now, setNow] = useState(() => Date.now());
@@ -681,11 +684,12 @@ function ScanCard({ rule, onBusy }: { rule: ScanRule; onBusy: (on: boolean) => v
   const [buying, setBuying] = useState(false);
 
   useEffect(() => {
-    onBusy(phase === "scanning" || buying);
+    onBusy(phase === "scanning" || phase === "searching" || buying);
   }, [phase, buying, onBusy]);
 
   useEffect(() => {
-    if (phase !== "scanning") return;
+    if (phase !== "scanning" && phase !== "searching") return;
+    const once = phase === "searching";
     let live = true;
     const seen = new Set<string>();
     // Base/BNB coins whose code showed warning signs (or isn't checked yet): not asked again this scan.
@@ -726,6 +730,11 @@ function ScanCard({ rule, onBusy }: { rule: ScanRule; onBusy: (on: boolean) => v
           setPhase("found");
           return;
         }
+        // Finding now: one look across every chain, then the answer.
+        if (once) {
+          setPhase("none");
+          return;
+        }
         if (t >= endsAt) {
           setPhase("timeout");
           return;
@@ -752,9 +761,9 @@ function ScanCard({ rule, onBusy }: { rule: ScanRule; onBusy: (on: boolean) => v
 
   return (
     <div>
-      <p className="text-[12px] uppercase tracking-wide text-dim">Scan</p>
+      <p className="text-[12px] uppercase tracking-wide text-dim">{watching ? "Scan" : "Find a coin"}</p>
       <ul className="mt-2 space-y-1">
-        {describeScan(rule).map((l) => (
+        {describeScan({ ...rule, watch: watching }).map((l) => (
           <li key={l}>{l}</li>
         ))}
       </ul>
@@ -790,16 +799,36 @@ function ScanCard({ rule, onBusy }: { rule: ScanRule; onBusy: (on: boolean) => v
           </button>
         </div>
       )}
+      {phase === "searching" && <p className="mt-3 font-mono text-[12.5px] text-signal">{`Looking at ${checked || "the"} coins on every chain…`}</p>}
+      {phase === "none" && (
+        <div className="mt-3">
+          <p className="text-[13px]">{`Nothing matches right now (${checked} coins checked). I didn't buy anything.`}</p>
+          <button
+            type="button"
+            disabled={problems.length > 0}
+            onClick={() => {
+              setWatching(true);
+              setEndsAt(Date.now() + 60 * 60_000);
+              setNow(Date.now());
+              setPhase("scanning");
+            }}
+            className={buttonClass("outline", "sm", "mt-2 w-full")}
+          >
+            {`Keep looking for 1 hour and buy the first match with $${rule.usd}`}
+          </button>
+        </div>
+      )}
       {phase === "timeout" && <p className="mt-3 text-[13px] text-muted">{"Time's up: no coin passed the rules, so I didn't buy anything."}</p>}
       {phase === "stopped" && <p className="mt-3 text-[13px] text-muted">Stopped. Nothing was bought.</p>}
       {phase === "found" && found && (
         <div className="mt-3 rounded-lg border border-line-2 p-3">
           <p className="text-[13px]">
-            Found <span className="font-medium">{found.symbol}</span> on {CHAIN_NAME[found.chain]}
-            {found.liquidity ? ` (pool ${fmtCompact(found.liquidity)})` : ""}. Buying now.
+            {watching ? "Found " : "Best match right now: "}
+            <span className="font-medium">{found.symbol}</span> on {CHAIN_NAME[found.chain]}
+            {found.liquidity ? ` (pool ${fmtCompact(found.liquidity)})` : ""}.{watching ? " Buying now." : " Check it and confirm to buy."}
           </p>
           <div className="mt-2">
-            <PlanCard steps={steps} preset={found} auto onBusy={setBuying} />
+            <PlanCard steps={steps} preset={found} auto={watching} onBusy={setBuying} />
           </div>
         </div>
       )}

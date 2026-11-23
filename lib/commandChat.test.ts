@@ -54,11 +54,11 @@ test("a buy without a coin asks which", () => {
 test("a scan, in the founder's words", () => {
   assert.deepEqual(readMessage("scan solana token for 1 hour today from now buy $5 of a coin which has 50k vol and sell it when you get 2x profit"), {
     kind: "scan",
-    rule: { chains: ["solana"], minutes: 60, minVolume: 50_000, usd: 5, takeProfit: 2, stopLossPct: 30, safetyStop: true, maxAgeHours: 24, minAgeHours: 0 },
+    rule: { chains: ["solana"], watch: true, minutes: 60, minVolume: 50_000, usd: 5, takeProfit: 2, stopLossPct: 30, safetyStop: true, maxAgeHours: 24, minAgeHours: 0 },
   });
   assert.deepEqual(readScan("scan for 30 minutes, buy $10 with volume over $100k, sell at 3x, stop loss 25%"), {
     kind: "scan",
-    rule: { chains: ["solana", "base", "bnb"], minutes: 30, minVolume: 100_000, usd: 10, takeProfit: 3, stopLossPct: 25, safetyStop: false, maxAgeHours: 24, minAgeHours: 0 },
+    rule: { chains: ["solana", "base", "bnb"], watch: true, minutes: 30, minVolume: 100_000, usd: 10, takeProfit: 3, stopLossPct: 25, safetyStop: false, maxAgeHours: 24, minAgeHours: 0 },
   });
 });
 
@@ -68,10 +68,10 @@ test("a scan asked for without the word scan, with launch age and percent profit
   if (r.kind !== "ask") return;
   assert.equal(r.text, "How much should I buy when I find a coin?");
   const filled = readMessage("$1", r.template);
-  assert.deepEqual(filled, { kind: "scan", rule: { chains: ["solana"], minutes: 60, minVolume: 50_000, usd: 1, takeProfit: 1.2, stopLossPct: 30, safetyStop: true, maxAgeHours: 1, minAgeHours: 0 } });
+  assert.deepEqual(filled, { kind: "scan", rule: { chains: ["solana"], watch: false, minutes: 60, minVolume: 50_000, usd: 1, takeProfit: 1.2, stopLossPct: 30, safetyStop: true, maxAgeHours: 1, minAgeHours: 0 } });
   assert.deepEqual(readMessage("find me a new coin under 30 min old with $100k volume, buy $5, sell when up 50%"), {
     kind: "scan",
-    rule: { chains: ["solana", "base", "bnb"], minutes: 60, minVolume: 100_000, usd: 5, takeProfit: 1.5, stopLossPct: 30, safetyStop: true, maxAgeHours: 0.5, minAgeHours: 0 },
+    rule: { chains: ["solana", "base", "bnb"], watch: false, minutes: 60, minVolume: 100_000, usd: 5, takeProfit: 1.5, stopLossPct: 30, safetyStop: true, maxAgeHours: 0.5, minAgeHours: 0 },
   });
 });
 
@@ -81,7 +81,7 @@ test("words for symbols: '20 percent profit', 'volume more than 50k', 'double'",
   if (r.kind !== "ask") return;
   assert.deepEqual(readMessage("1", r.template), {
     kind: "scan",
-    rule: { chains: ["solana", "base", "bnb"], minutes: 60, minVolume: 50_000, usd: 1, takeProfit: 1.2, stopLossPct: 30, safetyStop: true, maxAgeHours: 1, minAgeHours: 0 },
+    rule: { chains: ["solana", "base", "bnb"], watch: false, minutes: 60, minVolume: 50_000, usd: 1, takeProfit: 1.2, stopLossPct: 30, safetyStop: true, maxAgeHours: 1, minAgeHours: 0 },
   });
   const big = readMessage("scan for coins with volume greater than 120k, buy $5, sell when it doubles");
   assert.equal(big.kind === "scan" && big.rule.minVolume, 120_000);
@@ -121,7 +121,7 @@ test("a scan on the chains named, or all of them; silly lengths refused", () => 
 test("the founder's all-chains scan: older than an hour, 50k volume, $1, +20%", () => {
   assert.deepEqual(readMessage("i wanted to buy a coin which has age of 1 hour plus with 50 k volume in all chains (3 in our case ) buy for 1 usd and sell when it my profit reaches 20%"), {
     kind: "scan",
-    rule: { chains: ["solana", "base", "bnb"], minutes: 60, minVolume: 50_000, usd: 1, takeProfit: 1.2, stopLossPct: 30, safetyStop: true, maxAgeHours: 24, minAgeHours: 1 },
+    rule: { chains: ["solana", "base", "bnb"], watch: false, minutes: 60, minVolume: 50_000, usd: 1, takeProfit: 1.2, stopLossPct: 30, safetyStop: true, maxAgeHours: 24, minAgeHours: 1 },
   });
   const older = readMessage("scan every chain for coins older than 2 hours with $100k volume, buy $5, sell at 2x");
   assert.equal(older.kind === "scan" && older.rule.minAgeHours, 2);

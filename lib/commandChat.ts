@@ -14,6 +14,11 @@ export type ChatOption = { label: string; command: string; say?: string };
 /** A scan: watch new coins on `chains` for `minutes`, buy one (at most) that passes the rules, then the exits. */
 export type ScanRule = {
   chains: CommandChain[];
+  /**
+   * Keep watching for `minutes` and buy what turns up (the trader said "scan", "watch", "keep looking", or for how
+   * long). False: find the best coin right now, and show it to confirm ("buy a coin which…").
+   */
+  watch: boolean;
   minutes: number;
   /** Dollars traded in the coin's last hour. */
   minVolume: number;
@@ -246,6 +251,8 @@ export function readScan(text: string): Reply {
   if (age) lower = lower.replace(age[0], " ");
 
   const dur = lower.match(new RegExp(`\\b(?:for|next|over)\\s+(?:the\\s+next\\s+)?(\\d+(?:\\.\\d+)?)\\s*${TIME_UNIT}\\b`)) ?? lower.match(/\b(\d+(?:\.\d+)?)\s*(hours?|hrs?|h|minutes?|mins?)\b/);
+  // Watching only when asked: "scan", "watch", "keep looking", "snipe", or how long to look for.
+  const watch = !!dur || /\b(scan|scanning|watch|watching|monitor|snipe|sniping|hunt|keep (?:looking|watching|checking|scanning)|look out|wait for)\b/.test(lower);
   const minutes = dur ? minutesOf(dur[1], dur[2]) : 60;
 
   // Volume first, so its "$50k" isn't read as the buy amount.
@@ -274,6 +281,7 @@ export function readScan(text: string): Reply {
   const noStop = /\bno stop[- ]?loss\b|\bwithout (?:a )?stop[- ]?loss\b|\bno safety stop\b/.test(lower);
   const rule: ScanRule = {
     chains,
+    watch,
     minutes,
     minVolume,
     usd: num(usd[1] ?? usd[2]),
@@ -285,7 +293,7 @@ export function readScan(text: string): Reply {
   };
   if (minAgeHours >= maxAgeHours) return { kind: "error", text: `I look at coins up to ${maxAgeHours} hours old, so “at least ${minAgeHours} hours old” leaves nothing. Try a smaller age.` };
   if (!(maxAgeHours > 0 && maxAgeHours <= SCAN_LIMITS.maxAgeHours)) return { kind: "error", text: `I can look at coins launched within the last ${SCAN_LIMITS.maxAgeHours} hours at most.` };
-  if (rule.minutes < SCAN_LIMITS.minMinutes || rule.minutes > SCAN_LIMITS.maxMinutes) return { kind: "error", text: `A scan runs between ${SCAN_LIMITS.minMinutes} minutes and ${SCAN_LIMITS.maxMinutes / 60} hours.` };
+  if (watch && (rule.minutes < SCAN_LIMITS.minMinutes || rule.minutes > SCAN_LIMITS.maxMinutes)) return { kind: "error", text: `A scan runs between ${SCAN_LIMITS.minMinutes} minutes and ${SCAN_LIMITS.maxMinutes / 60} hours.` };
   if (!(rule.usd > 0)) return { kind: "error", text: "A scan's buy needs an amount above $0." };
   if (rule.takeProfit !== undefined && !(rule.takeProfit > 1 && rule.takeProfit <= 1000)) return { kind: "error", text: "Take profit is above what you paid, for example 2x or 20% profit." };
   if (rule.stopLossPct !== undefined && !(rule.stopLossPct > 0 && rule.stopLossPct < 100)) return { kind: "error", text: "A stop loss is between 1% and 99%." };
@@ -309,6 +317,13 @@ export function describeScan(r: ScanRule): string[] {
   const age = r.minAgeHours > 0 ? `launched between ${span(r.minAgeHours * 60)} and ${span(r.maxAgeHours * 60)} ago` : `launched within the last ${span(r.maxAgeHours * 60)}`;
   const profit = r.takeProfit ? (r.takeProfit < 2 ? `when it's up ${Math.round((r.takeProfit - 1) * 100)}%` : `at ${r.takeProfit}× the price I paid`) : null;
   const exits = [profit ? `sell it all ${profit}` : null, r.stopLossPct ? `sell it all if it drops ${r.stopLossPct}%${r.safetyStop ? " (a safety stop; say “no stop loss” to skip it)" : ""}` : null].filter(Boolean).join(", or ");
+  if (!r.watch) {
+    return [
+      `Find the best coin on ${chainList(r.chains)} right now: ${age}, at least ${moneyShort(r.minVolume)} traded in its last hour, and passing the safety checks.`,
+      `Show it to you to buy $${r.usd}. Nothing is bought until you confirm.`,
+      exits ? `Then ${exits}. That part keeps running even with the page closed.` : "No exit set: you sell it yourself.",
+    ];
+  }
   return [
     `Watch coins on ${chainList(r.chains)} for ${span(r.minutes)} (keep this page open).`,
     `Buy $${r.usd} of the first coin ${age} with at least ${moneyShort(r.minVolume)} traded in its last hour that passes the safety checks. One coin at most.`,
