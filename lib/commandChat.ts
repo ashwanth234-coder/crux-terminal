@@ -45,6 +45,14 @@ export type CopyRule = {
 
 export type Reply =
   | { kind: "plan"; steps: CommandStep[] }
+  /** "hi", "help", "what can you do": a friendly menu of what Crux can do. */
+  | { kind: "help"; greeting: boolean }
+  /** "what do I hold?", "how am I doing?": the coins in the one balance with profit / loss. */
+  | { kind: "portfolio" }
+  /** "what's trending?" (on one chain, or all). */
+  | { kind: "trending"; chain?: CommandChain }
+  /** "show my orders", "cancel my orders". */
+  | { kind: "orders"; cancel: boolean }
   | { kind: "copy"; rule: CopyRule }
   | { kind: "lookup"; coin: string; chain?: CommandChain }
   | { kind: "scan"; rule: ScanRule }
@@ -79,8 +87,31 @@ export function askForCoin(command: string, coinWord: string): string {
   return command.replace(new RegExp(`(^|[^A-Za-z0-9])\\$?${esc}(?![A-Za-z0-9])`, "i"), "$1{}");
 }
 
+/** The questions Crux answers about the trader's own account and the market (no coin named). Pure, for tests. */
+export function readQuestion(raw: string): Reply | null {
+  const t = raw.trim().toLowerCase().replace(/[!.?]+$/g, "").trim();
+  if (/^(hi|hello|hey|hii+|gm|good (morning|afternoon|evening)|yo|sup|hola|namaste|vanakkam)( crux)?$/.test(t)) return { kind: "help", greeting: true };
+  if (/^(help|menu|options|commands|\?)$/.test(t) || /\bwhat can (you|crux) do\b|\bhow (does this|do i use this|does it) work\b|\bwhat (else )?can i (say|ask|do)\b/.test(t)) return { kind: "help", greeting: false };
+  if (/\bcancel (all |every |my |all my )?(open )?orders?\b/.test(t)) return { kind: "orders", cancel: true };
+  // A message that trades ("…sell when my profit reaches 20%") is a command, not a question.
+  if (!/^what (do|did) i\b/.test(t) && /\b(buy|ape|sell|dump|scan|snipe|copy|follow|take profit|stop loss|tp|sl)\b/.test(t)) return null;
+  if (/\b(my|open|show|list|see|check)\s+(my\s+)?(open\s+)?orders\b/.test(t) || /^orders$/.test(t)) return { kind: "orders", cancel: false };
+  if (
+    /\bwhat (do|did) i (hold|have|own|buy|bought)\b|\bhow am i doing\b|\bhow('?s| is| are) my\b|\bmy (coins|bags?|holdings|portfolio|positions|pnl|p&l|p\/l|profits?|losses)\b|^(portfolio|holdings|positions|pnl|bags?)$/.test(t)
+  )
+    return { kind: "portfolio" };
+  if (/\b(trending|what'?s hot|hot coins|top (coins|movers|gainers)|what'?s (pumping|moving|up)|movers|gainers)\b/.test(t)) {
+    const c = t.match(/\bon\s+(base|solana|sol|bnb|bsc)\b/) ?? t.match(/\b(base|solana|bnb|bsc)\b/);
+    return { kind: "trending", chain: c ? CHAIN_WORDS[c[1]] : undefined };
+  }
+  return null;
+}
+
 /** Reads one chat message. `template`: a question's "{}" that this message answers. Pure, for tests. */
 export function readMessage(raw: string, template?: string): Reply {
+  // Questions about the account and the market come first (they name no coin, and "hi" mustn't vanish as filler).
+  const q = template ? null : readQuestion(raw);
+  if (q) return q;
   const text = fillTemplate(raw, template);
   if (!text) return { kind: "error", text: "Type what you want to do, or paste a coin's address." };
 

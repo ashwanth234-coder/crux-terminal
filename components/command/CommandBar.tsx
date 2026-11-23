@@ -18,6 +18,9 @@ import { scanEvmCoins } from "@/lib/coinMarket";
 import { evmSafety } from "@/lib/tokenSafety";
 import { fmtCompact, fmtPrice } from "@/lib/solanaCoins";
 import { IS_TESTNET } from "@/lib/network";
+import { YourCoins } from "@/components/portfolio/YourCoins";
+import { trendingSolanaCoins } from "@/lib/solanaCoins";
+import { trendingEvmCoins } from "@/lib/coinMarket";
 
 /** During the beta one buy is capped by the server (BETA_MAX_BUY_USDC); cards say so before anything is sent. */
 const BETA_MAX_BUY = 25;
@@ -33,6 +36,14 @@ const STARTERS: ChatOption[] = [
   { label: "scan Solana for 1 hour, buy $5, sell at 2x", command: "scan solana for 1 hour, buy $5 of a coin with 50k volume, sell at 2x" },
   { label: "stop loss 20% on BONK", command: "stop loss 20% on BONK" },
   { label: "copy a wallet's trades", command: "copy a wallet" },
+];
+
+/** The menu: what Crux can do, as buttons (the questions about the account first). */
+const MENU: ChatOption[] = [
+  { label: "What do I hold?", command: "what do I hold?" },
+  { label: "What's trending?", command: "what's trending?" },
+  { label: "Show my orders", command: "show my orders" },
+  ...STARTERS,
 ];
 
 /** Crux's own launches (the header search's cached list): matched first when a command names a coin. */
@@ -214,16 +225,125 @@ function CruxReply({ reply, onCommand, onBusy, onMissingCoin }: { reply: Reply; 
     case "ask":
       return <Said text={reply.text} options={reply.options} onCommand={onCommand} />;
     case "error":
-      return <Said text={reply.text} tone="error" options={STARTERS.slice(0, 2)} onCommand={onCommand} />;
+      return <Said text={reply.text} tone="error" options={[{ label: "What can you do?", command: "help" }, ...STARTERS.slice(0, 2)]} onCommand={onCommand} />;
     case "lookup":
       return <CoinCard query={reply.coin} chain={reply.chain} onCommand={onCommand} onMissingCoin={onMissingCoin} />;
     case "plan":
-      return <PlanCard steps={reply.steps} onBusy={onBusy} onMissingCoin={onMissingCoin} />;
+      return <PlanCard steps={reply.steps} onBusy={onBusy} onMissingCoin={onMissingCoin} onCommand={onCommand} />;
     case "scan":
       return <ScanCard rule={reply.rule} onBusy={onBusy} />;
     case "copy":
       return <CopyCard rule={reply.rule} onBusy={onBusy} />;
+    case "help":
+      return (
+        <Said
+          text={
+            reply.greeting
+              ? "Hey! I'm Crux, your trading desk for Solana, Base and BNB Chain, all from one balance. I can check a coin, buy or sell it, set take profits and stop losses, find new coins for you or copy a wallet. What shall we do?"
+              : "Here's what I can do. Type it your own way, or tap one. I'll always show you the plan before anything trades."
+          }
+          options={MENU}
+          onCommand={onCommand}
+        />
+      );
+    case "portfolio":
+      return <YourCoins compact onCommand={onCommand} />;
+    case "trending":
+      return <TrendingCard chain={reply.chain} onCommand={onCommand} />;
+    case "orders":
+      return <OrdersCard cancelAll={reply.cancel} />;
   }
+}
+
+/** The hottest coins right now (the hour's trending lists), each with Check and Buy $5. */
+function TrendingCard({ chain, onCommand }: { chain?: FoundCoin["chain"]; onCommand: OnCommand }) {
+  const want = (c: FoundCoin["chain"]) => !chain || chain === c;
+  const per = chain ? 6 : 3;
+  const sol = useQuery({ queryKey: ["cmd-trending-sol"], enabled: want("solana"), staleTime: 60_000, queryFn: () => trendingSolanaCoins() });
+  const base = useQuery({ queryKey: ["base-trending"], enabled: want("base"), staleTime: 30_000, queryFn: () => trendingEvmCoins("base") });
+  const bnb = useQuery({ queryKey: ["bnb-trending-cmd"], enabled: want("bnb"), staleTime: 30_000, queryFn: () => trendingEvmCoins("bsc") });
+  const rows = [
+    ...(want("solana") ? (sol.data ?? []).slice(0, per).map((c) => ({ chain: "solana" as const, address: c.mint, symbol: c.symbol, change: c.change1h, mcap: c.mcap })) : []),
+    ...(want("base") ? (base.data ?? []).slice(0, per).map((c) => ({ chain: "base" as const, address: c.address, symbol: c.symbol, change: c.change1h, mcap: c.mcap })) : []),
+    ...(want("bnb") ? (bnb.data ?? []).slice(0, per).map((c) => ({ chain: "bnb" as const, address: c.address, symbol: c.symbol, change: c.change1h, mcap: c.mcap })) : []),
+  ];
+  const loading = (want("solana") && sol.isLoading) || (want("base") && base.isLoading) || (want("bnb") && bnb.isLoading);
+  if (rows.length === 0) return <p className="text-muted">{loading ? "Looking at what's moving…" : "I couldn't read the trending lists just now. Try again in a moment."}</p>;
+  return (
+    <div>
+      <p>{chain ? `Hottest on ${CHAIN_NAME[chain]} in the last hour:` : "Hottest coins in the last hour, across every chain:"}</p>
+      <ul className="mt-2 space-y-2">
+        {rows.map((r) => (
+          <li key={`${r.chain}:${r.address}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line-2 px-3 py-2 text-[13px]">
+            <span>
+              <span className="font-medium">${r.symbol}</span> <span className="text-[11px] text-dim">{CHAIN_NAME[r.chain]}</span>
+              {r.change !== undefined && <span className={`ml-2 font-mono ${r.change >= 0 ? "text-up" : "text-down"}`}>{`${r.change >= 0 ? "+" : ""}${r.change.toFixed(1)}% 1h`}</span>}
+              {r.mcap ? <span className="ml-2 font-mono text-muted">{fmtCompact(r.mcap)}</span> : null}
+            </span>
+            <span className="flex gap-1.5">
+              <button type="button" onClick={() => onCommand(`${r.address} on ${r.chain}`, `Check $${r.symbol}`)} className="rounded-full border border-line-2 px-2.5 py-0.5 text-[12px] text-muted hover:text-chrome">
+                Check
+              </button>
+              <button type="button" onClick={() => onCommand(`buy $5 of ${r.address} on ${r.chain}`, `Buy $5 of $${r.symbol}`)} className="rounded-full border border-line-2 px-2.5 py-0.5 text-[12px] text-muted hover:text-chrome">
+                Buy $5
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-[12px] text-dim">{"Trending isn't safe by itself: tap Check to see a coin's warning signs first."}</p>
+    </div>
+  );
+}
+
+const ORDER_WORDS: Record<string, string> = { dip: "Buy the dip", takeProfit: "Take profit", stopLoss: "Stop loss", trailing: "Trailing stop" };
+
+/** The login's open price orders, each with Cancel (and Cancel all when asked). */
+function OrdersCard({ cancelAll }: { cancelAll: boolean }) {
+  const crux = useCruxAccount();
+  const o = useCoinOrders();
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  if (!crux.loggedIn) return <p className="text-down">Log in first to see your orders.</p>;
+  if (o.orders === null) return <p className="text-muted">Reading your orders…</p>;
+  const open = o.orders.filter((x) => x.status === "open");
+  if (open.length === 0) return <p>{note ?? "You have no open orders. Want to set a take profit or stop loss on something you hold?"}</p>;
+  const cancel = async (ids: string[]) => {
+    setBusy(true);
+    try {
+      await o.cancel(ids);
+      setNote(ids.length > 1 ? `Cancelled ${ids.length} orders.` : "Cancelled.");
+    } catch (e) {
+      setNote((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div>
+      <p>{`You have ${open.length} open order${open.length === 1 ? "" : "s"}. They run on Crux's server, even with this page closed.`}</p>
+      <ul className="mt-2 space-y-1.5">
+        {open.map((x) => (
+          <li key={x.id} className="flex items-center justify-between gap-2 rounded-lg border border-line-2 px-3 py-1.5 text-[13px]">
+            <span>
+              {ORDER_WORDS[x.kind] ?? x.kind} <span className="font-medium">${x.symbol}</span>
+              {x.trigger !== undefined && <span className="font-mono text-muted"> at {fmtPrice(x.trigger)}</span>}
+              {x.trailPct !== undefined && <span className="font-mono text-muted"> {x.trailPct}% under its high</span>}
+            </span>
+            <button type="button" disabled={busy} onClick={() => void cancel([x.id])} className="text-[12px] text-muted underline hover:text-chrome">
+              Cancel
+            </button>
+          </li>
+        ))}
+      </ul>
+      {cancelAll && open.length > 1 && (
+        <button type="button" disabled={busy} onClick={() => void cancel(open.map((x) => x.id))} className={buttonClass("outline", "sm", "mt-3 w-full")}>
+          {`Cancel all ${open.length} orders`}
+        </button>
+      )}
+      {note && <p className="mt-2 text-[12.5px] text-muted">{note}</p>}
+    </div>
+  );
 }
 
 /** A pasted address or a coin's name: its facts and warning signs, then what to do with it. */
@@ -339,7 +459,22 @@ function NotFound({ word, onMissingCoin }: { word: string; onMissingCoin?: (word
  * A command's steps to confirm, then run in order (each through the same paths as the coin pages). `preset`: coins
  * already chosen (a scan's find), skipping the search; `auto`: runs without a Confirm (the scan was confirmed).
  */
-function PlanCard({ steps, preset, auto = false, onBusy, onMissingCoin }: { steps: CommandStep[]; preset?: FoundCoin; auto?: boolean; onBusy: (on: boolean) => void; onMissingCoin?: (word: string) => void }) {
+function PlanCard({
+  steps,
+  preset,
+  auto = false,
+  onBusy,
+  onMissingCoin,
+  onCommand,
+}: {
+  steps: CommandStep[];
+  preset?: FoundCoin;
+  auto?: boolean;
+  onBusy: (on: boolean) => void;
+  onMissingCoin?: (word: string) => void;
+  /** Where the next-step buttons send their command (none inside a scan or a copy). */
+  onCommand?: OnCommand;
+}) {
   const crux = useCruxAccount();
   const launches = useLaunches();
   const [coins, setCoins] = useState<FoundCoin[][] | null>(preset ? steps.map((s) => (s.kind === "wait" ? [] : [preset])) : null);
@@ -474,6 +609,7 @@ function PlanCard({ steps, preset, auto = false, onBusy, onMissingCoin }: { step
         </ul>
       )}
       {!crux.loggedIn && <p className="mt-3 text-[12.5px] text-down">Log in first: I trade from your Crux balance.</p>}
+      {done && onCommand && outcomes.every((o) => o?.ok) && <Choices options={nextSteps(steps, steps.map((_, i) => chosen(i)))} onCommand={onCommand} />}
       {active === null && !done && !auto && (
         <div className="mt-3 flex gap-2">
           <button
@@ -796,6 +932,33 @@ function CopyCard({ rule, onBusy }: { rule: CopyRule; onBusy: (on: boolean) => v
       )}
     </div>
   );
+}
+
+/** What to offer once a plan went through: exits after a buy, another go after a sell, the account after an order. */
+function nextSteps(steps: CommandStep[], coins: (FoundCoin | undefined)[]): ChatOption[] {
+  const i = steps.map((s) => s.kind !== "wait").lastIndexOf(true);
+  const s = steps[i];
+  const c = coins[i];
+  if (!s || s.kind === "wait" || !c) return [];
+  const on = ` on ${c.chain}`;
+  if (s.kind === "buy") {
+    return [
+      ...(c.crux ? [] : [{ label: "Take profit 2×", command: `sell all ${c.address} at 2x${on}`, say: `Sell all my ${c.symbol} at 2×` }, { label: "Stop loss 20%", command: `stop loss 20% on ${c.address}${on}`, say: `Stop loss 20% on ${c.symbol}` }]),
+      { label: "Sell half", command: `sell half of ${c.address}${on}`, say: `Sell half my ${c.symbol}` },
+      { label: "What do I hold?", command: "what do I hold?" },
+    ];
+  }
+  if (s.kind === "sell") {
+    return [
+      { label: `Buy $5 of ${c.symbol} again`, command: `buy $5 of ${c.address}${on}`, say: `Buy $5 of ${c.symbol}` },
+      { label: "What's trending?", command: "what's trending?" },
+      { label: "What do I hold?", command: "what do I hold?" },
+    ];
+  }
+  return [
+    { label: "Show my orders", command: "show my orders" },
+    { label: "What do I hold?", command: "what do I hold?" },
+  ];
 }
 
 /** What stops a plan from being confirmed, in plain words. Pure. */

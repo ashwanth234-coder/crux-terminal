@@ -68,7 +68,7 @@ export function CoinOrderForm({
   cashDecimals,
 }: {
   kind: Exclude<OrderKind, "market">;
-  chain: "solana" | "bsc";
+  chain: "solana" | "bsc" | "base";
   coin: string;
   symbol: string;
   price?: number;

@@ -14,6 +14,8 @@ import { useCreatorAlert } from "@/hooks/useCreatorAlert";
 import { slippageFor, useTradeSettings } from "@/hooks/useTradeSettings";
 import { fmtPrice, solanaFeeText } from "@/lib/solanaCoins";
 import { bnbFeeText } from "@/lib/bnbCoins";
+import { usePositions } from "@/hooks/usePositions";
+import { pnlOf, pnlText } from "@/lib/pnl";
 
 type Side = "buy" | "sell";
 const usd = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -21,7 +23,6 @@ const coins = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 
 
 /** What a chain gives the ticket: cash, the bag, and how to prepare and send a trade. */
 type Venue = {
-  /** Base has no limit orders yet (the relay's orders cover Solana and BNB Chain): market only. */
   chain: "solana" | "bsc" | "base";
   coin: string;
   /** The cash a limit buy spends (it trades with no page open, from this chain's own cash), and its decimals. */
@@ -34,6 +35,8 @@ type Venue = {
   /** The bag, in the coin's base units, and its decimals. */
   held: bigint;
   decimals: number;
+  /** What the bag cost per whole coin, on average (positions), when Crux recorded the buys. */
+  entry?: number;
   busy: boolean;
   prepare: (side: Side, amount: bigint | "all", slippageBps: number) => void;
   buy: (dollars: number, slippageBps: number) => void;
@@ -110,9 +113,7 @@ function Ticket(v: Venue) {
         value={orderType}
         onChange={setOrderType}
         options={
-          v.chain === "base"
-            ? [{ value: "market", label: side === "buy" ? "Market: buy now" : "Market: sell now" }]
-            : side === "buy"
+          side === "buy"
             ? [
                 { value: "market", label: "Market: buy now" },
                 { value: "dip", label: "Buy the dip" },
@@ -128,7 +129,7 @@ function Ticket(v: Venue) {
       />
 
       {orderType !== "market" ? (
-        <CoinOrderForm kind={orderType} chain={v.chain === "base" ? "bsc" : v.chain} coin={v.coin} symbol={v.symbol} price={v.price} held={v.held} decimals={v.decimals} cash={v.orderCash} cashDecimals={v.cashDecimals} />
+        <CoinOrderForm kind={orderType} chain={v.chain} coin={v.coin} symbol={v.symbol} price={v.price} held={v.held} decimals={v.decimals} cash={v.orderCash} cashDecimals={v.cashDecimals} />
       ) : (
       <>
       <div className="mt-3">
@@ -195,6 +196,9 @@ function Ticket(v: Venue) {
           {heldUsd !== null && heldCoins > 0 && <span> ({usd(heldUsd)})</span>}
         </span>
       </div>
+      {heldCoins > 0 && v.entry !== undefined && v.price !== undefined && v.price > 0 && (
+        <PnlLine pnl={pnlOf(heldCoins, v.price, v.entry)} entry={v.entry} />
+      )}
 
       {estimate && (
         <p className="mt-2 text-[12px] leading-snug text-muted">
@@ -264,6 +268,18 @@ function Result({ r, receipt, testRun }: { r: { kind: string; label?: string; me
   );
 }
 
+/** Profit or loss on the bag against what it cost (green up, red down), with the average entry. */
+function PnlLine({ pnl, entry }: { pnl: { usd: number; pct: number }; entry: number }) {
+  return (
+    <p className="mt-1 flex justify-between text-[12px] text-muted">
+      <span>
+        Bought at <span className="font-mono text-chrome">{fmtPrice(entry)}</span>
+      </span>
+      <span className={`font-mono ${pnl.usd >= 0 ? "text-up" : "text-down"}`}>{pnlText(pnl)}</span>
+    </p>
+  );
+}
+
 /**
  * One balance for a chain's ticket (Option A, Base mainnet): the quick-buy size moves to this chain as soon as the
  * page opens (so the buy is instant), and a buy bigger than this chain's cash moves the rest first, then buys.
@@ -296,6 +312,7 @@ function useOneBalanceBuy(chain: CashChain) {
 export function SolanaTicket({ mint, symbol, price }: { mint: string; symbol?: string; price?: number }) {
   const crux = useCruxAccount();
   const t = useSolanaTrading(mint);
+  const pos = usePositions();
   const alert = useCreatorAlert(mint);
   const [turbo, setTurbo] = useState(false);
   const one = useOneBalanceBuy("solana");
@@ -316,6 +333,7 @@ export function SolanaTicket({ mint, symbol, price }: { mint: string; symbol?: s
       cash={cash}
       held={h?.coin?.amount ?? BigInt(0)}
       decimals={h?.coin?.decimals ?? h?.token?.decimals ?? 6}
+      entry={pos.entryOf("solana", mint, h?.coin?.decimals ?? h?.token?.decimals ?? 6)}
       busy={r.kind === "busy"}
       prepare={(side, amount, slippageBps) => t.prepare(side, amount, { turbo, slippageBps })}
       buy={(d, slippageBps) => {
@@ -358,6 +376,7 @@ export function SolanaTicket({ mint, symbol, price }: { mint: string; symbol?: s
 export function BnbTicket({ address, symbol, price }: { address: string; symbol?: string; price?: number }) {
   const crux = useCruxAccount();
   const t = useBnbTrading(address);
+  const pos = usePositions();
   const one = useOneBalanceBuy("bnb");
   if (!crux.loggedIn) return <LogIn text="Trade this coin from your one Crux account. No BNB needed, no bridging." />;
   const h = t.holdings;
@@ -375,6 +394,7 @@ export function BnbTicket({ address, symbol, price }: { address: string; symbol?
       cash={one.total !== null ? Number(one.total) / 1e6 : h ? Number(h.usdt) / 1e18 : null}
       held={h?.coin?.amount ?? BigInt(0)}
       decimals={h?.coin?.decimals ?? 18}
+      entry={pos.entryOf("bsc", address, h?.coin?.decimals ?? 18)}
       busy={r.kind === "busy"}
       // The ticket names buy amounts in 6-decimal dollars; BNB Chain's cash counts 18.
       prepare={(side, amount, slippageBps) => t.prepare(side, side === "buy" && typeof amount === "bigint" ? amount * BigInt(1_000_000_000_000) : amount, slippageBps)}
@@ -390,6 +410,7 @@ export function BnbTicket({ address, symbol, price }: { address: string; symbol?
 export function BaseTicket({ address, symbol, price }: { address: string; symbol?: string; price?: number }) {
   const crux = useCruxAccount();
   const t = useWalletTrading("base", address);
+  const pos = usePositions();
   const one = useOneBalanceBuy("base");
   if (!crux.loggedIn) return <LogIn text="Trade this coin from your one Crux account. No ETH needed, no bridging." />;
   const h = t.holdings;
@@ -407,6 +428,7 @@ export function BaseTicket({ address, symbol, price }: { address: string; symbol
       cash={one.total !== null ? Number(one.total) / 1e6 : h ? Number(h.cash) / 1e6 : null}
       held={h?.coin?.amount ?? BigInt(0)}
       decimals={h?.coin?.decimals ?? 18}
+      entry={pos.entryOf("base", address, h?.coin?.decimals ?? 18)}
       busy={r.kind === "busy"}
       prepare={(side, amount, slippageBps) => t.prepare(side, amount, slippageBps)}
       buy={(d, slippageBps) => void one.buy(units(d), () => void t.buy(units(d), slippageBps))}

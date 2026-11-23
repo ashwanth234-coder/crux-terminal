@@ -30,7 +30,7 @@ export type SolanaTradeResult =
 
 /** Re-reads every chain's wallet balance (all coins' pages and the header's one balance) right after a trade. */
 export function refreshBalances(qc: QueryClient) {
-  void qc.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === "string" && /^crux-(solana|bnb|base)-holdings$/.test(q.queryKey[0] as string) });
+  void qc.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === "string" && /^crux-(solana|bnb|base)-holdings$|^crux-positions$/.test(q.queryKey[0] as string) });
 }
 
 export async function relay<T>(path: string, body: unknown): Promise<T> {

@@ -30,6 +30,7 @@ import { useConnectModal } from "@/providers/Web3Provider";
 import { NETWORK_LONG, NETWORK_NAME } from "@/lib/network";
 import { USDC_WORD, USDC_WORD_CAP } from "@/lib/network";
 import { IS_TESTNET } from "@/lib/network";
+import { YourCoins } from "@/components/portfolio/YourCoins";
 
 const TEST_USDC_SOURCE = PAY_SOURCES.find((s) => s.id === "base-usdc") ?? PAY_SOURCES[0];
 const SELL_SIZES = [25, 50, 100] as const;
@@ -174,6 +175,9 @@ export function Portfolio() {
             ))}
           </div>
         )}
+
+        {/* The one balance's coins on every chain, with profit / loss (Base mainnet). */}
+        {crux.loggedIn && !IS_TESTNET && <YourCoins />}
 
         {!isConnected ? (
           <div className="rounded-xl border border-line px-6 py-12 text-center">
