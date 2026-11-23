@@ -71,7 +71,7 @@ export function readMessage(raw: string, template?: string): Reply {
     return { kind: "lookup", coin: word.replace(/^\$/, ""), chain: at ? CHAIN_WORDS[at.toLowerCase()] : undefined };
   }
 
-  if (/\b(scan|watch|hunt|snipe|look for|find)\b/i.test(text)) return readScan(text);
+  if (isScan(text)) return readScan(text);
 
   const r = parseCommand(text);
   if (r.ok) return { kind: "plan", steps: r.steps };
@@ -90,13 +90,32 @@ export function readMessage(raw: string, template?: string): Reply {
   return { kind: "error", text: r.error };
 }
 
+/**
+ * Whether a message asks Crux to go and find a coin rather than trade a named one: "scan…", "find…", or "buy a coin
+ * which/that/with…" ("buy a solana coin which is launched in 1 hour and with 50k volume"). Pure.
+ */
+export function isScan(text: string): boolean {
+  return /\b(scan|watch|hunt|snipe|look for|find)\b/i.test(text) || /\b(?:a|any|some|one)\s+(?:new\s+|fresh\s+)?(?:solana\s+|sol\s+)?(?:new\s+)?(?:coin|token|memecoin|meme)s?\b/i.test(text);
+}
+
+/** "1 hour", "30 min" → minutes. */
+const minutesOf = (n: string, unit: string) => Math.round(num(n) * (/^h/i.test(unit) ? 60 : 1));
+const TIME_UNIT = "(hours?|hrs?|h|minutes?|mins?|m)";
+
 /** "scan solana for 1 hour, buy $5 of a coin with 50k volume, sell at 2x". Pure, for tests. */
 export function readScan(text: string): Reply {
-  const lower = text.toLowerCase();
+  let lower = text.toLowerCase();
   if (/\b(base|bnb|bsc|binance)\b/.test(lower)) return { kind: "error", text: "Scanning works for Solana coins for now. Try “scan solana for 1 hour, buy $5 of a coin with 50k volume, sell at 2x”." };
 
-  const dur = lower.match(/\b(?:for|next|over)\s+(?:the\s+next\s+)?(\d+(?:\.\d+)?)\s*(hours?|hrs?|h|minutes?|mins?|m)\b/) ?? lower.match(/\b(\d+(?:\.\d+)?)\s*(hours?|hrs?|h|minutes?|mins?)\b/);
-  const minutes = dur ? Math.round(num(dur[1]) * (/^h/.test(dur[2]) ? 60 : 1)) : 60;
+  // How new the coin must be: "launched in 1 hour", "launched within the last 30 min", "under 2 hours old".
+  const age =
+    lower.match(new RegExp(`\\b(?:launched|created|listed|made|born|started)\\s+(?:in|within|in the|less than|under)?\\s*(?:the\\s+)?(?:last|past)?\\s*(\\d+(?:\\.\\d+)?)\\s*${TIME_UNIT}\\b`)) ??
+    lower.match(new RegExp(`\\b(?:under|less than|below)?\\s*(\\d+(?:\\.\\d+)?)\\s*${TIME_UNIT}\\s+old\\b`));
+  const maxAgeHours = age ? minutesOf(age[1], age[2]) / 60 : SCAN_LIMITS.maxAgeHours;
+  if (age) lower = lower.replace(age[0], " ");
+
+  const dur = lower.match(new RegExp(`\\b(?:for|next|over)\\s+(?:the\\s+next\\s+)?(\\d+(?:\\.\\d+)?)\\s*${TIME_UNIT}\\b`)) ?? lower.match(/\b(\d+(?:\.\d+)?)\s*(hours?|hrs?|h|minutes?|mins?)\b/);
+  const minutes = dur ? minutesOf(dur[1], dur[2]) : 60;
 
   // Volume first, so its "$50k" isn't read as the buy amount.
   const vol =
@@ -105,9 +124,13 @@ export function readScan(text: string): Reply {
   const minVolume = vol ? scaled(vol[1], vol[2]) : 50_000;
   const rest = vol ? lower.replace(vol[0], " ") : lower;
 
-  const usd = rest.match(/\$\s?(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s?(?:usd[ct]?|dollars?|bucks)\b/);
-  const tp = rest.match(/(\d+(?:\.\d+)?)\s?x\b/);
-  const sl = rest.match(/\b(?:stop[- ]?loss|sl)\s*(?:at|of)?\s*-?(\d+(?:\.\d+)?)\s?%/) ?? rest.match(/\b(?:drops?|falls?|dips?)\s*(?:by)?\s*(\d+(?:\.\d+)?)\s?%/);
+  // Profit as a percent ("20% profit", "up 50%", "when it reaches 20%"): 20% → sell at 1.2×.
+  const gain = rest.match(/(\d+(?:\.\d+)?)\s?%\s*(?:profit|gain|up)\b/) ?? rest.match(/\b(?:up|profit of|gain of|reaches|hits)\s*\+?(\d+(?:\.\d+)?)\s?%/);
+  const rest2 = gain ? rest.replace(gain[0], " ") : rest;
+  const usd = rest2.match(/\$\s?(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s?(?:usd[ct]?|dollars?|bucks)\b/);
+  const tpx = rest2.match(/(\d+(?:\.\d+)?)\s?x\b/);
+  const tp = tpx ? num(tpx[1]) : gain ? 1 + num(gain[1]) / 100 : undefined;
+  const sl = rest2.match(/\b(?:stop[- ]?loss|sl)\s*(?:at|of)?\s*-?(\d+(?:\.\d+)?)\s?%/) ?? rest2.match(/\b(?:drops?|falls?|dips?)\s*(?:by)?\s*(\d+(?:\.\d+)?)\s?%/);
 
   if (!usd) {
     return {
@@ -121,13 +144,14 @@ export function readScan(text: string): Reply {
     minutes,
     minVolume,
     usd: num(usd[1] ?? usd[2]),
-    takeProfit: tp ? num(tp[1]) : undefined,
+    takeProfit: tp,
     stopLossPct: sl ? num(sl[1]) : undefined,
-    maxAgeHours: SCAN_LIMITS.maxAgeHours,
+    maxAgeHours,
   };
+  if (!(maxAgeHours > 0 && maxAgeHours <= SCAN_LIMITS.maxAgeHours)) return { kind: "error", text: `I can look at coins launched within the last ${SCAN_LIMITS.maxAgeHours} hours at most.` };
   if (rule.minutes < SCAN_LIMITS.minMinutes || rule.minutes > SCAN_LIMITS.maxMinutes) return { kind: "error", text: `A scan runs between ${SCAN_LIMITS.minMinutes} minutes and ${SCAN_LIMITS.maxMinutes / 60} hours.` };
   if (!(rule.usd > 0)) return { kind: "error", text: "A scan's buy needs an amount above $0." };
-  if (rule.takeProfit !== undefined && !(rule.takeProfit > 1 && rule.takeProfit <= 1000)) return { kind: "error", text: "Take profit is a multiple above 1x, for example 2x." };
+  if (rule.takeProfit !== undefined && !(rule.takeProfit > 1 && rule.takeProfit <= 1000)) return { kind: "error", text: "Take profit is above what you paid, for example 2x or 20% profit." };
   if (rule.stopLossPct !== undefined && !(rule.stopLossPct > 0 && rule.stopLossPct < 100)) return { kind: "error", text: "A stop loss is between 1% and 99%." };
   return { kind: "scan", rule };
 }
@@ -136,11 +160,15 @@ export function readScan(text: string): Reply {
 export const moneyShort = (n: number) => (n >= 1_000_000 ? `$${+(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `$${+(n / 1_000).toFixed(1)}k` : `$${n}`);
 
 /** The scan's rules in plain words, for its card. */
+/** "1 hour", "30 minutes", "1.5 hours". */
+const span = (minutes: number) => (minutes >= 60 ? `${+(minutes / 60).toFixed(2)} hour${minutes === 60 ? "" : "s"}` : `${Math.round(minutes)} minutes`);
+
 export function describeScan(r: ScanRule): string[] {
-  const exits = [r.takeProfit ? `sell it all at ${r.takeProfit}× the price I paid` : null, r.stopLossPct ? `sell it all if it drops ${r.stopLossPct}%` : null].filter(Boolean).join(", or ");
+  const profit = r.takeProfit ? (r.takeProfit < 2 ? `when it's up ${Math.round((r.takeProfit - 1) * 100)}%` : `at ${r.takeProfit}× the price I paid`) : null;
+  const exits = [profit ? `sell it all ${profit}` : null, r.stopLossPct ? `sell it all if it drops ${r.stopLossPct}%` : null].filter(Boolean).join(", or ");
   return [
-    `Watch new Solana coins for ${r.minutes >= 60 && r.minutes % 60 === 0 ? `${r.minutes / 60} hour${r.minutes === 60 ? "" : "s"}` : `${r.minutes} minutes`} (keep this page open).`,
-    `Buy $${r.usd} of the first coin with at least ${moneyShort(r.minVolume)} traded in its last hour that passes the safety checks. One coin at most.`,
+    `Watch new Solana coins for ${span(r.minutes)} (keep this page open).`,
+    `Buy $${r.usd} of the first coin launched within the last ${span(r.maxAgeHours * 60)} with at least ${moneyShort(r.minVolume)} traded in its last hour that passes the safety checks. One coin at most.`,
     exits ? `Then ${exits}. That part keeps running even with the page closed.` : "No exit set: you sell it yourself.",
   ];
 }

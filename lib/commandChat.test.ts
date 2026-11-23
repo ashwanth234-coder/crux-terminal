@@ -62,6 +62,19 @@ test("a scan, in the founder's words", () => {
   });
 });
 
+test("a scan asked for without the word scan, with launch age and percent profit", () => {
+  const r = readMessage("buy a solana coin which is launched in 1 hour and with 50 k in volume atleast and sell it when it reaches 20% profit");
+  assert.equal(r.kind, "ask");
+  if (r.kind !== "ask") return;
+  assert.equal(r.text, "How much should I buy when I find a coin?");
+  const filled = readMessage("$1", r.template);
+  assert.deepEqual(filled, { kind: "scan", rule: { minutes: 60, minVolume: 50_000, usd: 1, takeProfit: 1.2, stopLossPct: undefined, maxAgeHours: 1 } });
+  assert.deepEqual(readMessage("find me a new coin under 30 min old with $100k volume, buy $5, sell when up 50%"), {
+    kind: "scan",
+    rule: { minutes: 60, minVolume: 100_000, usd: 5, takeProfit: 1.5, stopLossPct: undefined, maxAgeHours: 0.5 },
+  });
+});
+
 test("a scan without an amount asks for one", () => {
   const r = readMessage("scan solana for 1 hour, buy a coin with 50k volume, sell at 2x");
   assert.equal(r.kind, "ask");

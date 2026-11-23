@@ -41,7 +41,7 @@ export const MAX_STEPS = 6;
 const CHAIN_WORDS: Record<string, CommandChain> = { base: "base", solana: "solana", sol: "solana", bnb: "bnb", bsc: "bnb", binance: "bnb" };
 /** Words that can sit where a coin's name goes but never are one. */
 const NOT_COINS = new Set(
-  "a an the of in into on for my it its at all everything max half quarter worth usd usdc dollars dollar bucks and then also with when if once price sell buy ape get take profit stop loss trailing trail drops dips falls hits reaches goes up down to from by x tp sl coin coins token tokens some more min mins minute minutes sec secs second seconds hour hours hr hrs within after wait".split(" "),
+  "a an the of in into on for my it its at all everything max half quarter worth usd usdc dollars dollar bucks and then also with when if once price sell buy ape get take profit stop loss trailing trail drops dips falls hits reaches goes up down to from by x tp sl coin coins token tokens some more min mins minute minutes sec secs second seconds hour hours hr hrs within after wait which that who one any new".split(" "),
 );
 
 const num = (s: string) => Number(s.replace(/,/g, ""));
