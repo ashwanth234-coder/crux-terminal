@@ -5,6 +5,7 @@ import Link from "next/link";
 import { WalletChip } from "@/components/terminal/WalletChip";
 import { AccountButton } from "@/components/account/AccountButton";
 import { MobileSearch, TokenSearch } from "@/components/site/TokenSearch";
+import { CommandButton } from "@/components/command/CommandBar";
 import { LanguageSwitcher } from "@/components/site/LanguageSwitcher";
 import { ThemeToggle } from "@/components/site/ThemeToggle";
 import { StatusTag } from "@/components/ui/StatusTag";
@@ -56,6 +57,7 @@ export function Header() {
           <ThemeToggle className="hidden md:grid" />
           <TokenSearch className="hidden w-[220px] min-w-[140px] shrink md:block" />
           <MobileSearch className="md:hidden" />
+          <CommandButton className="hidden sm:inline-flex" />
           <AccountButton />
           <WalletChip variant="header" />
           <button

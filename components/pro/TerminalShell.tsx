@@ -6,6 +6,7 @@ import { useConnection } from "wagmi";
 import { Logo } from "@/components/site/Logo";
 import { SiteNav } from "@/components/site/SiteNav";
 import { MobileSearch, TokenSearch } from "@/components/site/TokenSearch";
+import { CommandButton } from "@/components/command/CommandBar";
 import { WalletChip } from "@/components/terminal/WalletChip";
 import { AccountButton } from "@/components/account/AccountButton";
 import { LanguageSwitcher } from "@/components/site/LanguageSwitcher";
@@ -35,6 +36,7 @@ export function TerminalShell({ children }: { children: ReactNode }) {
         <div className="flex min-w-0 items-center gap-3">
           <TokenSearch className="hidden w-[220px] min-w-[140px] shrink md:block" />
           <MobileSearch className="md:hidden" />
+          <CommandButton className="hidden sm:inline-flex" />
           <LanguageSwitcher compact className="hidden md:flex" />
           <ThemeToggle />
           <AccountButton />
