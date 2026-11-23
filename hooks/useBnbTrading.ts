@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePrivy, useSigners } from "@privy-io/react-auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
@@ -41,6 +41,9 @@ export function useWalletTrading(chain: WalletChain, coin: string | null) {
   const { addSigners } = useSigners();
   const [result, setResult] = useState<BnbTradeResult>({ kind: "idle" });
   const preparedAt = useRef(new Map<string, number>());
+  /** The trade last pointed at (kept ready for 30 s while the user decides) and a pending "landed here" prepare. */
+  const wanted = useRef<{ side: "buy" | "sell"; amount: bigint | "all"; slippageBps: number; at: number } | null>(null);
+  const trailing = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const token = useCallback(async () => {
     const t = await getAccessToken();
@@ -70,27 +73,64 @@ export function useWalletTrading(chain: WalletChain, coin: string | null) {
     await addSigners({ address: crux.owner, signers: [{ signerId: s.signerId, policyIds: [s.policyId] }] });
   }, [crux.owner, addSigners, c]);
 
-  const prepare = useCallback(
-    (side: "buy" | "sell", amount: bigint | "all", slippageBps = 300) => {
+  /** Asks the relay to ready this trade (its route, balance, spending permission and gas): the click then only sends. */
+  const fire = useCallback(
+    (side: "buy" | "sell", amount: bigint | "all", slippageBps: number) => {
       if (!coin) return;
-      const h = holdings.data;
-      if (side === "buy" && (!h || typeof amount !== "bigint" || h.cash < amount)) return;
-      const key = `${side}|${amount}`;
+      const key = `${side}|${amount}|${slippageBps}`;
       const now = Date.now();
-      if (now - (preparedAt.current.get(key) ?? 0) < 6_000 || now - (preparedAt.current.get("*") ?? 0) < 700) return;
       preparedAt.current.set(key, now);
       preparedAt.current.set("*", now);
       void token()
         .then((t) => relay(`${c.path}/prepare`, { token: t, side, coin, amount: amount.toString(), slippageBps }))
         .catch(() => preparedAt.current.delete(key));
     },
-    [coin, holdings.data, token, c],
+    [coin, token, c],
   );
+
+  const prepare = useCallback(
+    (side: "buy" | "sell", amount: bigint | "all", slippageBps = 300) => {
+      if (!coin) return;
+      const h = holdings.data;
+      if (side === "buy" && (!h || typeof amount !== "bigint" || h.cash < amount)) return;
+      wanted.current = { side, amount, slippageBps, at: Date.now() };
+      const key = `${side}|${amount}|${slippageBps}`;
+      const now = Date.now();
+      if (now - (preparedAt.current.get(key) ?? 0) < 6_000) return;
+      const since = now - (preparedAt.current.get("*") ?? 0);
+      if (since < 700) {
+        // Sweeping across buttons: the one the pointer settles on is readied once the sweep stops.
+        if (trailing.current) clearTimeout(trailing.current);
+        trailing.current = setTimeout(() => {
+          trailing.current = null;
+          const w = wanted.current;
+          if (w && Date.now() - (preparedAt.current.get(`${w.side}|${w.amount}|${w.slippageBps}`) ?? 0) >= 6_000) fire(w.side, w.amount, w.slippageBps);
+        }, 700 - since);
+        return;
+      }
+      fire(side, amount, slippageBps);
+    },
+    [coin, holdings.data, fire],
+  );
+
+  // A readied trade lasts 8 s on the relay: while the user is still deciding (up to 30 s after pointing at it), it's
+  // readied again so the click finds it fresh.
+  useEffect(() => {
+    const id = setInterval(() => {
+      const w = wanted.current;
+      if (w && Date.now() - w.at < 30_000) fire(w.side, w.amount, w.slippageBps);
+    }, 6_500);
+    return () => {
+      clearInterval(id);
+      if (trailing.current) clearTimeout(trailing.current);
+    };
+  }, [fire]);
 
   const trade = useCallback(
     async (side: "buy" | "sell", amount: bigint | "all", slippageBps = 300) => {
       if (!coin) return;
       const t0 = performance.now();
+      wanted.current = null;
       setResult({ kind: "busy", label: side === "buy" ? "Buying…" : "Selling…" });
       const send = async () => relay<{ hash: string; pending?: boolean }>(`${c.path}/trade`, { token: await token(), side, coin, amount: amount.toString(), slippageBps });
       try {
