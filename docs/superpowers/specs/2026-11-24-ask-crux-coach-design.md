@@ -1,6 +1,6 @@
 # Ask Crux coach: 10 trader rules (Option C MVP)
 
-Status: design, approved in direction by the founder 2026-11-24. **Not to be coded until the three Phase 1
+Status: design, approved by the founder 2026-11-24; plan in docs/superpowers/plans/2026-11-24-ask-crux-coach.md. **Not to be coded until the three Phase 1
 real-money tests pass on mainnet** (Test 1 passed, Test 3 passed, Test 2 pending).
 
 ## Why
@@ -73,9 +73,9 @@ Urgency: 3 = act now, 2 = worth a look, 1 = FYI. Prices are USD per coin; entry 
 |---|---|---|---|---|---|
 | B1 | No floor set | a held coin worth ≥ $2 has no open floor | "$X has no floor. A fall isn't capped." | Floor at −25% | 2 |
 | B2 | Thin market / oversized | position value > 3% of the coin's market cash *(my call)*; at buy time the existing Desk Check covers this | "Your $X is big for its market. Selling it all at once would cost you." | Sell half | 2 |
-| B3 | Big pullback from peak | price ≥ 40% below the highest price since entry (from the chart candles since the buy; 24 h high if no entry known) *(my call)* | "$X has fallen N% from its high since you bought." | Sell half · Set floor | 2 |
+| B3 | Big pullback from peak | price ≥ 40% below the highest price since entry (the highest price the server saw since the buy; coins Crux watches only, which is every Ask Crux buy) *(my call, changed in planning: no candle reads)* | "$X has fallen N% from its high since you bought." | Sell half · Set floor | 2 |
 | B4 | One coin is most of your money | one coin > 60% of coins + cash | "$X is N% of everything you hold." | Sell a quarter | 1 |
-| B5 | Dead bags | coins worth < $1, or 24 h volume < $1,000 *(my call)* | "N coins look dead (worth $Y total)." | Sell them all | 1 |
+| B5 | Dead bags | coins worth < $1, or under $1,000 of cash in the coin's market *(my call, changed in planning: volume isn't in the data the page already reads)* | "N coins look dead (worth $Y total)." | Sell them all | 1 |
 | B6 | Idle cash | cash ≥ $20 and ≥ 50% of total, no buy in Ask Crux this session *(my call)* | "You have $Y ready to trade." | Find me a coin | 1 |
 
 ## Priority cap
@@ -108,7 +108,7 @@ knows "ape", "tp", "sl"), one test per phrase, mapping to exact actions. Startin
 | dump it · cut it · exit · paper hand it | sell all |
 | dump half · trim | sell half / sell a quarter |
 | tp 2x · tp at 3x · sl 20 · sl -15% | take profit / stop loss (already partly known) |
-| dca $20 over a day | split into timed buys (existing timed steps) |
+| dca $20 over a day | not yet: Crux says it can't spread a buy over time yet (timed steps need the page open) |
 | bags · what am I holding · pnl | your coins and profit / loss |
 | is it rugging · creator dumping? | that coin's creator / market-cash check |
 
