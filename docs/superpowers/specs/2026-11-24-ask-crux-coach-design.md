@@ -95,6 +95,47 @@ works once Crux is added to the home screen.
 **Telegram later.** Traders live there and it would be strong, but it needs a bot, an account-linking flow and a
 second delivery path. V2.
 
+## Trader slang (founder, 2026-11-24)
+
+Ask Crux understands how traders actually type. A hand-written dictionary in `lib/commandIntent.ts` (which already
+knows "ape", "tp", "sl"), one test per phrase, mapping to exact actions. Starting set:
+
+| They type | Crux does |
+|---|---|
+| ape $5 into bonk · send $5 on bonk | buy $5 of BONK |
+| take initials · pull initials | sell enough to get the money put in back |
+| moon bag · leave a moon bag | keep ~10–20% riding (the rest sells) |
+| dump it · cut it · exit · paper hand it | sell all |
+| dump half · trim | sell half / sell a quarter |
+| tp 2x · tp at 3x · sl 20 · sl -15% | take profit / stop loss (already partly known) |
+| dca $20 over a day | split into timed buys (existing timed steps) |
+| bags · what am I holding · pnl | your coins and profit / loss |
+| is it rugging · creator dumping? | that coin's creator / market-cash check |
+
+Anything ambiguous lands on the normal confirm card, in plain words, before anything runs. Slang never skips confirm.
+
+## Voice (founder, 2026-11-24)
+
+Crux reads slang but **replies in plain words with a personality**: warm, a bit funny, a bit of sass. It can echo the
+trader's word once ("Took your initials: sold enough to get your $5 back. The rest keeps riding."). All lines are
+hand-written and picked by situation (a few per moment, rotated so they don't repeat); no language model.
+
+| Moment | Example lines |
+|---|---|
+| Profit taken | "Good job. Money in the bank beats money on a chart." · "Initials out. Everything from here is a free ride." |
+| Big win (≥ 3×) | "Look at you. Screenshot it, then set a floor." |
+| Stop / floor sold | "Sorry, that one hurt. Your floor did its job and kept it small." |
+| Two losses in a day | "Rough day. Nothing wrong with a break: the coins will still be here." |
+| 2x with no plan (S1) | "Up 2× and no exit plan? Bold. Lock some in?" |
+| Dead bags (B5) | "These N coins are just sitting there looking sad ($Y total). Sweep them?" |
+| Idle cash (B6) | "$Y doing nothing. No pressure. Want me to find something?" |
+
+Guardrails:
+- **Empathy, never sass, on losses.** No jokes when money was lost.
+- **No sass on urgent cards** (urgency 3: creator selling, cash leaving): those stay short and serious.
+- **Never nudge to trade after a loss.** After a stop or two losses, the only suggestion is a break; no "find a coin".
+- **Never mocks the trader**, never promises ("this will pump"), no profanity.
+
 ## Where it shows
 
 - Push notification: the card text; tapping opens Ask Crux with that card on top.
