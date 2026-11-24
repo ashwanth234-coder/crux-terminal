@@ -26,6 +26,10 @@ import { useAskCruxPlans, useDeskCheck, usePlacePlan } from "@/hooks/useTradePla
 import { presetPlan, PRESET_NAMES, TEST_FLOOR_NAME, testFloorPlan, watchPlan } from "@/lib/tradePlan";
 import { TradePlanSection, type PlanChoice } from "@/components/command/TradePlanSection";
 import { CoachCards, InitialsCard } from "@/components/command/CoachCards";
+import { usePositions } from "@/hooks/usePositions";
+import { entryPrice } from "@/lib/pnl";
+import { noteBuy, noteSell } from "@/lib/coachSession";
+import { momentOf, voice } from "@/lib/coachVoice";
 
 /** During the beta one buy is capped by the server (BETA_MAX_BUY_USDC); cards say so before anything is sent. */
 const BETA_MAX_BUY = 25;
@@ -1129,6 +1133,27 @@ function WaitRunner({ seconds, go, onDone }: { seconds: number; go: boolean; onD
   return left !== null ? <p className="mt-1 font-mono text-[12.5px] text-signal">{waitText(left)} left…</p> : null;
 }
 
+/** The coin's profit / loss now against what Crux recorded paying (percent), kept current for a sale's voice line. */
+function usePnlNow(coin: FoundCoin, decimals: number | undefined) {
+  const pos = usePositions();
+  const now = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    const chain = coin.chain === "bnb" ? "bsc" : coin.chain;
+    const p = pos.positions.find((x) => x.chain === chain && x.coin.toLowerCase() === coin.address.toLowerCase());
+    const entry = p && decimals !== undefined ? entryPrice(p, decimals) : undefined;
+    now.current = entry && coin.price ? (coin.price / entry - 1) * 100 : undefined;
+  });
+  return now;
+}
+
+/** A finished sale, with Crux's line for the moment (praise on a profit, empathy on a loss; a break after two). */
+function voiced(o: Outcome, pnlPct: number | undefined): Outcome {
+  if (!o.ok) return o;
+  const losses = noteSell(pnlPct);
+  const m = momentOf({ side: "sell", pnlPct, lossesToday: losses });
+  return m ? { ...o, text: `${o.text} ${voice(m, Date.now())}` } : o;
+}
+
 function Runner(p: RunnerProps) {
   return p.coin.chain === "solana" ? <SolanaRunner {...p} /> : <WalletRunner {...p} />;
 }
@@ -1192,6 +1217,7 @@ function SolanaRunner({ step, coin, go, onDone, wantEntry, deskUsd }: RunnerProp
   const t = useSolanaTrading(coin.address);
   const cash = useCashMove();
   const orders = useCoinOrders();
+  const pnl = usePnlNow(coin, t.holdings?.coin?.decimals ?? undefined);
   // What the step's run reads while it waits (kept current after each render).
   const result = useRef(t.result);
   const held = useRef<bigint | null>(null);
@@ -1221,12 +1247,14 @@ function SolanaRunner({ step, coin, go, onDone, wantEntry, deskUsd }: RunnerProp
         if (!IS_TESTNET) await cash.ensure("solana", usd6);
         void t.buy(usd6, { slippageBps: SLIPPAGE_BPS, deskUsd });
         const o = await finish();
+        if (o.ok) noteBuy();
         const r = result.current;
         return wantEntry && o.ok && r.kind === "done" && r.signature ? { ...o, entryTx: r.signature } : o;
       }
       if (step.kind === "sell") {
+        const before = pnl.current;
         void t.sell(await unitsOf(() => held.current, step.pct, coin.symbol), { slippageBps: SLIPPAGE_BPS });
-        return finish();
+        return voiced(await finish(), before);
       }
       return placeOrder(orders.place, step, coin, () => unitsOf(() => held.current, "pct" in step ? step.pct : 100, coin.symbol));
     },
@@ -1238,6 +1266,7 @@ function SolanaRunner({ step, coin, go, onDone, wantEntry, deskUsd }: RunnerProp
 function WalletRunner({ step, coin, go, onDone, wantEntry, deskUsd }: RunnerProps) {
   const chain = coin.chain === "bnb" ? "bnb" : "base";
   const t = useWalletTrading(chain, coin.address);
+  const pnl = usePnlNow(coin, t.holdings?.coin?.decimals ?? undefined);
   const cash = useCashMove();
   const orders = useCoinOrders();
   const held = useRef<bigint | null>(null);
@@ -1268,9 +1297,13 @@ function WalletRunner({ step, coin, go, onDone, wantEntry, deskUsd }: RunnerProp
         if (!IS_TESTNET) await cash.ensure(chain, usd6);
         const r = await t.buy(cashUnits, SLIPPAGE_BPS, deskUsd);
         const o = outcome(r);
+        if (o.ok) noteBuy();
         return wantEntry && o.ok && r?.kind === "done" ? { ...o, entryTx: r.hash } : o;
       }
-      if (step.kind === "sell") return outcome(await t.sell(await unitsOf(() => held.current, step.pct, coin.symbol), SLIPPAGE_BPS));
+      if (step.kind === "sell") {
+        const before = pnl.current;
+        return voiced(outcome(await t.sell(await unitsOf(() => held.current, step.pct, coin.symbol), SLIPPAGE_BPS)), before);
+      }
       return placeOrder(orders.place, step, coin, () => unitsOf(() => held.current, "pct" in step ? step.pct : 100, coin.symbol));
     },
     onDone,
