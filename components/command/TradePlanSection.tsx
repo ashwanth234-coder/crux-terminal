@@ -1,9 +1,10 @@
 "use client";
 
 import type { DeskCheck } from "@/hooks/useTradePlans";
-import { describeExit, presetExits, PRESET_HINTS, PRESET_NAMES, rationale, type Preset } from "@/lib/tradePlan";
+import { describeExit, presetExits, PRESET_HINTS, PRESET_NAMES, rationale, TEST_FLOOR_EXITS, TEST_FLOOR_NAME, type Preset } from "@/lib/tradePlan";
 
-export type PlanChoice = Preset | "none";
+/** "testFloor": TEMPORARY, for real-money Test 2 only (lib/tradePlan.ts TEST_FLOOR_EXITS). */
+export type PlanChoice = Preset | "none" | "testFloor";
 
 const TONE = {
   green: { box: "border-up/50", dot: "bg-up", word: "Looks fine" },
@@ -35,13 +36,13 @@ export function TradePlanSection({
   /** The buy is running or done: the choice can't change. */
   locked: boolean;
 }) {
-  const exits = choice === "none" ? [] : presetExits(choice);
+  const exits = choice === "none" ? [] : choice === "testFloor" ? TEST_FLOOR_EXITS : presetExits(choice);
   return (
     <div className="mt-3 space-y-3">
       <div>
         <p className="text-[12px] text-dim">After you buy, Crux sells for you:</p>
         <div className="mt-1.5 flex flex-wrap gap-1.5" role="radiogroup" aria-label="Exit plan">
-          {(["conservative", "balanced", "aggressive", "none"] as const).map((p) => (
+          {(["conservative", "balanced", "aggressive", "none", "testFloor"] as const).map((p) => (
             <button
               key={p}
               type="button"
@@ -50,9 +51,9 @@ export function TradePlanSection({
               disabled={locked}
               onClick={() => onChoice(p)}
               className={`rounded-full border px-2.5 py-1 text-[12px] ${choice === p ? "border-chrome/70 bg-tint/[0.06] text-chrome" : "border-line text-muted hover:border-line-2"}`}
-              title={p === "none" ? "Just buy. No automatic sells." : PRESET_HINTS[p]}
+              title={p === "none" ? "Just buy. No automatic sells." : p === "testFloor" ? "Temporary, for testing a real stop-loss sale" : PRESET_HINTS[p]}
             >
-              {p === "none" ? "No plan" : PRESET_NAMES[p]}
+              {p === "none" ? "No plan" : p === "testFloor" ? TEST_FLOOR_NAME : PRESET_NAMES[p]}
             </button>
           ))}
         </div>
@@ -64,7 +65,7 @@ export function TradePlanSection({
               ))}
             </ul>
             <p className="mt-1.5 text-[11.5px] text-dim">
-              {rationale(choice, exits)} Prices are checked every 2 seconds, so in a fast drop a sale can land lower than the floor.
+              {rationale(choice === "testFloor" ? "custom" : choice, exits)} Prices are checked every 2 seconds, so in a fast drop a sale can land lower than the floor.
             </p>
           </>
         ) : (

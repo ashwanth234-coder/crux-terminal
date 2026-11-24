@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { describeExit, presetExits, presetPlan, rationale, TradePlanSchema } from "./tradePlan.ts";
+import { describeExit, presetExits, presetPlan, rationale, testFloorPlan, TradePlanSchema } from "./tradePlan.ts";
 
 const MINT = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263";
 
@@ -30,4 +30,11 @@ test("each exit reads in plain words, with the honest 'about' on the floor", () 
 test("a size over the cap or a non-address is refused before anything is sent", () => {
   assert.throws(() => presetPlan("balanced", "solana", MINT, 5_000));
   assert.throws(() => presetPlan("balanced", "solana", "BONK", 25));
+});
+
+test("the temporary test floor is one -3% stop on the whole bag", () => {
+  const plan = testFloorPlan("solana", MINT, 1);
+  assert.equal(plan.preset, "custom");
+  assert.deepEqual(plan.exits, [{ kind: "stopLoss", id: "sl", dropPct: 3 }]);
+  assert.equal(plan.rationale, "Your plan: floor at about -3%.");
 });

@@ -90,6 +90,18 @@ export function rationale(preset: TradePlan["preset"], exits: ExitLeg[]): string
   return `${head}: ${parts.join(", ")}.${noStop}`.slice(0, 280);
 }
 
+/**
+ * TEMPORARY, for real-money Test 2 (2026-11-24): a −3% floor so a real stop-loss sale can be tested on a small buy.
+ * Plans show only to allowlisted accounts (ASK_CRUX_PLANS_ALLOWLIST). REMOVE before opening plans to the first testers.
+ */
+export const TEST_FLOOR_EXITS: ExitLeg[] = [{ kind: "stopLoss", id: "sl", dropPct: 3 }];
+export const TEST_FLOOR_NAME = "Test: −3% floor";
+
+/** The temporary test floor as a plan (preset "custom", which the server already accepts). Pure. */
+export function testFloorPlan(chain: PlanChain, coin: string, entryUsd: number): TradePlan {
+  return TradePlanSchema.parse({ version: 1, preset: "custom", chain, coin, entryUsd, exits: TEST_FLOOR_EXITS, rationale: rationale("custom", TEST_FLOOR_EXITS) });
+}
+
 /** A preset plan for one buy, checked against the schema (throws on a bad coin or size). Pure. */
 export function presetPlan(preset: Preset, chain: PlanChain, coin: string, entryUsd: number): TradePlan {
   const exits = presetExits(preset);

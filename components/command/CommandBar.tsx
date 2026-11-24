@@ -23,7 +23,7 @@ import { buyCheckOf } from "@/hooks/useBuyCheck";
 import { trendingSolanaCoins } from "@/lib/solanaCoins";
 import { trendingEvmCoins } from "@/lib/coinMarket";
 import { useAskCruxPlans, useDeskCheck, usePlacePlan } from "@/hooks/useTradePlans";
-import { presetPlan, PRESET_NAMES } from "@/lib/tradePlan";
+import { presetPlan, PRESET_NAMES, TEST_FLOOR_NAME, testFloorPlan } from "@/lib/tradePlan";
 import { TradePlanSection, type PlanChoice } from "@/components/command/TradePlanSection";
 
 /** During the beta one buy is capped by the server (BETA_MAX_BUY_USDC); cards say so before anything is sent. */
@@ -572,10 +572,11 @@ function PlanCard({
     Promise.resolve()
       .then(() => {
         if (!entryTx) throw new Error("I couldn't find the buy's transaction.");
-        return placePlan(presetPlan(preset, coin.chain, coin.address, buyUsd), entryTx, coin.symbol);
+        const plan = preset === "testFloor" ? testFloorPlan(coin.chain, coin.address, buyUsd) : presetPlan(preset, coin.chain, coin.address, buyUsd);
+        return placePlan(plan, entryTx, coin.symbol);
       })
       .then(
-      () => setPlanNote({ ok: true, text: `Plan set: ${PRESET_NAMES[preset]}. Crux watches the price and sells for you, even with this page closed.` }),
+      () => setPlanNote({ ok: true, text: `Plan set: ${preset === "testFloor" ? TEST_FLOOR_NAME : PRESET_NAMES[preset]}. Crux watches the price and sells for you, even with this page closed.` }),
       (e: Error) => setPlanNote({ ok: false, text: `Bought, but couldn't set the plan: ${e.message.split("\n")[0]} Set exits on the coin's page.` }),
     );
   }, [planEligible, planChoice, firstOutcome, firstCoin, buyUsd, placePlan]);
