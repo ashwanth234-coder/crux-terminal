@@ -102,6 +102,16 @@ export function testFloorPlan(chain: PlanChain, coin: string, entryUsd: number):
   return TradePlanSchema.parse({ version: 1, preset: "custom", chain, coin, entryUsd, exits: TEST_FLOOR_EXITS, rationale: rationale("custom", TEST_FLOOR_EXITS) });
 }
 
+export const WATCH_RATIONALE = "Watching only: no automatic sells.";
+
+/**
+ * A "No plan" buy is still watched (the coach's alerts need its entry): a plan with no exits, which never sells and closes
+ * by itself once the coins are sold. The server keeps at most 5 of these per login. Pure.
+ */
+export function watchPlan(chain: PlanChain, coin: string, entryUsd: number): TradePlan {
+  return TradePlanSchema.parse({ version: 1, preset: "custom", chain, coin, entryUsd, exits: [], rationale: WATCH_RATIONALE });
+}
+
 /** A preset plan for one buy, checked against the schema (throws on a bad coin or size). Pure. */
 export function presetPlan(preset: Preset, chain: PlanChain, coin: string, entryUsd: number): TradePlan {
   const exits = presetExits(preset);

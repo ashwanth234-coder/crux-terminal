@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { describeExit, presetExits, presetPlan, rationale, testFloorPlan, TradePlanSchema } from "./tradePlan.ts";
+import { describeExit, presetExits, presetPlan, rationale, testFloorPlan, TradePlanSchema, watchPlan } from "./tradePlan.ts";
 
 const MINT = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263";
 
@@ -37,4 +37,11 @@ test("the temporary test floor is one -3% stop on the whole bag", () => {
   assert.equal(plan.preset, "custom");
   assert.deepEqual(plan.exits, [{ kind: "stopLoss", id: "sl", dropPct: 3 }]);
   assert.equal(plan.rationale, "Your plan: floor at about -3%.");
+});
+
+test("a No plan buy is watched with a plan that has no exits", () => {
+  const plan = watchPlan("solana", MINT, 1);
+  assert.equal(plan.preset, "custom");
+  assert.deepEqual(plan.exits, []);
+  assert.equal(plan.rationale, "Watching only: no automatic sells.");
 });

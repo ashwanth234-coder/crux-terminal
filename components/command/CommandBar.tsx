@@ -23,7 +23,7 @@ import { buyCheckOf } from "@/hooks/useBuyCheck";
 import { trendingSolanaCoins } from "@/lib/solanaCoins";
 import { trendingEvmCoins } from "@/lib/coinMarket";
 import { useAskCruxPlans, useDeskCheck, usePlacePlan } from "@/hooks/useTradePlans";
-import { presetPlan, PRESET_NAMES, TEST_FLOOR_NAME, testFloorPlan } from "@/lib/tradePlan";
+import { presetPlan, PRESET_NAMES, TEST_FLOOR_NAME, testFloorPlan, watchPlan } from "@/lib/tradePlan";
 import { TradePlanSection, type PlanChoice } from "@/components/command/TradePlanSection";
 
 /** During the beta one buy is capped by the server (BETA_MAX_BUY_USDC); cards say so before anything is sent. */
@@ -567,7 +567,7 @@ function PlanCard({
   // The buy landed: hand its plan to the server once, with what actually filled.
   const firstOutcome = outcomes[0];
   useEffect(() => {
-    if (!planEligible || planChoice === "none" || !firstOutcome?.ok || planSent.current || !firstCoin) return;
+    if (!planEligible || !firstOutcome?.ok || planSent.current || !firstCoin) return;
     planSent.current = true;
     const entryTx = firstOutcome.entryTx;
     const preset = planChoice;
@@ -575,12 +575,18 @@ function PlanCard({
     Promise.resolve()
       .then(() => {
         if (!entryTx) throw new Error("I couldn't find the buy's transaction.");
-        const plan = preset === "testFloor" ? testFloorPlan(coin.chain, coin.address, buyUsd) : presetPlan(preset, coin.chain, coin.address, buyUsd);
+        const plan =
+          preset === "none" ? watchPlan(coin.chain, coin.address, buyUsd) : preset === "testFloor" ? testFloorPlan(coin.chain, coin.address, buyUsd) : presetPlan(preset, coin.chain, coin.address, buyUsd);
         return placePlan(plan, entryTx, coin.symbol);
       })
       .then(
-      () => setPlanNote({ ok: true, text: `Plan set: ${preset === "testFloor" ? TEST_FLOOR_NAME : PRESET_NAMES[preset]}. Crux watches the price and sells for you, even with this page closed.` }),
-      (e: Error) => setPlanNote({ ok: false, text: `Bought, but couldn't set the plan: ${e.message.split("\n")[0]} Set exits on the coin's page.` }),
+      () =>
+        setPlanNote(
+          preset === "none"
+            ? { ok: true, text: "Crux is watching it for you. Nothing sells unless you say so." }
+            : { ok: true, text: `Plan set: ${preset === "testFloor" ? TEST_FLOOR_NAME : PRESET_NAMES[preset]}. Crux watches the price and sells for you, even with this page closed.` }),
+      // Watching a No plan buy is a bonus: if it can't be set (5 already watched), say nothing.
+      (e: Error) => preset !== "none" && setPlanNote({ ok: false, text: `Bought, but couldn't set the plan: ${e.message.split("\n")[0]} Set exits on the coin's page.` }),
     );
   }, [planEligible, planChoice, firstOutcome, firstCoin, buyUsd, placePlan]);
 
@@ -654,7 +660,7 @@ function PlanCard({
                 (s.kind === "wait" ? (
                   <WaitRunner seconds={s.seconds} go={active === i} onDone={(o2) => onStepDone(i, o2)} />
                 ) : (
-                  c && <Runner step={s} coin={c} go={active === i} onDone={(o2) => onStepDone(i, o2)} wantEntry={planEligible && planChoice !== "none"} deskUsd={planEligible ? buyUsd : undefined} />
+                  c && <Runner step={s} coin={c} go={active === i} onDone={(o2) => onStepDone(i, o2)} wantEntry={planEligible} deskUsd={planEligible ? buyUsd : undefined} />
                 ))}
             </li>
           );
