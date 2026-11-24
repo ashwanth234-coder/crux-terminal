@@ -25,6 +25,7 @@ import { trendingEvmCoins } from "@/lib/coinMarket";
 import { useAskCruxPlans, useDeskCheck, usePlacePlan } from "@/hooks/useTradePlans";
 import { presetPlan, PRESET_NAMES, TEST_FLOOR_NAME, testFloorPlan, watchPlan } from "@/lib/tradePlan";
 import { TradePlanSection, type PlanChoice } from "@/components/command/TradePlanSection";
+import { CoachCards, InitialsCard } from "@/components/command/CoachCards";
 
 /** During the beta one buy is capped by the server (BETA_MAX_BUY_USDC); cards say so before anything is sent. */
 const BETA_MAX_BUY = 25;
@@ -155,6 +156,8 @@ function CommandPanel({ open, onClose, onWorking }: { open: boolean; onClose: ()
   return (
     <Modal open={open} onClose={onClose} title="Ask Crux" subtitle="Talk to Crux like a trading desk. Nothing happens until you confirm." size="lg">
       <div className="mt-4 flex max-h-[min(60svh,560px)] flex-col gap-3 overflow-y-auto pr-1">
+        {/* The coach: what it would look at in your coins (on for allowlisted logins with ASK_CRUX_COACH=on). */}
+        <CoachCards onCommand={send} />
         {msgs.map((m) =>
           m.from === "you" ? (
             <p key={m.id} className="ml-auto max-w-[85%] rounded-xl bg-tint/[0.06] px-3 py-2 text-[14px] text-chrome">
@@ -258,8 +261,7 @@ function CruxReply({ reply, onCommand, onBusy, onMissingCoin }: { reply: Reply; 
     case "orders":
       return <OrdersCard cancelAll={reply.cancel} />;
     case "initials":
-      // Placeholder until the coach's InitialsCard (plan Task 5) works the share out from what was paid.
-      return <Said text={`To take your initials on ${reply.coin}, I need what you paid. Meanwhile:`} options={[{ label: "Sell half", command: `sell half of ${reply.coin}${reply.chain ? ` on ${reply.chain}` : ""}` }]} onCommand={onCommand} />;
+      return <InitialsCard coin={reply.coin} chain={reply.chain} onCommand={onCommand} />;
   }
 }
 

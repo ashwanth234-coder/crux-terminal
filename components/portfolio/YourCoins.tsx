@@ -15,7 +15,27 @@ const CHAIN: Record<Position["chain"], string> = { solana: "Solana", base: "Base
 const pageOf = (chain: Position["chain"], coin: string) => (chain === "solana" ? `/sol/${coin}` : chain === "base" ? `/base/${coin}` : `/bnb/${coin}`);
 const usd = (n: number) => (n >= 1 ? `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}` : `$${n.toFixed(n >= 0.01 ? 2 : 4)}`);
 
-type Row = { chain: Position["chain"]; coin: string; symbol: string; held: number; price?: number; entry?: number };
+/** One coin held. `marketCash`: the cash in its market (Solana coins); `boughtAt`: when Crux last recorded a trade in it. */
+export type Row = { chain: Position["chain"]; coin: string; symbol: string; held: number; price?: number; entry?: number; marketCash?: number; boughtAt?: number };
+
+/** The Solana coins in the login's wallet (Jupiter's holdings: every coin, also ones bought elsewhere), dust left out. */
+export function useSolanaRows(): { rows: Row[]; reading: boolean } {
+  const pos = usePositions();
+  const solWallet = useSolanaTrading(null).holdings?.wallet;
+  const jup = useQuery({ queryKey: ["your-coins-solana", solWallet], enabled: !!solWallet, refetchInterval: 30_000, queryFn: () => holdingsOf(solWallet!) });
+  const solMints = useMemo(() => [...(jup.data ?? new Map<string, bigint>()).keys()].filter((m) => !NOT_COPIED.has(m)), [jup.data]);
+  const facts = useQuery({ queryKey: ["your-coins-solana-facts", solMints.join()], enabled: solMints.length > 0, refetchInterval: 30_000, queryFn: () => solanaCoins(solMints) });
+  const rows: Row[] = solMints.flatMap((mint) => {
+    const f = facts.data?.find((c) => c.mint === mint);
+    const decimals = f?.decimals ?? 6;
+    const held = Number(jup.data!.get(mint)!) / 10 ** decimals;
+    const p = pos.positions.find((x) => x.chain === "solana" && x.coin === mint);
+    // Dust (worth under a cent) isn't a holding.
+    if (f?.price !== undefined && held * f.price < 0.01) return [];
+    return [{ chain: "solana" as const, coin: mint, symbol: f?.symbol || "COIN", held, price: f?.price, entry: p ? entryPrice(p, decimals) : undefined, marketCash: f?.liquidity, boughtAt: p?.updatedAt }];
+  });
+  return { rows, reading: (!!solWallet && jup.isLoading) || facts.isLoading };
+}
 
 /**
  * The coins in the one balance's wallets, on every chain: what each is worth now and, for coins bought through Crux, the
@@ -25,20 +45,7 @@ type Row = { chain: Position["chain"]; coin: string; symbol: string; held: numbe
 /** `compact`: the Ask Crux version (a list, each coin with buttons that send `onCommand`). */
 export function YourCoins({ compact = false, onCommand }: { compact?: boolean; onCommand?: (command: string, say?: string) => void } = {}) {
   const pos = usePositions();
-  const solWallet = useSolanaTrading(null).holdings?.wallet;
-  const jup = useQuery({ queryKey: ["your-coins-solana", solWallet], enabled: !!solWallet, refetchInterval: 30_000, queryFn: () => holdingsOf(solWallet!) });
-  const solMints = useMemo(() => [...(jup.data ?? new Map<string, bigint>()).keys()].filter((m) => !NOT_COPIED.has(m)), [jup.data]);
-  const facts = useQuery({ queryKey: ["your-coins-solana-facts", solMints.join()], enabled: solMints.length > 0, refetchInterval: 30_000, queryFn: () => solanaCoins(solMints) });
-
-  const solRows: Row[] = solMints.flatMap((mint) => {
-    const f = facts.data?.find((c) => c.mint === mint);
-    const decimals = f?.decimals ?? 6;
-    const held = Number(jup.data!.get(mint)!) / 10 ** decimals;
-    const p = pos.positions.find((x) => x.chain === "solana" && x.coin === mint);
-    // Dust (worth under a cent) isn't a holding.
-    if (f?.price !== undefined && held * f.price < 0.01) return [];
-    return [{ chain: "solana" as const, coin: mint, symbol: f?.symbol || "COIN", held, price: f?.price, entry: p ? entryPrice(p, decimals) : undefined }];
-  });
+  const { rows: solRows, reading: solReading } = useSolanaRows();
   const evm = pos.positions.filter((p) => p.chain !== "solana");
 
   // Each EVM row reads its own bag; its value and profit report back for the totals.
@@ -48,7 +55,7 @@ export function YourCoins({ compact = false, onCommand }: { compact?: boolean; o
   const value = rows.reduce((s, r) => s + (r.price !== undefined ? r.held * r.price : 0), 0);
   const withEntry = rows.filter((r) => r.entry !== undefined && r.price !== undefined);
   const pnl = withEntry.reduce((s, r) => s + pnlOf(r.held, r.price!, r.entry!).usd, 0);
-  const reading = (!!solWallet && jup.isLoading) || facts.isLoading;
+  const reading = solReading;
 
   if (compact) {
     const on = (r: Row) => ` on ${r.chain === "bsc" ? "bnb" : r.chain}`;
@@ -163,7 +170,7 @@ export function YourCoins({ compact = false, onCommand }: { compact?: boolean; o
 }
 
 /** One BNB Chain or Base coin Crux recorded buying: its bag (the wallet's balance) and price, reported as a row. */
-function EvmBag({ p, onRow }: { p: Position; onRow: (k: string, r: Row | null) => void }) {
+export function EvmBag({ p, onRow }: { p: Position; onRow: (k: string, r: Row | null) => void }) {
   const chain = p.chain === "base" ? "base" : "bnb";
   const t = useWalletTrading(chain, p.coin);
   const facts = useQuery({ queryKey: ["your-coins-evm", p.chain, p.coin], refetchInterval: 30_000, queryFn: () => bnbCoin(p.coin, p.chain === "base" ? "base" : "bsc") });
@@ -173,7 +180,7 @@ function EvmBag({ p, onRow }: { p: Position; onRow: (k: string, r: Row | null) =
   const price = facts.data?.price;
   const symbol = facts.data?.symbol ?? "COIN";
   useEffect(() => {
-    onRow(k, held === null || held <= 0 ? null : { chain: p.chain, coin: p.coin, symbol, held, price, entry: entryPrice(p, decimals) });
+    onRow(k, held === null || held <= 0 ? null : { chain: p.chain, coin: p.coin, symbol, held, price, entry: entryPrice(p, decimals), boughtAt: p.updatedAt });
   }, [k, held, price, symbol, decimals, p, onRow]);
   return null;
 }

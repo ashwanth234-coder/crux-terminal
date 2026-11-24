@@ -38,6 +38,17 @@ export function useAskCruxPlans(): boolean {
   return running.data === true && crux.loggedIn && mine.data === true;
 }
 
+/** Whether the Ask Crux coach is on for this login: the server runs it (ASK_CRUX_COACH=on) and plans are on for it. */
+export function useAskCruxCoach(): boolean {
+  const plans = useAskCruxPlans();
+  const running = useQuery({
+    queryKey: ["ask-crux-coach"],
+    staleTime: 60_000,
+    queryFn: async () => ((await (await fetch(`${RELAY_URL}/v1/health`)).json()) as { askCruxCoach?: boolean }).askCruxCoach === true,
+  });
+  return plans && running.data === true;
+}
+
 /**
  * The Desk Check for one buy (crux-solver deskcheck.ts): read by the server, all at once, while the card is open. It
  * never holds up the buy itself, which stays prepared on the usual fast path.
