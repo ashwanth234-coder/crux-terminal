@@ -231,7 +231,16 @@ export function describeCopy(r: CopyRule): string[] {
  * which/that/with…" ("buy a solana coin which is launched in 1 hour and with 50k volume"). Pure.
  */
 export function isScan(text: string): boolean {
-  return /\b(scan|watch|hunt|snipe|look for|find)\b/i.test(text) || /\b(?:a|any|some|one)\s+(?:new\s+|fresh\s+)?(?:solana\s+|sol\s+)?(?:new\s+)?(?:coin|token|memecoin|meme)s?\b/i.test(text);
+  return (
+    /\b(scan|watch|hunt|snipe|look for|find)\b/i.test(text) ||
+    /\b(?:a|any|some|one|the)\s+(?:(?:new|newest|fresh|trending|hot|hyped|young|top|random|good|newly\s+launched)\s+)?(?:solana\s+|sol\s+|base\s+|bnb\s+)?(?:new\s+)?(?:coin|token|memecoin|meme|launch|pair)s?\b/i.test(text) ||
+    /\b(?:something|anything)\b/i.test(text) ||
+    // Describing the coin instead of naming it (2026-11-24, live: "buy coin which was launched in 15 mins and has 50k
+    // volume" read "WAS" as a coin): "coin which/that…", "launched in 15 mins", "50k volume".
+    /\b(?:coin|token|memecoin|meme)s?\s+(?:which|that|with|launched|created)\b/i.test(text) ||
+    /\b(?:launched|created|listed)\s+(?:in|within|less than|under|the last|in the last)\b/i.test(text) ||
+    /\b\d+(?:\.\d+)?\s*[km]\s*(?:usd\s*)?(?:of\s+)?(?:vol|volume)\b/i.test(text)
+  );
 }
 
 /** "1 hour", "30 min" → minutes. */
@@ -257,7 +266,9 @@ export function readScan(text: string): Reply {
   const age =
     lower.match(new RegExp(`\\b(?:launched|created|listed|made|born|started)\\s+(?:in|within|in the|less than|under)?\\s*(?:the\\s+)?(?:last|past)?\\s*(\\d+(?:\\.\\d+)?)\\s*${TIME_UNIT}\\b`)) ??
     lower.match(new RegExp(`\\b(?:under|less than|below)?\\s*(\\d+(?:\\.\\d+)?)\\s*${TIME_UNIT}\\s+old\\b`));
-  const maxAgeHours = age ? minutesOf(age[1], age[2]) / 60 : SCAN_LIMITS.maxAgeHours;
+  // "just launched" / "brand new": the last hour.
+  const justNow = !age && /\b(?:just|freshly)\s+(?:launched|created|listed|dropped)\b|\bbrand[- ]new\b/.test(lower);
+  const maxAgeHours = age ? minutesOf(age[1], age[2]) / 60 : justNow ? 1 : SCAN_LIMITS.maxAgeHours;
   if (age) lower = lower.replace(age[0], " ");
 
   const dur = lower.match(new RegExp(`\\b(?:for|next|over)\\s+(?:the\\s+next\\s+)?(\\d+(?:\\.\\d+)?)\\s*${TIME_UNIT}\\b`)) ?? lower.match(/\b(\d+(?:\.\d+)?)\s*(hours?|hrs?|h|minutes?|mins?)\b/);

@@ -65,7 +65,7 @@ function shareOf(s: string): number | null {
  * never mistaken for a coin ("can you buy BT now" reads as "buy BT").
  */
 const FILLER =
-  /\b(?:(?:can|could|would|will) you|please|pls|plz|kindly|i(?:'d| would)? like to|i (?:want|wanna|need) to|i want|i wanna|for me|right now|now|immediately|asap|quickly|just|hey|hi|crux|go ahead and|let's|lets)\b[,!.]?/gi;
+  /\b(?:(?:can|could|would|will) you|please|pls|plz|kindly|i(?:'d| would)? like to|i (?:want|wanna|need) to|i want|i wanna|for me|right now|now|immediately|asap|quickly|just(?!\s+(?:launched|created|listed|dropped))|hey|hi|crux|go ahead and|let's|lets)\b[,!.]?/gi;
 /**
  * Words for symbols, so every way of saying it reads the same: "20 percent" → "20%", "double" / "2 times" → "2x",
  * "triple" → "3x", "half a dollar"-style amounts aside. Applied before anything is read.

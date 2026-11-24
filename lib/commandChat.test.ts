@@ -170,3 +170,22 @@ test("the scan's safety rules", () => {
   assert.equal(pickScanCoin([good, busier, { ...busier, mint: "C", freezeOff: false, volume1h: 900_000 }], rule, now)?.mint, "B");
   assert.equal(pickScanCoin([good], rule, now, new Set(["A"])), null);
 });
+
+test("a coin described instead of named is a scan (live 2026-11-24: 'WAS' was read as a coin)", () => {
+  const r = readMessage("buy coin which was launched in 15 mins and has 50k volume for $5 and sell with +20% profit");
+  assert.equal(r.kind, "scan");
+  if (r.kind !== "scan") return;
+  assert.equal(r.rule.usd, 5);
+  assert.equal(r.rule.minVolume, 50_000);
+  assert.equal(r.rule.maxAgeHours, 0.25);
+  assert.equal(r.rule.takeProfit, 1.2);
+  assert.equal(readMessage("buy $5 of a token that launched within the last hour").kind, "scan");
+  assert.equal(readMessage("buy $5 of a coin with 100k volume").kind, "scan");
+  assert.equal(readMessage("buy something new for $5 and sell at 2x").kind, "scan");
+  assert.equal(readMessage("buy $10 of a trending coin on base").kind, "scan");
+  const just = readMessage("i want to buy a coin that just launched with high volume for $5 and sell at 30% profit");
+  assert.ok(just.kind === "scan" && just.rule.maxAgeHours === 1 && just.rule.takeProfit === 1.3);
+  // Named coins stay plain buys.
+  assert.equal(readMessage("buy $5 of BONK").kind, "plan");
+  assert.equal(readMessage("buy $5 of WAS").kind, "plan");
+});
