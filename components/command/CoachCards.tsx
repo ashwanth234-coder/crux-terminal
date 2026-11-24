@@ -73,7 +73,7 @@ function Review({ rows, reading, onCommand }: { rows: Row[]; reading: boolean; o
     queryFn: async () => {
       const token = await getAccessToken();
       if (!token) throw new Error("Log in first.");
-      return relay<{ cards: Card[]; peaks: Record<string, number> }>("/v1/coach/cards", { token });
+      return relay<{ cards: Card[]; peaks: Record<string, number>; lossesToday?: number }>("/v1/coach/cards", { token });
     },
   });
   const plans = useQuery({
@@ -114,7 +114,8 @@ function Review({ rows, reading, onCommand }: { rows: Row[]; reading: boolean; o
     server: server.data?.cards ?? [],
     dismissed,
     boughtThisSession: boughtThisVisit(),
-    lossesToday: lossesToday(),
+    // Losses today: Ask Crux sales in this browser, or the plans' own sales on the server, whichever saw more.
+    lossesToday: Math.max(lossesToday(), server.data?.lossesToday ?? 0),
     now,
   });
   if (cards.length === 0) return null;

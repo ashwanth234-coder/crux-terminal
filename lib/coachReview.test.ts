@@ -43,3 +43,12 @@ test("taking initials: the share that gets back what was paid", () => {
   assert.equal(initialsShare(5, 5), null); // not up: nothing to take out
   assert.equal(initialsShare(5, 4), null);
 });
+
+test("server alerts that went stale, or are about coins no longer held, are dropped", () => {
+  const fresh = twoXNoPlan({ coin: BONK, price: 2, entry: 1, hasTakeProfit: false }, now - 60_000)!;
+  const old = { ...fresh, at: now - 7 * 3_600_000 }; // past its 6 h quiet period
+  const held = [row({ coin: BONK, held: 10, price: 2, entry: 1 })];
+  assert.deepEqual(rules(input({ rows: held, cashUsd: 15, server: [old] })), []);
+  assert.deepEqual(rules(input({ rows: [], cashUsd: 5, server: [fresh] })), []);
+  assert.deepEqual(rules(input({ rows: held, cashUsd: 15, server: [fresh] })), ["twoXNoPlan:BONK"]);
+});

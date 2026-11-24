@@ -26,6 +26,8 @@ test("selling slang: dump, cut, exit, paper hand, jeet, trim, moon bag", () => {
   assert.equal(t("dump half bonk"), "sell half of bonk");
   assert.equal(t("dump half of my bonk"), "sell half of bonk");
   assert.equal(t("trim half bonk"), "sell half of bonk");
+  assert.equal(t("cut half my bonk"), "sell half of bonk");
+  assert.equal(t("exit half of bonk"), "sell half of bonk");
   assert.equal(t("trim bonk"), "sell 25% of bonk");
   assert.equal(t("leave a moon bag on bonk"), "sell 85% of bonk");
   assert.equal(t("keep a moonbag of WIF"), "sell 85% of WIF");

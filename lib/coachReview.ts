@@ -2,7 +2,7 @@
  * The coach's review when Ask Crux opens (docs/superpowers/specs/2026-11-24-ask-crux-coach-design.md): the page's six
  * rules over what the trader holds, plus the server's alerts of the last day, cut to one card per coin (capCards). Pure.
  */
-import { capCards, concentration, deadBags, idleCash, noFloor, oversized, pullback, quiet, type Card, type CoinRef } from "./coach.ts";
+import { capCards, concentration, deadBags, idleCash, noFloor, oversized, pullback, quiet, QUIET_MS, type Card, type CoinRef } from "./coach.ts";
 
 export type ReviewRow = {
   coin: CoinRef;
@@ -40,7 +40,10 @@ export function reviewCards(i: ReviewInput): Card[] {
   const priced = i.rows.filter((r) => r.price !== undefined && Number.isFinite(r.price));
   const value = (r: ReviewRow) => r.held * r.price!;
   const totalUsd = i.cashUsd + priced.reduce((s, r) => s + value(r), 0);
-  const cards: (Card | null)[] = [...i.server];
+  // A server alert counts only while it is fresh (its quiet period) and the coin is still held: an old "close to your
+  // floor" after the floor already sold would be a stale sell prompt.
+  const held = new Set(priced.map((r) => coinKey(r.coin)));
+  const cards: (Card | null)[] = i.server.filter((c) => i.now - c.at < QUIET_MS[c.rule] && (!c.coin || held.has(coinKey(c.coin))));
   for (const r of priced) {
     cards.push(oversized({ coin: r.coin, valueUsd: value(r), marketCash: r.marketCash }, i.now));
     cards.push(pullback({ coin: r.coin, price: r.price, peak: i.peaks[coinKey(r.coin)] }, i.now));

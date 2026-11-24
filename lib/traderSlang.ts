@@ -21,7 +21,7 @@ const AMOUNT = String.raw`\$?\s?(\d[\d,]*(?:\.\d+)?)\s*(?:usd[ct]?|dollars?|buck
 /** Whole-message rewrites, tried in order; the first that matches wins. */
 const WHOLE: [RegExp, (m: RegExpMatchArray) => string][] = [
   [new RegExp(String.raw`^(?:ape|aping|aped|send(?:\s+it)?|sending)[,\s]+(?:in\s+)?${AMOUNT}\s+(?:into|in|on|of)\s+(.+)$`, "i"), (m) => `buy $${m[1]} of ${m[2]}`],
-  [/^(?:dump|trim|sell)\s+half\s+(?:of\s+)?(?:my\s+)?(.+)$/i, (m) => `sell half of ${m[1]}`],
+  [/^(?:dump|trim|sell|cut|exit|jeet)\s+half\s+(?:of\s+)?(?:my\s+)?(.+)$/i, (m) => `sell half of ${m[1]}`],
   [/^(?:leave|keep)\s+(?:me\s+)?(?:a\s+)?moon\s?bag\s+(?:on|of|in)\s+(?:my\s+)?(.+)$/i, (m) => `sell 85% of ${m[1]}`],
   [/^(?:dump|cut|exit|paper\s?hand|jeet)\s+(?:all\s+)?(?:of\s+)?(?:my\s+)?(.+)$/i, (m) => `sell all ${m[1]}`],
   [/^trim\s+(?:my\s+)?(.+)$/i, (m) => `sell 25% of ${m[1]}`],

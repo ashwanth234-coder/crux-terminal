@@ -22,7 +22,7 @@ import { YourCoins } from "@/components/portfolio/YourCoins";
 import { buyCheckOf } from "@/hooks/useBuyCheck";
 import { trendingSolanaCoins } from "@/lib/solanaCoins";
 import { trendingEvmCoins } from "@/lib/coinMarket";
-import { useAskCruxPlans, useDeskCheck, usePlacePlan } from "@/hooks/useTradePlans";
+import { useAskCruxCoach, useAskCruxPlans, useDeskCheck, usePlacePlan } from "@/hooks/useTradePlans";
 import { presetPlan, PRESET_NAMES, TEST_FLOOR_NAME, testFloorPlan, watchPlan } from "@/lib/tradePlan";
 import { TradePlanSection, type PlanChoice } from "@/components/command/TradePlanSection";
 import { CoachCards, InitialsCard } from "@/components/command/CoachCards";
@@ -547,6 +547,8 @@ function PlanCard({
   // Ask Crux plans (docs/ask-crux-desk-phase1.md), on when the server says so: a single confirmed buy of a coin that
   // isn't a Crux launch gets a Desk Check and, unless "No plan" is picked, exits armed from the real fill.
   const askPlans = useAskCruxPlans();
+  // A "No plan" buy is watched only for the coach (its alerts need the entry); with the coach off it stays a plain buy.
+  const coachOn = useAskCruxCoach();
   const first = steps[0];
   const firstCoin = chosen(0);
   const planEligible = askPlans && !auto && steps.length === 1 && first.kind === "buy" && firstCoin !== undefined && !firstCoin.crux;
@@ -573,7 +575,7 @@ function PlanCard({
   // The buy landed: hand its plan to the server once, with what actually filled.
   const firstOutcome = outcomes[0];
   useEffect(() => {
-    if (!planEligible || !firstOutcome?.ok || planSent.current || !firstCoin) return;
+    if (!planEligible || (planChoice === "none" && !coachOn) || !firstOutcome?.ok || planSent.current || !firstCoin) return;
     planSent.current = true;
     const entryTx = firstOutcome.entryTx;
     const preset = planChoice;
@@ -594,7 +596,7 @@ function PlanCard({
       // Watching a No plan buy is a bonus: if it can't be set (5 already watched), say nothing.
       (e: Error) => preset !== "none" && setPlanNote({ ok: false, text: `Bought, but couldn't set the plan: ${e.message.split("\n")[0]} Set exits on the coin's page.` }),
     );
-  }, [planEligible, planChoice, firstOutcome, firstCoin, buyUsd, placePlan]);
+  }, [planEligible, planChoice, coachOn, firstOutcome, firstCoin, buyUsd, placePlan]);
 
   const onStepDone = useCallback(
     (i: number, o: Outcome) => {
@@ -666,7 +668,7 @@ function PlanCard({
                 (s.kind === "wait" ? (
                   <WaitRunner seconds={s.seconds} go={active === i} onDone={(o2) => onStepDone(i, o2)} />
                 ) : (
-                  c && <Runner step={s} coin={c} go={active === i} onDone={(o2) => onStepDone(i, o2)} wantEntry={planEligible} deskUsd={planEligible ? buyUsd : undefined} />
+                  c && <Runner step={s} coin={c} go={active === i} onDone={(o2) => onStepDone(i, o2)} wantEntry={planEligible && (planChoice !== "none" || coachOn)} deskUsd={planEligible ? buyUsd : undefined} />
                 ))}
             </li>
           );
