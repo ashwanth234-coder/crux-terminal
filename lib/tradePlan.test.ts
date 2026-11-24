@@ -11,7 +11,7 @@ test("each preset makes a plan the schema accepts", () => {
   }
 });
 
-test("balanced: half at 2x, the rest trailed at 20% once TP1 fills, a -25% floor (G1)", () => {
+test("balanced: half at 2x, the rest trailed at 20% after the first sale, a -25% floor (G1)", () => {
   assert.deepEqual(presetExits("balanced"), [
     { kind: "takeProfit", id: "tp1", sellPct: 50, atMultiple: 2 },
     { kind: "trailing", id: "trail", sellPct: 50, trailPct: 20, armAfter: "tp1" },
@@ -20,7 +20,7 @@ test("balanced: half at 2x, the rest trailed at 20% once TP1 fills, a -25% floor
 });
 
 test("the one-liner matches the server's word for word", () => {
-  assert.equal(rationale("balanced", presetExits("balanced")), "Balanced: sell 50% at 2x, trail 50% at 20% once TP1 fills, floor at about -25%.");
+  assert.equal(rationale("balanced", presetExits("balanced")), "Balanced: sell 50% at 2x, trail 50% at 20% after the first sale, floor at about -25%.");
 });
 
 test("each exit reads in plain words, with the honest 'about' on the floor", () => {

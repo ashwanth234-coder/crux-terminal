@@ -12,16 +12,30 @@ export type DeskLine = { level: "green" | "amber" | "red"; text: string };
 export type DeskCheck = { level: "green" | "amber" | "red"; lines: DeskLine[]; blockers: string[]; suggestedUsd?: number; route: string; roundTripPct?: number };
 
 /**
- * Whether Ask Crux trade plans are on: the server says so in its health (ASK_CRUX_PLANS=on there), so the one switch
- * lives on the server. Off (or unreachable): the card behaves exactly as before.
+ * Whether Ask Crux trade plans are on for this login. The server's health says the feature is running (ASK_CRUX_PLANS=on);
+ * then the server says whether this account may use it (ASK_CRUX_PLANS_ALLOWLIST while plans are tested). Logged out,
+ * off or unreachable: false, and the card behaves exactly as before.
  */
 export function useAskCruxPlans(): boolean {
-  const q = useQuery({
+  const crux = useCruxAccount();
+  const { getAccessToken } = usePrivy();
+  const running = useQuery({
     queryKey: ["ask-crux-plans"],
     staleTime: 60_000,
     queryFn: async () => ((await (await fetch(`${RELAY_URL}/v1/health`)).json()) as { askCruxPlans?: boolean }).askCruxPlans === true,
   });
-  return q.data === true;
+  const mine = useQuery({
+    queryKey: ["ask-crux-plans-mine", crux.owner],
+    enabled: running.data === true && crux.loggedIn,
+    staleTime: 5 * 60_000,
+    retry: false,
+    queryFn: async () => {
+      const token = await getAccessToken();
+      if (!token) return false;
+      return (await relay<{ on?: boolean }>("/v1/order-groups/enabled", { token })).on === true;
+    },
+  });
+  return running.data === true && crux.loggedIn && mine.data === true;
 }
 
 /**
@@ -44,15 +58,16 @@ export function useDeskCheck(chain: PlanChain | null, coin: string | null, usd: 
   });
 }
 
-/** Hands a confirmed buy and its plan to the server, which arms the exits from the real fill. */
+/** Hands a confirmed buy's transaction and its plan to the server, which arms the exits from the real fill. */
 export function usePlacePlan() {
   const crux = useCruxAccount();
   const { getAccessToken } = usePrivy();
   return useCallback(
-    async (plan: TradePlan, entry: { tx: string; units: bigint }, symbol: string) => {
+    async (plan: TradePlan, entryTx: string, symbol: string) => {
       const token = await getAccessToken();
       if (!token) throw new Error("Log in first.");
-      return relay<{ group: { id: string } }>("/v1/order-groups/place", { token, plan, entryTx: entry.tx, entryUnits: entry.units.toString(), symbol, owner: crux.owner ?? undefined });
+      // The server reads what the buy brought in from this transaction itself; the page sends no size.
+      return relay<{ group: { id: string } }>("/v1/order-groups/place", { token, plan, entryTx, symbol, owner: crux.owner ?? undefined });
     },
     [getAccessToken, crux.owner],
   );

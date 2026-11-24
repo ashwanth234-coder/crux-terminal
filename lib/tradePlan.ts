@@ -70,14 +70,20 @@ export function describeExit(l: ExitLeg): string {
   return `Floor: sell everything at about −${l.dropPct}%${l.breakevenAfter ? " (moves to breakeven once the first sale fills)" : ""}`;
 }
 
+/** A take-profit's name in plain words, by its place among the plan's sales: "the first sale", "the second sale"… */
+export function saleName(id: string, exits: { kind: string; id: string }[]): string {
+  const i = exits.filter((l) => l.kind === "takeProfit").findIndex((l) => l.id === id);
+  return `the ${["first", "second", "third", "fourth", "fifth", "sixth"][i] ?? "first"} sale`;
+}
+
 /** The plan's one-liner, from its own numbers (the server writes the same). Pure. */
 export function rationale(preset: TradePlan["preset"], exits: ExitLeg[]): string {
   const parts = exits.map((l) =>
     l.kind === "takeProfit"
       ? `sell ${l.sellPct}% at ${l.atMultiple}x`
       : l.kind === "trailing"
-        ? `trail ${l.sellPct}% at ${l.trailPct}%${l.armAfter ? ` once ${l.armAfter.toUpperCase()} fills` : ""}`
-        : `floor at about -${l.dropPct}%${l.breakevenAfter ? ` (moves to breakeven after ${l.breakevenAfter.toUpperCase()})` : ""}`,
+        ? `trail ${l.sellPct}% at ${l.trailPct}%${l.armAfter ? ` after ${saleName(l.armAfter, exits)}` : ""}`
+        : `floor at about -${l.dropPct}%${l.breakevenAfter ? ` (moves to breakeven after ${saleName(l.breakevenAfter, exits)})` : ""}`,
   );
   const head = { conservative: "Conservative", balanced: "Balanced", aggressive: "Aggressive", custom: "Your plan" }[preset];
   const noStop = !exits.some((l) => l.kind === "stopLoss") ? " No stop-loss set." : "";

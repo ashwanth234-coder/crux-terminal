@@ -32,8 +32,8 @@ const SLIPPAGE_BPS = 300;
 /** How often a scan re-reads the coin lists. */
 const SCAN_EVERY_MS = 20_000;
 
-/** `entry`: a buy's transaction and the coin units it added, for an Ask Crux plan's exits. */
-type Outcome = { ok: boolean; text: string; link?: string; entry?: { tx: string; units: bigint } };
+/** `entryTx`: a buy's confirmed transaction, for an Ask Crux plan (the server reads the fill from it). */
+type Outcome = { ok: boolean; text: string; link?: string; entryTx?: string };
 
 const STARTERS: ChatOption[] = [
   { label: "buy $5 of BONK", command: "buy $5 of BONK" },
@@ -566,13 +566,13 @@ function PlanCard({
   useEffect(() => {
     if (!planEligible || planChoice === "none" || !firstOutcome?.ok || planSent.current || !firstCoin) return;
     planSent.current = true;
-    const entry = firstOutcome.entry;
+    const entryTx = firstOutcome.entryTx;
     const preset = planChoice;
     const coin = firstCoin;
     Promise.resolve()
       .then(() => {
-        if (!entry) throw new Error("I couldn't read how much landed.");
-        return placePlan(presetPlan(preset, coin.chain, coin.address, buyUsd), entry, coin.symbol);
+        if (!entryTx) throw new Error("I couldn't find the buy's transaction.");
+        return placePlan(presetPlan(preset, coin.chain, coin.address, buyUsd), entryTx, coin.symbol);
       })
       .then(
       () => setPlanNote({ ok: true, text: `Plan set: ${PRESET_NAMES[preset]}. Crux watches the price and sells for you, even with this page closed.` }),
@@ -1092,7 +1092,7 @@ export function planProblems(steps: CommandStep[], coins: (FoundCoin | undefined
   return [...p];
 }
 
-/** `wantEntry`: an Ask Crux plan rides on this buy, so the outcome also says what landed (tx and coin units). */
+/** `wantEntry`: an Ask Crux plan rides on this buy, so the outcome also carries its transaction. */
 type RunnerProps = { step: TradeStep; coin: FoundCoin; go: boolean; onDone: (o: Outcome) => void; wantEntry?: boolean };
 
 /** A wait step: counts down on the card, then lets the next step run. */
@@ -1157,19 +1157,6 @@ async function unitsOf(held: () => bigint | null | undefined, pct: number, symbo
   return pct >= 100 ? "all" : (amount * BigInt(Math.round(pct * 100))) / BigInt(10_000);
 }
 
-/**
- * What a buy added: the holding read after it, less the holding before. Unknown before (or nothing seen landing within
- * 10 s): no entry, and the plan says so rather than guessing at units.
- */
-async function entryOf(held: () => bigint | null, before: bigint | null, tx: string | undefined): Promise<Outcome["entry"]> {
-  if (before === null || !tx) return undefined;
-  const units = await waitFor(() => {
-    const h = held();
-    return h !== null && h > before ? h - before : null;
-  }, 10_000);
-  return units === null ? undefined : { tx, units };
-}
-
 /** A price order (Solana and BNB Chain coins): Crux watches the price and trades with the page closed. */
 async function placeOrder(place: (o: PlaceCoinOrder[]) => Promise<void>, s: TradeStep, c: FoundCoin, sellUnits: () => Promise<bigint | "all">): Promise<Outcome> {
   const chain = c.chain === "bnb" ? "bsc" : c.chain === "base" ? "base" : "solana";
@@ -1217,12 +1204,10 @@ function SolanaRunner({ step, coin, go, onDone, wantEntry }: RunnerProps) {
     async () => {
       if (step.kind === "buy") {
         if (!IS_TESTNET) await cash.ensure("solana", usd6);
-        const before = held.current;
         void t.buy(usd6, { slippageBps: SLIPPAGE_BPS });
         const o = await finish();
-        if (!o.ok || !wantEntry) return o;
         const r = result.current;
-        return { ...o, entry: await entryOf(() => held.current, before, r.kind === "done" ? r.signature : undefined) };
+        return wantEntry && o.ok && r.kind === "done" && r.signature ? { ...o, entryTx: r.signature } : o;
       }
       if (step.kind === "sell") {
         void t.sell(await unitsOf(() => held.current, step.pct, coin.symbol), { slippageBps: SLIPPAGE_BPS });
@@ -1266,11 +1251,9 @@ function WalletRunner({ step, coin, go, onDone, wantEntry }: RunnerProps) {
     async () => {
       if (step.kind === "buy") {
         if (!IS_TESTNET) await cash.ensure(chain, usd6);
-        const before = held.current;
         const r = await t.buy(cashUnits, SLIPPAGE_BPS);
         const o = outcome(r);
-        if (!o.ok || !wantEntry) return o;
-        return { ...o, entry: await entryOf(() => held.current, before, r?.kind === "done" ? r.hash : undefined) };
+        return wantEntry && o.ok && r?.kind === "done" ? { ...o, entryTx: r.hash } : o;
       }
       if (step.kind === "sell") return outcome(await t.sell(await unitsOf(() => held.current, step.pct, coin.symbol), SLIPPAGE_BPS));
       return placeOrder(orders.place, step, coin, () => unitsOf(() => held.current, "pct" in step ? step.pct : 100, coin.symbol));
