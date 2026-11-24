@@ -257,6 +257,9 @@ function CruxReply({ reply, onCommand, onBusy, onMissingCoin }: { reply: Reply; 
       return <TrendingCard chain={reply.chain} onCommand={onCommand} />;
     case "orders":
       return <OrdersCard cancelAll={reply.cancel} />;
+    case "initials":
+      // Placeholder until the coach's InitialsCard (plan Task 5) works the share out from what was paid.
+      return <Said text={`To take your initials on ${reply.coin}, I need what you paid. Meanwhile:`} options={[{ label: "Sell half", command: `sell half of ${reply.coin}${reply.chain ? ` on ${reply.chain}` : ""}` }]} onCommand={onCommand} />;
   }
 }
 

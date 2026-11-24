@@ -1,4 +1,5 @@
 import { parseCommand, plainSymbols, withoutFiller, type CommandChain, type CommandStep } from "./commandIntent.ts";
+import { deslang } from "./traderSlang.ts";
 
 /**
  * The conversation on top of the command reader (lib/commandIntent): every message gets a reply a trader can act on,
@@ -62,6 +63,8 @@ export type Reply =
   | { kind: "orders"; cancel: boolean }
   | { kind: "copy"; rule: CopyRule }
   | { kind: "lookup"; coin: string; chain?: CommandChain }
+  /** "take initials on BONK": sell enough to get back what was put in (the page works the share out from the entry). */
+  | { kind: "initials"; coin: string; chain?: CommandChain }
   | { kind: "scan"; rule: ScanRule }
   /** A question. `template`: the next message fills its "{}" (e.g. the coin a buy was missing). */
   | { kind: "ask"; text: string; options?: ChatOption[]; template?: string }
@@ -118,6 +121,13 @@ export function readQuestion(raw: string): Reply | null {
 
 /** Reads one chat message. `template`: a question's "{}" that this message answers. Pure, for tests. */
 export function readMessage(raw: string, template?: string): Reply {
+  // Trader slang first ("ape 5 into bonk", "leave a moon bag", "sl 20"): rewritten into the plain commands below.
+  if (!template) {
+    const slang = deslang(raw);
+    if (slang.notYet) return { kind: "error", text: slang.notYet };
+    if (slang.initials) return { kind: "initials", ...slang.initials };
+    raw = slang.text;
+  }
   // Questions about the account and the market come first (they name no coin, and "hi" mustn't vanish as filler).
   const q = template ? null : readQuestion(raw);
   if (q) return q;
