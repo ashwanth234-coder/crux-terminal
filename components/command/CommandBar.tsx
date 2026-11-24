@@ -22,6 +22,9 @@ import { YourCoins } from "@/components/portfolio/YourCoins";
 import { buyCheckOf } from "@/hooks/useBuyCheck";
 import { trendingSolanaCoins } from "@/lib/solanaCoins";
 import { trendingEvmCoins } from "@/lib/coinMarket";
+import { useAskCruxPlans, useDeskCheck, usePlacePlan } from "@/hooks/useTradePlans";
+import { presetPlan, PRESET_NAMES } from "@/lib/tradePlan";
+import { TradePlanSection, type PlanChoice } from "@/components/command/TradePlanSection";
 
 /** During the beta one buy is capped by the server (BETA_MAX_BUY_USDC); cards say so before anything is sent. */
 const BETA_MAX_BUY = 25;
@@ -29,7 +32,8 @@ const SLIPPAGE_BPS = 300;
 /** How often a scan re-reads the coin lists. */
 const SCAN_EVERY_MS = 20_000;
 
-type Outcome = { ok: boolean; text: string; link?: string };
+/** `entry`: a buy's transaction and the coin units it added, for an Ask Crux plan's exits. */
+type Outcome = { ok: boolean; text: string; link?: string; entry?: { tx: string; units: bigint } };
 
 const STARTERS: ChatOption[] = [
   { label: "buy $5 of BONK", command: "buy $5 of BONK" },
@@ -530,8 +534,25 @@ function PlanCard({
   const blocked = (checks.data ?? []).flatMap((x) => x.check.blocks.map((b) => `Crux won't buy ${x.coin.symbol}: ${b.charAt(0).toLowerCase()}${b.slice(1)}.`));
   const warned = (checks.data ?? []).flatMap((x) => x.check.warnings.map((w) => `${x.coin.symbol}: ${w}`));
   const checking = buying.length > 0 && !auto && checks.isLoading;
+
+  // Ask Crux plans (docs/ask-crux-desk-phase1.md), on when the server says so: a single confirmed buy of a coin that
+  // isn't a Crux launch gets a Desk Check and, unless "No plan" is picked, exits armed from the real fill.
+  const askPlans = useAskCruxPlans();
+  const first = steps[0];
+  const firstCoin = chosen(0);
+  const planEligible = askPlans && !auto && steps.length === 1 && first.kind === "buy" && firstCoin !== undefined && !firstCoin.crux;
+  const buyUsd = first.kind === "buy" ? first.usd : 0;
+  const [planChoice, setPlanChoice] = useState<PlanChoice>("balanced");
+  const desk = useDeskCheck(planEligible ? firstCoin!.chain : null, planEligible ? firstCoin!.address : null, buyUsd, planEligible);
+  const deskRed = planEligible && desk.data?.level === "red";
+  const placePlan = usePlacePlan();
+  const [planNote, setPlanNote] = useState<Outcome | null>(null);
+  const planSent = useRef(false);
+  const missingStop =
+    askPlans && !auto && steps.some((s) => s.kind === "buy") && steps.some((s) => s.kind === "takeProfit" || s.kind === "trailing") && !steps.some((s) => s.kind === "stopLoss");
+
   const problems = coins ? [...planProblems(steps, steps.map((_, i) => chosen(i))), ...blocked] : [];
-  const canRun = coins !== null && problems.length === 0 && crux.loggedIn && !checking && (auto || warned.length === 0 || ackWarnings);
+  const canRun = coins !== null && problems.length === 0 && crux.loggedIn && !checking && !deskRed && (auto || warned.length === 0 || ackWarnings);
   // The step running now. A scan's buy starts as soon as its coin is set (the scan itself was confirmed).
   const active = running !== null ? running : auto && canRun && outcomes.length === 0 ? 0 : null;
   const done = active === null && outcomes.length > 0;
@@ -539,6 +560,25 @@ function PlanCard({
   useEffect(() => {
     onBusy(active !== null);
   }, [active, onBusy]);
+
+  // The buy landed: hand its plan to the server once, with what actually filled.
+  const firstOutcome = outcomes[0];
+  useEffect(() => {
+    if (!planEligible || planChoice === "none" || !firstOutcome?.ok || planSent.current || !firstCoin) return;
+    planSent.current = true;
+    const entry = firstOutcome.entry;
+    const preset = planChoice;
+    const coin = firstCoin;
+    Promise.resolve()
+      .then(() => {
+        if (!entry) throw new Error("I couldn't read how much landed.");
+        return placePlan(presetPlan(preset, coin.chain, coin.address, buyUsd), entry, coin.symbol);
+      })
+      .then(
+      () => setPlanNote({ ok: true, text: `Plan set: ${PRESET_NAMES[preset]}. Crux watches the price and sells for you, even with this page closed.` }),
+      (e: Error) => setPlanNote({ ok: false, text: `Bought, but couldn't set the plan: ${e.message.split("\n")[0]} Set exits on the coin's page.` }),
+    );
+  }, [planEligible, planChoice, firstOutcome, firstCoin, buyUsd, placePlan]);
 
   const onStepDone = useCallback(
     (i: number, o: Outcome) => {
@@ -610,12 +650,25 @@ function PlanCard({
                 (s.kind === "wait" ? (
                   <WaitRunner seconds={s.seconds} go={active === i} onDone={(o2) => onStepDone(i, o2)} />
                 ) : (
-                  c && <Runner step={s} coin={c} go={active === i} onDone={(o2) => onStepDone(i, o2)} />
+                  c && <Runner step={s} coin={c} go={active === i} onDone={(o2) => onStepDone(i, o2)} wantEntry={planEligible && planChoice !== "none"} />
                 ))}
             </li>
           );
         })}
       </ol>
+      {planEligible && (
+        <TradePlanSection
+          choice={planChoice}
+          onChoice={setPlanChoice}
+          desk={desk.data}
+          deskLoading={desk.isLoading}
+          deskError={desk.isError}
+          locked={active !== null || done}
+          showDesk={crux.loggedIn}
+        />
+      )}
+      {planNote && <p className={`mt-2 text-[12.5px] ${planNote.ok ? "text-up" : "text-signal"}`}>{planNote.text}</p>}
+      {missingStop && active === null && !done && <p className="mt-3 text-[12.5px] text-signal">No stop-loss set. Add a floor, e.g. &quot;stop loss 25%&quot;, so a fall is capped.</p>}
       {problems.length > 0 && (
         <ul className="mt-3 space-y-1">
           {problems.map((p) => (
@@ -1039,7 +1092,8 @@ export function planProblems(steps: CommandStep[], coins: (FoundCoin | undefined
   return [...p];
 }
 
-type RunnerProps = { step: TradeStep; coin: FoundCoin; go: boolean; onDone: (o: Outcome) => void };
+/** `wantEntry`: an Ask Crux plan rides on this buy, so the outcome also says what landed (tx and coin units). */
+type RunnerProps = { step: TradeStep; coin: FoundCoin; go: boolean; onDone: (o: Outcome) => void; wantEntry?: boolean };
 
 /** A wait step: counts down on the card, then lets the next step run. */
 function WaitRunner({ seconds, go, onDone }: { seconds: number; go: boolean; onDone: (o: Outcome) => void }) {
@@ -1103,6 +1157,19 @@ async function unitsOf(held: () => bigint | null | undefined, pct: number, symbo
   return pct >= 100 ? "all" : (amount * BigInt(Math.round(pct * 100))) / BigInt(10_000);
 }
 
+/**
+ * What a buy added: the holding read after it, less the holding before. Unknown before (or nothing seen landing within
+ * 10 s): no entry, and the plan says so rather than guessing at units.
+ */
+async function entryOf(held: () => bigint | null, before: bigint | null, tx: string | undefined): Promise<Outcome["entry"]> {
+  if (before === null || !tx) return undefined;
+  const units = await waitFor(() => {
+    const h = held();
+    return h !== null && h > before ? h - before : null;
+  }, 10_000);
+  return units === null ? undefined : { tx, units };
+}
+
 /** A price order (Solana and BNB Chain coins): Crux watches the price and trades with the page closed. */
 async function placeOrder(place: (o: PlaceCoinOrder[]) => Promise<void>, s: TradeStep, c: FoundCoin, sellUnits: () => Promise<bigint | "all">): Promise<Outcome> {
   const chain = c.chain === "bnb" ? "bsc" : c.chain === "base" ? "base" : "solana";
@@ -1119,7 +1186,7 @@ async function placeOrder(place: (o: PlaceCoinOrder[]) => Promise<void>, s: Trad
   return { ok: true, text: "Order placed. Crux watches the price and trades for you, even with this page closed." };
 }
 
-function SolanaRunner({ step, coin, go, onDone }: RunnerProps) {
+function SolanaRunner({ step, coin, go, onDone, wantEntry }: RunnerProps) {
   const t = useSolanaTrading(coin.address);
   const cash = useCashMove();
   const orders = useCoinOrders();
@@ -1150,8 +1217,12 @@ function SolanaRunner({ step, coin, go, onDone }: RunnerProps) {
     async () => {
       if (step.kind === "buy") {
         if (!IS_TESTNET) await cash.ensure("solana", usd6);
+        const before = held.current;
         void t.buy(usd6, { slippageBps: SLIPPAGE_BPS });
-        return finish();
+        const o = await finish();
+        if (!o.ok || !wantEntry) return o;
+        const r = result.current;
+        return { ...o, entry: await entryOf(() => held.current, before, r.kind === "done" ? r.signature : undefined) };
       }
       if (step.kind === "sell") {
         void t.sell(await unitsOf(() => held.current, step.pct, coin.symbol), { slippageBps: SLIPPAGE_BPS });
@@ -1164,7 +1235,7 @@ function SolanaRunner({ step, coin, go, onDone }: RunnerProps) {
   return null;
 }
 
-function WalletRunner({ step, coin, go, onDone }: RunnerProps) {
+function WalletRunner({ step, coin, go, onDone, wantEntry }: RunnerProps) {
   const chain = coin.chain === "bnb" ? "bnb" : "base";
   const t = useWalletTrading(chain, coin.address);
   const cash = useCashMove();
@@ -1195,7 +1266,11 @@ function WalletRunner({ step, coin, go, onDone }: RunnerProps) {
     async () => {
       if (step.kind === "buy") {
         if (!IS_TESTNET) await cash.ensure(chain, usd6);
-        return outcome(await t.buy(cashUnits, SLIPPAGE_BPS));
+        const before = held.current;
+        const r = await t.buy(cashUnits, SLIPPAGE_BPS);
+        const o = outcome(r);
+        if (!o.ok || !wantEntry) return o;
+        return { ...o, entry: await entryOf(() => held.current, before, r?.kind === "done" ? r.hash : undefined) };
       }
       if (step.kind === "sell") return outcome(await t.sell(await unitsOf(() => held.current, step.pct, coin.symbol), SLIPPAGE_BPS));
       return placeOrder(orders.place, step, coin, () => unitsOf(() => held.current, "pct" in step ? step.pct : 100, coin.symbol));
