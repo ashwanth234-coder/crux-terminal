@@ -127,12 +127,12 @@ export function useWalletTrading(chain: WalletChain, coin: string | null) {
   }, [fire]);
 
   const trade = useCallback(
-    async (side: "buy" | "sell", amount: bigint | "all", slippageBps = 300) => {
+    async (side: "buy" | "sell", amount: bigint | "all", slippageBps = 300, deskUsd?: number) => {
       if (!coin) return;
       const t0 = performance.now();
       wanted.current = null;
       setResult({ kind: "busy", label: side === "buy" ? "Buying…" : "Selling…" });
-      const send = async () => relay<{ hash: string; pending?: boolean }>(`${c.path}/trade`, { token: await token(), side, coin, amount: amount.toString(), slippageBps });
+      const send = async () => relay<{ hash: string; pending?: boolean }>(`${c.path}/trade`, { token: await token(), side, coin, amount: amount.toString(), slippageBps, ...(deskUsd ? { deskCheck: deskUsd } : {}) });
       try {
         let r: { hash: string; pending?: boolean };
         try {
@@ -175,5 +175,5 @@ export function useWalletTrading(chain: WalletChain, coin: string | null) {
     [coin, token, enable, qc, c],
   );
 
-  return { holdings: holdings.data ?? null, refetch: holdings.refetch, prepare, buy: (usdt: bigint, slippageBps?: number) => trade("buy", usdt, slippageBps), sell: (amount: bigint | "all", slippageBps?: number) => trade("sell", amount, slippageBps), result };
+  return { holdings: holdings.data ?? null, refetch: holdings.refetch, prepare, buy: (usdt: bigint, slippageBps?: number, deskUsd?: number) => trade("buy", usdt, slippageBps, deskUsd), sell: (amount: bigint | "all", slippageBps?: number) => trade("sell", amount, slippageBps), result };
 }

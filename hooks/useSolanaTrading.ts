@@ -112,7 +112,7 @@ export function useSolanaTrading(mint: string | null) {
 
   /** Sends a direct trade; shows it as done the moment it's sent, then waits for Solana's confirmation. */
   const direct = useCallback(
-    async (side: "buy" | "sell", amount: bigint | "all", opts: { turbo?: boolean; slippageBps?: number }, t0: number) => {
+    async (side: "buy" | "sell", amount: bigint | "all", opts: { turbo?: boolean; slippageBps?: number; deskUsd?: number }, t0: number) => {
       preparedAt.current.delete(`${side}|${amount}|${opts.turbo === true}`);
       const r = await relay<{ signature: string; fee: string; pending?: boolean }>("/v1/solana/trade", {
         ...(await tokens()),
@@ -121,6 +121,8 @@ export function useSolanaTrading(mint: string | null) {
         amount: amount.toString(),
         turbo: opts.turbo === true,
         slippageBps: opts.slippageBps ?? 300,
+        // An Ask Crux buy whose card showed the Desk Check: the server reads its red items again before sending.
+        ...(side === "buy" && opts.deskUsd ? { deskCheck: opts.deskUsd } : {}),
       });
       const sent = { kind: "done" as const, side, how: "direct" as const, signature: r.signature, fee: BigInt(r.fee), ms: Math.round(performance.now() - t0) };
       setResult({ ...sent, confirmed: !r.pending });
@@ -135,7 +137,7 @@ export function useSolanaTrading(mint: string | null) {
   );
 
   const buy = useCallback(
-    async (usdc6: bigint, opts: { turbo?: boolean; slippageBps?: number } = {}) => {
+    async (usdc6: bigint, opts: { turbo?: boolean; slippageBps?: number; deskUsd?: number } = {}) => {
       if (!mint) return;
       const t0 = performance.now();
       const h = holdings.data;

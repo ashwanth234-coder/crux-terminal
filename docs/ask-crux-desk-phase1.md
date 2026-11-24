@@ -212,7 +212,11 @@ today's single orders.
    While testing, `ASK_CRUX_PLANS_ALLOWLIST` (comma-separated wallet addresses or Privy ids) limits the card and the
    routes to those accounts; every other visitor keeps today's card. The server reads each buy's size from its own
    confirmed transaction, never from the page.
-2. Before the first 20 testers: the server re-runs the Desk Check's red items just before the buy is sent.
+2. Before the first 20 testers: the server re-runs the Desk Check's red items just before the buy is sent. Done
+   2026-11-24: an Ask Crux buy carries `deskCheck: <usd>` and the server refuses it at send time if anything is red
+   (reusing the card's own check for 10 s). Also: plans shrink to what the wallet really holds, two readings 30 s
+   apart, and close when the coins were sold outside the plan, so a later buy is never sold by an old plan.
+   Test 2 (the forced stop) did not run: the trader sold by hand before the floor was reached.
 3. Then default-on (empty allowlist). Phase 2 only after these pass.
 
 **Estimate:** about 3-4 working sessions (server engine and tests first, then the card).

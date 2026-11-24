@@ -651,7 +651,7 @@ function PlanCard({
                 (s.kind === "wait" ? (
                   <WaitRunner seconds={s.seconds} go={active === i} onDone={(o2) => onStepDone(i, o2)} />
                 ) : (
-                  c && <Runner step={s} coin={c} go={active === i} onDone={(o2) => onStepDone(i, o2)} wantEntry={planEligible && planChoice !== "none"} />
+                  c && <Runner step={s} coin={c} go={active === i} onDone={(o2) => onStepDone(i, o2)} wantEntry={planEligible && planChoice !== "none"} deskUsd={planEligible ? buyUsd : undefined} />
                 ))}
             </li>
           );
@@ -1093,8 +1093,11 @@ export function planProblems(steps: CommandStep[], coins: (FoundCoin | undefined
   return [...p];
 }
 
-/** `wantEntry`: an Ask Crux plan rides on this buy, so the outcome also carries its transaction. */
-type RunnerProps = { step: TradeStep; coin: FoundCoin; go: boolean; onDone: (o: Outcome) => void; wantEntry?: boolean };
+/**
+ * `wantEntry`: an Ask Crux plan rides on this buy, so the outcome also carries its transaction. `deskUsd`: the card showed
+ * the Desk Check, so the server re-reads its red items right before sending the buy.
+ */
+type RunnerProps = { step: TradeStep; coin: FoundCoin; go: boolean; onDone: (o: Outcome) => void; wantEntry?: boolean; deskUsd?: number };
 
 /** A wait step: counts down on the card, then lets the next step run. */
 function WaitRunner({ seconds, go, onDone }: { seconds: number; go: boolean; onDone: (o: Outcome) => void }) {
@@ -1174,7 +1177,7 @@ async function placeOrder(place: (o: PlaceCoinOrder[]) => Promise<void>, s: Trad
   return { ok: true, text: "Order placed. Crux watches the price and trades for you, even with this page closed." };
 }
 
-function SolanaRunner({ step, coin, go, onDone, wantEntry }: RunnerProps) {
+function SolanaRunner({ step, coin, go, onDone, wantEntry, deskUsd }: RunnerProps) {
   const t = useSolanaTrading(coin.address);
   const cash = useCashMove();
   const orders = useCoinOrders();
@@ -1205,7 +1208,7 @@ function SolanaRunner({ step, coin, go, onDone, wantEntry }: RunnerProps) {
     async () => {
       if (step.kind === "buy") {
         if (!IS_TESTNET) await cash.ensure("solana", usd6);
-        void t.buy(usd6, { slippageBps: SLIPPAGE_BPS });
+        void t.buy(usd6, { slippageBps: SLIPPAGE_BPS, deskUsd });
         const o = await finish();
         const r = result.current;
         return wantEntry && o.ok && r.kind === "done" && r.signature ? { ...o, entryTx: r.signature } : o;
@@ -1221,7 +1224,7 @@ function SolanaRunner({ step, coin, go, onDone, wantEntry }: RunnerProps) {
   return null;
 }
 
-function WalletRunner({ step, coin, go, onDone, wantEntry }: RunnerProps) {
+function WalletRunner({ step, coin, go, onDone, wantEntry, deskUsd }: RunnerProps) {
   const chain = coin.chain === "bnb" ? "bnb" : "base";
   const t = useWalletTrading(chain, coin.address);
   const cash = useCashMove();
@@ -1252,7 +1255,7 @@ function WalletRunner({ step, coin, go, onDone, wantEntry }: RunnerProps) {
     async () => {
       if (step.kind === "buy") {
         if (!IS_TESTNET) await cash.ensure(chain, usd6);
-        const r = await t.buy(cashUnits, SLIPPAGE_BPS);
+        const r = await t.buy(cashUnits, SLIPPAGE_BPS, deskUsd);
         const o = outcome(r);
         return wantEntry && o.ok && r?.kind === "done" ? { ...o, entryTx: r.hash } : o;
       }
