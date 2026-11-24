@@ -46,11 +46,11 @@
   - `type Card = { rule: RuleId; coin?: CoinRef; urgency: 1 | 2 | 3; text: string; actions: CardAction[]; at: number }`
   - `const QUIET_MS: Record<RuleId, number>`: twoXNoPlan 6 h, creatorSelling 30 min, cashLeaving 30 min, nearFloor 15 min, page rules 24 h
   - Server rules: `twoXNoPlan(f: { coin; price; entry; hasTakeProfit: boolean }, now): Card | null`, `creatorSelling(f: { coin; soldPct: number; all: boolean }, now)`, `cashLeaving(f: { coin; cashNow?: number; cashHigh1h?: number }, now)`, `nearFloor(f: { coin; price?: number; floor?: number; dropPct: number }, now)`
-  - Page rules: `oversized(f: { coin; valueUsd; marketCash?: number }, now)`, `pullback(f: { coin; price?: number; peak?: number }, now)`, `noFloor(f: { coin; valueUsd; hasFloor: boolean }, now)`, `deadBags(f: { coins: { coin: CoinRef; valueUsd: number; marketCash?: number }[] }, now)`, `concentration(f: { coin; valueUsd; totalUsd }, now)`, `idleCash(f: { cashUsd; totalUsd; boughtThisSession: boolean; lossesToday: number }, now)`
+  - Page rules: `oversized(f: { coin; valueUsd; marketCash?: number }, now)`, `pullback(f: { coin; price?: number; peak?: number }, now)`, `noFloor(f: { coin; valueUsd; hasFloor: boolean }, now)`, `deadBags(f: { coins: { coin: CoinRef; valueUsd: number; heldMs?: number; pnlPct?: number; marketCash?: number }[] }, now)`, `concentration(f: { coin; valueUsd; totalUsd }, now)`, `idleCash(f: { cashUsd; totalUsd; boughtThisSession: boolean; lossesToday: number }, now)`
   - `capCards(cards: Card[]): Card[]`
   - `quiet(rule: RuleId, lastAt: number | undefined, now: number): boolean`
 
-Thresholds (spec): 2× entry; creator ≥ 20%; market cash ≥ 30% below its 1 h high; price within 5% above floor; value > 3% of market cash; price ≥ 40% under peak; no floor when value ≥ $2; dead when value < $1 or market cash < $1,000; one coin > 60% of total; idle when cash ≥ $20 and ≥ 50% of total, not when `lossesToday >= 1`.
+Thresholds (spec): 2× entry; creator ≥ 20%; market cash ≥ 30% below its 1 h high; price within 5% above floor; value > 3% of market cash; price ≥ 40% under peak; no floor when value ≥ $2; dead when (held > 24 h AND down > 65%) OR market cash < $1,000 (founder 2026-11-24: never on value alone, a $1 buy is $0.98 after fees); one coin > 60% of total; idle when cash ≥ $20 and ≥ 50% of total, not when `lossesToday >= 1`.
 
 Card text and buttons (exact copy; `$S` = symbol, `N` = rounded number). Commands use the coin address and ` on <chain>` like YourCoins does:
 - twoXNoPlan (2): "Up 2× on $S and no exit plan? Bold. Lock some in?" · Sell half (`sell half of <addr> on <chain>`), Floor at −25% (`stop loss 25% on <addr> on <chain>`)
@@ -99,6 +99,7 @@ Mapping (spec table): `ape|send|aping` `$N (into|on|in) X` → `buy $N of X`; `t
 - Test: `crux-terminal/lib/tradePlan.test.ts`, `crux-solver/scripts/ordergroups.test.ts`, `crux-solver/scripts/ordergroupsrunner.test.ts`
 
 **Interfaces:**
+- Founder 2026-11-24: at most **5 open watch-only plans per login** (the server refuses a 6th with 429 "Crux is already watching 5 coins for you."; the page stays silent); they close by themselves once sold (fitToWallet).
 - Produces: watch-only groups (`plan.exits.length === 0`, `legs: []`) that Task 4 reads; `wantEntry` now true for "none" too.
 
 - [ ] **Step 1: Failing tests**: site `watchPlan` passes the schema with `exits: []`; server pure: `nextAction(watchGroup, anyPrice) === null`; runner: a watch-only group at a −90% price sends nothing, and closes via `fitToWallet` when the wallet empties.
@@ -117,7 +118,7 @@ Mapping (spec table): `ape|send|aping` `$N (into|on|in) X` → `buy $N of X`; `t
 
 **Interfaces:**
 - Consumes: `coach.ts` rules, `capCards`, `quiet`, `QUIET_MS`; `OrderGroup` (`entryPrice`, `legs`, `status`, `decimals`, `owner`); `marketOf(chain, coin)` → `{ liquidityUsd? }`.
-- Produces: `makeCoach(d: { tell; market(chain, coin): Promise<{ liquidityUsd?: number }>; userOf(token): Promise<string>; allowed(userId): Promise<boolean>; watchCreator?(userId, owner, mint): Promise<void>; file: string; log; now? })` returning `{ onPrice(g, unitPrice), onCreatorSold(e), pollMarkets(groups), handle(body, ip) }`. `handle` returns `{ ok, cards: Card[], peaks: Record<groupId, number> }` (peaks feed Task 5's pullback rule).
+- Produces: `makeCoach(d: { tell; market(chain, coin): Promise<{ liquidityUsd?: number }>; userOf(token): Promise<string>; allowed(userId): Promise<boolean>; watchCreator?(userId, owner, mint): Promise<void>; file: string; log; now? })` returning `{ onPrice(g, unitPrice), onCreatorSold(e), pollMarkets(groups), handle(body, ip) }`. `handle` returns `{ ok, cards: Card[], peaks: Record<groupId, number> }`: every server alert is kept 24 h and shown in Ask Crux too, so it reaches the trader even with notifications blocked (founder 2026-11-24) (peaks feed Task 5's pullback rule).
 - State file `coach.json`: `{ lastSent: Record<"userId|rule|coin", number>, peaks: Record<groupId, number>, cards: Card[] (last 24 h per user) }`.
 
 Behaviour: `onPrice` keeps the per-group peak (USD per coin), and evaluates twoXNoPlan (`hasTakeProfit` = any armed takeProfit leg) and nearFloor (floor = armed stopLoss trigger). `pollMarkets` every 60 s reads market cash per watched coin, keeps a 1 h high, evaluates cashLeaving. `onCreatorSold` → creatorSelling. A card is pushed (`tell(owner, { title: card.text, body: actionsLine, url })`) only when `!quiet(rule, lastSent)`; then `lastSent` saved. When a Solana group is placed, the coach calls `watchCreator` (errors ignored: unknown creator is fine).
