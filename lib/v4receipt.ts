@@ -294,16 +294,30 @@ export function buildReceipt(o: {
 export const CLAIM_PERIOD_SEC = 30 * 86_400;
 
 /**
+ * How Crux's list file stands against the chain: "unposted" until the Safe posts a root, "match" when the file's root is
+ * the posted one, "mismatch" when they differ (the file is newer or older than what was posted; nothing in it is claimable).
+ */
+export type ListState = "unposted" | "match" | "mismatch";
+export function listState(fileRoot: string | null | undefined, reward: { posted: boolean; root?: string }): ListState {
+  if (!reward.posted) return "unposted";
+  if (!fileRoot || !reward.root || fileRoot.toLowerCase() !== reward.root.toLowerCase()) return "mismatch";
+  return "match";
+}
+
+/**
  * Whether to offer "Claim it yourself": the line exists, the list is posted, it hasn't been paid, wasn't swept to the
- * floor and the 30-day claim period (from posting) is still open.
+ * floor, the 30-day claim period (from posting) is still open, and the file's root is the one posted on chain (a proof from
+ * any other list would only revert).
  */
 export function canClaimYourself(
   line: RewardLine | null,
-  reward: { posted: boolean; swept: boolean; postedAt?: number },
+  fileRoot: string | null | undefined,
+  reward: { posted: boolean; swept: boolean; postedAt?: number; root?: string },
   claimed: boolean,
   nowSec: number = Math.floor(Date.now() / 1000),
 ): boolean {
   if (!line || !reward.posted || reward.swept || claimed) return false;
+  if (listState(fileRoot, reward) !== "match") return false;
   if (reward.postedAt && nowSec >= reward.postedAt + CLAIM_PERIOD_SEC) return false;
   return BigInt(line.amount) > BigInt(0);
 }

@@ -225,6 +225,12 @@ export type DexPair = {
 };
 
 const DEX_CHAIN: Record<ChartNetwork, string> = { solana: "solana", bsc: "bsc", base: "base" };
+/** A pool id the chart can follow on this network: any Solana id; a 20-byte address on EVM; a 32-byte V4 pool id only on Base. */
+export function poolIdOk(network: ChartNetwork, id: string): boolean {
+  if (network === "solana") return true;
+  if (/^0x[0-9a-fA-F]{40}$/.test(id)) return true;
+  return network === "base" && /^0x[0-9a-fA-F]{64}$/.test(id);
+}
 const pairCache = new Map<string, { at: number; pair: Promise<DexPair | null> }>();
 /**
  * The coin's deepest market (most money in it), with its live numbers: one read per coin every 15 s, shared by
@@ -239,8 +245,9 @@ export function deepestPair(network: ChartNetwork, token: string): Promise<DexPa
     if (!r.ok) throw new Error(`markets ${r.status}`);
     const t = token.toLowerCase();
     const pairs = ((await r.json()) as DexPair[]).filter(
-      // Pools with a 0x… address (a 32-byte id for a Uniswap V4 pool), or any Solana one: the chart's source reads those.
-      (p) => (p.baseToken.address.toLowerCase() === t || p.quoteToken.address.toLowerCase() === t) && (network === "solana" || /^0x([0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/.test(p.pairAddress)),
+      // Pools with a 0x… address (a 32-byte Uniswap V4 pool id only on Base, where Crux's V4 coins live), or any Solana
+      // one: the chart's source reads those.
+      (p) => (p.baseToken.address.toLowerCase() === t || p.quoteToken.address.toLowerCase() === t) && poolIdOk(network, p.pairAddress),
     );
     // The market trading right now (last 5 minutes, then the hour, then today; the server's live feed picks the same):
     // a coin that just moved from its pump.fun curve to PumpSwap still shows the curve as today's busiest.

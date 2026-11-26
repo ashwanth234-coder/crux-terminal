@@ -39,7 +39,7 @@ export type V4Launch = {
   holdersEth: bigint;
   /** Floors already placed (positions beyond the coin's first three). */
   floorsPlaced: number;
-  reward: { posted: boolean; pot: bigint; claimed: bigint; swept: boolean; /** unix s; set once the list is posted */ postedAt?: number };
+  reward: { posted: boolean; pot: bigint; claimed: bigint; swept: boolean; /** unix s; set once the list is posted */ postedAt?: number; /** the posted list's merkle root (zero until posted) */ root?: `0x${string}` };
 };
 
 /** The early fee at a moment: the same straight-line fall to zero the contract uses. */
@@ -110,7 +110,7 @@ export async function readV4Launch(client: Pick<PublicClient, "multicall" | "rea
     floorEth: (liq as bigint) + (floorPot as bigint),
     holdersEth: holders as bigint,
     floorsPlaced: Math.max(0, (positions as readonly unknown[]).length - 3),
-    reward: { posted: r[3] > 0, pot: r[1], claimed: r[2], swept: r[4], postedAt: Number(r[3]) },
+    reward: { posted: r[3] > 0, pot: r[1], claimed: r[2], swept: r[4], postedAt: Number(r[3]), root: r[0] as `0x${string}` },
   };
 }
 

@@ -300,7 +300,7 @@ function Desk({
           </Detail>
           {stats?.pool && (
             <Detail label="Market">
-              <a href={/^0x[0-9a-fA-F]{64}$/.test(stats.pool) ? `https://www.geckoterminal.com/base/pools/${stats.pool}` : x.account(stats.pool)} target="_blank" rel="noopener noreferrer" className="font-mono text-chrome hover:underline">
+              <a href={/^0x[0-9a-fA-F]{64}$/.test(stats.pool) ? `https://www.geckoterminal.com/${network}/pools/${stats.pool}` : x.account(stats.pool)} target="_blank" rel="noopener noreferrer" className="font-mono text-chrome hover:underline">
                 {stats.venue ?? "Pool"} · {short(stats.pool)} ↗
               </a>
             </Detail>

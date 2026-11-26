@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { deepestPair } from "./solanaCoins.ts";
+import { deepestPair, poolIdOk } from "./solanaCoins.ts";
 
 const POOL_ID = "0x6990e66bb0735bc40f042aa762b8bd3de7936a9c54f7c9594b1066e7b47aece7";
 const COIN = "0x0C959d32561DBC20FDaBd136220e177f7Bab5aFE";
@@ -28,4 +28,13 @@ test("a pair address that is neither 20 nor 32 bytes is still dropped", async ()
     [{ pairAddress: "0x1234", baseToken: { address: "0xAbCdEf0000000000000000000000000000000001" }, quoteToken: { address: WETH } }],
     async () => assert.equal(await deepestPair("base", "0xAbCdEf0000000000000000000000000000000001"), null),
   );
+});
+
+test("poolIdOk: a 32-byte V4 pool id only on Base; 20-byte addresses on every EVM network; anything on Solana", () => {
+  assert.equal(poolIdOk("base", POOL_ID), true);
+  assert.equal(poolIdOk("bsc", POOL_ID), false);
+  assert.equal(poolIdOk("bsc", WETH), true);
+  assert.equal(poolIdOk("base", WETH), true);
+  assert.equal(poolIdOk("bsc", "not-a-pool"), false);
+  assert.equal(poolIdOk("solana", "So11111111111111111111111111111111111111112"), true);
 });

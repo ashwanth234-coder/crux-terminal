@@ -10,7 +10,7 @@ import { NETWORK } from "@/lib/network";
 import { simulateThenWrite } from "@/lib/preflight";
 import { RELAY_URL } from "@/lib/readCache";
 import { V4_HOOK, V4_REWARDS, readCreator, rewardsAbi, type V4Launch } from "@/lib/v4launch";
-import { buildReceipt, canClaimYourself, fetchRewards, isAddress40, readEarlyFees, readEthUsd, readWalletPaid, receiptFor } from "@/lib/v4receipt";
+import { buildReceipt, canClaimYourself, fetchRewards, isAddress40, listState, readEarlyFees, readEthUsd, readWalletPaid, receiptFor } from "@/lib/v4receipt";
 
 type Client = Pick<PublicClient, "readContract" | "multicall" | "getLogs" | "getBlock" | "getBlockNumber">;
 
@@ -72,7 +72,10 @@ export function V4Receipt({ address, launch, client }: { address: string; launch
     ready && wallet
       ? buildReceipt({ symbol: symbol.data ?? "COIN", launch, file, wallet, logs: { earlyFees: fees.data ?? null, ...paid.data! }, ethUsd: price.data ?? null })
       : null;
-  const claimable = canClaimYourself(line, launch.reward, claimed.data === true || Boolean(receipt?.paid));
+  // The file is only good for a claim once its root is the one the Safe posted on chain.
+  const state = listState(file?.root, launch.reward);
+  const claimable = canClaimYourself(line, file?.root, launch.reward, claimed.data === true || Boolean(receipt?.paid));
+  const mismatch = Boolean(receipt && receipt.kind === "holder" && !receipt.paid && state === "mismatch");
   const mine = Boolean(connected && wallet && connected.toLowerCase() === wallet.toLowerCase());
 
   const claim = async () => {
@@ -160,12 +163,22 @@ export function V4Receipt({ address, launch, client }: { address: string; launch
           <p>Early buyers&rsquo; fees collected: {receipt.earlyFees}</p>
           <p>Creator&rsquo;s choice: {receipt.choice}</p>
           {receipt.held && <p>{receipt.held}</p>}
-          <p className="font-mono text-[13px] text-chrome">
-            {receipt.kind === "creator" ? "Your payout" : "Your share"}: {receipt.shareEth}
-            {receipt.shareUsd ? ` (${receipt.shareUsd})` : ""}
-          </p>
+          {mismatch ? (
+            <p className="text-dim">This list doesn&rsquo;t match the posted one yet.</p>
+          ) : (
+            <p className="font-mono text-[13px] text-chrome">
+              {receipt.kind === "creator" ? "Your payout" : "Your share"}: {receipt.shareEth}
+              {receipt.shareUsd ? ` (${receipt.shareUsd})` : ""}
+            </p>
+          )}
           <p>
-            {receipt.paid ? "Paid" : "Not paid yet. Crux sends it to your wallet on its own."}
+            {receipt.paid
+              ? "Paid"
+              : mismatch
+                ? "Nothing to claim from it until it does."
+                : state === "unposted"
+                  ? "Not paid yet. Waiting to be posted — then it’s sent to your wallet automatically."
+                  : "Not paid yet. Crux sends it to your wallet on its own."}
             {receipt.tx && receipt.tx !== "0x" && (
               <>
                 {" · "}

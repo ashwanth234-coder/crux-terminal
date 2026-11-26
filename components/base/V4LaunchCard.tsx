@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ComponentProps } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createPublicClient, fallback, formatEther, http, type Address } from "viem";
 import { base } from "viem/chains";
@@ -9,6 +9,8 @@ import { V4Receipt } from "@/components/base/V4Receipt";
 import { feeAt, readV4Launch, rulesText } from "@/lib/v4launch";
 
 const client = createPublicClient({ chain: base, transport: fallback(BASE_RPCS.map((u) => http(u, { timeout: 8_000 }))) });
+// The same Base reads typed without the chain's own transaction formatters (V4Receipt only reads contracts, logs and blocks).
+const receiptClient = client as unknown as ComponentProps<typeof V4Receipt>["client"];
 
 function eth(v: bigint): string {
   const n = Number(formatEther(v));
@@ -65,6 +67,12 @@ export function V4LaunchCard({ address }: { address: string }) {
           </p>
         )}
       </div>
+      {/* Anyone paid by this coin (a holder from the share, or the creator from theirs) can look up their receipt. */}
+      {(l.toHoldersBps > 0 || l.toCreatorBps > 0) && (
+        <div className="mt-3">
+          <V4Receipt address={address} launch={l} client={receiptClient} />
+        </div>
+      )}
     </section>
   );
 }

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Address, Hex } from "viem";
-import { buildReceipt, canClaimYourself, fetchRewards, fmtCoins, fmtDate, fmtEth, fmtUsd, isAddress40, paidFrom, readEthUsd, receiptFor, shortSymbol, sumFees, type RewardsFile } from "./v4receipt.ts";
+import { buildReceipt, canClaimYourself, fetchRewards, listState, fmtCoins, fmtDate, fmtEth, fmtUsd, isAddress40, paidFrom, readEthUsd, receiptFor, shortSymbol, sumFees, type RewardsFile } from "./v4receipt.ts";
 import type { V4Launch } from "./v4launch.ts";
 
 const e18 = BigInt(10) ** BigInt(18);
@@ -88,16 +88,30 @@ test("log sums", () => {
   assert.deepEqual(paidFrom([{ args: { amount: BigInt(2) }, transactionHash: TX }]), { amount: BigInt(2), tx: TX });
 });
 
-test("claim button only when the line exists, the list is posted, unpaid, not swept and inside 30 days", () => {
+test("claim button only when the line exists, the list is posted with this file's root, unpaid, not swept and inside 30 days", () => {
   const line = file.list[0];
-  const posted = { posted: true, swept: false, postedAt: 1_800_000_000 };
+  const posted = { posted: true, swept: false, postedAt: 1_800_000_000, root: file.root };
   const now = 1_800_000_100;
-  assert.equal(canClaimYourself(line, posted, false, now), true);
-  assert.equal(canClaimYourself(null, posted, false, now), false);
-  assert.equal(canClaimYourself(line, { ...posted, posted: false }, false, now), false);
-  assert.equal(canClaimYourself(line, posted, true, now), false);
-  assert.equal(canClaimYourself(line, { ...posted, swept: true }, false, now), false);
-  assert.equal(canClaimYourself(line, posted, false, 1_800_000_000 + 30 * 86_400), false, "claims close 30 days after posting");
+  assert.equal(canClaimYourself(line, file.root, posted, false, now), true);
+  assert.equal(canClaimYourself(line, file.root.toUpperCase().replace("0X", "0x"), posted, false, now), true, "root compare ignores letter case");
+  assert.equal(canClaimYourself(null, file.root, posted, false, now), false);
+  assert.equal(canClaimYourself(line, file.root, { ...posted, posted: false }, false, now), false);
+  assert.equal(canClaimYourself(line, file.root, posted, true, now), false);
+  assert.equal(canClaimYourself(line, file.root, { ...posted, swept: true }, false, now), false);
+  assert.equal(canClaimYourself(line, file.root, posted, false, 1_800_000_000 + 30 * 86_400), false, "claims close 30 days after posting");
+  const other = ("0x" + "11".repeat(32)) as Hex;
+  assert.equal(canClaimYourself(line, file.root, { ...posted, root: other }, false, now), false, "a file that doesn't match the posted root is not claimable");
+  assert.equal(canClaimYourself(line, file.root, { ...posted, root: undefined }, false, now), false, "unknown on-chain root is not claimable");
+  assert.equal(canClaimYourself(line, null, posted, false, now), false);
+});
+
+test("listState: unposted before the Safe posts, match on the same root, mismatch otherwise", () => {
+  const other = ("0x" + "11".repeat(32)) as Hex;
+  assert.equal(listState(file.root, { posted: false, root: ("0x" + "00".repeat(32)) as Hex }), "unposted");
+  assert.equal(listState(null, { posted: false }), "unposted");
+  assert.equal(listState(file.root, { posted: true, root: file.root }), "match");
+  assert.equal(listState(file.root, { posted: true, root: other }), "mismatch");
+  assert.equal(listState(undefined, { posted: true, root: other }), "mismatch");
 });
 
 test("fetchRewards: 404 is none, junk and failures are errors, malformed lines are dropped", async () => {
