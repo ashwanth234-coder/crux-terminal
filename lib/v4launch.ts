@@ -5,19 +5,24 @@ export const V4_HOOK: Address = "0x71F19f5Fa71FF21F19453d7acD625932355d60cC";
 export const V4_LOCKER: Address = "0x0184596998D4FC7242cC35dD1230f821Be2B815f";
 export const V4_REWARDS: Address = "0x4c09Ed1C6D759E91b543073e2264E856236BF430";
 
-const hookAbi = parseAbi([
+export const hookAbi = parseAbi([
   "struct Config { address coin; uint40 launchedAt; uint32 window; uint16 startBps; uint16 cruxEarlyBps; uint16 toCreatorBps; uint16 toLiquidityBps; uint16 toHoldersBps; }",
   "function configOf(address coin) view returns (Config)",
   "function liquidityPot(address coin) view returns (uint256)",
   "function holdersPot(address coin) view returns (uint256)",
+  "event EarlyFee(address indexed coin, address indexed sender, uint256 fee, uint256 toCrux, uint256 toCreator, uint256 toLiquidity, uint256 toHolders)",
+  "event CreatorClaimed(address indexed coin, address to, uint256 amount)",
 ]);
 const lockerAbi = parseAbi([
   "struct Position { int24 lo; int24 hi; bytes32 salt; }",
   "function positionsOf(address coin) view returns (Position[])",
   "function floorPot(address coin) view returns (uint256)",
 ]);
-const rewardsAbi = parseAbi([
+export const rewardsAbi = parseAbi([
   "function rewardOf(address coin) view returns (bytes32 root, uint256 pot, uint256 claimed, uint40 postedAt, bool swept)",
+  "function isClaimed(address coin, address account) view returns (bool)",
+  "function claim(address coin, address account, uint256 amount, bytes32[] proof)",
+  "event Claimed(address indexed coin, address indexed account, uint256 amount)",
 ]);
 
 export type V4Launch = {

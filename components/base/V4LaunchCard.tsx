@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createPublicClient, fallback, formatEther, http, type Address } from "viem";
 import { base } from "viem/chains";
 import { BASE_RPCS, NETWORK } from "@/lib/network";
+import { V4Receipt } from "@/components/base/V4Receipt";
 import { feeAt, readV4Launch, rulesText } from "@/lib/v4launch";
 
 const client = createPublicClient({ chain: base, transport: fallback(BASE_RPCS.map((u) => http(u, { timeout: 8_000 }))) });
