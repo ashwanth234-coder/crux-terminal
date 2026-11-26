@@ -17,6 +17,7 @@ const lockerAbi = parseAbi([
   "struct Position { int24 lo; int24 hi; bytes32 salt; }",
   "function positionsOf(address coin) view returns (Position[])",
   "function floorPot(address coin) view returns (uint256)",
+  "function creatorOf(address coin) view returns (address)",
 ]);
 export const rewardsAbi = parseAbi([
   "function rewardOf(address coin) view returns (bytes32 root, uint256 pot, uint256 claimed, uint40 postedAt, bool swept)",
@@ -38,7 +39,7 @@ export type V4Launch = {
   holdersEth: bigint;
   /** Floors already placed (positions beyond the coin's first three). */
   floorsPlaced: number;
-  reward: { posted: boolean; pot: bigint; claimed: bigint; swept: boolean };
+  reward: { posted: boolean; pot: bigint; claimed: bigint; swept: boolean; /** unix s; set once the list is posted */ postedAt?: number };
 };
 
 /** The early fee at a moment: the same straight-line fall to zero the contract uses. */
@@ -109,6 +110,15 @@ export async function readV4Launch(client: Pick<PublicClient, "multicall" | "rea
     floorEth: (liq as bigint) + (floorPot as bigint),
     holdersEth: holders as bigint,
     floorsPlaced: Math.max(0, (positions as readonly unknown[]).length - 3),
-    reward: { posted: r[3] > 0, pot: r[1], claimed: r[2], swept: r[4] },
+    reward: { posted: r[3] > 0, pot: r[1], claimed: r[2], swept: r[4], postedAt: Number(r[3]) },
   };
+}
+
+/** The coin's current creator, per the locker (where the creator's payout goes); null when it can't be read. */
+export async function readCreator(client: Pick<PublicClient, "readContract">, coin: Address): Promise<Address | null> {
+  try {
+    return await client.readContract({ address: V4_LOCKER, abi: lockerAbi, functionName: "creatorOf", args: [coin] });
+  } catch {
+    return null;
+  }
 }

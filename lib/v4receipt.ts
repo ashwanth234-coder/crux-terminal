@@ -1,4 +1,5 @@
 import { formatEther, formatUnits, getAbiItem, type Address, type Hex, type PublicClient } from "viem";
+import { ttlCache } from "./ttlCache.ts";
 import { ETH_USD_FEED, ethUsdFeedAbi } from "./v4create.ts";
 import { hookAbi, rewardsAbi, rulesText, type V4Launch } from "./v4launch.ts";
 
@@ -34,16 +35,40 @@ export function receiptFor(file: RewardsFile | null | undefined, wallet: string 
   return file.list.find((l) => l.account.toLowerCase() === w) ?? null;
 }
 
-/** Reads a coin's list from the relay; null when there is none yet (404) or it can't be read. */
-export async function fetchRewards(relay: string, coin: string, fetcher: typeof fetch = fetch): Promise<RewardsFile | null> {
-  if (!isAddress40(coin)) return null;
+const DIGITS = /^\d+$/;
+const HEX = /^0x[0-9a-fA-F]*$/;
+
+/** A list line that is safe to turn into BigInts and send as a claim; anything else is dropped. */
+function goodLine(l: unknown): l is RewardLine {
+  const x = l as Partial<RewardLine> | null;
+  return (
+    !!x &&
+    isAddress40(x.account) &&
+    typeof x.amount === "string" &&
+    DIGITS.test(x.amount) &&
+    typeof x.avgBalance === "string" &&
+    DIGITS.test(x.avgBalance) &&
+    typeof x.endBalance === "string" &&
+    DIGITS.test(x.endBalance) &&
+    Array.isArray(x.proof) &&
+    x.proof.every((p) => typeof p === "string" && HEX.test(p))
+  );
+}
+
+/** "ok" with the list, "none" when there is no list yet (404), "error" when Crux couldn't be reached or sent junk. */
+export type RewardsResult = { status: "ok"; file: RewardsFile } | { status: "none" } | { status: "error" };
+
+export async function fetchRewards(relay: string, coin: string, fetcher: typeof fetch = fetch): Promise<RewardsResult> {
+  if (!isAddress40(coin)) return { status: "none" };
   try {
     const r = await fetcher(`${relay.replace(/\/$/, "")}/v1/v4/rewards/${coin}`);
-    if (!r.ok) return null;
+    if (r.status === 404) return { status: "none" };
+    if (!r.ok) return { status: "error" };
     const j = (await r.json()) as RewardsFile;
-    return j && Array.isArray(j.list) ? j : null;
+    if (!j || !Array.isArray(j.list)) return { status: "error" };
+    return { status: "ok", file: { ...j, list: j.list.filter(goodLine) } };
   } catch {
-    return null;
+    return { status: "error" };
   }
 }
 
@@ -73,6 +98,12 @@ export function fmtDate(sec: number): string {
   return new Date(sec * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 }
 
+/** The coin's ticker as shown on the card: no leading $, at most 12 characters. */
+export function shortSymbol(symbol: string): string {
+  const t = symbol.replace(/^\$/, "");
+  return t.length > 12 ? `${t.slice(0, 12)}…` : t;
+}
+
 /* ---- Logs ---- */
 
 export type Paid = { amount: bigint; tx: Hex };
@@ -94,8 +125,12 @@ type LogClient = {
 const CHUNK = BigInt(45_000);
 const CONCURRENCY = 4;
 
-/** The first block at or after `ts` (binary search on real block times). */
+const blockMemo = ttlCache<bigint>(500, 6 * 3_600_000);
+/** The first block at or after `ts` (binary search on real block times). Past answers don't change, so they're remembered. */
 export async function blockAtOrAfter(client: LogClient, ts: number, head: bigint): Promise<bigint> {
+  const settled = ts < Date.now() / 1000 - 120;
+  const hit = settled ? blockMemo.get(String(ts)) : undefined;
+  if (hit !== undefined) return hit;
   let lo = BigInt(0);
   let hi = head;
   while (lo < hi) {
@@ -104,6 +139,7 @@ export async function blockAtOrAfter(client: LogClient, ts: number, head: bigint
     if (Number(b.timestamp) >= ts) hi = mid;
     else lo = mid + BigInt(1);
   }
+  if (settled) blockMemo.set(String(ts), lo);
   return lo;
 }
 
@@ -138,47 +174,55 @@ export function paidFrom(logs: { args: { amount?: bigint }; transactionHash: Hex
   return { amount, tx: (logs[logs.length - 1].transactionHash ?? "0x") as Hex };
 }
 
+const feeMemo = ttlCache<bigint>(500, 24 * 3_600_000);
+
+/** Early fees paid in the launch window, summed. Once the window is over the sum is final and kept; null when unreadable. */
+export async function readEarlyFees(client: LogClient, hook: Address, coin: Address, launch: Pick<V4Launch, "launchedAt" | "windowSec">): Promise<bigint | null> {
+  const endSec = launch.launchedAt + launch.windowSec + 60;
+  const final = endSec < Date.now() / 1000 - 120;
+  const key = coin.toLowerCase();
+  const hit = final ? feeMemo.get(key) : undefined;
+  if (hit !== undefined) return hit;
+  try {
+    const head = await client.getBlockNumber();
+    const [from, to] = await Promise.all([blockAtOrAfter(client, launch.launchedAt, head), blockAtOrAfter(client, endSec, head)]);
+    const logs = await scan(from, to, (a, b) => client.getLogs({ address: hook, event: earlyFeeEvent, args: { coin }, fromBlock: a, toBlock: b }));
+    const sum = sumFees(logs as unknown as { args: { fee?: bigint } }[]);
+    if (final) feeMemo.set(key, sum);
+    return sum;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Reads what the receipt needs from chain logs: the early fees paid in the launch window, the wallet's holder payout
- * (Claimed) and the creator's own payouts (CreatorClaimed). Each part fails alone: a missing read shows as "—".
+ * What one wallet was paid: its holder payout (Claimed, scanned from the snapshot onward) and the creator's own
+ * payouts (CreatorClaimed paid to it). Each part fails alone and reads as "nothing found".
  */
-export async function readReceiptLogs(
+export async function readWalletPaid(
   client: LogClient,
   hook: Address,
   rewards: Address,
   coin: Address,
-  wallet: Address | null,
-  launch: Pick<V4Launch, "launchedAt" | "windowSec">,
+  wallet: Address,
+  launch: Pick<V4Launch, "launchedAt">,
   paidFromSec: number,
-): Promise<ReceiptLogs> {
-  const out: ReceiptLogs = { earlyFees: null, holderPaid: null, creatorPaid: null };
+): Promise<{ holderPaid: Paid | null; creatorPaid: Paid | null }> {
+  const out: { holderPaid: Paid | null; creatorPaid: Paid | null } = { holderPaid: null, creatorPaid: null };
   let head: bigint;
   try {
     head = await client.getBlockNumber();
   } catch {
     return out;
   }
-  let launchBlock: bigint | null = null;
-  try {
-    launchBlock = await blockAtOrAfter(client, launch.launchedAt, head);
-  } catch {}
-  const fromLaunch = launchBlock ?? BigInt(0);
+  const fromLaunch = await blockAtOrAfter(client, launch.launchedAt, head).catch(() => BigInt(0));
   await Promise.all([
     (async () => {
-      if (launchBlock === null) return;
-      // Early fees only exist inside the window: one short read.
-      const endBlock = await blockAtOrAfter(client, launch.launchedAt + launch.windowSec + 60, head);
-      const logs = await scan(fromLaunch, endBlock, (a, b) => client.getLogs({ address: hook, event: earlyFeeEvent, args: { coin }, fromBlock: a, toBlock: b }));
-      out.earlyFees = sumFees(logs as unknown as { args: { fee?: bigint } }[]);
-    })().catch(() => {}),
-    (async () => {
-      if (!wallet) return;
       const start = (await blockAtOrAfter(client, paidFromSec, head).catch(() => fromLaunch)) || fromLaunch;
       const logs = await scan(start, head, (a, b) => client.getLogs({ address: rewards, event: claimedEvent, args: { coin, account: wallet }, fromBlock: a, toBlock: b }));
       out.holderPaid = paidFrom(logs as unknown as Parameters<typeof paidFrom>[0]);
     })().catch(() => {}),
     (async () => {
-      if (!wallet) return;
       const logs = await scan(fromLaunch, head, (a, b) => client.getLogs({ address: hook, event: creatorClaimedEvent, args: { coin }, fromBlock: a, toBlock: b }));
       const mine = (logs as unknown as { args: { to?: Address; amount?: bigint }; transactionHash: Hex | null }[]).filter((l) => l.args.to?.toLowerCase() === wallet.toLowerCase());
       out.creatorPaid = paidFrom(mine);
@@ -196,6 +240,8 @@ export type Receipt = {
   /** "—" when it can't be read. */
   earlyFees: string;
   choice: string;
+  /** Holders only: the average held through day one, e.g. "1.25 million". */
+  heldAmount: string | null;
   /** Holders only: "You held an average of X $COIN through day one". */
   held: string | null;
   shareEth: string;
@@ -217,22 +263,23 @@ export function buildReceipt(o: {
   ethUsd: number | null;
 }): Receipt | null {
   const line = receiptFor(o.file, o.wallet);
-  const sym = `$${o.symbol.replace(/^\$/, "")}`;
-  const rules = rulesText(o.launch);
+  const sym = `$${shortSymbol(o.symbol)}`;
   const base = {
     coin: sym,
     launchDate: fmtDate(o.launch.launchedAt),
     earlyFees: o.logs.earlyFees === null ? "—" : fmtEth(o.logs.earlyFees),
-    choice: rules.join(" "),
+    choice: rulesText(o.launch).join(" "),
   };
   const usd = (wei: bigint) => fmtUsd(o.ethUsd === null ? null : Number(formatEther(wei)) * o.ethUsd);
   if (line) {
     const amount = BigInt(line.amount);
+    const heldAmount = fmtCoins(BigInt(line.avgBalance));
     const paid = o.logs.holderPaid;
     return {
       ...base,
       kind: "holder",
-      held: `You held an average of ${fmtCoins(BigInt(line.avgBalance))} ${sym} through day one`,
+      heldAmount,
+      held: `You held an average of ${heldAmount} ${sym} through day one`,
       shareEth: fmtEth(amount),
       shareUsd: usd(amount),
       paid: paid !== null,
@@ -240,19 +287,32 @@ export function buildReceipt(o: {
     };
   }
   const cp = o.logs.creatorPaid;
-  if (cp) return { ...base, kind: "creator", held: null, shareEth: fmtEth(cp.amount), shareUsd: usd(cp.amount), paid: true, tx: cp.tx };
+  if (cp) return { ...base, kind: "creator", heldAmount: null, held: null, shareEth: fmtEth(cp.amount), shareUsd: usd(cp.amount), paid: true, tx: cp.tx };
   return null;
 }
 
-/** Whether to offer "Claim it yourself": the line exists, the list is posted and it hasn't been paid. */
-export function canClaimYourself(line: RewardLine | null, posted: boolean, claimed: boolean): boolean {
-  return Boolean(line && posted && !claimed && BigInt(line.amount) > BigInt(0));
+export const CLAIM_PERIOD_SEC = 30 * 86_400;
+
+/**
+ * Whether to offer "Claim it yourself": the line exists, the list is posted, it hasn't been paid, wasn't swept to the
+ * floor and the 30-day claim period (from posting) is still open.
+ */
+export function canClaimYourself(
+  line: RewardLine | null,
+  reward: { posted: boolean; swept: boolean; postedAt?: number },
+  claimed: boolean,
+  nowSec: number = Math.floor(Date.now() / 1000),
+): boolean {
+  if (!line || !reward.posted || reward.swept || claimed) return false;
+  if (reward.postedAt && nowSec >= reward.postedAt + CLAIM_PERIOD_SEC) return false;
+  return BigInt(line.amount) > BigInt(0);
 }
 
-/** ETH's price in dollars from Chainlink on Base, or null when it can't be read. */
-export async function readEthUsd(client: Pick<PublicClient, "readContract">): Promise<number | null> {
+/** ETH's price in dollars from Chainlink on Base; null when it can't be read or the answer is over 3 hours old. */
+export async function readEthUsd(client: Pick<PublicClient, "readContract">, nowSec: number = Math.floor(Date.now() / 1000)): Promise<number | null> {
   try {
-    const [, answer] = await client.readContract({ address: ETH_USD_FEED, abi: ethUsdFeedAbi, functionName: "latestRoundData" });
+    const [, answer, , updatedAt] = await client.readContract({ address: ETH_USD_FEED, abi: ethUsdFeedAbi, functionName: "latestRoundData" });
+    if (nowSec - Number(updatedAt) > 3 * 3600) return null;
     const n = Number(answer) / 1e8;
     return n > 0 ? n : null;
   } catch {

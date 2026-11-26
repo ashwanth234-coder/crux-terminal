@@ -9,14 +9,15 @@ import { waitForTransactionReceipt } from "wagmi/actions";
 import { NETWORK } from "@/lib/network";
 import { simulateThenWrite } from "@/lib/preflight";
 import { RELAY_URL } from "@/lib/readCache";
-import { V4_HOOK, V4_REWARDS, rewardsAbi, type V4Launch } from "@/lib/v4launch";
-import { buildReceipt, canClaimYourself, fetchRewards, isAddress40, readEthUsd, readReceiptLogs, receiptFor } from "@/lib/v4receipt";
+import { V4_HOOK, V4_REWARDS, readCreator, rewardsAbi, type V4Launch } from "@/lib/v4launch";
+import { buildReceipt, canClaimYourself, fetchRewards, isAddress40, readEarlyFees, readEthUsd, readWalletPaid, receiptFor } from "@/lib/v4receipt";
 
 type Client = Pick<PublicClient, "readContract" | "multicall" | "getLogs" | "getBlock" | "getBlockNumber">;
 
 /**
  * "Paid to holders: check your wallet": the coin's payout receipt for a wallet, plus one tap to share it as an image.
  * Crux sends the payouts itself; "Claim it yourself" only shows for a share that is posted and still unpaid.
+ * Nothing but the (cheap) list is read until a wallet is entered, and no log is scanned for a wallet with no share.
  */
 export function V4Receipt({ address, launch, client }: { address: string; launch: V4Launch; client: Client }) {
   const { address: connected, chainId } = useConnection();
@@ -27,23 +28,34 @@ export function V4Receipt({ address, launch, client }: { address: string; launch
   useEffect(() => {
     if (connected && !touched) setTyped(connected);
   }, [connected, touched]);
-  const wallet = isAddress40(typed.trim()) ? (typed.trim() as Address) : null;
+  const wallet = isAddress40(typed.trim()) ? getAddress(typed.trim()) : null;
   const coin = getAddress(address);
 
-  const file = useQuery({ queryKey: ["v4-rewards", coin], queryFn: () => fetchRewards(RELAY_URL, coin), refetchInterval: 60_000 });
+  const list = useQuery({ queryKey: ["v4-rewards", coin], queryFn: () => fetchRewards(RELAY_URL, coin), refetchInterval: 60_000 });
+  const file = list.data?.status === "ok" ? list.data.file : null;
+  const line = receiptFor(file, wallet);
+  const creator = useQuery({ queryKey: ["v4-creator", coin], enabled: Boolean(wallet), staleTime: 300_000, queryFn: () => readCreator(client, coin) });
+  const isCreator = Boolean(wallet && creator.data && creator.data.toLowerCase() === wallet.toLowerCase());
+  const listKnown = list.data !== undefined && list.data.status !== "error";
+  /** Only a wallet that has a line (or is the creator) has anything to look up on chain. */
+  const hasReceipt = Boolean(wallet && listKnown && !creator.isPending && (line || isCreator));
+
   const symbol = useQuery({
     queryKey: ["v4-symbol", coin],
+    enabled: hasReceipt,
     staleTime: Infinity,
     queryFn: () => client.readContract({ address: coin, abi: erc20Abi, functionName: "symbol" }).catch(() => "COIN"),
   });
-  const price = useQuery({ queryKey: ["eth-usd-feed"], staleTime: 60_000, queryFn: () => readEthUsd(client) });
-  const logs = useQuery({
-    queryKey: ["v4-receipt-logs", coin, wallet],
-    enabled: launch.windowSec > 0,
+  const price = useQuery({ queryKey: ["eth-usd-feed"], enabled: hasReceipt, staleTime: 60_000, queryFn: () => readEthUsd(client) });
+  // The same for every wallet: read once per coin.
+  const fees = useQuery({ queryKey: ["v4-early-fees", coin], enabled: hasReceipt, staleTime: 300_000, queryFn: () => readEarlyFees(client, V4_HOOK, coin, launch) });
+  const snapshotAt = file?.snapshotAt ?? launch.launchedAt + 86_400;
+  const paid = useQuery({
+    queryKey: ["v4-wallet-paid", coin, wallet, snapshotAt],
+    enabled: hasReceipt,
     staleTime: 30_000,
-    queryFn: () => readReceiptLogs(client, V4_HOOK, V4_REWARDS, coin, wallet, launch, file.data?.snapshotAt ?? launch.launchedAt + 86_400),
+    queryFn: () => readWalletPaid(client, V4_HOOK, V4_REWARDS, coin, wallet as Address, launch, snapshotAt),
   });
-  const line = receiptFor(file.data, wallet);
   const claimed = useQuery({
     queryKey: ["v4-claimed", coin, wallet],
     enabled: Boolean(line),
@@ -55,15 +67,16 @@ export function V4Receipt({ address, launch, client }: { address: string; launch
   const [error, setError] = useState<string | null>(null);
   if (NETWORK.testnet) return null;
 
+  const ready = hasReceipt && paid.data && !fees.isPending && !symbol.isPending;
   const receipt =
-    wallet && logs.data
-      ? buildReceipt({ symbol: symbol.data ?? "COIN", launch, file: file.data ?? null, wallet, logs: logs.data, ethUsd: price.data ?? null })
+    ready && wallet
+      ? buildReceipt({ symbol: symbol.data ?? "COIN", launch, file, wallet, logs: { earlyFees: fees.data ?? null, ...paid.data! }, ethUsd: price.data ?? null })
       : null;
-  // A paid claim is also what isClaimed says: show "Paid" the moment the chain does.
-  const claimable = canClaimYourself(line, launch.reward.posted, claimed.data === true || Boolean(receipt?.paid));
+  const claimable = canClaimYourself(line, launch.reward, claimed.data === true || Boolean(receipt?.paid));
+  const mine = Boolean(connected && wallet && connected.toLowerCase() === wallet.toLowerCase());
 
   const claim = async () => {
-    if (!connected || !line || !wallet) return;
+    if (!connected || !line) return;
     setBusy(true);
     setError(null);
     try {
@@ -72,12 +85,12 @@ export function V4Receipt({ address, launch, client }: { address: string; launch
         address: V4_REWARDS,
         abi: rewardsAbi,
         functionName: "claim",
-        args: [coin, wallet, BigInt(line.amount), line.proof],
+        args: [coin, getAddress(line.account), BigInt(line.amount), line.proof],
         chainId: base.id,
       });
       await waitForTransactionReceipt(config, { hash, chainId: base.id });
       void claimed.refetch();
-      void logs.refetch();
+      void paid.refetch();
     } catch (e) {
       setError((e as Error).message.split("\n")[0]);
     } finally {
@@ -95,12 +108,15 @@ export function V4Receipt({ address, launch, client }: { address: string; launch
         await navigator.share({ files: [f], text: `My ${receipt?.coin ?? "coin"} payout on Crux` });
         return;
       }
+      const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
+      a.href = url;
       a.download = "crux-receipt.png";
       a.click();
-      URL.revokeObjectURL(a.href);
-    } catch {
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch (e) {
+      // Closing the share sheet is not an error.
+      if ((e as Error)?.name === "AbortError") return;
       window.open(imageUrl, "_blank", "noopener");
     }
   };
@@ -120,11 +136,22 @@ export function V4Receipt({ address, launch, client }: { address: string; launch
         className="mt-2 w-full rounded-lg border border-line bg-transparent px-2.5 py-1.5 font-mono text-[11.5px] text-chrome outline-none focus:border-accent"
       />
       {!wallet && typed.trim() !== "" && <p className="mt-2 text-[12px] text-dim">That doesn&rsquo;t look like a wallet address.</p>}
-      {wallet && !file.isPending && !file.data && !receipt && (
-        <p className="mt-2 text-[12px] text-dim">The holders&rsquo; list isn&rsquo;t ready yet. It&rsquo;s posted after the first 24 hours.</p>
+      {wallet && list.data?.status === "error" && (
+        <p className="mt-2 text-[12px] text-dim">
+          Couldn&rsquo;t reach Crux just now.{" "}
+          <button type="button" className="underline" onClick={() => void list.refetch()}>
+            Try again
+          </button>
+        </p>
       )}
-      {wallet && file.data && !line && logs.data && !receipt && <p className="mt-2 text-[12px] text-dim">This wallet has no share on this coin.</p>}
-      {wallet && line && !receipt && logs.isPending && <p className="mt-2 text-[12px] text-dim">Reading your receipt…</p>}
+      {wallet && list.data?.status === "none" && !isCreator && (
+        <p className="mt-2 text-[12px] text-dim">The holders&rsquo; list isn&rsquo;t posted yet. It&rsquo;s posted after the first 24 hours.</p>
+      )}
+      {wallet && listKnown && !creator.isPending && !line && !isCreator && list.data?.status === "ok" && (
+        <p className="mt-2 text-[12px] text-dim">This wallet has no share on this coin.</p>
+      )}
+      {hasReceipt && !receipt && (paid.isPending || fees.isPending) && <p className="mt-2 text-[12px] text-dim">Reading your receipt…</p>}
+      {hasReceipt && isCreator && !line && paid.data && !receipt && <p className="mt-2 text-[12px] text-dim">No creator payout has been sent to this wallet yet.</p>}
       {receipt && (
         <div className="mt-3 space-y-1 text-[12.5px]">
           <p className="font-medium text-chrome">
@@ -158,7 +185,7 @@ export function V4Receipt({ address, launch, client }: { address: string; launch
             disabled={busy || !connected}
             className="rounded-lg border border-line px-3 py-1.5 text-[12px] text-chrome disabled:opacity-50"
           >
-            {busy ? "Claiming…" : connected ? "Claim it yourself" : "Connect a wallet to claim it yourself"}
+            {busy ? "Claiming…" : !connected ? "Connect a wallet to claim" : mine ? "Claim it yourself" : "Claim for this wallet (you pay the gas)"}
           </button>
         )}
         {receipt && (
