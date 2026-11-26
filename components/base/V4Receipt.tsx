@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { erc20Abi, getAddress, type Address, type PublicClient } from "viem";
 import { base } from "viem/chains";
@@ -23,11 +23,10 @@ export function V4Receipt({ address, launch, client }: { address: string; launch
   const { address: connected, chainId } = useConnection();
   const config = useConfig();
   const { mutateAsync: switchChain } = useSwitchChain();
-  const [typed, setTyped] = useState("");
+  const [edited, setTyped] = useState("");
   const [touched, setTouched] = useState(false);
-  useEffect(() => {
-    if (connected && !touched) setTyped(connected);
-  }, [connected, touched]);
+  // The connected wallet fills the box until the visitor types their own.
+  const typed = touched ? edited : (connected ?? edited);
   const wallet = isAddress40(typed.trim()) ? getAddress(typed.trim()) : null;
   const coin = getAddress(address);
 
