@@ -14,6 +14,10 @@ function eth(v: bigint): string {
   return `${n === 0 ? "0" : n < 0.0001 ? "<0.0001" : n.toFixed(4).replace(/\.?0+$/, "")} ETH`;
 }
 
+function fmtFee(bps: number): string {
+  return bps >= 100 ? `${Math.round(bps / 100)}%` : `${(bps / 100).toFixed(1)}%`;
+}
+
 function clock(sec: number): string {
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 }
@@ -44,16 +48,21 @@ export function V4LaunchCard({ address }: { address: string }) {
       <div className="mt-2 space-y-1 font-mono text-[11.5px]">
         {l.windowSec > 0 && (
           <p>
-            {live ? `Early fee now: ${(feeAt(l, now) / 100).toFixed(0)}% · ${clock(left)} left` : "Early fee: over, the normal 1% applies"}
+            {live ? `Early fee now: ${fmtFee(feeAt(l, now))} · ${clock(left)} left` : "Early fee: over, the normal 1% applies"}
           </p>
         )}
         {l.toLiquidityBps > 0 && (
           <p>
-            Locked floor: {l.floorsPlaced > 0 ? "placed" : "not yet"}
+            {l.floorsPlaced > 0 ? "Locked floor: added" : "Locked floor: not added yet. It's added after the early fee ends."}
             {l.floorEth > BigInt(0) ? ` · ${eth(l.floorEth)} waiting to be added` : ""}
           </p>
         )}
-        {l.toHoldersBps > 0 && <p>Holders&rsquo; share: {eth(l.holdersEth)} (paid to holders after 24 hours)</p>}
+        {l.toHoldersBps > 0 && (
+          <p>
+            Holders&rsquo; share: {eth(l.reward.posted ? l.reward.pot : l.holdersEth)}
+            {!l.reward.posted ? " (paid to holders after 24 hours)" : l.reward.swept || (l.reward.pot > BigInt(0) && l.reward.claimed >= l.reward.pot) ? " · paid out" : " · being paid to holders"}
+          </p>
+        )}
       </div>
     </section>
   );

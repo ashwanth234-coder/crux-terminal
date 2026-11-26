@@ -1,10 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { feeAt, rulesText, type V4Launch } from "./v4launch.ts";
+import { feeAt, readV4Launch, rulesText, type V4Launch } from "./v4launch.ts";
 
 const base: V4Launch = {
   launchedAt: 1000, windowSec: 300, startBps: 5000, cruxEarlyBps: 0, toCreatorBps: 0, toLiquidityBps: 10000, toHoldersBps: 0,
-  feeBpsNow: 0, floorEth: BigInt(0), holdersEth: BigInt(0), creatorEth: BigInt(0), floorsPlaced: 0, reward: { posted: false, pot: BigInt(0), claimed: BigInt(0) },
+  floorEth: BigInt(0), holdersEth: BigInt(0), floorsPlaced: 0, reward: { posted: false, pot: BigInt(0), claimed: BigInt(0), swept: false },
 };
 
 test("the early fee starts at the start rate, halves at half the window, and is gone after it", () => {
@@ -28,4 +28,20 @@ test("rules say half to the creator, half to holders", () => {
 
 test("no early fee window", () => {
   assert.deepEqual(rulesText({ ...base, windowSec: 0, startBps: 0 }), ["No early fee: everyone pays the normal 1%."]);
+});
+
+test("Crux's share comes off the top, then the rest follows the creator's mix", () => {
+  const c = { ...base, cruxEarlyBps: 1000 };
+  assert.deepEqual(rulesText(c), ["Early buyers pay a fee for 5 minutes.", "10% of it goes to Crux; the rest goes all to this coin's locked floor."]);
+  assert.equal(rulesText({ ...c, toLiquidityBps: 5000, toHoldersBps: 5000 })[1], "10% of it goes to Crux; the rest goes half to this coin's locked floor, half to holders.");
+  assert.equal(rulesText({ ...c, toCreatorBps: 6000, toLiquidityBps: 0, toHoldersBps: 4000 })[1], "10% of it goes to Crux; the rest goes 60% to the creator, 40% to holders.");
+});
+
+test("a one-minute window reads in the singular", () => {
+  assert.equal(rulesText({ ...base, windowSec: 60 })[0], "Early buyers pay a fee for 1 minute.");
+});
+
+test("a coin that isn't a Crux launch reads as null", async () => {
+  const client = { readContract: async () => ({ launchedAt: 0 }), multicall: async () => { throw new Error("no"); } };
+  assert.equal(await readV4Launch(client as never, "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed"), null);
 });
