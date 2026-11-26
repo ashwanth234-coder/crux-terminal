@@ -84,6 +84,18 @@ export function rulesText(l: V4Launch): string[] {
   return out;
 }
 
+/**
+ * The buy panel's early-fee warning while the coin's window is on (a buyer ticks it before buying): the fee now, the
+ * time left and where it goes. Null once the window is over, and for a coin with none.
+ */
+export function earlyFeeNote(l: V4Launch, nowSec: number): { bps: number; left: number; text: string } | null {
+  const bps = feeAt(l, nowSec);
+  const left = l.launchedAt + l.windowSec - nowSec;
+  if (bps <= 0 || left <= 0) return null;
+  const clock = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+  return { bps, left, text: `Early fee now ${Math.max(1, Math.round(bps / 100))}% of what you pay, for ${clock} more. ${rulesText(l)[1] ?? ""}`.trim() };
+}
+
 /** Reads the coin's launch rules; null when it isn't a Crux V4 launch. */
 export async function readV4Launch(client: Pick<PublicClient, "multicall" | "readContract">, coin: Address): Promise<V4Launch | null> {
   const cfg = await client.readContract({ address: V4_HOOK, abi: hookAbi, functionName: "configOf", args: [coin] });

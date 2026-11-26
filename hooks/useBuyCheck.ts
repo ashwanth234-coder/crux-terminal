@@ -6,7 +6,7 @@ import { bundleWarning, findBundle, type MapHolder } from "@/lib/holderMap";
 import { relay } from "@/hooks/useSolanaTrading";
 import { solanaFacts, solanaWarnings } from "@/lib/coinScan";
 import { evmSafety } from "@/lib/tokenSafety";
-import { createPublicClient, fallback, http, isAddress, type Address } from "viem";
+import { createPublicClient, erc20Abi, fallback, http, isAddress, type Address } from "viem";
 import { base } from "viem/chains";
 import { BASE_RPCS } from "@/lib/network";
 import { V4_HOOK, hookAbi } from "@/lib/v4launch";
@@ -25,6 +25,23 @@ export async function isCruxV4Coin(coin: string): Promise<boolean> {
     return Number(cfg.launchedAt) > 0;
   } catch {
     return false;
+  }
+}
+
+/**
+ * A Crux V4 coin's name and ticker, read from the coin itself: for its first minutes, before the market sites list it
+ * (it can already be traded on Crux, straight in its own pool). Null for any other coin.
+ */
+export async function cruxV4Facts(coin: string): Promise<{ address: string; name: string; symbol: string } | null> {
+  if (!(await isCruxV4Coin(coin))) return null;
+  try {
+    const [name, symbol] = await Promise.all([
+      baseClient.readContract({ address: coin as Address, abi: erc20Abi, functionName: "name" }),
+      baseClient.readContract({ address: coin as Address, abi: erc20Abi, functionName: "symbol" }),
+    ]);
+    return { address: coin, name, symbol };
+  } catch {
+    return null;
   }
 }
 

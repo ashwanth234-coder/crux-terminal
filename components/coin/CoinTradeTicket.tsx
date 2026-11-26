@@ -16,6 +16,7 @@ import { fmtPrice, solanaFeeText } from "@/lib/solanaCoins";
 import { bnbFeeText } from "@/lib/bnbCoins";
 import { usePositions } from "@/hooks/usePositions";
 import { useBuyCheck } from "@/hooks/useBuyCheck";
+import { useEarlyFee } from "@/hooks/useEarlyFee";
 import { buyClear, type BuyCheck } from "@/lib/buySafety";
 import { pnlOf, pnlText } from "@/lib/pnl";
 
@@ -47,6 +48,8 @@ type Venue = {
   sell: (amount: bigint | "all", slippageBps: number) => void;
   /** Turbo, the creator alert: what only this chain has. */
   extras?: ReactNode;
+  /** A Crux V4 coin's early fee while its window is on: shown before any buy, and ticked before one. */
+  early?: { bps: number; text: string } | null;
   footnote: string;
   status: ReactNode;
 };
@@ -61,8 +64,12 @@ function Ticket(v: Venue) {
   const [accepted, setAccepted] = useState(false);
   const [gate, setGate] = useState<{ run: () => void } | null>(null);
   const [gateNote, setGateNote] = useState<string | null>(null);
+  // A Crux V4 coin's early fee: the buyer ticks it before any buy while it's on (nobody pays 40% by surprise).
+  const [earlyOk, setEarlyOk] = useState(false);
+  const earlyBlocked = !!v.early && !earlyOk;
   const safeBuy = (dollars: number, slippageBps: number) => {
     setGateNote(null);
+    if (earlyBlocked) return setGateNote("Tick the early fee box first.");
     if (v.check === null) return setGateNote("Checking this coin's safety first… try again in a second.");
     if (v.check.blocks.length > 0) return setGate({ run: () => undefined });
     if (buyClear(v.check, accepted)) return v.buy(dollars, slippageBps);
@@ -81,12 +88,14 @@ function Ticket(v: Venue) {
   // Buy: the box is dollars. Sell: coins (Max fills the whole bag, sold as "all" so nothing is left behind).
   const sellAll = side === "sell" && n > 0 && n >= heldCoins;
   const sellUnits = side === "sell" && n > 0 ? (sellAll ? ("all" as const) : BigInt(Math.floor(n * scale))) : null;
+  // Inside a Crux V4 coin's window the early fee comes off what a buy gets.
   const slip = 1 - bps / 10_000;
+  const afterEarly = side === "buy" && v.early ? 1 - v.early.bps / 10_000 : 1;
   const estimate =
     n <= 0 || v.price === undefined || v.price <= 0
       ? null
       : side === "buy"
-        ? `About ${coins(n / v.price)} $${v.symbol} · at least ${coins((n / v.price) * slip)}`
+        ? `About ${coins((n / v.price) * afterEarly)} $${v.symbol} · at least ${coins((n / v.price) * afterEarly * slip)}`
         : `About ${usd(n * v.price)} · at least ${usd(n * v.price * slip)}`;
   const tooMuch = side === "buy" ? v.cash !== null && n > v.cash + 1e-9 : n > heldCoins + 1e-12;
   const pct = (p: number): bigint | "all" => (p >= 100 ? "all" : (v.held * BigInt(Math.round(p * 100))) / BigInt(10_000));
@@ -143,6 +152,15 @@ function Ticket(v: Venue) {
         }
       />
 
+      {side === "buy" && v.early && (
+        <label className="mt-3 flex items-start gap-2 rounded-lg border border-signal/60 px-3 py-2 text-[12.5px] text-signal">
+          <input type="checkbox" className="mt-0.5" checked={earlyOk} onChange={(e) => setEarlyOk(e.target.checked)} aria-label="I accept the early fee" />
+          <span>
+            {v.early.text} <span className="text-chrome">I accept it.</span>
+          </span>
+        </label>
+      )}
+
       {orderType !== "market" ? (
         <CoinOrderForm kind={orderType} chain={v.chain} coin={v.coin} symbol={v.symbol} price={v.price} held={v.held} decimals={v.decimals} cash={v.orderCash} cashDecimals={v.cashDecimals} />
       ) : (
@@ -160,7 +178,7 @@ function Ticket(v: Venue) {
                 <button
                   key={d}
                   type="button"
-                  disabled={v.busy || (v.cash !== null && v.cash < d)}
+                  disabled={v.busy || earlyBlocked || (v.cash !== null && v.cash < d)}
                   onPointerEnter={() => v.prepare("buy", BigInt(Math.round(d * 1e6)), bps)}
                   onClick={() => (instant ? safeBuy(d, bps) : setAmount(String(d)))}
                   className="h-9 rounded-lg border border-up/40 font-mono text-[12.5px] text-up transition-colors hover:border-up hover:bg-up/[0.06] disabled:opacity-35"
@@ -223,7 +241,7 @@ function Ticket(v: Venue) {
 
       <button
         type="button"
-        disabled={v.busy || n <= 0 || tooMuch}
+        disabled={v.busy || n <= 0 || tooMuch || (side === "buy" && earlyBlocked)}
         onPointerEnter={() => {
           if (n <= 0 || tooMuch) return;
           if (side === "buy") v.prepare("buy", BigInt(Math.round(n * 1e6)), bps);
@@ -492,6 +510,7 @@ export function BaseTicket({ address, symbol, price }: { address: string; symbol
   const t = useWalletTrading("base", address);
   const pos = usePositions();
   const check = useBuyCheck("base", address);
+  const early = useEarlyFee(address);
   const one = useOneBalanceBuy("base");
   if (!crux.loggedIn) return <LogIn text="Trade this coin from your one Crux account. No ETH needed, no bridging." />;
   const h = t.holdings;
@@ -510,6 +529,7 @@ export function BaseTicket({ address, symbol, price }: { address: string; symbol
       held={h?.coin?.amount ?? BigInt(0)}
       decimals={h?.coin?.decimals ?? 18}
       check={check}
+      early={early}
       entry={pos.entryOf("base", address, h?.coin?.decimals ?? 18)}
       busy={r.kind === "busy"}
       prepare={(side, amount, slippageBps) => t.prepare(side, amount, slippageBps)}

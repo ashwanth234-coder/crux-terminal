@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { CoinTerminal } from "@/components/coin/CoinTerminal";
 import { BaseTicket } from "@/components/coin/CoinTradeTicket";
-import { baseCoin } from "@/lib/bnbCoins";
+import { baseCoin, type BnbCoin } from "@/lib/bnbCoins";
 import { V4LaunchCard } from "@/components/base/V4LaunchCard";
+import { cruxV4Facts } from "@/hooks/useBuyCheck";
 
 type FeedRow = { version: number; auctionId: number; token: string };
 
@@ -32,7 +33,10 @@ export function BaseCoinPage({ address }: { address: string }) {
     if (crux) router.replace(`/launch/v${crux.version}/${crux.auctionId}`);
   }, [crux, router]);
 
-  const c = coin.data;
+  // A Crux V4 coin trades on Crux from its first block, straight in its own pool; the market sites list it minutes later.
+  const v4 = useQuery({ queryKey: ["v4-facts", address], queryFn: () => cruxV4Facts(address), enabled: coin.data === null, staleTime: Infinity });
+  const fresh = coin.data === null ? (v4.data ?? null) : null;
+  const c: BnbCoin | null | undefined = coin.data === null ? fresh : coin.data;
   return (
     <CoinTerminal
       network="base"
@@ -41,7 +45,8 @@ export function BaseCoinPage({ address }: { address: string }) {
       path={`/base/${address}`}
       trade={
         <>
-          {c === null && <p className="mb-3 text-[12.5px] text-down">This coin has no market on Base yet, so it can&rsquo;t be traded here.</p>}
+          {fresh && <p className="mb-3 text-[12.5px] text-muted">Just launched: you can trade it here now. Its chart and trades show up in a few minutes.</p>}
+          {c === null && !v4.isPending && <p className="mb-3 text-[12.5px] text-down">This coin has no market on Base yet, so it can&rsquo;t be traded here.</p>}
           <V4LaunchCard address={address} />
           <BaseTicket address={address} symbol={c?.symbol} price={c?.price} />
         </>

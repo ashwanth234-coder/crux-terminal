@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { feeAt, readV4Launch, rulesText, type V4Launch } from "./v4launch.ts";
+import { earlyFeeNote, feeAt, readV4Launch, rulesText, type V4Launch } from "./v4launch.ts";
 
 const base: V4Launch = {
   launchedAt: 1000, windowSec: 300, startBps: 5000, cruxEarlyBps: 0, toCreatorBps: 0, toLiquidityBps: 10000, toHoldersBps: 0,
@@ -44,4 +44,15 @@ test("a one-minute window reads in the singular", () => {
 test("a coin that isn't a Crux launch reads as null", async () => {
   const client = { readContract: async () => ({ launchedAt: 0 }), multicall: async () => { throw new Error("no"); } };
   assert.equal(await readV4Launch(client as never, "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed"), null);
+});
+
+test("the buy panel's early-fee warning: the fee now, the time left and where it goes; nothing once it's over", () => {
+  const c = { ...base, cruxEarlyBps: 1000 };
+  const n = earlyFeeNote(c, 1150)!;
+  assert.equal(n.bps, 2500);
+  assert.equal(n.left, 150);
+  assert.equal(n.text, "Early fee now 25% of what you pay, for 2:30 more. 10% of it goes to Crux; the rest goes all to this coin's locked floor.");
+  assert.equal(earlyFeeNote(c, 1300), null);
+  assert.equal(earlyFeeNote({ ...c, windowSec: 0, startBps: 0 }, 1000), null);
+  assert.equal(earlyFeeNote(c, 1299)!.text.startsWith("Early fee now 1% of what you pay, for 0:01 more."), true);
 });
