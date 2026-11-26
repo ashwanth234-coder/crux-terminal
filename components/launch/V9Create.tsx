@@ -18,9 +18,9 @@ import { FACTORY_V9, V9_ON, curveV9Abi, factoryV9Abi, launchFromAccountV9, type 
 import { IS_TESTNET, NETWORK_LONG } from "@/lib/network";
 import { isReservedName } from "@/lib/antiVamp";
 
-const RESERVED_TEXT = "Crux is a reserved name. Crux has no token yet, so no coin can use it in its name or ticker.";
+export const RESERVED_TEXT = "Crux is a reserved name. Crux has no token yet, so no coin can use it in its name or ticker.";
 
-const metadataOf = (o: { name: string; description: string; image: string; x: string }) => {
+export const metadataOf = (o: { name: string; description: string; image: string; x: string }) => {
   const json = JSON.stringify({ name: o.name, description: o.description, image: o.image, links: o.x ? { x: o.x } : {} });
   return `data:application/json;base64,${btoa(unescape(encodeURIComponent(json)))}`;
 };
@@ -29,7 +29,7 @@ const metadataOf = (o: { name: string; description: string; image: string; x: st
  * A picked file as a small square image (256 px, centre-cropped, WebP or JPEG), as base64: what the relay keeps for a token image.
  * A big photo becomes a few KB, so it uploads in a blink.
  */
-async function squareImage(file: File): Promise<string> {
+export async function squareImage(file: File): Promise<string> {
   const bitmap = await createImageBitmap(file);
   const side = Math.min(bitmap.width, bitmap.height);
   const canvas = document.createElement("canvas");
@@ -50,7 +50,7 @@ async function squareImage(file: File): Promise<string> {
 }
 
 /** The anti-copycat check the relay runs, run here too for a wallet launch (the factory itself doesn't check). */
-async function checkCopycat(symbol: string, name: string, image: string, x: string): Promise<string | null> {
+export async function checkCopycat(symbol: string, name: string, image: string, x: string): Promise<string | null> {
   if (isReservedName(symbol) || isReservedName(name)) return RESERVED_TEXT;
   try {
     const res = await fetch("/api/launch-check", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ symbol, name, image, x }) });
