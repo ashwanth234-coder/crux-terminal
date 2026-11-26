@@ -44,12 +44,15 @@ type Venue = {
   check: BuyCheck | null;
   busy: boolean;
   prepare: (side: Side, amount: bigint | "all", slippageBps: number) => void;
-  buy: (dollars: number, slippageBps: number) => void;
+  /** acceptEarlyBps: the early fee the buyer accepted (a Crux V4 coin inside its window). */
+  buy: (dollars: number, slippageBps: number, acceptEarlyBps?: number) => void;
   sell: (amount: bigint | "all", slippageBps: number) => void;
   /** Turbo, the creator alert: what only this chain has. */
   extras?: ReactNode;
   /** A Crux V4 coin's early fee while its window is on: shown before any buy, and ticked before one. */
   early?: { bps: number; text: string } | null;
+  /** The early fee is still being read: buys wait for it. */
+  earlyLoading?: boolean;
   footnote: string;
   status: ReactNode;
 };
@@ -66,14 +69,16 @@ function Ticket(v: Venue) {
   const [gateNote, setGateNote] = useState<string | null>(null);
   // A Crux V4 coin's early fee: the buyer ticks it before any buy while it's on (nobody pays 40% by surprise).
   const [earlyOk, setEarlyOk] = useState(false);
-  const earlyBlocked = !!v.early && !earlyOk;
+  const earlyBlocked = !!v.earlyLoading || (!!v.early && !earlyOk);
   const safeBuy = (dollars: number, slippageBps: number) => {
     setGateNote(null);
-    if (earlyBlocked) return setGateNote("Tick the early fee box first.");
+    if (v.earlyLoading) return setGateNote("Reading this coin's launch rules first… try again in a second.");
+    if (v.early && !earlyOk) return setGateNote("Check the early fee box first.");
+    const ae = v.early?.bps;
     if (v.check === null) return setGateNote("Checking this coin's safety first… try again in a second.");
     if (v.check.blocks.length > 0) return setGate({ run: () => undefined });
-    if (buyClear(v.check, accepted)) return v.buy(dollars, slippageBps);
-    setGate({ run: () => v.buy(dollars, slippageBps) });
+    if (buyClear(v.check, accepted)) return v.buy(dollars, slippageBps, ae);
+    setGate({ run: () => v.buy(dollars, slippageBps, ae) });
   };
   const settings = useTradeSettings();
   const [side, setSide] = useState<Side>("buy");
@@ -529,11 +534,12 @@ export function BaseTicket({ address, symbol, price }: { address: string; symbol
       held={h?.coin?.amount ?? BigInt(0)}
       decimals={h?.coin?.decimals ?? 18}
       check={check}
-      early={early}
+      early={early.note}
+      earlyLoading={early.loading}
       entry={pos.entryOf("base", address, h?.coin?.decimals ?? 18)}
       busy={r.kind === "busy"}
       prepare={(side, amount, slippageBps) => t.prepare(side, amount, slippageBps)}
-      buy={(d, slippageBps) => void one.buy(units(d), () => void t.buy(units(d), slippageBps))}
+      buy={(d, slippageBps, acceptEarlyBps) => void one.buy(units(d), () => void t.buy(units(d), slippageBps, undefined, acceptEarlyBps))}
       sell={(a, slippageBps) => void t.sell(a, slippageBps)}
       status={one.status ?? <Result r={r} receipt={r.kind === "done" ? `https://basescan.org/tx/${r.hash}` : undefined} />}
       footnote={`Paid from your Crux balance. ${bnbFeeText} Crux pays the gas.`}

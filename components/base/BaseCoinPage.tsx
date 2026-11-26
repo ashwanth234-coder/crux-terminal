@@ -48,7 +48,7 @@ export function BaseCoinPage({ address }: { address: string }) {
           {fresh && <p className="mb-3 text-[12.5px] text-muted">Just launched: you can trade it here now. Its chart and trades show up in a few minutes.</p>}
           {c === null && !v4.isPending && <p className="mb-3 text-[12.5px] text-down">This coin has no market on Base yet, so it can&rsquo;t be traded here.</p>}
           <V4LaunchCard address={address} />
-          <BaseTicket address={address} symbol={c?.symbol} price={c?.price} />
+          <BaseTicket key={address} address={address} symbol={c?.symbol} price={c?.price} />
         </>
       }
     />
