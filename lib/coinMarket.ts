@@ -155,7 +155,8 @@ const VENUES: [RegExp, string][] = [
   [/^four-meme/, "four.meme"],
   [/^uniswap/, "Uniswap"],
 ];
-export const venueName = (id?: string) => (id ? (VENUES.find(([r]) => r.test(id))?.[1] ?? id.replace(/[-_]/g, " ")) : undefined);
+export const venueName = (id?: string, labels?: string[]) =>
+  id === "uniswap" && labels?.includes("v4") ? "Uniswap V4" : id ? (VENUES.find(([r]) => r.test(id))?.[1] ?? id.replace(/[-_]/g, " ")) : undefined;
 
 /** The coin's deepest pool and its numbers (DexScreener). Null when it has no market. */
 export async function poolStats(network: ChartNetwork, token: string): Promise<PoolStats | null> {
@@ -169,7 +170,7 @@ export async function poolStats(network: ChartNetwork, token: string): Promise<P
     mcap: isBase ? (p.marketCap ?? p.fdv) : undefined,
     liquidity: p.liquidity?.usd,
     createdAt: p.pairCreatedAt,
-    venue: venueName(p.dexId),
+    venue: venueName(p.dexId, p.labels),
     change: isBase ? { m5: p.priceChange?.m5, h1: p.priceChange?.h1, h6: p.priceChange?.h6, h24: p.priceChange?.h24 } : {},
     volume24h: p.volume?.h24,
     volume1h: p.volume?.h1,

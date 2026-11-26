@@ -209,6 +209,8 @@ export type ChartNetwork = "solana" | "bsc" | "base";
 /** A coin's market as DexScreener lists it (its free API allows ~300 reads a minute, so it carries the live stats). */
 export type DexPair = {
   dexId?: string;
+  /** DexScreener's tags for the pool, e.g. ["v4"] for a Uniswap V4 pool. */
+  labels?: string[];
   pairAddress: string;
   baseToken: { address: string; name?: string; symbol?: string };
   quoteToken: { address: string; symbol?: string };
@@ -237,8 +239,8 @@ export function deepestPair(network: ChartNetwork, token: string): Promise<DexPa
     if (!r.ok) throw new Error(`markets ${r.status}`);
     const t = token.toLowerCase();
     const pairs = ((await r.json()) as DexPair[]).filter(
-      // Pools with a 0x… address (or any Solana one): the chart's source reads those.
-      (p) => (p.baseToken.address.toLowerCase() === t || p.quoteToken.address.toLowerCase() === t) && (network === "solana" || /^0x[0-9a-fA-F]{40}$/.test(p.pairAddress)),
+      // Pools with a 0x… address (a 32-byte id for a Uniswap V4 pool), or any Solana one: the chart's source reads those.
+      (p) => (p.baseToken.address.toLowerCase() === t || p.quoteToken.address.toLowerCase() === t) && (network === "solana" || /^0x([0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/.test(p.pairAddress)),
     );
     // The market trading right now (last 5 minutes, then the hour, then today; the server's live feed picks the same):
     // a coin that just moved from its pump.fun curve to PumpSwap still shows the curve as today's busiest.
