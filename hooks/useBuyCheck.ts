@@ -6,6 +6,27 @@ import { bundleWarning, findBundle, type MapHolder } from "@/lib/holderMap";
 import { relay } from "@/hooks/useSolanaTrading";
 import { solanaFacts, solanaWarnings } from "@/lib/coinScan";
 import { evmSafety } from "@/lib/tokenSafety";
+import { createPublicClient, fallback, http, isAddress, type Address } from "viem";
+import { base } from "viem/chains";
+import { BASE_RPCS } from "@/lib/network";
+import { V4_HOOK, hookAbi } from "@/lib/v4launch";
+
+const baseClient = createPublicClient({ chain: base, transport: fallback(BASE_RPCS.map((u) => http(u, { timeout: 8_000 }))) });
+
+/**
+ * Whether a Base coin is a Crux V4 launch (Crux's hook knows its launch time). Those are Crux's own contracts: fixed
+ * supply, no tax, no owner, liquidity locked forever, so the outside scanners' check (which takes minutes to cover a
+ * new coin) isn't needed. A read that fails counts as "not known to be Crux's": the ordinary check runs.
+ */
+export async function isCruxV4Coin(coin: string): Promise<boolean> {
+  if (!isAddress(coin, { strict: false })) return false;
+  try {
+    const cfg = await baseClient.readContract({ address: V4_HOOK, abi: hookAbi, functionName: "configOf", args: [coin as Address] });
+    return Number(cfg.launchedAt) > 0;
+  } catch {
+    return false;
+  }
+}
 
 export type CheckChain = "solana" | "base" | "bnb";
 
@@ -43,6 +64,8 @@ export async function buyCheckOf(chain: CheckChain, coin: string): Promise<BuyCh
     const [f, bundle] = await Promise.all([solanaFacts(coin), bundleSign(chain, coin)]);
     return classify(f ? [...solanaWarnings(f), ...bundle] : null, f?.liquidity);
   }
+  // Crux's own V4 coins: nothing for an outside scanner to find (and it may not have looked yet: the first minutes).
+  if (chain === "base" && (await isCruxV4Coin(coin))) return { blocks: [], warnings: [], checked: true };
   const s = (await evmSafety(chain === "bnb" ? "bsc" : "base", [coin]).catch(() => ({}) as Record<string, null>))[coin.toLowerCase()];
   const b = s?.top ? findBundle(s.top) : null;
   return classify(s ? [...s.warnings, ...(b ? [bundleWarning(b)] : [])] : null);
