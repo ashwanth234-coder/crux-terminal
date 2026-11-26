@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CoinTerminal } from "@/components/coin/CoinTerminal";
 import { BaseTicket } from "@/components/coin/CoinTradeTicket";
 import { baseCoin } from "@/lib/bnbCoins";
+import { V4LaunchCard } from "@/components/base/V4LaunchCard";
 
 type FeedRow = { version: number; auctionId: number; token: string };
 
@@ -41,6 +42,7 @@ export function BaseCoinPage({ address }: { address: string }) {
       trade={
         <>
           {c === null && <p className="mb-3 text-[12.5px] text-down">This coin has no market on Base yet, so it can&rsquo;t be traded here.</p>}
+          <V4LaunchCard address={address} />
           <BaseTicket address={address} symbol={c?.symbol} price={c?.price} />
         </>
       }
