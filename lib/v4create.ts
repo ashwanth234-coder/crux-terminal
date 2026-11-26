@@ -84,3 +84,19 @@ export function fitBytes(s: string, max: number): string {
   }
   return out;
 }
+
+/** Chainlink's ETH / USD feed on Base mainnet (8 decimals): values ETH already in the wallet for the first buy. */
+export const ETH_USD_FEED: Address = "0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70";
+export const ethUsdFeedAbi = parseAbi(["function latestRoundData() view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)"]);
+/** The ETH a Base wallet keeps for gas (the relay's top-up target): never counted toward a first buy. */
+export const GAS_FLOOR_WEI = BigInt(50_000_000_000_000);
+
+/**
+ * The dollars a first buy can use: the wallet's cash plus its ETH above the gas floor (a first buy left from a launch
+ * that didn't go through: the relay spends that ETH first and swaps only the rest).
+ */
+export function firstBuyFunds(o: { cash: number; ethWei: bigint; ethUsd: number | null }): number {
+  const spare = o.ethWei > GAS_FLOOR_WEI ? o.ethWei - GAS_FLOOR_WEI : BigInt(0);
+  const spareUsd = o.ethUsd && o.ethUsd > 0 ? (Number(spare) / 1e18) * o.ethUsd : 0;
+  return o.cash + spareUsd;
+}

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { keccak256, toHex, type Address } from "viem";
-import { DEFAULT_MIX, DEFAULT_WINDOW, NAME_MAX_BYTES, TICKER_MAX_BYTES, fitBytes, makeSaltKeeper, mixBps, mixProblem, previewLaunch, type SaltInput } from "./v4create.ts";
+import { DEFAULT_MIX, DEFAULT_WINDOW, GAS_FLOOR_WEI, NAME_MAX_BYTES, TICKER_MAX_BYTES, firstBuyFunds, fitBytes, makeSaltKeeper, mixBps, mixProblem, previewLaunch, type SaltInput } from "./v4create.ts";
 import { rulesText } from "./v4launch.ts";
 
 const creator = "0x19d3e4b5369835dE24db4ae4B2F16c897867ecAB" as Address;
@@ -46,4 +46,11 @@ test("name and ticker limits count bytes, as the relay does, and never cut a cha
   assert.equal(emoji, "🚀".repeat(8));
   assert.equal(new TextEncoder().encode(fitBytes("é".repeat(20), NAME_MAX_BYTES)).length, 32);
   assert.equal(fitBytes("ABCDEFGHIJKL", TICKER_MAX_BYTES), "ABCDEFGHIJ");
+});
+
+test("a first buy can use ETH already in the wallet (above the gas it keeps) as well as cash", () => {
+  assert.equal(firstBuyFunds({ cash: 5, ethWei: BigInt(0), ethUsd: 2000 }), 5);
+  assert.equal(firstBuyFunds({ cash: 0, ethWei: GAS_FLOOR_WEI, ethUsd: 2000 }), 0, "the gas floor never counts");
+  assert.equal(firstBuyFunds({ cash: 0, ethWei: GAS_FLOOR_WEI + BigInt(10) ** BigInt(16), ethUsd: 2000 }), 20, "0.01 ETH at $2,000");
+  assert.equal(firstBuyFunds({ cash: 3, ethWei: GAS_FLOOR_WEI + BigInt(10) ** BigInt(16), ethUsd: null }), 3, "no price: only cash counts");
 });

@@ -16,7 +16,7 @@ import { isReservedName } from "@/lib/antiVamp";
 import { BASE_RPCS, NETWORK } from "@/lib/network";
 import { RELAY_URL, postRelay } from "@/lib/session";
 import { rulesText } from "@/lib/v4launch";
-import { DEFAULT_MIX, DEFAULT_WINDOW, DESCRIPTION_MAX_CHARS, MAX_FIRST_BUY_USD, NAME_MAX_BYTES, TICKER_MAX_BYTES, V4_FACTORY, V4_WINDOWS, fitBytes, makeSaltKeeper, mixBps, mixProblem, previewLaunch, v4FactoryAbi, type Mix } from "@/lib/v4create";
+import { DEFAULT_MIX, DEFAULT_WINDOW, DESCRIPTION_MAX_CHARS, ETH_USD_FEED, ethUsdFeedAbi, firstBuyFunds, MAX_FIRST_BUY_USD, NAME_MAX_BYTES, TICKER_MAX_BYTES, V4_FACTORY, V4_WINDOWS, fitBytes, makeSaltKeeper, mixBps, mixProblem, previewLaunch, v4FactoryAbi, type Mix } from "@/lib/v4create";
 
 const client = createPublicClient({ chain: base, transport: fallback(BASE_RPCS.map((u) => http(u, { timeout: 8_000 }))) });
 const WINDOW_LABEL: Record<number, string> = { 0: "Off", 60: "1 min", 180: "3 min", 300: "5 min" };
@@ -57,6 +57,16 @@ export function V4Create() {
     makeSaltKeeper((i) => client.readContract({ address: V4_FACTORY, abi: v4FactoryAbi, functionName: "coinInitCodeHash", args: [i.name, i.symbol, i.metadataURI, i.creator] })),
   ).current;
 
+  // ETH's price, to count ETH already in the wallet (a first buy left from a launch that didn't go through).
+  const ethUsd = useQuery({
+    queryKey: ["eth-usd-feed"],
+    enabled: !NETWORK.testnet,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const [, answer] = await client.readContract({ address: ETH_USD_FEED, abi: ethUsdFeedAbi, functionName: "latestRoundData" });
+      return Number(answer) / 1e8;
+    },
+  });
   const fees = useQuery({
     queryKey: ["v4-factory-fees"],
     enabled: !NETWORK.testnet,
@@ -100,7 +110,9 @@ export function V4Create() {
   const buyUsd = Number(firstBuy || "0");
   const buyOk = Number.isFinite(buyUsd) && buyUsd >= 0 && buyUsd <= MAX_FIRST_BUY_USD && (buyUsd === 0 || buyUsd >= 1);
   const cash = wallet.holdings ? Number(wallet.holdings.cash) / 10 ** wallet.holdings.cashDecimals : null;
-  const enoughCash = buyUsd === 0 || cash === null || cash >= buyUsd;
+  // Cash plus ETH above the gas floor: the relay spends ETH already in the wallet first and swaps only the rest.
+  const funds = wallet.holdings && cash !== null ? firstBuyFunds({ cash, ethWei: wallet.holdings.bnb, ethUsd: ethUsd.data ?? null }) : null;
+  const enoughCash = buyUsd === 0 || funds === null || funds >= buyUsd;
   const mixWhy = mixProblem(mix);
   const reserved = isReservedName(name) || isReservedName(symbol);
   const ready = name.trim() !== "" && symbol.trim() !== "" && !reserved && mixWhy === null && buyOk && enoughCash && fees.data !== undefined;
@@ -255,14 +267,14 @@ export function V4Create() {
 
           <div className="text-muted">
             <label className="block">
-              Your first buy <span className="text-dim">($0 to ${MAX_FIRST_BUY_USD}, from your cash)</span>
+              Your first buy <span className="text-dim">($0 to ${MAX_FIRST_BUY_USD}, from your cash or ETH already in your wallet)</span>
               <input value={firstBuy} inputMode="decimal" onChange={(e) => setFirstBuy(e.target.value.replace(/[^0-9.]/g, ""))} className={`${field} font-mono`} />
             </label>
             <p className="mt-1 text-[12px] text-dim">
-              Bought before anyone else, with no early fee.{cash !== null ? ` You have $${cash.toFixed(2)}.` : ""}
+              Bought before anyone else, with no early fee.{funds !== null ? ` You have $${funds.toFixed(2)}${cash !== null && funds - cash >= 0.01 ? ` (including $${(funds - cash).toFixed(2)} as ETH)` : ""}.` : ""}
             </p>
             {!buyOk && <p className="mt-1 text-[12px] text-down">A first buy is $1 to ${MAX_FIRST_BUY_USD}, or $0 for none.</p>}
-            {buyOk && !enoughCash && <p className="mt-1 text-[12px] text-down">You don&apos;t have that much cash.</p>}
+            {buyOk && !enoughCash && <p className="mt-1 text-[12px] text-down">You don&apos;t have that much in cash or ETH.</p>}
           </div>
 
           <div className="rounded-lg border border-line p-3 text-muted">
