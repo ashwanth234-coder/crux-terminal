@@ -16,7 +16,7 @@ import { isReservedName } from "@/lib/antiVamp";
 import { BASE_RPCS, NETWORK } from "@/lib/network";
 import { RELAY_URL, postRelay } from "@/lib/session";
 import { rulesText } from "@/lib/v4launch";
-import { DEFAULT_MIX, DEFAULT_WINDOW, MAX_FIRST_BUY_USD, V4_FACTORY, V4_WINDOWS, makeSaltKeeper, mixBps, mixProblem, previewLaunch, v4FactoryAbi, type Mix } from "@/lib/v4create";
+import { DEFAULT_MIX, DEFAULT_WINDOW, DESCRIPTION_MAX_CHARS, MAX_FIRST_BUY_USD, NAME_MAX_BYTES, TICKER_MAX_BYTES, V4_FACTORY, V4_WINDOWS, fitBytes, makeSaltKeeper, mixBps, mixProblem, previewLaunch, v4FactoryAbi, type Mix } from "@/lib/v4create";
 
 const client = createPublicClient({ chain: base, transport: fallback(BASE_RPCS.map((u) => http(u, { timeout: 8_000 }))) });
 const WINDOW_LABEL: Record<number, string> = { 0: "Off", 60: "1 min", 180: "3 min", 300: "5 min" };
@@ -46,7 +46,11 @@ export function V4Create() {
   const [windowSec, setWindowSec] = useState<number>(DEFAULT_WINDOW);
   const [mix, setMix] = useState<Mix>(DEFAULT_MIX);
   const [firstBuy, setFirstBuy] = useState("0");
-  const [vest, setVest] = useState(false);
+  // Vesting (30 days, up to 10%) is left out while a first buy is capped at $50: at the opening value $50 can't reach
+  // the 2% a creator may hold unlocked, so vesting would do nothing. It comes back if the first-buy cap rises.
+  const vest = false;
+  /** A launch sent but not seen landing yet: where to look. */
+  const [pending, setPending] = useState<{ coin: string; link: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const saltFor = useRef(
@@ -104,6 +108,7 @@ export function V4Create() {
 
   const launch = async () => {
     setError(null);
+    setPending(null);
     try {
       if (!crux.loggedIn) return crux.login();
       const creator: Address | null = crux.owner;
@@ -118,11 +123,12 @@ export function V4Create() {
       const body = async () => {
         const token = await getAccessToken();
         if (!token) throw new Error("Log in first.");
-        return { token, name: name.trim(), symbol: sym, metadataURI, salt, vest: buyUsd > 0 && vest, window: windowSec, ...mixBps(mix), firstBuy: String(Math.round(buyUsd * 1e6)) };
+        return { token, name: name.trim(), symbol: sym, metadataURI, salt, vest, window: windowSec, ...mixBps(mix), firstBuy: String(Math.round(buyUsd * 1e6)) };
       };
-      let r: { coin: string };
+      type Launched = { coin: string; pending?: boolean; link?: string };
+      let r: Launched;
       try {
-        r = await relay<{ coin: string }>("/v1/v4/launch", await body());
+        r = await relay<Launched>("/v1/v4/launch", await body());
       } catch (e) {
         // The wallet hasn't let Crux sign for it on Base yet: one silent approval, then the launch again.
         if (!/Turn on .* trading/i.test((e as Error).message)) throw e;
@@ -133,7 +139,7 @@ export function V4Create() {
         for (let attempt = 1; ; attempt++) {
           await new Promise((ok) => setTimeout(ok, attempt === 1 ? 1_500 : 2_500));
           try {
-            r = await relay<{ coin: string }>("/v1/v4/launch", await body());
+            r = await relay<Launched>("/v1/v4/launch", await body());
             break;
           } catch (err) {
             if (!/Turn on .* trading/i.test((err as Error).message)) throw err;
@@ -141,6 +147,8 @@ export function V4Create() {
           }
         }
       }
+      // Sent but not seen landing in time: it may still land. Say where to look instead of calling it a failure.
+      if (r.pending) return setPending({ coin: r.coin, link: r.link ?? "" });
       router.push(`/base/${r.coin}`);
     } catch (e) {
       setError(((e as Error).message ?? String(e)).split("\n")[0]);
@@ -163,11 +171,11 @@ export function V4Create() {
         <div className="mt-6 space-y-4 text-[13px]">
           <label className="block text-muted">
             Name
-            <input value={name} maxLength={32} onChange={(e) => setName(e.target.value)} className={field} />
+            <input value={name} onChange={(e) => setName(fitBytes(e.target.value, NAME_MAX_BYTES))} className={field} />
           </label>
           <label className="block text-muted">
             Ticker
-            <input value={symbol} maxLength={10} onChange={(e) => setSymbol(e.target.value.replace(/[^A-Za-z0-9]/g, ""))} className={`${field} font-mono uppercase`} />
+            <input value={symbol} onChange={(e) => setSymbol(fitBytes(e.target.value.replace(/[^A-Za-z0-9]/g, ""), TICKER_MAX_BYTES))} className={`${field} font-mono uppercase`} />
           </label>
           {reserved && (
             <p role="alert" className="text-[12.5px] text-down">
@@ -176,7 +184,7 @@ export function V4Create() {
           )}
           <label className="block text-muted">
             Description <span className="text-dim">(optional)</span>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className={field} />
+            <textarea value={description} maxLength={DESCRIPTION_MAX_CHARS} onChange={(e) => setDescription([...e.target.value].slice(0, DESCRIPTION_MAX_CHARS).join(""))} rows={2} className={field} />
           </label>
           <div className="text-muted">
             Image <span className="text-dim">(optional)</span>
@@ -255,12 +263,6 @@ export function V4Create() {
             </p>
             {!buyOk && <p className="mt-1 text-[12px] text-down">A first buy is $1 to ${MAX_FIRST_BUY_USD}, or $0 for none.</p>}
             {buyOk && !enoughCash && <p className="mt-1 text-[12px] text-down">You don&apos;t have that much cash.</p>}
-            {buyUsd > 0 && (
-              <label className="mt-2 flex items-start gap-2">
-                <input type="checkbox" checked={vest} onChange={(e) => setVest(e.target.checked)} className="mt-0.5" />
-                <span>Vest over 30 days (lets you buy up to 10%)</span>
-              </label>
-            )}
           </div>
 
           <div className="rounded-lg border border-line p-3 text-muted">
@@ -274,6 +276,21 @@ export function V4Create() {
             {busy ?? (crux.loggedIn ? "Launch" : "Log in to launch")}
           </button>
           {error && <p className="text-[12.5px] text-down">{error}</p>}
+          {pending && (
+            <p role="status" className="text-[12.5px] text-muted">
+              Your launch was sent and is still landing on Base.{" "}
+              {pending.link && (
+                <a href={pending.link} target="_blank" rel="noreferrer" className="underline decoration-line-2 hover:text-chrome">
+                  See it on Basescan
+                </a>
+              )}
+              {pending.link ? " or " : " "}
+              <a href={`/base/${pending.coin}`} className="underline decoration-line-2 hover:text-chrome">
+                open your coin
+              </a>{" "}
+              in a moment. Don&apos;t launch it again.
+            </p>
+          )}
         </div>
       </main>
     </>

@@ -3,6 +3,7 @@ import { checkLaunch, conflictLine, normalizeTicker, type GuardLaunch } from "@/
 import { artworkOf } from "@/lib/artwork";
 import { readLaunches } from "@/lib/launchFeed";
 import { readV9Launches } from "@/lib/v9Launches";
+import { readV4Launches } from "@/lib/v4Launches";
 import { MAX_IMAGE_DATA_URI } from "@/lib/tokenMeta";
 import { NETWORK_NAME } from "@/lib/network";
 
@@ -40,9 +41,11 @@ export async function POST(request: Request) {
 
   let launches;
   let v9Launches;
+  let v4Launches;
   try {
     // V9 launches count too (when V9 is on): a V9 ticker can't copy a V8 one, nor another V9 one.
-    [launches, v9Launches] = await Promise.all([readLaunches().then((ls) => ls.flatMap((l) => (l.version === 9 || l.phase === "curve" ? [] : [{ ...l, phase: l.phase as Exclude<typeof l.phase, "curve"> }]))), readV9Launches()]);
+    // Crux V4 coins (Base mainnet) too: a V4 coin can't reuse another V4 coin's ticker, artwork or X account.
+    [launches, v9Launches, v4Launches] = await Promise.all([readLaunches().then((ls) => ls.flatMap((l) => (l.version === 9 || l.phase === "curve" ? [] : [{ ...l, phase: l.phase as Exclude<typeof l.phase, "curve"> }]))), readV9Launches(), readV4Launches()]);
   } catch {
     return json({ error: `Couldn't read ${NETWORK_NAME} right now. Retry shortly.` }, 503);
   }
@@ -71,6 +74,20 @@ export async function POST(request: Request) {
             symbol: l.symbol,
             token: l.token,
             href: `/launch/v9/${l.id}`,
+            phase: "graduated",
+            closesAt: 0,
+            x: l.metadata.links.x,
+            art: image && l.metadata.image ? await artworkOf(l.metadata.image) : null,
+          }),
+        ),
+      )),
+      // A V4 coin is never cancelled either: its ticker, artwork and X account stay taken.
+      ...(await Promise.all(
+        v4Launches.map(
+          async (l): Promise<GuardLaunch> => ({
+            symbol: l.symbol,
+            token: l.token,
+            href: `/base/${l.token}`,
             phase: "graduated",
             closesAt: 0,
             x: l.metadata.links.x,

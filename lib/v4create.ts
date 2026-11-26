@@ -65,3 +65,22 @@ export function makeSaltKeeper(hashOf: (i: SaltInput) => Promise<Hex>, mine: typ
     return { salt, coin: token, mined: true };
   };
 }
+
+/** The longest name, ticker and description a launch may carry (the relay's limits: name and ticker in bytes). */
+export const NAME_MAX_BYTES = 32;
+export const TICKER_MAX_BYTES = 10;
+export const DESCRIPTION_MAX_CHARS = 1_000;
+
+/** `s` cut to at most `max` UTF-8 bytes, never mid-character (an emoji counts as 4). */
+export function fitBytes(s: string, max: number): string {
+  const enc = new TextEncoder();
+  let out = "";
+  let used = 0;
+  for (const ch of s) {
+    const n = enc.encode(ch).length;
+    if (used + n > max) break;
+    out += ch;
+    used += n;
+  }
+  return out;
+}

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { keccak256, toHex, type Address } from "viem";
-import { DEFAULT_MIX, DEFAULT_WINDOW, makeSaltKeeper, mixBps, mixProblem, previewLaunch, type SaltInput } from "./v4create.ts";
+import { DEFAULT_MIX, DEFAULT_WINDOW, NAME_MAX_BYTES, TICKER_MAX_BYTES, fitBytes, makeSaltKeeper, mixBps, mixProblem, previewLaunch, type SaltInput } from "./v4create.ts";
 import { rulesText } from "./v4launch.ts";
 
 const creator = "0x19d3e4b5369835dE24db4ae4B2F16c897867ecAB" as Address;
@@ -38,4 +38,12 @@ test("the preview reads like the coin page: defaults are 1 minute, all to the lo
   const l = previewLaunch({ windowSec: DEFAULT_WINDOW, mix: DEFAULT_MIX, startBps: 5000, cruxEarlyBps: 1000 });
   assert.deepEqual(rulesText(l), ["Early buyers pay a fee for 1 minute.", "10% of it goes to Crux; the rest goes all to this coin's locked floor."]);
   assert.deepEqual(rulesText(previewLaunch({ windowSec: 0, mix: DEFAULT_MIX, startBps: 5000, cruxEarlyBps: 1000 })), ["No early fee: everyone pays the normal 1%."]);
+});
+
+test("name and ticker limits count bytes, as the relay does, and never cut a character in half", () => {
+  assert.equal(fitBytes("a".repeat(40), NAME_MAX_BYTES).length, 32);
+  const emoji = fitBytes("🚀".repeat(10), NAME_MAX_BYTES);
+  assert.equal(emoji, "🚀".repeat(8));
+  assert.equal(new TextEncoder().encode(fitBytes("é".repeat(20), NAME_MAX_BYTES)).length, 32);
+  assert.equal(fitBytes("ABCDEFGHIJKL", TICKER_MAX_BYTES), "ABCDEFGHIJ");
 });
