@@ -283,6 +283,7 @@ export function ProChart({
   const rc = useRemoteChart(remote ?? null, pickedInterval);
   // Another chain's coin: who made it, for its DB / DS badges.
   const coinCreator = useCoinCreator(remote?.network ?? null, remote?.token ?? null);
+  const rcGraduatedAt = remote ? rc.graduatedAt : null;
   const swapData = useThrottled(remote ? rc.swapData : swaps.data, redrawMs);
   const tradesPending = remote ? rc.isPending : swaps.isPending;
   const tradesLoaded = remote ? rc.candles !== undefined : swaps.data !== undefined;
@@ -783,6 +784,8 @@ export function ProChart({
     const times = candles.map((c) => c.time);
     const milestones: { time: number; text: string; color: string }[] = [];
     if (!external && !marksHidden && graduatedAt !== null && graduatedAt > 0) milestones.push({ time: graduatedAt, text: "Graduated", color: "#f3f3f0" });
+    // Another chain's coin that left its launch curve (a pump.fun coin's move to its market): where its chart joins.
+    if (remote && !marksHidden && rcGraduatedAt) milestones.push({ time: rcGraduatedAt, text: "Graduated", color: "#f3f3f0" });
     if (!external && !marksHidden && auction.settledAt > 0) {
       if (market.protectedUntil && market.protectedUntil > auction.settledAt) milestones.push({ time: market.protectedUntil, text: "Anti-sniper ends", color: "#5cc08c" });
       if (vestDays) milestones.push({ time: auction.settledAt + vestDays * 86_400, text: "Creator unlocked", color: "#ffd166" });
@@ -797,7 +800,7 @@ export function ProChart({
         return time === null ? [] : [{ time, text: m.text, color: m.color }];
       }),
     );
-  }, [engine, candles, k, fmt, minMove, config.type, drawnStudies, config.alerts, settings, marksHidden, gradPrice, mine, standingOrders, auction.token, auction.settledAt, graduatedAt, external, market.protectedUntil, vestDays, interval]);
+  }, [engine, candles, k, fmt, minMove, config.type, drawnStudies, config.alerts, settings, marksHidden, gradPrice, mine, standingOrders, auction.token, auction.settledAt, graduatedAt, external, market.protectedUntil, vestDays, interval, remote, rcGraduatedAt]);
 
   // Your trades on their way are drawn in the candles themselves (drawnCandles above), so the separate overlay candle
   // stays off. This takes each one off the list once its real trade is on the chart: the moment a trade with its hash

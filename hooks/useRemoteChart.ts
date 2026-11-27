@@ -9,6 +9,7 @@ import type { Address, Hex } from "viem";
 import { toCandles, type Candle } from "@/lib/candles";
 import { topPool, type ChartNetwork } from "@/lib/solanaCoins";
 import type { PoolTrade } from "@/hooks/usePoolSwaps";
+import { joinLaunch, launchCandles, type LaunchHistory } from "@/lib/launchHistory";
 
 /** A Solana or BNB Chain coin the Crux pro chart draws (its busiest market; history and live trades from Crux's server). */
 export type RemoteCoin = { network: ChartNetwork; token: string };
@@ -63,6 +64,21 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
     refetchInterval: () => (liveFeed ? 60_000 : 10_000),
     staleTime: 5_000,
   });
+
+  // The coin's launch phase, before any market data site saw it (crux-solver launchhistory.ts: a Solana coin's
+  // pump.fun curve trades): the chart and the creator's DB / DS badges start at its first trade. A first read can
+  // take minutes on the server: asked again every 10 s until it's ready; a coin still on its curve every 30 s.
+  const launch = useQuery({
+    queryKey: ["launch-history", coin?.network, coin?.token],
+    enabled: coin?.network === "solana",
+    staleTime: 10_000,
+    queryFn: () => relay<LaunchHistory>("/v1/launch-history", { chain: coin!.network, coin: coin!.token }),
+    refetchInterval: (q) => {
+      const d = q.state.data;
+      return !d || d.loading ? 10_000 : d.none || d.complete ? false : 30_000;
+    },
+  });
+  const launchTrades = launch.data && !launch.data.loading && !launch.data.none ? launch.data.trades : null;
 
   // Every trade on the coin's market, pushed by Crux's server the moment it lands (crux-solver coinfeed.ts), merged
   // into the trades list the chart and the trades tab both read.
@@ -135,8 +151,10 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
   });
 
   const swapData = useMemo(() => {
-    if (!trades.data) return undefined;
-    const list: PoolTrade[] = trades.data.map((t) => ({
+    if (!trades.data && !launchTrades) return undefined;
+    // The market's trades, then the launch phase's before them (each trade once), newest first.
+    const all = joinLaunch(trades.data ?? [], launchTrades);
+    const list: PoolTrade[] = all.map((t) => ({
       side: t.side,
       usdc: BigInt(Math.round(t.usd * 1e6)),
       tokens: BigInt(0),
@@ -151,7 +169,7 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
       time: Math.floor(t.time / 1000),
     }));
     return { trades: list, truncated: false };
-  }, [trades.data]);
+  }, [trades.data, launchTrades]);
 
   const base = useMemo(() => {
     // Under a minute, or a market with no stored candles (some markets aren't charted anywhere): from the trades.
@@ -162,7 +180,8 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
     }
     if (!candles.data) return undefined;
     // Trades that landed after GeckoTerminal last counted its candles move the newest one, and open the next ones.
-    const out = candles.data.map((c) => ({ ...c }));
+    // The launch phase's candles go in front of the market's (GeckoTerminal never saw that phase).
+    const out = [...launchCandles(launchTrades, candles.data[0]?.time ?? Infinity, interval), ...candles.data.map((c) => ({ ...c }))];
     if (out.length && swapData) {
       for (const t of [...swapData.trades].reverse()) {
         const last = out[out.length - 1];
@@ -178,7 +197,7 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
       }
     }
     return out;
-  }, [fine, swapData, candles.data, interval]);
+  }, [fine, swapData, candles.data, interval, launchTrades]);
 
   // The live price moves the newest candle (or opens the next one when its period has begun), every tick.
   const live = tick.data ?? null;
@@ -212,5 +231,9 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
     isPending: coin !== null && drawn === undefined && !pool.isError && !busy,
     isError: pool.isError || trades.isError || (!fine && candles.isError),
     noMarket: pool.data === null,
+    /** When the coin left its launch curve (unix s), for a "Graduated" line; null when unknown or still on it. */
+    graduatedAt: launch.data && !launch.data.loading && launch.data.complete ? (launch.data.graduatedAt ?? null) : null,
+    /** The launch phase is still being read (the chart says so). */
+    launchLoading: launch.data?.loading === true,
   };
 }
