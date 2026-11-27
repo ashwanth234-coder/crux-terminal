@@ -153,7 +153,7 @@ export function CoinTerminal({ network, token, coin, trade, path }: { network: C
           <button
             type="button"
             onClick={toggleBottom}
-            className="absolute right-3 top-2 z-20 hidden rounded-[4px] border border-line-2 bg-panel-2 px-2 py-0.5 text-[11px] text-dim hover:text-chrome lg:block"
+            className="absolute left-1/2 top-2.5 z-20 hidden -translate-x-1/2 rounded-full border border-line-2 bg-panel-2 px-2.5 py-0.5 text-[10.5px] leading-none text-dim hover:text-chrome lg:block"
             title={panes.bottomHidden ? "Show trades and holders" : "Hide trades and holders (bigger chart)"}
           >
             {panes.bottomHidden ? "▴ Show trades" : "▾ Hide"}
