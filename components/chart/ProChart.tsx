@@ -47,7 +47,7 @@ import { OverlaysButton } from "./OverlaysBar";
 import { SymbolSwitch } from "./SymbolSwitch";
 import { requestOrderAt } from "@/lib/chartOrders";
 import { dropPendingTrade, usePendingTrades, watchPendingTrades, type PendingTrade } from "@/lib/pendingTrades";
-import { clusterBadges, continuous, graduationTime, matchExecutions, withLiveBar, withPendingTrades, type BadgeFill } from "@/lib/chartLive";
+import { clusterBadges, graduationTime, matchExecutions, withPendingTrades, type BadgeFill } from "@/lib/chartLive";
 import type { Badge } from "./badges";
 import { FACTORY_V9 } from "@/lib/v9";
 import { timingMark } from "@/lib/tradeTiming";
@@ -603,9 +603,9 @@ export function ProChart({
   const paintLive = useCallback(
     (pendingNow: readonly PendingTrade[], real: Candle[]) => {
       if (!engine) return;
-      // The period running now by the wall clock has its bar from its first second, trade or no trade.
-      // Every candle opens at the previous close (lib/chartLive continuous), the feed's and your trades' alike.
-      const drawn = continuous(replaying ? real : withPendingTrades(withLiveBar(real, Math.floor(Date.now() / 1000), interval), pendingNow, onChartTx, interval, feedHasTx));
+      // Only real trades make candles (each opens at its own first trade; a period without one stays a gap), plus
+      // your own trades on their way, until their confirmed trade replaces them.
+      const drawn = replaying ? real : withPendingTrades(real, pendingNow, onChartTx, interval, feedHasTx);
       engine.setData(drawn, k, fmt, minMove);
 
       const newest = real.length ? real[real.length - 1] : null;

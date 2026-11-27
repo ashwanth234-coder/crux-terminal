@@ -2,64 +2,11 @@ import type { Candle } from "./candles.ts";
 
 /**
  * What the chart draws on top of the candles the trades made, worked out without React so the chart can paint it in
- * the same task as a click or a feed frame: the live bar of the current period, your trades on their way, the trade
- * badges of each candle, and when a launch graduated.
+ * the same task as a click or a feed frame: your trades on their way, the trade badges of each candle, and when a
+ * launch graduated. Nothing here invents a candle value: every price drawn is a trade's (yours on its way included).
  */
 
 const priceOk = (v: number | undefined): v is number => v !== undefined && Number.isFinite(v) && v > 0;
-
-/**
- * Each candle opens where the one before it closed (high and low widened to take that open in), so every trade
- * draws a body from the previous close to its own: a trade that moved the price never shows as a flat dash. The
- * first candle keeps its own open. Returns the same array when nothing needed changing.
- */
-export function continuous(candles: Candle[]): Candle[] {
-  let out: Candle[] | null = null;
-  for (let i = 1; i < candles.length; i++) {
-    const prev = (out ?? candles)[i - 1].close;
-    const c = candles[i];
-    if (!priceOk(prev) || c.open === prev) continue;
-    out ??= candles.slice();
-    out[i] = { ...c, open: prev, high: Math.max(c.high, prev, c.close), low: Math.min(c.low, prev, c.close) };
-  }
-  return out ?? candles;
-}
-
-/**
- * `candles` with the current period's bar: when the newest candle's period is over (by the wall clock, `nowS` in unix
- * seconds), a flat bar at its close (O = H = L = C) for the period now running, so the chart always has a bar for
- * "now" and a trade lands in a bar that's already there. Only that one bar: a period that ends without a trade isn't
- * kept, so a quiet token's history stays its traded candles side by side.
- */
-export function withLiveBar(candles: Candle[], nowS: number | null, interval: number): Candle[] {
-  if (nowS === null || candles.length === 0 || !(interval > 0)) return candles;
-  const newest = candles[candles.length - 1];
-  const bucket = Math.floor(nowS / interval) * interval;
-  if (bucket <= newest.time || !priceOk(newest.close)) return candles;
-  return [...candles, { time: bucket, open: newest.close, high: newest.close, low: newest.close, close: newest.close, volume: 0, trades: 0 }];
-}
-
-/**
- * `candles` moved by a quoted price (`live`, read at `tickAtS` unix seconds): the newest candle closes at it (high and
- * low widened), or a new candle opens for the running period. Only while no trades are streaming in: a quote service
- * trails the coin's own trades by seconds (Jupiter, live 2026-11-27: up to ~10%), so forcing it into candles the trades
- * already draw puts wicks on the chart that no trade made.
- */
-export function withLiveTick(candles: Candle[], live: number | null, tickAtS: number | null, interval: number, tradesStreaming: boolean): Candle[] {
-  if (tradesStreaming || live === null || !priceOk(live) || tickAtS === null || candles.length === 0 || !(interval > 0)) return candles;
-  const out = candles.slice();
-  const last = { ...out[out.length - 1] };
-  const bucket = Math.floor(tickAtS / interval) * interval;
-  if (bucket > last.time) {
-    out.push({ time: bucket, open: last.close, high: Math.max(last.close, live), low: Math.min(last.close, live), close: live, volume: 0, trades: 0 });
-  } else {
-    last.close = live;
-    last.high = Math.max(last.high, live);
-    last.low = Math.min(last.low, live);
-    out[out.length - 1] = last;
-  }
-  return out;
-}
 
 export type AheadTrade = { at: number; price: number; expected?: number; usdc?: number; tx?: string };
 
@@ -83,8 +30,10 @@ export function withPendingTrades(
   const newest = out[out.length - 1];
   const nowS = Math.floor(Math.max(...ahead.map((p) => p.at)) / 1000);
   const barAt = nowS < newest.time + interval ? newest.time : Math.floor(nowS / interval) * interval;
-  const bar: Candle =
-    barAt > newest.time ? { time: barAt, open: newest.close, high: newest.close, low: newest.close, close: newest.close, volume: 0, trades: 0 } : { ...newest };
+  const first = ahead.map((p) => (priceOk(p.expected) ? p.expected : priceOk(p.price) ? p.price : null)).find((v) => v !== null) ?? null;
+  // A new period opens at the first pending trade's own price, as the confirmed trade's candle will.
+  if (barAt > newest.time && first === null) return candles;
+  const bar: Candle = barAt > newest.time ? { time: barAt, open: first!, high: first!, low: first!, close: first!, volume: 0, trades: 0 } : { ...newest };
   for (const p of ahead) {
     const to = priceOk(p.expected) ? p.expected : priceOk(p.price) ? p.price : null;
     if (to !== null) {

@@ -51,7 +51,7 @@ test("a batch-pool fill carries its batch and its uniform price", () => {
   assert.equal(sell.usdc, BigInt(5));
 });
 
-test("candles open at the clearing price, then at each previous close; volume and trades add up", () => {
+test("the first candle opens at the clearing price, every later one at its own first trade; volume and trades add up", () => {
   const fills = [
     { time: 970, price: 2, usdc: BigInt(1_000_000) },
     { time: 1_010, price: 3, usdc: BigInt(500_000) }, // the same minute (960–1019)
@@ -62,7 +62,7 @@ test("candles open at the clearing price, then at each previous close; volume an
     candles.map((c) => [c.time, c.open, c.high, c.low, c.close, c.volume, c.trades]),
     [
       [960, 1, 3, 1, 3, 1.5, 2],
-      [1_200, 3, 3, 1.5, 1.5, 0.25, 1],
+      [1_200, 1.5, 1.5, 1.5, 1.5, 0.25, 1],
     ],
   );
 });
@@ -80,9 +80,28 @@ test("candles ignore zero-price fills and sort by time", () => {
     candles.map((c) => [c.time, c.open, c.close]),
     [
       [60, 2, 2],
-      [180, 2, 4],
+      [180, 4, 4],
     ],
   );
+});
+
+test("a live candle from real trades only: open first, high and low the extremes, close last", () => {
+  const trade = (time: number, price: number) => ({ time, price, usdc: BigInt(1_000_000) });
+  const steps = [trade(60, 100), trade(61, 105), trade(62, 98), trade(63, 110)];
+  const expect = [
+    [100, 100, 100, 100],
+    [100, 105, 100, 105],
+    [100, 105, 98, 98],
+    [100, 110, 98, 110],
+  ];
+  for (let i = 0; i < steps.length; i++) {
+    const [c] = toCandles(steps.slice(0, i + 1), 60);
+    assert.deepEqual([c.open, c.high, c.low, c.close], expect[i], `after trade ${i + 1}`);
+    assert.equal(c.volume, i + 1);
+  }
+  // A quiet minute is a gap, and the next candle opens at its own first trade, not the last close.
+  const two = toCandles([...steps, trade(185, 90)], 60);
+  assert.deepEqual(two.map((c) => [c.time, c.open, c.close]), [[60, 100, 110], [180, 90, 90]]);
 });
 
 test("fillGaps draws quiet periods flat at the last close, up to now, and leaves sub-minute intervals alone", async () => {

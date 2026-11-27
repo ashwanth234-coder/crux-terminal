@@ -7,35 +7,12 @@ import { relay } from "@/hooks/useSolanaTrading";
 import { poolTrades, type CoinTrade } from "@/lib/coinMarket";
 import type { Address, Hex } from "viem";
 import { toCandles, type Candle } from "@/lib/candles";
-import { withLiveTick } from "@/lib/chartLive";
 import { topPool, type ChartNetwork } from "@/lib/solanaCoins";
 import type { PoolTrade } from "@/hooks/usePoolSwaps";
 import { joinLaunch, launchCandles, type LaunchHistory } from "@/lib/launchHistory";
 
 /** A Solana or BNB Chain coin the Crux pro chart draws (its busiest market; history and live trades from Crux's server). */
 export type RemoteCoin = { network: ChartNetwork; token: string };
-
-/**
- * The coin's price right now, read every few seconds so the newest candle moves between trade reads: Jupiter's price
- * for Solana (generous free limits), the pool's DexScreener price for BNB Chain (~300 reads a minute).
- */
-async function livePrice(network: ChartNetwork, pool: string, token: string): Promise<number | null> {
-  if (network === "solana") {
-    const r = await fetch(`https://lite-api.jup.ag/price/v3?ids=${token}`);
-    if (!r.ok) return null;
-    const p = ((await r.json()) as Record<string, { usdPrice?: number } | undefined>)[token]?.usdPrice;
-    return typeof p === "number" && p > 0 ? p : null;
-  }
-  const r = await fetch(`https://api.dexscreener.com/latest/dex/pairs/${network}/${pool}`);
-  if (!r.ok) return null;
-  const pair = ((await r.json()) as { pair?: { baseToken?: { address?: string }; priceUsd?: string } }).pair;
-  if (!pair?.priceUsd || pair.baseToken?.address?.toLowerCase() !== token.toLowerCase()) return null;
-  const p = Number(pair.priceUsd);
-  return p > 0 ? p : null;
-}
-
-/** Every live price read this visit, per coin: the chart draws from these while the candle source is busy. */
-const tickLog = new Map<string, { time: number; price: number }[]>();
 
 /** USD candles at `interval` seconds: the largest size GeckoTerminal has that divides it, merged up when needed. */
 async function remoteCandles(network: ChartNetwork, pool: string, token: string, interval: number): Promise<Candle[]> {
@@ -126,23 +103,6 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
     };
   }, [coin, addr, qc]);
   const fine = interval < 60;
-  const tick = useQuery({
-    queryKey: ["coin-tick", coin?.network, addr, coin?.token],
-    queryFn: async () => {
-      const p = await livePrice(coin!.network, addr!, coin!.token);
-      if (p !== null) {
-        const key = `${coin!.network}:${coin!.token}`;
-        const log = tickLog.get(key) ?? [];
-        log.push({ time: Math.floor(Date.now() / 1000), price: p });
-        if (log.length > 5_000) log.splice(0, log.length - 5_000);
-        tickLog.set(key, log);
-      }
-      return p;
-    },
-    enabled: coin !== null && addr !== null,
-    refetchInterval: coin?.network === "solana" ? 2_000 : 3_000,
-    staleTime: 1_000,
-  });
   const candles = useQuery({
     queryKey: ["coin-ohlcv", coin?.network, addr, interval],
     queryFn: () => remoteCandles(coin!.network, addr!, coin!.token, interval),
@@ -194,26 +154,15 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
           last.high = Math.max(last.high, t.price);
           last.low = Math.min(last.low, t.price);
           last.volume += usd;
-        } else out.push({ time: b, open: last.close, high: Math.max(last.close, t.price), low: Math.min(last.close, t.price), close: t.price, volume: usd, trades: 1 });
+        } else out.push({ time: b, open: t.price, high: t.price, low: t.price, close: t.price, volume: usd, trades: 1 });
       }
     }
     return out;
   }, [fine, swapData, candles.data, interval, launchTrades]);
 
-  // The live price moves the newest candle (or opens the next one when its period has begun), every tick.
-  const live = tick.data ?? null;
-  const tickAt = tick.dataUpdatedAt;
+  // Only trades draw candles: a quoted price (Jupiter, DexScreener) trails the coin's own trades and isn't a trade.
   const busy = trades.isError || (!fine && candles.isError);
-  const drawn = useMemo(() => {
-    // The candle source is busy: draw this visit's live prices instead of a blank chart.
-    if (!base && busy && coin && tickAt) {
-      const log = tickLog.get(`${coin.network}:${coin.token}`) ?? [];
-      return log.length ? toCandles(log.map((t) => ({ time: t.time, price: t.price, usdc: BigInt(0) })), interval) : undefined;
-    }
-    if (!base) return base;
-    // With Crux's server streaming the coin's trades, they alone draw the candles (a quote service trails them).
-    return withLiveTick(base, live, tickAt ? Math.floor(tickAt / 1000) : null, interval, liveFeed);
-  }, [base, live, tickAt, interval, busy, coin, liveFeed]);
+  const drawn = base;
 
   return {
     candles: drawn,

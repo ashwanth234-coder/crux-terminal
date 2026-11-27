@@ -1,29 +1,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { badgeText, clusterBadges, continuous, graduationTime, matchExecutions, withLiveBar, withLiveTick, withPendingTrades, type BadgeFill } from "./chartLive.ts";
+import { badgeText, clusterBadges, graduationTime, matchExecutions, withPendingTrades, type BadgeFill } from "./chartLive.ts";
 
 const bar = (time: number, close: number) => ({ time, open: close, high: close, low: close, close, volume: 3, trades: 1 });
-
-test("withLiveBar: a flat bar opens for the running period once the newest candle's is over, and only then", () => {
-  const candles = [bar(100, 2), bar(105, 3)];
-  assert.equal(withLiveBar(candles, 109, 5), candles, "still inside the newest candle's period");
-  const out = withLiveBar(candles, 111, 5);
-  assert.deepEqual(out[2], { time: 110, open: 3, high: 3, low: 3, close: 3, volume: 0, trades: 0 });
-  assert.equal(candles.length, 2, "the input isn't changed");
-  // An hour later there is still one live bar, not one per quiet period.
-  assert.equal(withLiveBar(candles, 3_711, 5).length, 3);
-  assert.equal(withLiveBar(candles, 3_711, 5)[2].time, 3_710);
-  assert.equal(withLiveBar(candles, null, 5), candles);
-  assert.equal(withLiveBar([], 111, 5).length, 0);
-});
 
 test("withPendingTrades: a trade on its way moves the newest bar; one already on the chart isn't counted twice", () => {
   const candles = [bar(100, 2)];
   const out = withPendingTrades(candles, [{ at: 100_400, price: 2, expected: 2.5, usdc: 1 }], new Set(), 1);
   assert.deepEqual(out[0], { time: 100, open: 2, high: 2.5, low: 2, close: 2.5, volume: 4, trades: 2 });
-  // Pressed after the bar's second was up: it opens the next bar from the last close.
+  // Pressed after the bar's second was up: the next bar opens at its own price, as its confirmed trade's candle will.
   const next = withPendingTrades(candles, [{ at: 101_200, price: 2, expected: 1.5 }], new Set(), 1);
-  assert.deepEqual(next[1], { time: 101, open: 2, high: 2, low: 1.5, close: 1.5, volume: 0, trades: 1 });
+  assert.deepEqual(next[1], { time: 101, open: 1.5, high: 1.5, low: 1.5, close: 1.5, volume: 0, trades: 1 });
+  // With no usable price, a new period gets no bar at all.
+  assert.equal(withPendingTrades(candles, [{ at: 101_200, price: NaN }], new Set(), 1), candles);
   assert.equal(withPendingTrades(candles, [{ at: 100_400, price: 2, expected: 2.5, tx: "0xAB" }], new Set(["0xab"]), 1), candles);
 });
 
@@ -85,34 +74,10 @@ test("matchExecutions: each mark gets its own swap's price, by transaction or by
   assert.equal(out[4], null);
 });
 
-test("continuous: each candle opens at the previous close, with its high and low taking that open in", () => {
-  const c = (time: number, open: number, high: number, low: number, close: number) => ({ time, open, high, low, close, volume: 1, trades: 1 });
-  const ok = [c(1, 1, 2, 1, 2), c(2, 2, 3, 2, 3)];
-  assert.equal(continuous(ok), ok, "already continuous: the same array");
-  // A one-trade candle the feed drew flat at its own price (a dash) gets its body from the last close.
-  const out = continuous([c(1, 1, 2, 1, 2), c(2, 3, 3, 3, 3), c(3, 2.5, 2.5, 2.5, 2.5)]);
-  assert.deepEqual(out[1], c(2, 2, 3, 2, 3));
-  assert.deepEqual(out[2], c(3, 3, 3, 2.5, 2.5));
-  assert.deepEqual(out[0], c(1, 1, 2, 1, 2), "the first keeps its open");
-});
-
 test("withPendingTrades: a pending trade whose swap a feed frame already carried gives way in that paint", () => {
   const candles = [{ time: 100, open: 1, high: 2, low: 1, close: 2, volume: 1, trades: 1 }];
   const tx = `0x${"cd".repeat(32)}`;
   // The swap is in the frame's candles (close 2), not yet in the trade list React renders.
   assert.equal(withPendingTrades(candles, [{ at: 100_400, price: 2, expected: 2.5, usdc: 1, tx }], new Set(), 1, (t) => t === tx), candles);
   assert.equal(withPendingTrades(candles, [{ at: 100_400, price: 2, expected: 2.5, usdc: 1, tx }], new Set(), 1, () => false)[0].close, 2.5);
-});
-
-test("withLiveTick: a quoted price moves the newest candle only while no trades are streaming in", () => {
-  const candles = [bar(100, 2), bar(105, 3)];
-  // Live 2026-11-27: Jupiter's quoted price trailed the coin's own trades by a few seconds and up to ~10%; forced into
-  // the newest 1-second candle every 2 s, it drew wicks the trades never made. With trades streaming, they alone draw.
-  assert.equal(withLiveTick(candles, 2.5, 107, 5, true), candles, "trades streaming: the quote is ignored");
-  const moved = withLiveTick(candles, 2.5, 107, 5, false);
-  assert.deepEqual(moved[1], { time: 105, open: 3, high: 3, low: 2.5, close: 2.5, volume: 3, trades: 1 });
-  const next = withLiveTick(candles, 4, 111, 5, false);
-  assert.deepEqual(next[2], { time: 110, open: 3, high: 4, low: 3, close: 4, volume: 0, trades: 0 });
-  assert.equal(withLiveTick(candles, null, 111, 5, false), candles, "no quote: unchanged");
-  assert.equal(candles.length, 2, "the input isn't changed");
 });
