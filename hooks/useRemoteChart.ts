@@ -7,6 +7,7 @@ import { relay } from "@/hooks/useSolanaTrading";
 import { poolTrades, type CoinTrade } from "@/lib/coinMarket";
 import type { Address, Hex } from "viem";
 import { toCandles, type Candle } from "@/lib/candles";
+import { withLiveTick } from "@/lib/chartLive";
 import { topPool, type ChartNetwork } from "@/lib/solanaCoins";
 import type { PoolTrade } from "@/hooks/usePoolSwaps";
 import { joinLaunch, launchCandles, type LaunchHistory } from "@/lib/launchHistory";
@@ -209,21 +210,10 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
       const log = tickLog.get(`${coin.network}:${coin.token}`) ?? [];
       return log.length ? toCandles(log.map((t) => ({ time: t.time, price: t.price, usdc: BigInt(0) })), interval) : undefined;
     }
-    if (!base || live === null || base.length === 0 || !tickAt) return base;
-    const out = base.slice();
-    const last = { ...out[out.length - 1] };
-    const now = Math.floor(tickAt / 1000);
-    const bucket = Math.floor(now / interval) * interval;
-    if (bucket > last.time) {
-      out.push({ time: bucket, open: last.close, high: Math.max(last.close, live), low: Math.min(last.close, live), close: live, volume: 0, trades: 0 });
-    } else {
-      last.close = live;
-      last.high = Math.max(last.high, live);
-      last.low = Math.min(last.low, live);
-      out[out.length - 1] = last;
-    }
-    return out;
-  }, [base, live, tickAt, interval, busy, coin]);
+    if (!base) return base;
+    // With Crux's server streaming the coin's trades, they alone draw the candles (a quote service trails them).
+    return withLiveTick(base, live, tickAt ? Math.floor(tickAt / 1000) : null, interval, liveFeed);
+  }, [base, live, tickAt, interval, busy, coin, liveFeed]);
 
   return {
     candles: drawn,

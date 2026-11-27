@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { badgeText, clusterBadges, continuous, graduationTime, matchExecutions, withLiveBar, withPendingTrades, type BadgeFill } from "./chartLive.ts";
+import { badgeText, clusterBadges, continuous, graduationTime, matchExecutions, withLiveBar, withLiveTick, withPendingTrades, type BadgeFill } from "./chartLive.ts";
 
 const bar = (time: number, close: number) => ({ time, open: close, high: close, low: close, close, volume: 3, trades: 1 });
 
@@ -102,4 +102,17 @@ test("withPendingTrades: a pending trade whose swap a feed frame already carried
   // The swap is in the frame's candles (close 2), not yet in the trade list React renders.
   assert.equal(withPendingTrades(candles, [{ at: 100_400, price: 2, expected: 2.5, usdc: 1, tx }], new Set(), 1, (t) => t === tx), candles);
   assert.equal(withPendingTrades(candles, [{ at: 100_400, price: 2, expected: 2.5, usdc: 1, tx }], new Set(), 1, () => false)[0].close, 2.5);
+});
+
+test("withLiveTick: a quoted price moves the newest candle only while no trades are streaming in", () => {
+  const candles = [bar(100, 2), bar(105, 3)];
+  // Live 2026-11-27: Jupiter's quoted price trailed the coin's own trades by a few seconds and up to ~10%; forced into
+  // the newest 1-second candle every 2 s, it drew wicks the trades never made. With trades streaming, they alone draw.
+  assert.equal(withLiveTick(candles, 2.5, 107, 5, true), candles, "trades streaming: the quote is ignored");
+  const moved = withLiveTick(candles, 2.5, 107, 5, false);
+  assert.deepEqual(moved[1], { time: 105, open: 3, high: 3, low: 2.5, close: 2.5, volume: 3, trades: 1 });
+  const next = withLiveTick(candles, 4, 111, 5, false);
+  assert.deepEqual(next[2], { time: 110, open: 3, high: 4, low: 3, close: 4, volume: 0, trades: 0 });
+  assert.equal(withLiveTick(candles, null, 111, 5, false), candles, "no quote: unchanged");
+  assert.equal(candles.length, 2, "the input isn't changed");
 });

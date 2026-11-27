@@ -39,6 +39,28 @@ export function withLiveBar(candles: Candle[], nowS: number | null, interval: nu
   return [...candles, { time: bucket, open: newest.close, high: newest.close, low: newest.close, close: newest.close, volume: 0, trades: 0 }];
 }
 
+/**
+ * `candles` moved by a quoted price (`live`, read at `tickAtS` unix seconds): the newest candle closes at it (high and
+ * low widened), or a new candle opens for the running period. Only while no trades are streaming in: a quote service
+ * trails the coin's own trades by seconds (Jupiter, live 2026-11-27: up to ~10%), so forcing it into candles the trades
+ * already draw puts wicks on the chart that no trade made.
+ */
+export function withLiveTick(candles: Candle[], live: number | null, tickAtS: number | null, interval: number, tradesStreaming: boolean): Candle[] {
+  if (tradesStreaming || live === null || !priceOk(live) || tickAtS === null || candles.length === 0 || !(interval > 0)) return candles;
+  const out = candles.slice();
+  const last = { ...out[out.length - 1] };
+  const bucket = Math.floor(tickAtS / interval) * interval;
+  if (bucket > last.time) {
+    out.push({ time: bucket, open: last.close, high: Math.max(last.close, live), low: Math.min(last.close, live), close: live, volume: 0, trades: 0 });
+  } else {
+    last.close = live;
+    last.high = Math.max(last.high, live);
+    last.low = Math.min(last.low, live);
+    out[out.length - 1] = last;
+  }
+  return out;
+}
+
 export type AheadTrade = { at: number; price: number; expected?: number; usdc?: number; tx?: string };
 
 /**
