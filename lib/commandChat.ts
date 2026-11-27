@@ -183,7 +183,7 @@ export function suggestionsFor(text: string): ChatOption[] {
   out.push({ label: "What can you do?", command: "help" }, { label: "What's trending?", command: "what's trending?" });
   return out;
 }
-const COMMON = new Set("i me my you your a an the to of in on at for and or but is are was be do does did can could would should will want wanna need please pls just now then that this it its what whats how why when where who which some any all half more less much many get got buy sell coin coins token tokens price safe dollars bucks usd".split(" "));
+const COMMON = new Set("i me my you your a an the to of in on at for and or but is are was be do does did can could would should will want wanna need please pls just now then that this it its what whats how why when where who which some any all half more less much many get got buy sell coin coins token tokens price safe dollars bucks usd tell about show give find pull make made creator dev deployer info check know thanks thank hey hi hello yo also like good bad new old today tonight his her their our up down out into from with without there here have has had been am im it's let lets go going gonna wanna kinda really very so too okay ok yes no not dont don't cant can't why help more again thing things stuff bro bruh man dude guys sir fam pls plz something anything everything".split(" "));
 
 function readCommand(raw: string, template?: string): Reply {
   // Trader slang first ("ape 5 into bonk", "leave a moon bag", "sl 20"): rewritten into the plain commands below.

@@ -129,13 +129,34 @@ export type CoinQuestion =
   | { kind: "help" };
 
 /** Words that are never the coin in a question ("is it safe", "who made this"). */
-const NOT_COIN = new Set("it this that dat dis the a an coin token one my his her their dev creator deployer wallet address ca he she they guy them".split(" "));
+const NOT_COIN = new Set("it its it's this that dat dis the a an coin token one my his her their dev creator deployer wallet address ca he she they guy them".split(" "));
 const coinWord = (w: string | undefined, last?: string): string | null => {
   if (!w) return last ?? null;
   const c = w.replace(/^\$/, "").replace(/[?!.,]+$/, "");
   if (!c || NOT_COIN.has(c.toLowerCase())) return last ?? null;
   return c;
 };
+
+/** Words that make a message a trade (a trade mentioning the dev stays a trade). */
+const TRADING = /\b(?:buy|sell|ape|dump|stop[- ]?loss|take[- ]?profit|tp|sl|trail(?:ing)?|scan|copy|snipe)\b/;
+const ADDRESS_ANY = /\b(0x[a-fA-F0-9]{40}|[1-9A-HJ-NP-Za-km-z]{32,44})\b/;
+/**
+ * The coin a creator question names, wherever it sits: an address, a $TICKER, "BONK's creator", "creator of BONK";
+ * else the coin the conversation is about.
+ */
+function anyCoin(s: string, last?: string): string | null {
+  const a = s.match(ADDRESS_ANY);
+  if (a) return a[1];
+  const ticker = s.match(/\$([A-Za-z][A-Za-z0-9]{1,14})\b/);
+  if (ticker) return ticker[1];
+  const before = s.match(/\b([A-Za-z][A-Za-z0-9]{1,14})(?:'s|s')?\s+(?:creator|dev|deployer|founder)\b/i);
+  if (before && !NOT_COIN.has(before[1].toLowerCase()) && !QUESTION_WORDS.has(before[1].toLowerCase())) return before[1];
+  const after = s.match(/\b(?:creator|dev|deployer|founder)\s+(?:of|for|behind)\s+([A-Za-z][A-Za-z0-9]{1,14})\b/i);
+  if (after && !NOT_COIN.has(after[1].toLowerCase())) return after[1];
+  return last ?? null;
+}
+/** Words that sit before "creator" in a question but aren't a coin ("about its creator", "who's the dev"). */
+const QUESTION_WORDS = new Set("about who whos who's is the its it's this that what whats what's show tell find pull get give me real original actual same".split(" "));
 
 /** A peak named in the message: "hit 50k", "reached $1m", "over 100k mc", "50k+". */
 function peakIn(s: string): number | undefined {
@@ -177,6 +198,14 @@ export function readCoinQuestion(raw: string, last?: string): CoinQuestion | nul
   ) {
     return { kind: "creator", coin: coinWord(m[1]?.split(" ").pop(), last), chain };
   }
+  // Anything else about the creator that isn't a trade ("tell me about its creator", "<address> who's the dev",
+  // "creator?", "who made this one"): the coin named anywhere in it, else the one the conversation is about.
+  if (/\b(?:creator|dev|deployer|founder|who\s+(?:made|created|launched|deployed|minted))\b/.test(t) && !TRADING.test(t)) {
+    return { kind: "creator", coin: anyCoin(noChain, last), chain };
+  }
+  // A pasted address with a question about it ("0x… tell me about it", "is 0x… safe"): its facts.
+  const pasted = noChain.match(ADDRESS_ANY);
+  if (pasted && !TRADING.test(t) && /\b(?:about|safe|legit|rug|scam|info|check|price|mcap|what|tell|is|any good|thoughts)\b/.test(t)) return { kind: "lookup", coin: pasted[1], chain };
   // A coin's facts: "is bonk safe", "price of wif", "how much is wif", "tell me about bonk", "should i buy bonk".
   if (
     (m = noChain.match(/^(?:is|are)\s+(\S+)\s+(?:safe|legit|a rug|rugging|rugged|a scam|scam|a honeypot|good|ok|okay|worth it|a good buy|real|dead|still alive)\b/i)) ||

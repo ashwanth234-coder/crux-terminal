@@ -12,3 +12,9 @@ test("Ask Crux reads everyday ways of typing (the corpus)", () => {
   if (process.env.CORPUS_REPORT) console.log(`${CORPUS.length - misses.length}/${CORPUS.length} read right\n${misses.join("\n")}`);
   assert.deepEqual(misses, []);
 });
+
+test("a message Crux can't read never guesses an everyday word as a coin", async () => {
+  const { suggestionsFor } = await import("./commandChat.ts");
+  const labels = suggestionsFor("tell me about the thing please").map((o) => o.label);
+  assert.ok(!labels.some((l) => /^Check (TELL|ABOUT|THING|PLEASE)$/.test(l)), labels.join(", "));
+});
