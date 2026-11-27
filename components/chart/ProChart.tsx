@@ -9,7 +9,7 @@ import { DESTINATION_SETTLER, useLaunchMarket } from "@/hooks/useLaunchMarket";
 import { useTokenTransfers } from "@/hooks/useTokenTransfers";
 import { useStandingOrders } from "@/hooks/useStandingOrders";
 import { useCreatorVestingDays } from "@/hooks/useCreatorVesting";
-import { barTime, markBarTime, markTrades, type MarkWho } from "@/lib/chartMarks";
+import { barTime, graduationPoint, markBarTime, markTrades, type MarkWho } from "@/lib/chartMarks";
 import { devMarks } from "@/lib/devMarks";
 import { useCoinCreator } from "@/hooks/useCoinCreator";
 import { useSavedWallets } from "@/hooks/useSavedWallets";
@@ -787,10 +787,15 @@ export function ProChart({
     engine.setPriceLines(lines);
 
     const times = candles.map((c) => c.time);
-    const milestones: { time: number; text: string; color: string }[] = [];
-    if (!external && !marksHidden && graduatedAt !== null && graduatedAt > 0) milestones.push({ time: graduatedAt, text: "Graduated", color: "#f3f3f0" });
+    const milestones: { time: number; text: string; color: string; price?: number }[] = [];
+    // Graduation pinned where it happened: on its candle, at the price (market cap) the coin left its curve at.
+    const graduated = (at: number) => {
+      const p = graduationPoint(candles, at);
+      return p ? { time: p.time, text: `Graduated · ${fmt(p.price * k)}`, color: "#f3f3f0", price: p.price * k } : { time: at, text: "Graduated", color: "#f3f3f0" };
+    };
+    if (!external && !marksHidden && graduatedAt !== null && graduatedAt > 0) milestones.push(graduated(graduatedAt));
     // Another chain's coin that left its launch curve (a pump.fun coin's move to its market): where its chart joins.
-    if (remote && !marksHidden && rcGraduatedAt) milestones.push({ time: rcGraduatedAt, text: "Graduated", color: "#f3f3f0" });
+    if (remote && !marksHidden && rcGraduatedAt) milestones.push(graduated(rcGraduatedAt));
     if (!external && !marksHidden && auction.settledAt > 0) {
       if (market.protectedUntil && market.protectedUntil > auction.settledAt) milestones.push({ time: market.protectedUntil, text: "Anti-sniper ends", color: "#5cc08c" });
       if (vestDays) milestones.push({ time: auction.settledAt + vestDays * 86_400, text: "Creator unlocked", color: "#ffd166" });
@@ -802,7 +807,7 @@ export function ProChart({
       milestones.flatMap((m) => {
         if (times.length === 0 || m.time < times[0] || m.time > times[times.length - 1] + interval) return [];
         const time = barTime(times, m.time);
-        return time === null ? [] : [{ time, text: m.text, color: m.color }];
+        return time === null ? [] : [{ time, text: m.text, color: m.color, price: m.price }];
       }),
     );
   }, [engine, candles, k, fmt, minMove, config.type, drawnStudies, config.alerts, settings, marksHidden, gradPrice, mine, standingOrders, auction.token, auction.settledAt, graduatedAt, external, market.protectedUntil, vestDays, interval, remote, rcGraduatedAt]);

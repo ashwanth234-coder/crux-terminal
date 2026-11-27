@@ -97,6 +97,17 @@ export function markBarTime(
   return own;
 }
 
+/**
+ * Where a coin graduated on its chart: the last candle at or before `graduatedAt` (the launch curve's final bar) and
+ * its close, the price (or market cap, in the chart's units) it left the curve at. Null when there's no such candle.
+ */
+export function graduationPoint(candles: readonly { time: number; close: number }[], graduatedAt: number): { time: number; price: number } | null {
+  if (candles.length === 0 || graduatedAt < candles[0].time) return null;
+  const time = barTime(candles.map((c) => c.time), graduatedAt);
+  const bar = time === null ? undefined : candles.find((c) => c.time === time);
+  return bar && Number.isFinite(bar.close) && bar.close > 0 ? { time: bar.time, price: bar.close } : null;
+}
+
 /** The latest candle time at or before `time` (candle times ascending), so a mark sits on an existing bar. */
 export function barTime(times: number[], time: number): number | null {
   let lo = 0;

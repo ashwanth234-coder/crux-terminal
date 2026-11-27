@@ -10,8 +10,11 @@ type Target = Parameters<IPrimitivePaneRenderer["draw"]>[0];
  */
 export type Badge = { time: number; high: number; low: number; label: string; side: "buy" | "sell"; count: number; fills: BadgeFill[] };
 
-/** A milestone of the launch on its bar: a dashed line down the pane with its name in a pill at the top. */
-export type ChartEvent = { time: number; text: string; color: string };
+/**
+ * A milestone of the launch on its bar: a dashed line down the pane with its name in a pill at the top. With `price`
+ * (in the chart's units) it's pinned where it happened instead: a dot on that price with its name just above it.
+ */
+export type ChartEvent = { time: number; text: string; color: string; price?: number };
 
 /** How far down the pane the first milestone's name sits: under the legend's two lines. */
 const EVENT_TOP = 46;
@@ -86,6 +89,36 @@ export class BadgesPrimitive implements ISeriesPrimitive<Time> {
       if (x === null || x < -60 || x > width + 60) continue;
       const w = ctx.measureText(e.text).width + 12;
       const cx = Math.min(Math.max(x, w / 2 + 2), Math.max(w / 2 + 2, width - w / 2 - 2));
+      const py = e.price !== undefined ? (this.series?.priceToCoordinate(e.price) ?? null) : null;
+      if (py !== null && Number.isFinite(py) && py >= 0 && py <= height) {
+        // Pinned on its price: a ringed dot there, a short stem, and the name in a pill just above (below when the dot
+        // is near the top of the pane).
+        const up = py > 40;
+        const ly = up ? py - 22 : py + 22;
+        ctx.strokeStyle = `${e.color}99`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(Math.round(x) + 0.5, up ? ly + 8 : ly - 8);
+        ctx.lineTo(Math.round(x) + 0.5, up ? py - 4 : py + 4);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(x, py, 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(10, 10, 10, 0.9)";
+        ctx.fill();
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = e.color;
+        ctx.stroke();
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(cx - w / 2, ly - 8, w, 16, 8);
+        ctx.fillStyle = "rgba(10, 10, 10, 0.85)";
+        ctx.fill();
+        ctx.strokeStyle = `${e.color}99`;
+        ctx.stroke();
+        ctx.fillStyle = e.color;
+        ctx.fillText(e.text, cx, ly + 0.5);
+        continue;
+      }
       let row = 0;
       while (rows[row]?.some((r) => cx - w / 2 < r.right + 4 && cx + w / 2 > r.left - 4)) row++;
       (rows[row] ??= []).push({ left: cx - w / 2, right: cx + w / 2 });

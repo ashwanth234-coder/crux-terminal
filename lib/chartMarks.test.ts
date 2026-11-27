@@ -1,7 +1,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Address, Hex } from "viem";
-import { barTime, markTrades, type MarkContext } from "./chartMarks.ts";
+import { barTime, graduationPoint, markTrades, type MarkContext } from "./chartMarks.ts";
+
+test("graduationPoint: the last launch-curve candle and the price it graduated at", () => {
+  const c = (time: number, close: number) => ({ time, close });
+  const candles = [c(100, 1), c(160, 2), c(220, 3.5), c(280, 3.1)];
+  // Graduated at 230 (inside the 220 candle): that candle's close is where the curve ended.
+  assert.deepEqual(graduationPoint(candles, 230), { time: 220, price: 3.5 });
+  assert.deepEqual(graduationPoint(candles, 220), { time: 220, price: 3.5 });
+  assert.equal(graduationPoint(candles, 50), null, "before the first candle: no point to mark");
+  assert.equal(graduationPoint([], 230), null);
+  assert.equal(graduationPoint([c(100, 0)], 120), null, "no real price: no point");
+});
 import type { TokenTransfer } from "../hooks/useTokenTransfers.ts";
 
 const a = (n: number) => `0x${n.toString(16).padStart(40, "0")}` as Address;
