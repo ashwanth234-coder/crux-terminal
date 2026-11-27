@@ -222,6 +222,8 @@ export type DexPair = {
   marketCap?: number;
   fdv?: number;
   pairCreatedAt?: number;
+  /** The team's links, when they gave DexScreener any. */
+  info?: { websites?: { label?: string; url?: string }[]; socials?: { type?: string; url?: string }[] };
 };
 
 const DEX_CHAIN: Record<ChartNetwork, string> = { solana: "solana", bsc: "bsc", base: "base" };

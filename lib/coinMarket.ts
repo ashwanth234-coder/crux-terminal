@@ -2,7 +2,7 @@
  * Live market facts for a Solana or BNB Chain coin's terminal (its deepest pool on GeckoTerminal's free API, read in the
  * browser): the stats bar, the trades tape, and BNB Chain's fresh coins for the Trenches tab.
  */
-import { deepestPair, isStable, type ChartNetwork } from "@/lib/solanaCoins";
+import { deepestPair, isStable, type ChartNetwork, type DexPair } from "@/lib/solanaCoins";
 
 const GT = "https://api.geckoterminal.com/api/v2/networks";
 const get = async <T,>(url: string): Promise<T | null> => {
@@ -143,6 +143,9 @@ export type PoolStats = {
   volume1h?: number;
   buys24h?: number;
   sells24h?: number;
+  /** DexScreener's market id ("pumpswap", "fourmeme"…) and the team's links it lists. */
+  dexId?: string;
+  info?: DexPair["info"];
 };
 
 /** A venue id as traders know it ("pancakeswap_v2" → "PancakeSwap", "pump-fun" → "pump.fun"). */
@@ -176,6 +179,8 @@ export async function poolStats(network: ChartNetwork, token: string): Promise<P
     volume1h: p.volume?.h1,
     buys24h: t24?.buys,
     sells24h: t24?.sells,
+    dexId: p.dexId,
+    info: p.info,
   };
 }
 

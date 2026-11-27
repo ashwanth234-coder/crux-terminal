@@ -16,6 +16,17 @@ import { SafetyStrip } from "@/components/coin/SafetyStrip";
 import { SaveStar } from "@/components/wallets/SaveWallet";
 import { useSavedWallets } from "@/hooks/useSavedWallets";
 import { chainOf, walletKey } from "@/lib/savedWallets";
+import { coinLinks, launchpadOf } from "@/lib/coinLinks";
+
+type JupiterToken = { id: string; website?: string; twitter?: string; telegram?: string; discord?: string; launchpad?: string };
+
+/** A Solana coin's links and launchpad from Jupiter's token list (free, the same list the scan reads). */
+async function jupiterToken(mint: string): Promise<JupiterToken | null> {
+  const r = await fetch(`https://lite-api.jup.ag/tokens/v2/search?query=${encodeURIComponent(mint)}`);
+  if (!r.ok) return null;
+  const list = (await r.json()) as JupiterToken[];
+  return Array.isArray(list) ? (list.find((t) => t.id === mint) ?? null) : null;
+}
 
 export type CoinFacts = { symbol?: string; name?: string; icon?: string; price?: number; change24h?: number; mcap?: number; liquidity?: number };
 
@@ -134,6 +145,9 @@ export function CoinTerminal({ network, token, coin, trade, path }: { network: C
 
 function CoinBar({ network, token, coin, price, stats, now }: { network: ChartNetwork; token: string; coin: CoinFacts | null | undefined; price?: number; stats?: PoolStats; now: number }) {
   const [copied, setCopied] = useState(false);
+  const jup = useQuery({ queryKey: ["jupiter-token", token], queryFn: () => jupiterToken(token), enabled: network === "solana", staleTime: 10 * 60_000, retry: 1 });
+  const links = coinLinks(jup.data, stats?.info);
+  const launchpad = launchpadOf({ network, token, dexId: stats?.dexId, jupiter: jup.data?.launchpad });
   const mcap = coin?.mcap ?? stats?.mcap;
   const liquidity = stats?.liquidity ?? coin?.liquidity;
   const moves: [string, number | undefined][] = [
@@ -172,6 +186,16 @@ function CoinBar({ network, token, coin, price, stats, now }: { network: ChartNe
               {copied ? "copied ✓" : `${short(token)} ⧉`}
             </button>
           </div>
+          {(launchpad || links.length > 0) && (
+            <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px]">
+              {launchpad && <span className="rounded-[3px] bg-panel-2 px-1.5 py-px text-muted">Launched on {launchpad}</span>}
+              {links.map((l) => (
+                <a key={l.kind} href={l.url} target="_blank" rel="noopener noreferrer nofollow" className="text-dim hover:text-chrome hover:underline" title={l.url}>
+                  {l.label} ↗
+                </a>
+              ))}
+            </div>
+          )}
         </div>
       </div>
       <div className="font-mono text-[22px] text-chrome">{price !== undefined ? fmtPrice(price) : "…"}</div>
