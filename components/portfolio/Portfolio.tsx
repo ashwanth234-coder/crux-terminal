@@ -31,6 +31,7 @@ import { NETWORK_LONG, NETWORK_NAME } from "@/lib/network";
 import { USDC_WORD, USDC_WORD_CAP } from "@/lib/network";
 import { IS_TESTNET } from "@/lib/network";
 import { YourCoins } from "@/components/portfolio/YourCoins";
+import { SavedWalletsList } from "@/components/wallets/SavedWalletsList";
 
 const TEST_USDC_SOURCE = PAY_SOURCES.find((s) => s.id === "base-usdc") ?? PAY_SOURCES[0];
 const SELL_SIZES = [25, 50, 100] as const;
@@ -294,6 +295,8 @@ export function Portfolio() {
                 </ul>
               </section>
             )}
+
+            <SavedWalletsList />
 
             <p className="text-[11.5px] leading-relaxed text-dim">
               {viaAccount ? "Account sells sign silently with your login (no gas) and pay back into the account. " : ""}Sells are signed orders: Crux fills them in the next 10-second batch at no worse than your signed minimum, or

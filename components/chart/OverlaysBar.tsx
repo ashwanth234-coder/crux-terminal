@@ -27,12 +27,13 @@ function Check({ on, onClick, label, swatch }: { on: boolean; onClick: () => voi
 
 /**
  * The toolbar's Overlays menu: which on-chain trades and levels to draw on the candles, and the smallest trade marked.
- * `devOnly`: another chain's coin, where only its creator's buys and sells (DB / DS) are marked so far.
+ * `devOnly`: another chain's coin, where its creator's buys and sells (DB / DS) and saved wallets' (★B / ★S) are marked.
  */
-export function OverlaysButton({ settings, onChange, counts, devOnly = false }: { settings: ChartSettings; onChange: (s: ChartSettings) => void; counts: { mine: number; dev: number; top: number }; devOnly?: boolean }) {
+export function OverlaysButton({ settings, onChange, counts, devOnly = false }: { settings: ChartSettings; onChange: (s: ChartSettings) => void; counts: { mine: number; dev: number; top: number; saved?: number }; devOnly?: boolean }) {
   const marks = settings.marks;
-  const toggle = (k: keyof ChartSettings["marks"]) => onChange({ ...settings, marks: { ...marks, [k]: !marks[k] } });
-  const on = (devOnly ? [marks.dev] : [marks.mine, marks.dev, marks.top, settings.clearingLine]).filter(Boolean).length;
+  const toggle = (k: keyof ChartSettings["marks"]) => onChange({ ...settings, marks: { ...marks, [k]: k === "saved" ? marks.saved === false : !marks[k] } });
+  const savedOn = marks.saved !== false;
+  const on = (devOnly ? [marks.dev, savedOn] : [marks.mine, marks.dev, marks.top, settings.clearingLine]).filter(Boolean).length;
   return (
     <Popover
       width="w-60"
@@ -52,7 +53,10 @@ export function OverlaysButton({ settings, onChange, counts, devOnly = false }: 
         <div className="flex flex-col gap-0.5 p-1">
           <p className="px-1.5 pb-1 text-[10px] uppercase tracking-[0.14em] text-dim">Mark on the chart</p>
           {devOnly ? (
-            <Check on={marks.dev} onClick={() => toggle("dev")} label={`Dev buys & sells${counts.dev ? ` (${counts.dev})` : ""}`} swatch="#c792ea" />
+            <>
+              <Check on={marks.dev} onClick={() => toggle("dev")} label={`Dev buys & sells${counts.dev ? ` (${counts.dev})` : ""}`} swatch="#c792ea" />
+              <Check on={savedOn} onClick={() => toggle("saved")} label={`Saved wallets ★${counts.saved ? ` (${counts.saved})` : ""}`} swatch="#ff9d00" />
+            </>
           ) : (
             <>
               <Check on={marks.mine} onClick={() => toggle("mine")} label={`My swaps${counts.mine ? ` (${counts.mine})` : ""}`} swatch="#00e676" />

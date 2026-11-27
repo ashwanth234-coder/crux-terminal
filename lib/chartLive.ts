@@ -149,7 +149,7 @@ export function matchExecutions(
 export type BadgeCluster = { time: number; side: "buy" | "sell"; label: string; count: number; fills: BadgeFill[] };
 
 /** Whose label a mixed badge carries: the creator's first (DB / DS), then yours, a whale's, a top holder's. */
-const WHO_RANK = ["dev", "me", "whale", "top", "focus"];
+const WHO_RANK = ["dev", "me", "saved", "whale", "top", "focus"];
 const rank = (who: string) => {
   const i = WHO_RANK.indexOf(who);
   return i < 0 ? WHO_RANK.length : i;

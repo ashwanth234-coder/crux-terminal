@@ -3,6 +3,9 @@
 import { useMemo } from "react";
 import { useHolders, type CheckChain } from "@/hooks/useBuyCheck";
 import { findBundle, walletShare, type MapHolder } from "@/lib/holderMap";
+import { SaveStar } from "@/components/wallets/SaveWallet";
+import { useSavedWallets } from "@/hooks/useSavedWallets";
+import { shortWallet, walletKey } from "@/lib/savedWallets";
 
 const W = 560;
 const H = 300;
@@ -52,6 +55,8 @@ const COLOR = { pool: "var(--color-dim, #6b7280)", creator: "var(--color-down, #
  */
 export function HolderMap({ chain, coin, accountUrl }: { chain: CheckChain; coin: string; accountUrl: (a: string) => string }) {
   const q = useHolders(chain, coin);
+  const savedWallets = useSavedWallets();
+  const saved = savedWallets.index;
   const holders = useMemo(() => q.data ?? [], [q.data]);
   const bundle = useMemo(() => findBundle(holders), [holders]);
   const placed = useMemo(() => packBubbles(holders, new Set(bundle?.wallets ?? [])), [holders, bundle]);
@@ -113,6 +118,27 @@ export function HolderMap({ chain, coin, accountUrl }: { chain: CheckChain; coin
         )}
         <li className="text-dim">{"Shows the biggest holders only; wallets linked by who funded them aren't traced yet."}</li>
       </ul>
+      <p className="mt-3 text-[10px] uppercase tracking-[0.14em] text-dim">Biggest wallets · ★ to save</p>
+      <ol className="mt-1 space-y-0.5 font-mono text-[11.5px]">
+        {holders
+          .filter((h) => h.kind !== "pool")
+          .slice(0, 10)
+          .map((h) => {
+            const s = saved.get(walletKey(chain, h.owner));
+            return (
+              <li key={h.owner} className="flex items-center justify-between gap-2">
+                <span className="flex min-w-0 items-center">
+                  <SaveStar chain={chain} address={h.owner} saved={s} loggedIn={savedWallets.loggedIn} login={savedWallets.login} />
+                  <a href={accountUrl(h.owner)} target="_blank" rel="noopener noreferrer" className={`truncate hover:underline ${s?.name ? "text-signal" : h.kind === "creator" ? "text-down" : "text-muted"}`}>
+                    {s?.name || shortWallet(h.owner)}
+                    {h.kind === "creator" ? " · creator" : ""}
+                  </a>
+                </span>
+                <span className="text-chrome">{h.pct.toFixed(2)}%</span>
+              </li>
+            );
+          })}
+      </ol>
       </div>
     </div>
   );

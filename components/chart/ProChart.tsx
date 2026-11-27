@@ -12,6 +12,8 @@ import { useCreatorVestingDays } from "@/hooks/useCreatorVesting";
 import { barTime, markBarTime, markTrades, type MarkWho } from "@/lib/chartMarks";
 import { devMarks } from "@/lib/devMarks";
 import { useCoinCreator } from "@/hooks/useCoinCreator";
+import { useSavedWallets } from "@/hooks/useSavedWallets";
+import { chainOf, savedMarks } from "@/lib/savedWallets";
 import { buildHolders } from "@/lib/holders";
 import { CRUX_SOLVERS, PREVIOUS_SETTLERS, SETTLER } from "@/lib/intents";
 import { EMPTY_CONTEXT, computeInstance, flowByCandle, holdersByCandle, paramsOf, poolByCandle, top10ByCandle, type StudyContext, type StudyId } from "@/lib/indicators";
@@ -75,6 +77,7 @@ const MARK_STYLE: Record<MarkWho, { color: string; buy: string; sell: string }> 
   dev: { color: "#c792ea", buy: "DB", sell: "DS" },
   whale: { color: "#4cc9f0", buy: "WB", sell: "WS" },
   top: { color: "#ffd166", buy: "TB", sell: "TS" },
+  saved: { color: "#ff9d00", buy: "★B", sell: "★S" },
 };
 
 const compactUsd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 2 });
@@ -283,6 +286,8 @@ export function ProChart({
   const rc = useRemoteChart(remote ?? null, pickedInterval);
   // Another chain's coin: who made it, for its DB / DS badges.
   const coinCreator = useCoinCreator(remote?.network ?? null, remote?.token ?? null);
+  // Another chain's coin: the wallets the trader saved, for their ★ badges.
+  const savedIndex = useSavedWallets().index;
   const rcGraduatedAt = remote ? rc.graduatedAt : null;
   const swapData = useThrottled(remote ? rc.swapData : swaps.data, redrawMs);
   const tradesPending = remote ? rc.isPending : swaps.isPending;
@@ -457,7 +462,7 @@ export function ProChart({
     // Another chain's coin: its creator's buys and sells (DB / DS) from the coin's trades list.
     if (remote) {
       const trades = (swapData?.trades ?? []).map((t) => ({ time: t.time, side: t.side, usd: Number(t.usdc) / 1e6, price: t.price, trader: t.to, tx: t.txHash }));
-      return devMarks(trades, coinCreator);
+      return [...devMarks(trades, coinCreator), ...savedMarks(trades, chainOf(remote.network), savedIndex)].sort((a, b) => a.time - b.time);
     }
     if (!transfers.data || candles.length === 0) return [];
     const system = new Set(["pool", "auction", "solver", "settler", "burn"]);
@@ -480,7 +485,7 @@ export function ProChart({
         return bt === null ? null : (candles.find((c) => c.time === bt)?.close ?? null);
       },
     );
-  }, [transfers.data, candles, holders, me, auction.pair, auction.creator, market.batchPool, focus, remote, swapData, coinCreator]);
+  }, [transfers.data, candles, holders, me, auction.pair, auction.creator, market.batchPool, focus, remote, swapData, coinCreator, savedIndex]);
   // A wallet picked in the desk shows alone, every trade of it, whatever the overlay switches say.
   const replayEnd = replayIndex !== null && candles.length ? candles[candles.length - 1].time + interval : null;
   const shownMarks = useMemo(
@@ -491,14 +496,14 @@ export function ProChart({
             (m) =>
               (replayEnd === null || m.time < replayEnd) &&
               m.usd >= settings.minUsd &&
-              (m.who === "me" ? settings.marks.mine : m.who === "top" ? settings.marks.top : settings.marks.dev),
+              (m.who === "me" ? settings.marks.mine : m.who === "top" ? settings.marks.top : m.who === "saved" ? settings.marks.saved !== false : settings.marks.dev),
           ),
     [marks, settings.minUsd, settings.marks, focus, replayEnd],
   );
   /** Your trades' badges shown ahead of their marks (see the overlays effect). */
   const ownBadges = useRef<{ id: number; time: number; side: "buy" | "sell"; who: MarkWho; at: number; filled: boolean; until: number; usd: number | null; tokens: number | null }[]>([]);
   const markCounts = useMemo(
-    () => ({ mine: marks.filter((m) => m.who === "me").length, dev: marks.filter((m) => m.who === "dev" || m.who === "whale").length, top: marks.filter((m) => m.who === "top").length }),
+    () => ({ mine: marks.filter((m) => m.who === "me").length, dev: marks.filter((m) => m.who === "dev" || m.who === "whale").length, top: marks.filter((m) => m.who === "top").length, saved: marks.filter((m) => m.who === "saved").length }),
     [marks],
   );
   const last = candles.length ? candles[candles.length - 1] : null;
@@ -618,7 +623,7 @@ export function ProChart({
       if (!marksHidden) {
         for (const m of shownMarks.slice(-300)) {
           // Badges for the creator (DB / DS) and you (B / S) only, or the wallet picked in the desk.
-          if (m.who !== "dev" && m.who !== "me" && m.who !== "focus") continue;
+          if (m.who !== "dev" && m.who !== "me" && m.who !== "focus" && m.who !== "saved") continue;
           const time = markBarTime(times, m.time, m.side, isDown, interval);
           if (time === null) continue;
           const style = MARK_STYLE[m.who];

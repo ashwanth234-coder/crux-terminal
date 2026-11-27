@@ -3,9 +3,9 @@ import type { TokenTransfer } from "../hooks/useTokenTransfers";
 
 /**
  * Whose trade a chart mark shows, strongest first: the wallet picked in the desk, the viewer, the launch's creator, a
- * whale, a top-10 holder.
+ * whale, a top-10 holder; on another chain's coin, also a wallet the trader saved (lib/savedWallets, ★ badges).
  */
-export type MarkWho = "focus" | "me" | "dev" | "whale" | "top";
+export type MarkWho = "focus" | "me" | "dev" | "whale" | "top" | "saved";
 
 export type MarkTrade = { time: number; side: "buy" | "sell"; who: MarkWho; address: Address; tokens: number; usd: number; txHash: string };
 

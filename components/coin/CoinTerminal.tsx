@@ -13,6 +13,9 @@ import { fmtCompact, fmtPrice, type ChartNetwork } from "@/lib/solanaCoins";
 import { HolderMap } from "@/components/coin/HolderMap";
 import { useTradingSince } from "@/hooks/useTradingSince";
 import { SafetyStrip } from "@/components/coin/SafetyStrip";
+import { SaveStar } from "@/components/wallets/SaveWallet";
+import { useSavedWallets } from "@/hooks/useSavedWallets";
+import { chainOf, walletKey } from "@/lib/savedWallets";
 
 export type CoinFacts = { symbol?: string; name?: string; icon?: string; price?: number; change24h?: number; mcap?: number; liquidity?: number };
 
@@ -250,8 +253,13 @@ function Desk({
   const [tab, setTab] = useState<Tab>("trades");
   const [focus, setFocus] = useState<string | null>(null);
   const [bigOnly, setBigOnly] = useState(false);
+  const [savedOnly, setSavedOnly] = useState(false);
   const x = explorer(network);
-  const shown = useMemo(() => trades.filter((t) => (!focus || t.trader === focus) && (!bigOnly || t.usd >= 500)).slice(0, 100), [trades, focus, bigOnly]);
+  const wchain = chainOf(network);
+  const savedWallets = useSavedWallets();
+  const saved = savedWallets.index;
+  const savedOf = (trader: string) => (trader ? saved.get(walletKey(wchain, trader)) : undefined);
+  const shown = trades.filter((t) => (!focus || t.trader === focus) && (!bigOnly || t.usd >= 500) && (!savedOnly || !!savedOf(t.trader))).slice(0, 100);
   const tabs: [Tab, string][] = [
     ["trades", "Trades"],
     ["holders", "Holder map"],
@@ -287,6 +295,12 @@ function Desk({
               <input type="checkbox" checked={bigOnly} onChange={(e) => setBigOnly(e.target.checked)} />
               $500+ only
             </label>
+            {saved.size > 0 && (
+              <label className="flex items-center gap-1.5 text-dim" title="Only trades by wallets you saved">
+                <input type="checkbox" checked={savedOnly} onChange={(e) => setSavedOnly(e.target.checked)} />
+                ★ only
+              </label>
+            )}
             <span className="hidden text-dim sm:inline">Updates live</span>
           </div>
         )}
@@ -322,7 +336,7 @@ function Desk({
       ) : busy ? (
         <p className="px-2 py-4 text-[12.5px] text-dim">Trades are busy for a moment. Trying again…</p>
       ) : shown.length === 0 ? (
-        <p className="px-2 py-4 text-[12.5px] text-dim">No trades to show{focus || bigOnly ? " with this filter" : " yet"}.</p>
+        <p className="px-2 py-4 text-[12.5px] text-dim">No trades to show{focus || bigOnly || savedOnly ? " with this filter" : " yet"}.</p>
       ) : (
         <div className="min-h-0 flex-1 overflow-auto">
           <table className="w-full min-w-[560px] text-left">
@@ -346,9 +360,10 @@ function Desk({
                   <td className={`${td} text-right text-muted`}>{amount(t.amount)}</td>
                   <td className={`${td} text-right text-chrome`}>{fmtPrice(t.price)}</td>
                   <td className={td}>
+                    {t.trader && <SaveStar chain={wchain} address={t.trader} saved={savedOf(t.trader)} loggedIn={savedWallets.loggedIn} login={savedWallets.login} />}
                     {t.trader ? (
-                      <button type="button" onClick={() => setFocus(focus === t.trader ? null : t.trader)} className="text-muted hover:text-chrome" title="Only this trader's trades">
-                        {short(t.trader)}
+                      <button type="button" onClick={() => setFocus(focus === t.trader ? null : t.trader)} className={savedOf(t.trader)?.name ? "text-signal hover:text-chrome" : "text-muted hover:text-chrome"} title="Only this trader's trades">
+                        {savedOf(t.trader)?.name || short(t.trader)}
                       </button>
                     ) : (
                       <span className="text-dim">live</span>
