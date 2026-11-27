@@ -12,6 +12,7 @@ import { explorer, poolStats, type CoinTrade, type PoolStats } from "@/lib/coinM
 import { fmtCompact, fmtPrice, type ChartNetwork } from "@/lib/solanaCoins";
 import { HolderMap } from "@/components/coin/HolderMap";
 import { useTradingSince } from "@/hooks/useTradingSince";
+import { SafetyStrip } from "@/components/coin/SafetyStrip";
 
 export type CoinFacts = { symbol?: string; name?: string; icon?: string; price?: number; change24h?: number; mcap?: number; liquidity?: number };
 
@@ -105,6 +106,7 @@ export function CoinTerminal({ network, token, coin, trade, path }: { network: C
   return (
     <TerminalShell>
       <CoinBar network={network} token={token} coin={coin} price={price} stats={s ?? undefined} now={now} />
+      <SafetyStrip network={network} token={token} trades={trades.data ?? []} startedAt={startedAt} supply={supply} />
       <div className="flex min-h-0 flex-1 gap-px bg-line">
       {/* Every chain's coins, one click from each other (wide screens; phones use the header search). */}
       <div className="hidden w-[230px] shrink-0 xl:flex xl:flex-col">

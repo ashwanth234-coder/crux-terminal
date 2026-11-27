@@ -6,7 +6,7 @@
 import type { MapHolder } from "./holderMap.ts";
 
 /** `top`: GoPlus's top 10 holders, for the holder map (locked / contract holders count as pools). */
-export type EvmSafety = { warnings: string[]; holders?: number; top?: MapHolder[] };
+export type EvmSafety = { warnings: string[]; holders?: number; top?: MapHolder[]; creatorPct?: number; lpLockedPct?: number };
 
 const CHAIN_ID = { bsc: 56, base: 8453 } as const;
 type Network = keyof typeof CHAIN_ID;
@@ -30,7 +30,18 @@ type GoPlus = {
   holder_count?: string;
   creator_address?: string;
   holders?: { address?: string; percent?: string; is_contract?: number; is_locked?: number }[];
+  lp_holders?: { address?: string; percent?: string; is_locked?: number }[];
 };
+
+/**
+ * The share of the pool's shares that can't be pulled: locked, or sent to a dead address. Unknown (undefined) when
+ * GoPlus lists no pool-share holders (newer pools, Uniswap V3/V4, hold no shares it can read). Pure.
+ */
+export function lpLockedOf(g: GoPlus): number | undefined {
+  const lp = (g.lp_holders ?? []).filter((h) => Number(h.percent) > 0);
+  if (!lp.length) return undefined;
+  return Math.min(100, lp.filter((h) => h.is_locked === 1 || ZERO.test(h.address ?? "")).reduce((s, h) => s + Number(h.percent) * 100, 0));
+}
 
 /** GoPlus's top holders as holder-map rows. Pure. */
 export function topHoldersOf(g: GoPlus): MapHolder[] {
@@ -97,7 +108,7 @@ export async function evmSafety(network: Network, addresses: string[]): Promise<
       if (!j) return;
       const g = j.result?.[a];
       const known = g && (g.is_open_source !== undefined || g.is_honeypot !== undefined);
-      cache.set(`${network}:${a}`, { at: now, v: known ? { warnings: warningsOf(g), holders: Number(g.holder_count ?? 0) > 0 ? Number(g.holder_count) : undefined, top: topHoldersOf(g) } : null });
+      cache.set(`${network}:${a}`, { at: now, v: known ? { warnings: warningsOf(g), holders: Number(g.holder_count ?? 0) > 0 ? Number(g.holder_count) : undefined, top: topHoldersOf(g), creatorPct: g.creator_percent ? pct(g.creator_percent) : undefined, lpLockedPct: lpLockedOf(g) } : null });
     } catch {
       // Unreachable now: the coin stays unknown and is asked again next time.
     }
