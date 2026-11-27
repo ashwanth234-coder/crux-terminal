@@ -68,7 +68,13 @@ export type Reply =
   | { kind: "scan"; rule: ScanRule }
   /** A question. `template`: the next message fills its "{}" (e.g. the coin a buy was missing). */
   | { kind: "ask"; text: string; options?: ChatOption[]; template?: string }
-  | { kind: "error"; text: string };
+  | { kind: "error"; text: string }
+  /** Ask Crux's AI (lib/askAi): its words, then the cards it showed. */
+  | { kind: "ai"; text: string; cards: Reply[] }
+  /** The AI is still answering. */
+  | { kind: "thinking" }
+  /** A list of coins the AI found (e.g. a creator's coins that reached a value), each tappable. */
+  | { kind: "coins"; title: string; chain: CommandChain; coins: { address: string; symbol?: string; note?: string }[] };
 
 export const SCAN_LIMITS = { minMinutes: 5, maxMinutes: 180, maxAgeHours: 24 };
 /** A scan buys a coin it found itself: unless told otherwise, it's sold if it drops this much. */

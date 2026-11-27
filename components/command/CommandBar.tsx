@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { usePathname } from "next/navigation";
+import { usePrivy } from "@privy-io/react-auth";
+import { relay } from "@/hooks/useSolanaTrading";
+import { RELAY_URL } from "@/lib/readCache";
+import { AI_HISTORY, assistantTurn, cardsToReplies, goesToAi, pageCoin, type AiAnswer, type AiTurn } from "@/lib/askAi";
 import { Modal } from "@/components/ui/Modal";
 import { buttonClass } from "@/components/ui/Button";
 import { useCruxAccount } from "@/hooks/useCruxAccount";
@@ -111,6 +116,16 @@ export function CommandButton({ className = "" }: { className?: string }) {
   );
 }
 
+/** Whether Ask Crux's AI is on (the server says so on /v1/health). */
+function useAskCruxAi(): boolean {
+  const q = useQuery({
+    queryKey: ["ask-crux-ai"],
+    staleTime: 60_000,
+    queryFn: async () => ((await (await fetch(`${RELAY_URL}/v1/health`)).json()) as { askCruxAi?: boolean }).askCruxAi === true,
+  });
+  return q.data === true;
+}
+
 /** `command`: what a reply was read from (the trader's words, with any question's answer filled in). */
 type Msg = { id: number; from: "you" | "crux"; text?: string; options?: ChatOption[]; reply?: Reply; command?: string };
 
@@ -122,6 +137,12 @@ function CommandPanel({ open, onClose, onWorking }: { open: boolean; onClose: ()
   const box = useRef<HTMLInputElement>(null);
   const end = useRef<HTMLDivElement>(null);
   const nextId = useRef(1);
+  // Ask Crux's AI: what the patterns can't read goes to it; once a conversation with it starts, typed follow-ups do too.
+  const aiOn = useAskCruxAi();
+  const crux = useCruxAccount();
+  const { getAccessToken } = usePrivy();
+  const pathname = usePathname();
+  const aiTurns = useRef<AiTurn[]>([]);
 
   useEffect(() => {
     onWorking(busy.size > 0);
@@ -139,12 +160,35 @@ function CommandPanel({ open, onClose, onWorking }: { open: boolean; onClose: ()
       if (!t) return;
       const reply = readMessage(t, template);
       const you: Msg = { id: nextId.current++, from: "you", text: say ?? t };
-      const crux: Msg = { id: nextId.current++, from: "crux", reply, command: fillTemplate(t, template) };
-      setMsgs((m) => [...m, you, crux]);
+      // Typed (a button passes its label as `say` and sends an exact command, which the patterns read).
+      const typed = say === undefined;
+      if (typed && aiOn && crux.loggedIn && goesToAi(reply, aiTurns.current.length > 0, template !== undefined)) {
+        const id = nextId.current++;
+        setMsgs((m) => [...m, you, { id, from: "crux", reply: { kind: "thinking" } }]);
+        setTemplate(undefined);
+        setInput("");
+        const turns = [...aiTurns.current, { role: "user" as const, text: t }].slice(-AI_HISTORY);
+        void (async () => {
+          let shown: Reply;
+          try {
+            const token = await getAccessToken();
+            const a = await relay<AiAnswer>("/v1/ask", { token, messages: turns, context: pageCoin(pathname) ?? undefined });
+            aiTurns.current = [...turns, { role: "assistant" as const, text: assistantTurn(a) }].slice(-AI_HISTORY);
+            shown = { kind: "ai", text: a.text, cards: cardsToReplies(a.cards) };
+          } catch (e) {
+            // The AI is unreachable: the patterns' own reply (a question or a hint), with what went wrong.
+            shown = reply.kind === "ask" ? reply : { kind: "error", text: (e as Error).message || "Ask Crux couldn't answer just now. Try again in a moment." };
+          }
+          setMsgs((m) => m.map((x) => (x.id === id ? { ...x, reply: shown, command: t } : x)));
+        })();
+        return;
+      }
+      const cruxMsg: Msg = { id: nextId.current++, from: "crux", reply, command: fillTemplate(t, template) };
+      setMsgs((m) => [...m, you, cruxMsg]);
       setTemplate(reply.kind === "ask" ? reply.template : undefined);
       setInput("");
     },
-    [template],
+    [template, aiOn, crux.loggedIn, getAccessToken, pathname],
   );
 
   const markBusy = useCallback((id: number, on: boolean) => {
@@ -266,7 +310,46 @@ function CruxReply({ reply, onCommand, onBusy, onMissingCoin }: { reply: Reply; 
       return <OrdersCard cancelAll={reply.cancel} />;
     case "initials":
       return <InitialsCard coin={reply.coin} chain={reply.chain} onCommand={onCommand} />;
+    case "thinking":
+      return <p className="animate-pulse text-muted">Thinking…</p>;
+    case "coins":
+      return <CoinsCard title={reply.title} chain={reply.chain} coins={reply.coins} onCommand={onCommand} />;
+    case "ai":
+      return (
+        <>
+          {reply.text && <p className="whitespace-pre-wrap">{reply.text}</p>}
+          {reply.cards.map((c, i) => (
+            <div key={i} className="mt-2">
+              <CruxReply reply={c} onCommand={onCommand} onBusy={onBusy} onMissingCoin={onMissingCoin} />
+            </div>
+          ))}
+        </>
+      );
   }
+}
+
+/** A list of coins from Ask Crux's AI (e.g. a creator's coins that reached a value): tap one to check it. */
+function CoinsCard({ title, chain, coins, onCommand }: { title: string; chain: FoundCoin["chain"]; coins: { address: string; symbol?: string; note?: string }[]; onCommand: OnCommand }) {
+  return (
+    <div>
+      <p className="text-[12px] uppercase tracking-[0.12em] text-dim">
+        {title} · {CHAIN_NAME[chain]}
+      </p>
+      <ul className="mt-1.5 divide-y divide-line-2 rounded-lg border border-line-2">
+        {coins.map((c) => (
+          <li key={c.address}>
+            <button type="button" onClick={() => onCommand(`check ${c.address} on ${chain}`, c.symbol ? `$${c.symbol}` : "Check this coin")} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-tint/[0.04]">
+              <span className="min-w-0">
+                <span className="font-medium text-chrome">{c.symbol ? `$${c.symbol}` : `${c.address.slice(0, 4)}…${c.address.slice(-4)}`}</span>
+                {c.note && <span className="ml-2 text-[12.5px] text-muted">{c.note}</span>}
+              </span>
+              <span className="shrink-0 text-[12px] text-dim">Check ›</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 /** The hottest coins right now (the hour's trending lists), each with Check and Buy $5. */
