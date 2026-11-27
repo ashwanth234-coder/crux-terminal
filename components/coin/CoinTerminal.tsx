@@ -1,7 +1,9 @@
 "use client";
 
 import { NotOfficial } from "@/components/ui/NotOfficial";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { PaneHandle } from "@/components/pro/PaneHandle";
+import { usePaneSizes } from "@/hooks/usePaneSizes";
 import { useQuery } from "@tanstack/react-query";
 import { CoinRail } from "@/components/coin/CoinRail";
 import { TerminalShell } from "@/components/pro/TerminalShell";
@@ -116,26 +118,49 @@ export function CoinTerminal({ network, token, coin, trade, path }: { network: C
   );
   const remote = useMemo(() => ({ network, token }), [network, token]);
   const now = useNow();
+  // Wide screens: the coin list, the Buy/Sell panel and the trades area resize by their edges (kept per trader).
+  const area = useRef<HTMLDivElement>(null);
+  const areaHeight = useCallback(() => area.current?.clientHeight, []);
+  const { sizes: panes, drag, toggleBottom } = usePaneSizes(areaHeight);
 
   return (
     <TerminalShell>
       <CoinBar network={network} token={token} coin={coin} price={price} stats={s ?? undefined} now={now} />
       <SafetyStrip network={network} token={token} trades={trades.data ?? []} startedAt={startedAt} supply={supply} />
-      <div className="flex min-h-0 flex-1 gap-px bg-line">
+      <div
+        className="flex min-h-0 flex-1 gap-px bg-line"
+        style={{ "--rail-w": `${panes.rail}px`, "--side-w": `${panes.side}px`, "--bottom-h": panes.bottomHidden ? "34px" : `${panes.bottom}px` } as CSSProperties}
+      >
       {/* Every chain's coins, one click from each other (wide screens; phones use the header search). */}
-      <div className="hidden w-[230px] shrink-0 xl:flex xl:flex-col">
+      <div className="relative hidden shrink-0 xl:flex xl:w-[var(--rail-w)] xl:flex-col">
         <CoinRail current={path} />
+        <PaneHandle edge="right" label="Resize the coin list" {...drag("rail")} />
       </div>
-      <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)] gap-px bg-line max-lg:pb-6 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] lg:grid-rows-[minmax(0,1fr)_minmax(190px,30%)]">
+      <div
+        ref={area}
+        className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)] gap-px bg-line max-lg:pb-6 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_var(--side-w)] lg:grid-rows-[minmax(0,1fr)_var(--bottom-h)]"
+      >
         <section aria-label="Chart" className="bg-void p-1.5 max-lg:h-[72svh] max-lg:min-h-[460px] lg:col-start-1 lg:row-start-1 lg:min-h-0">
           <ChartGrid auction={auction} symbol={`$${coin?.symbol || "Coin"}`} name={coin?.name ?? null} factory={zeroAddress} id="0" external remote={remote} />
         </section>
-        <aside aria-label="Buy and sell" className="bg-panel p-3 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:overflow-y-auto">
+        <aside aria-label="Buy and sell" className="relative bg-panel p-3 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:overflow-y-auto">
+          <PaneHandle edge="left" label="Resize the Buy and Sell panel" {...drag("side")} />
           {trade}
           {s && <Flow stats={s} />}
         </aside>
-        <section aria-label="Trades and details" className="min-h-[260px] bg-void p-3 lg:col-start-1 lg:row-start-2 lg:min-h-0 lg:overflow-y-auto">
-          <Desk network={network} token={token} symbol={symbol} trades={trades.data ?? []} loading={stats.isLoading || trades.isLoading} busy={trades.isError && !trades.data} noPool={stats.data === null && !trades.data?.length} now={now} stats={s ?? undefined} />
+        <section aria-label="Trades and details" className="relative min-h-[260px] bg-void p-3 lg:col-start-1 lg:row-start-2 lg:min-h-0 lg:overflow-y-auto">
+          {!panes.bottomHidden && <PaneHandle edge="top" label="Resize the trades area" {...drag("bottom")} />}
+          <button
+            type="button"
+            onClick={toggleBottom}
+            className="absolute right-3 top-2 z-20 hidden rounded-[4px] border border-line-2 bg-panel-2 px-2 py-0.5 text-[11px] text-dim hover:text-chrome lg:block"
+            title={panes.bottomHidden ? "Show trades and holders" : "Hide trades and holders (bigger chart)"}
+          >
+            {panes.bottomHidden ? "▴ Show trades" : "▾ Hide"}
+          </button>
+          <div className={panes.bottomHidden ? "lg:hidden" : undefined}>
+            <Desk network={network} token={token} symbol={symbol} trades={trades.data ?? []} loading={stats.isLoading || trades.isLoading} busy={trades.isError && !trades.data} noPool={stats.data === null && !trades.data?.length} now={now} stats={s ?? undefined} />
+          </div>
         </section>
       </div>
       </div>
