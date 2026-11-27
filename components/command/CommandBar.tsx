@@ -31,6 +31,7 @@ import { useAskCruxCoach, useAskCruxPlans, useDeskCheck, usePlacePlan } from "@/
 import { presetPlan, PRESET_NAMES, TEST_FLOOR_NAME, testFloorPlan, watchPlan } from "@/lib/tradePlan";
 import { TradePlanSection, type PlanChoice } from "@/components/command/TradePlanSection";
 import { CoachCards, InitialsCard } from "@/components/command/CoachCards";
+import { CreatorCard, CreatorCoinsCard } from "@/components/command/CreatorCards";
 import { usePositions } from "@/hooks/usePositions";
 import { entryPrice } from "@/lib/pnl";
 import { noteBuy, noteSell } from "@/lib/coachSession";
@@ -143,6 +144,8 @@ function CommandPanel({ open, onClose, onWorking }: { open: boolean; onClose: ()
   const { getAccessToken } = usePrivy();
   const pathname = usePathname();
   const aiTurns = useRef<AiTurn[]>([]);
+  // The coin the conversation is about ("buy 20 of it", "who made it"): the last one talked about, else the page's.
+  const lastCoin = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     onWorking(busy.size > 0);
@@ -158,7 +161,9 @@ function CommandPanel({ open, onClose, onWorking }: { open: boolean; onClose: ()
     (text: string, say?: string) => {
       const t = text.trim();
       if (!t) return;
-      const reply = readMessage(t, template);
+      const reply = readMessage(t, template, lastCoin.current ?? pageCoin(pathname)?.coin);
+      const talked = coinOfReply(reply);
+      if (talked) lastCoin.current = talked;
       const you: Msg = { id: nextId.current++, from: "you", text: say ?? t };
       // Typed (a button passes its label as `say` and sends an exact command, which the patterns read).
       const typed = say === undefined;
@@ -252,6 +257,13 @@ function CommandPanel({ open, onClose, onWorking }: { open: boolean; onClose: ()
   );
 }
 
+/** The coin a reply is about (for "it" in the next message), when it names one. */
+function coinOfReply(r: Reply): string | undefined {
+  if (r.kind === "lookup" || r.kind === "creator" || r.kind === "creatorCoins" || r.kind === "initials") return r.coin;
+  if (r.kind === "plan") return r.steps.find((s) => s.kind !== "wait")?.coin as string | undefined;
+  return undefined;
+}
+
 /** A plain reply: text, then buttons that send a command. */
 type OnCommand = (command: string, say?: string) => void;
 
@@ -267,11 +279,17 @@ function Said({ text, options, onCommand, tone }: { text: string; options?: Chat
 function Choices({ options, onCommand }: { options: ChatOption[]; onCommand: OnCommand }) {
   return (
     <div className="mt-2 flex flex-wrap gap-2">
-      {options.map((o) => (
+      {options.map((o) =>
+        o.href ? (
+          <a key={o.href} href={o.href} className="rounded-full border border-line-2 px-3 py-1 text-[12.5px] text-muted hover:border-chrome/40 hover:text-chrome">
+            {o.label}
+          </a>
+        ) : (
         <button key={o.command} type="button" onClick={() => onCommand(o.command, o.say ?? o.label)} className="rounded-full border border-line-2 px-3 py-1 text-[12.5px] text-muted hover:border-chrome/40 hover:text-chrome">
           {o.label}
         </button>
-      ))}
+        ),
+      )}
     </div>
   );
 }
@@ -281,7 +299,11 @@ function CruxReply({ reply, onCommand, onBusy, onMissingCoin }: { reply: Reply; 
     case "ask":
       return <Said text={reply.text} options={reply.options} onCommand={onCommand} />;
     case "error":
-      return <Said text={reply.text} tone="error" options={[{ label: "What can you do?", command: "help" }, ...STARTERS.slice(0, 2)]} onCommand={onCommand} />;
+      return <Said text={reply.text} tone="error" options={reply.options ?? [{ label: "What can you do?", command: "help" }, ...STARTERS.slice(0, 2)]} onCommand={onCommand} />;
+    case "creator":
+      return <CreatorCard coin={reply.coin} chain={reply.chain} onCommand={onCommand} />;
+    case "creatorCoins":
+      return <CreatorCoinsCard coin={reply.coin} chain={reply.chain} minPeakUsd={reply.minPeakUsd} onCommand={onCommand} />;
     case "lookup":
       return <CoinCard query={reply.coin} chain={reply.chain} onCommand={onCommand} onMissingCoin={onMissingCoin} />;
     case "plan":

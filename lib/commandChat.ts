@@ -1,5 +1,7 @@
 import { parseCommand, plainSymbols, withoutFiller, type CommandChain, type CommandStep } from "./commandIntent.ts";
 import { deslang } from "./traderSlang.ts";
+import { fixTypos, hasPronoun, numberWords, readCoinQuestion, rephrase, withCoin } from "./understand.ts";
+import { readOffTrack, tooMuch } from "./offTrack.ts";
 
 /**
  * The conversation on top of the command reader (lib/commandIntent): every message gets a reply a trader can act on,
@@ -10,7 +12,7 @@ import { deslang } from "./traderSlang.ts";
  *   - anything else a command reads → the confirmation card.
  */
 /** A reply button: `command` is what Crux reads; the trader's bubble shows `say` (else the label), never raw addresses. */
-export type ChatOption = { label: string; command: string; say?: string };
+export type ChatOption = { label: string; command: string; say?: string; /** A page to open instead of a command. */ href?: string };
 
 /** A scan: watch new coins on `chains` for `minutes`, buy one (at most) that passes the rules, then the exits. */
 export type ScanRule = {
@@ -68,7 +70,11 @@ export type Reply =
   | { kind: "scan"; rule: ScanRule }
   /** A question. `template`: the next message fills its "{}" (e.g. the coin a buy was missing). */
   | { kind: "ask"; text: string; options?: ChatOption[]; template?: string }
-  | { kind: "error"; text: string }
+  | { kind: "error"; text: string; options?: ChatOption[] }
+  /** "who made BONK", "creator of WIF": the coin's creator (read by Crux's server). */
+  | { kind: "creator"; coin: string; chain?: CommandChain }
+  /** "his coins that hit 50k": the coins the coin's creator made, at least that big at their peak. */
+  | { kind: "creatorCoins"; coin: string; chain?: CommandChain; minPeakUsd?: number }
   /** Ask Crux's AI (lib/askAi): its words, then the cards it showed. */
   | { kind: "ai"; text: string; cards: Reply[] }
   /** The AI is still answering. */
@@ -126,7 +132,60 @@ export function readQuestion(raw: string): Reply | null {
 }
 
 /** Reads one chat message. `template`: a question's "{}" that this message answers. Pure, for tests. */
-export function readMessage(raw: string, template?: string): Reply {
+/**
+ * What a message means. `last`: the coin the conversation was about (the coin page open, or the last one talked
+ * about), so "buy 20 of it", "is it safe" and "who made it" read as that coin. Pure.
+ */
+export function readMessage(raw: string, template?: string, last?: string): Reply {
+  if (template) return readCommand(raw, template);
+  // Typos and number words first, then everyday phrasing into the plain commands.
+  const said = rephrase(numberWords(fixTypos(raw.trim())));
+  // Something Crux doesn't do, the money itself, a problem or plain chat: an honest line and the way back.
+  const off = readOffTrack(said, last);
+  if (off) return off;
+  const q = readCoinQuestion(said, last);
+  if (q) {
+    if (q.kind === "portfolio" || q.kind === "trending" || q.kind === "help") return q.kind === "help" ? { kind: "help", greeting: false } : q;
+    if (!q.coin) return { kind: "ask", text: "Which coin? Type its name or paste its address.", template: q.kind === "lookup" ? "check {}" : q.kind === "creator" ? "who made {}" : `coins by the {} creator${q.minPeakUsd ? ` that hit $${q.minPeakUsd}` : ""}` };
+    if (q.kind === "lookup") return { kind: "lookup", coin: q.coin, chain: q.chain };
+    if (q.kind === "creator") return { kind: "creator", coin: q.coin, chain: q.chain };
+    return { kind: "creatorCoins", coin: q.coin, chain: q.chain, ...(q.minPeakUsd ? { minPeakUsd: q.minPeakUsd } : {}) };
+  }
+  const first = readCommand(said);
+  // Too much for one card (and not one plan): take it a part at a time.
+  if (first.kind === "error" || (first.kind === "ask" && !first.template) || (first.kind === "ask" && said.length >= 90 && !isScan(said))) {
+    const parts = tooMuch(said);
+    if (parts) return parts;
+  }
+  // "buy 20 of it", "sell half of this": the coin the conversation was about.
+  if (last && hasPronoun(said) && needsTheCoin(first)) return readCommand(withCoin(said, last));
+  // Not understood: its best guesses as buttons (a plain "not yet" keeps its own words and no guesses).
+  if (first.kind === "error" && !first.options && /^I didn't understand/.test(first.text)) return { ...first, options: suggestionsFor(said) };
+  return first;
+}
+
+/** A reply that didn't find its coin (it asks which, or took a pronoun for one). */
+function needsTheCoin(r: Reply): boolean {
+  if (r.kind === "ask" || r.kind === "error") return true;
+  if (r.kind === "plan") return r.steps.some((s) => s.kind !== "wait" && /^(IT|THIS|THAT|DAT|DIS|ONE|COIN|TOKEN)$/i.test(s.coin));
+  if (r.kind === "lookup") return /^(IT|THIS|THAT|DAT|DIS|ONE|COIN|TOKEN)$/i.test(r.coin);
+  return false;
+}
+
+/** Buttons for a message Crux couldn't read: its best guesses at what was meant, then the menu's first questions. */
+export function suggestionsFor(text: string): ChatOption[] {
+  const words = text.split(/\s+/).map((w) => w.replace(/[^A-Za-z0-9$]/g, "")).filter(Boolean);
+  const coin = words.map((w) => w.replace(/^\$/, "")).find((w) => /^[A-Za-z][A-Za-z0-9]{1,14}$/.test(w) && !COMMON.has(w.toLowerCase()));
+  const amount = text.match(/\$\s?(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s?(?:usd|dollars?|bucks)/i);
+  const out: ChatOption[] = [];
+  if (coin && amount) out.push({ label: `Buy $${amount[1] ?? amount[2]} of ${coin.toUpperCase()}`, command: `buy $${amount[1] ?? amount[2]} of ${coin}` });
+  if (coin) out.push({ label: `Check ${coin.toUpperCase()}`, command: `check ${coin}` });
+  out.push({ label: "What can you do?", command: "help" }, { label: "What's trending?", command: "what's trending?" });
+  return out;
+}
+const COMMON = new Set("i me my you your a an the to of in on at for and or but is are was be do does did can could would should will want wanna need please pls just now then that this it its what whats how why when where who which some any all half more less much many get got buy sell coin coins token tokens price safe dollars bucks usd".split(" "));
+
+function readCommand(raw: string, template?: string): Reply {
   // Trader slang first ("ape 5 into bonk", "leave a moon bag", "sl 20"): rewritten into the plain commands below.
   if (!template) {
     const slang = deslang(raw);
