@@ -11,6 +11,7 @@ import type { AuctionV2 } from "@/lib/launchV2";
 import { explorer, poolStats, type CoinTrade, type PoolStats } from "@/lib/coinMarket";
 import { fmtCompact, fmtPrice, type ChartNetwork } from "@/lib/solanaCoins";
 import { HolderMap } from "@/components/coin/HolderMap";
+import { useTradingSince } from "@/hooks/useTradingSince";
 
 export type CoinFacts = { symbol?: string; name?: string; icon?: string; price?: number; change24h?: number; mcap?: number; liquidity?: number };
 
@@ -68,7 +69,9 @@ export function CoinTerminal({ network, token, coin, trade, path }: { network: C
     }
   }, [path]);
 
-  const s = stats.data;
+  // The market sites date a coin by when its market was created; when it really started trading can differ (hooks/useTradingSince).
+  const startedAt = useTradingSince(network, token, pool, stats.data?.createdAt);
+  const s = useMemo(() => (stats.data ? { ...stats.data, createdAt: startedAt ?? stats.data.createdAt } : stats.data), [stats.data, startedAt]);
   const price = coin?.price ?? s?.price;
   const symbol = coin?.symbol || "…";
   // The Crux pro chart takes a launch's shape; for another chain's coin it needs only the supply (for market-cap
