@@ -255,7 +255,19 @@ export function ProChart({
   // while it's down, falls back to bucketing the trades here.
   // "Auto" picks a timeframe once, when the chart opens (1s for a young token), and keeps it while the page is open.
   // A launch time not read yet (0) would look decades old and pick 1D: treat it as new instead.
-  const [autoPick] = useState(() => (auction.settledAt > 0 ? openingInterval(auction.settledAt, Math.floor(Date.now() / 1000)) : 1));
+  // Another chain's coin learns its age a moment after the chart opens (from its market's listing): until then "Auto"
+  // shows 1-minute candles, then picks once from the real age. (Picking at once took every such coin for a new one and
+  // opened a 5-hour-old coin on 1-second candles, of which only its last few hundred trades exist: a mostly empty chart.)
+  const pickNow = () => openingInterval(auction.settledAt, Math.floor(Date.now() / 1000));
+  const [autoPickState, setAutoPick] = useState<number | null>(() => (auction.settledAt > 0 ? pickNow() : external ? null : 1));
+  if (autoPickState === null && auction.settledAt > 0) setAutoPick(pickNow());
+  // A coin whose market isn't listed anywhere yet never learns its age: after a few seconds it's taken as new (1s).
+  useEffect(() => {
+    if (autoPickState !== null) return;
+    const t = setTimeout(() => setAutoPick((p) => p ?? 1), 5_000);
+    return () => clearTimeout(t);
+  }, [autoPickState]);
+  const autoPick = autoPickState ?? 60;
   // A trade never changes the timeframe. (On "Auto" every Buy or Sell used to switch the chart to 1-second candles
   // for a minute, then back: each switch re-subscribed the feed and refitted the axis, and the chart jumped twice.)
   const [, setPickedAt] = useState(0);
