@@ -146,6 +146,7 @@ export function readMessage(raw: string, template?: string, last?: string): Repl
   const q = readCoinQuestion(said, last);
   if (q) {
     if (q.kind === "portfolio" || q.kind === "trending" || q.kind === "help") return q.kind === "help" ? { kind: "help", greeting: false } : q;
+    if (q.kind === "orders") return { kind: "orders", cancel: false };
     if (!q.coin) return { kind: "ask", text: "Which coin? Type its name or paste its address.", template: q.kind === "lookup" ? "check {}" : q.kind === "creator" ? "who made {}" : `coins by the {} creator${q.minPeakUsd ? ` that hit $${q.minPeakUsd}` : ""}` };
     if (q.kind === "lookup") return { kind: "lookup", coin: q.coin, chain: q.chain };
     if (q.kind === "creator") return { kind: "creator", coin: q.coin, chain: q.chain };

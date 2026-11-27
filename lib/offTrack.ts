@@ -49,6 +49,18 @@ export function readOffTrack(raw: string, last?: string): Reply | null {
   if (/\b(bridge|bridging|swap (?:to|chains?)|move .*(?:to|from) (?:base|solana|sol|bnb|bsc)|gas|need eth|need sol|need bnb)\b/.test(t)) {
     return say("No bridging or gas needed: your one Crux balance buys on Solana, Base and BNB Chain, and Crux pays the network costs.", [{ label: "Buy $5 of BONK", command: "buy $5 of BONK" }, TRENDING, HOLD]);
   }
+  // Sending to someone else: Crux only ever pays out to the trader's own bound wallet.
+  if (/\b(?:send|transfer|pay|tip)\b.*\b(?:to\s+(?:my\s+)?(?:friend|bro|mom|dad|wife|someone|him|her|them|this address|0x[a-f0-9]{6,})|friend)\b/.test(t)) {
+    return say("Crux only sends money to the wallet you bound to your account (a withdrawal), never to anyone else. That keeps it safe if your login is ever stolen.", [ACCOUNT, HOLD]);
+  }
+  // Staking, yield, airdrops.
+  if (/\b(?:stake|staking|yield|apy|apr|lend|lending|farm|farming|airdrop|airdrops)\b/.test(t)) {
+    return say("Crux trades coins: no staking, yield or airdrops. Want to see what's moving instead?", [TRENDING, HOLD]);
+  }
+  // Is Crux itself safe.
+  if (/\bis\s+crux\s+(?:safe|legit|a scam)\b|\bcan\s+i\s+trust\s+(?:crux|you)\b/.test(t)) {
+    return say("Your money sits in your own account and can only leave to the wallet you bind. Every trade waits for your confirm.", [ACCOUNT, HELP]);
+  }
   // Adding money, withdrawing, sending.
   if (/\b(withdraw|withdrawal|cash ?out to|send (?:money|it|usdc|cash)? ?to|transfer (?:to|out)|take (?:my )?money out)\b/.test(t)) {
     return say("Withdrawals are on your account page: your money goes to the wallet you bound to your account, and only there.", [ACCOUNT, HOLD]);

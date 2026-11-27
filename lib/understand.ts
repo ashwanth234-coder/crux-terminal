@@ -74,9 +74,26 @@ const COIN = String.raw`(\$?[A-Za-z0-9][A-Za-z0-9.]{0,43})`;
  */
 export function rephrase(raw: string): string {
   let s = raw.trim().replace(/\s+/g, " ");
+  // Stop losses said other ways: "cut bonk at -20%", "stop out bonk at 20%", "protect my bonk at 20% down".
+  s = s.replace(new RegExp(String.raw`^(?:cut|stop\s+out|protect)\s+(?:my\s+)?${COIN}\s+(?:at|if it drops|below)\s+-?(\d+(?:\.\d+)?)\s?%(?:\s+down)?$`, "i"), (_, c: string, p: string) => `stop loss ${p}% on ${c}`);
+  // A trailing stop with the coin first: "trail bonk 15%".
+  s = s.replace(new RegExp(String.raw`^trail(?:ing)?(?:\s+stop)?\s+(?:my\s+)?${COIN}\s+(?:at\s+|by\s+)?(\d+(?:\.\d+)?)\s?%$`, "i"), (_, c: string, p: string) => `trailing stop ${p}% on ${c}`);
+  // Dip buys said other ways: "if bonk dips 30% buy $10", "catch bonk at -30% with 10 bucks".
+  s = s.replace(new RegExp(String.raw`^if\s+${COIN}\s+(?:dips|drops|falls|goes down)\s+(?:by\s+)?(\d+(?:\.\d+)?)\s?%\s*,?\s+(?:buy|grab|get)\s+${MONEY}$`, "i"), (_, c: string, p: string, n: string, u?: string) => `buy ${dollarsOf(n, u)} of ${c} if it drops ${p}%`);
+  s = s.replace(new RegExp(String.raw`^catch\s+${COIN}\s+(?:at|on a)\s+-?(\d+(?:\.\d+)?)\s?%(?:\s+dip)?\s+(?:with|for)\s+${MONEY}$`, "i"), (_, c: string, p: string, n: string, u?: string) => `buy ${dollarsOf(n, u)} of ${c} if it drops ${p}%`);
+  // "take profit(s) on X" with a target is the order; without one it's selling now (all, or the share named).
+  // (A target reads "at 2x", "@ 3x", "at 50%", "when it's up 50%"; a bare "25% bonk" is the share to sell now.)
+  if (/\btake\s+profits?\s+on\b/i.test(s) && !/\d\s?x\b|(?:\bat|@|\bup)\s*\+?\d+(?:\.\d+)?\s?%/i.test(s)) s = s.replace(/\btake\s+profits?\s+on\s+/i, "sell ");
+  s = s.replace(new RegExp(String.raw`\btake\s+profits?\s+on\s+${COIN}\s+(?:at|@)\s+(\d+(?:\.\d+)?)\s?x\b`, "i"), (_, c: string, x: string) => `take profit at ${x}x on ${c}`);
+  // Selling verbs with a share keep the share; without one they sell everything ("dump 25% bonk" sells 25%, not all).
+  const SHARE = String.raw`(all(?:\s+of)?|everything|half(?:\s+of)?|a\s+quarter(?:\s+of)?|\d+(?:\.\d+)?\s?%(?:\s+of)?)`;
+  s = s.replace(new RegExp(String.raw`^(?:dump|exit|jeet|paper\s?hand|cash\s+out(?:\s+of)?|get\s+me\s+out\s+of|take\s+me\s+out\s+of|close(?:\s+out)?|offload|unload|liquidate)\s+${SHARE}\s+(?:my\s+)?`, "i"), (_, share: string) => `sell ${share.replace(/\s+of$/i, "")} of `);
   // "get me out of X", "cash out (of) X", "take me out of X" → sell all.
   s = s.replace(/\b(?:get|take)\s+me\s+out\s+(?:of\s+)?(?:my\s+)?/i, "sell all of ");
   s = s.replace(/\bcash\s+out\s+(?:of\s+)?(?:my\s+)?/i, "sell all of ");
+  s = s.replace(/^close\s+(?:out\s+)?(?:my\s+)?(?!.*\b(?:position|bag|trade)\b)/i, "sell all of ");
+  // "ape $1k into bonk", "gimme $20 of bonk", "give me 20 bucks of bonk" → buy (amounts with k / m kept).
+  s = s.replace(new RegExp(String.raw`^(?:ape|aping|send(?:\s+it)?|gimme|give\s+me)\s+${MONEY}\s+(?:into|in|on|of)\s+`, "i"), (_, n: string, u?: string) => `buy ${dollarsOf(n, u)} of `);
   // "take half off X", "take 30% out of X" → sell that share.
   s = s.replace(/\btake\s+(half|a quarter|\d+(?:\.\d+)?\s?%)\s+(?:off|out of|of)\s+(?:my\s+)?/i, (_, share: string) => `sell ${share} of `);
   // Other ways to sell.
@@ -98,9 +115,16 @@ export function rephrase(raw: string): string {
   s = s.replace(new RegExp(String.raw`\bbuy\s+\$?\s?(\d[\d,]*(?:\.\d+)?)\s?(k|m)?\s?(\$|usd[ct]?|dollars?|bucks)?(?!\s?(?:%|x\b))\s+(?:of\s+)?`, "i"), (_, n: string, u?: string) => `buy ${dollarsOf(n, u)} of `);
   // "20$" anywhere → "$20".
   s = s.replace(/(^|\s)(\d[\d,]*(?:\.\d+)?)\$/g, "$1$$$2");
-  // No verb, just money and a coin: "5 bucks bonk", "$10 wif".
-  const bare = s.match(new RegExp(String.raw`^(?:\$\s?(\d[\d,]*(?:\.\d+)?)\s?(k|m)?|(\d[\d,]*(?:\.\d+)?)\s?(k|m)?\s?(?:usd[ct]?|dollars?|bucks))\s+(?:of\s+|in\s+|into\s+|on\s+)?${COIN}$`, "i"));
-  if (bare) s = `buy ${dollarsOf(bare[1] ?? bare[3], bare[2] ?? bare[4])} of ${bare[5]}`;
+  // No verb, just money and a coin: "5 bucks bonk", "$10 wif", "i want 20 of bonk" ("i want" is filler), "bonk $20".
+  const lead = s.replace(/^(?:i\s+(?:want|need|wanna|would like)|i'?d\s+like|lemme\s+have|let\s+me\s+have)\s+/i, "");
+  const bare =
+    lead.match(new RegExp(String.raw`^(?:\$\s?(\d[\d,]*(?:\.\d+)?)\s?(k|m)?|(\d[\d,]*(?:\.\d+)?)\s?(k|m)?\s?(?:usd[ct]?|dollars?|bucks|\$)?)\s+(?:of\s+|in\s+|into\s+|on\s+)?${COIN}$`, "i")) ??
+    null;
+  const coinFirst = lead.match(new RegExp(String.raw`^${COIN}\s+(?:\$\s?(\d[\d,]*(?:\.\d+)?)\s?(k|m)?|(\d[\d,]*(?:\.\d+)?)\s?(k|m)?\s?(?:usd[ct]?|dollars?|bucks|\$))$`, "i"));
+  const money = (n?: string) => n !== undefined && Number(n.replace(/,/g, "")) > 0;
+  // A bare number with no money word ("20 bonk") is dollars only after "i want"; on its own it could be anything.
+  if (bare && money(bare[1] ?? bare[3]) && (bare[1] || /\b(?:usd|dollars?|bucks|\$)/i.test(lead) || lead !== s)) s = `buy ${dollarsOf(bare[1] ?? bare[3], bare[2] ?? bare[4])} of ${bare[5]}`;
+  else if (coinFirst && !/^(?:buy|sell|stop|take|tp|sl|trail|check|is|what|who)$/i.test(coinFirst[1]) && money(coinFirst[2] ?? coinFirst[4])) s = `buy ${dollarsOf(coinFirst[2] ?? coinFirst[4], coinFirst[3] ?? coinFirst[5])} of ${coinFirst[1]}`;
   // "when it doubles" (2x after plainSymbols) / "when it 3x" → "when it hits 3x" (the take-profit reader's words).
   s = s.replace(/\b(when|if|once)\s+it\s+(\d+(?:\.\d+)?)\s?x\b/gi, "$1 it hits $2x");
   s = s.replace(/\b(when|if|once)\s+it\s+(doubles|doubled)\b/gi, "$1 it hits 2x").replace(/\b(when|if|once)\s+it\s+(triples|tripled)\b/gi, "$1 it hits 3x");
@@ -126,6 +150,7 @@ export type CoinQuestion =
   | { kind: "creatorCoins"; coin: string | null; chain?: CommandChain; minPeakUsd?: number }
   | { kind: "portfolio" }
   | { kind: "trending"; chain?: CommandChain }
+  | { kind: "orders" }
   | { kind: "help" };
 
 /** Words that are never the coin in a question ("is it safe", "who made this"). */
@@ -181,7 +206,7 @@ export function readCoinQuestion(raw: string, last?: string): CoinQuestion | nul
     /\b(?:his|her|their|the dev'?s|the creator'?s|dev'?s|creator'?s|deployer'?s)\s+(?:other\s+)?(?:coins|launches|tokens|projects)\b/.test(t) ||
     /\b(?:coins|launches|tokens)\s+(?:by|from|made by|launched by|of)\s+(?:this|that|the|his|same)?\s*(?:creator|dev|deployer|guy|wallet)\b/.test(t) ||
     /\bwhat\s+else\s+(?:did|has)\s+(?:the\s+)?(?:\S+\s+)?(?:dev|creator|deployer)\s+(?:launch|make|create|deploy|do)/.test(t) ||
-    /\b(?:did|has)\s+(?:the\s+)?(?:creator|dev|deployer)\b.*\brug/.test(t) ||
+    /\b(?:did|has)\s+(?:the\s+)?(?:\S+\s+)?(?:creator|dev|deployer)\b.*\brug/.test(t) ||
     /\b(?:creator|dev|deployer)'?s?\s+(?:track record|history|past|record)\b/.test(t) ||
     /\bother\s+(?:coins|launches|tokens)\s+(?:by|from)\b/.test(t) ||
     /\bcoins\s+(?:by|from)\s+(?:the\s+)?\S+\s+(?:creator|dev|deployer)\b/.test(t);
@@ -213,16 +238,21 @@ export function readCoinQuestion(raw: string, last?: string): CoinQuestion | nul
     (m = noChain.match(/^how\s+much\s+is\s+(\S+)(?:\s+(?:worth|at|now))?$/i)) ||
     (m = noChain.match(/^what(?:'?s| is)\s+(\S+)\s+(?:at|doing|trading at|worth)$/i)) ||
     (m = noChain.match(/^(?:tell me|talk to me|what do you know)\s+(?:more\s+)?about\s+(\S+)$/i)) ||
-    (m = noChain.match(/^(?:thoughts|opinion|views?)\s+on\s+(\S+)$/i)) ||
+    (m = noChain.match(/^(?:thoughts|opinion|views?|anything|news|updates?)\s+on\s+(\S+)$/i)) ||
+    (m = noChain.match(/^what(?:'?s| is)\s+(?!trending\b|hot\b|pumping\b|moving\b|up\b|new\b|my\b|popping\b|good\b)(\S+)$/i)) ||
     (m = noChain.match(/^should\s+i\s+(?:buy|get|ape|ape into|grab|invest in)\s+(\S+)$/i)) ||
     (m = noChain.match(/^(\$?[A-Za-z0-9]{2,44})\s+(?:price|mcap|mc|chart|safe|legit|info)$/i))
   ) {
     return { kind: "lookup", coin: coinWord(m[1], last), chain };
   }
+  // Orders: "show my stop losses", "what orders do i have".
+  if (/\b(?:show|see|list|check|my|what|which)\b.*\b(?:stop[- ]?loss(?:es)?|take[- ]?profits|limit orders?|orders)\b/.test(t) && !/\b(?:buy|sell|ape|dump|cancel)\b/.test(t) && !/\d/.test(t)) return { kind: "orders" };
+  // The account: "balance", "what's in my wallet", "how much money do i have".
+  if (/\bwhat'?s\s+in\s+my\s+(?:wallet|account|bag)\b|^(?:my\s+)?(?:balance|cash|money|funds)$|\bhow\s+much\s+(?:money|cash|usdc)\s+(?:do\s+i\s+have|is\s+left|have\s+i\s+got)\b|\bmy\s+balance\b/.test(t)) return { kind: "portfolio" };
   // The account.
   if (/^am\s+i\s+(?:up|down|in profit|winning|losing|green|red)\b/.test(t) || /\bhow\s+much\s+(?:am i up|am i down|have i made|did i make|have i lost|did i lose)\b/.test(t) || /^(?:my\s+)?(?:profits?|gains|losses|p ?n ?l)$/.test(t)) return { kind: "portfolio" };
   // The market.
-  if (/\b(?:any|some)\s+(?:good|new|hot|decent)\s+(?:coins|tokens|plays|memes)\b/.test(t) || /^what\s+(?:should|to|can)\s+i\s+(?:buy|ape|get)(?:\s+(?:now|today))?$/.test(t) || /\bwhat'?s\s+popping\b/.test(t) || /\bbest\s+(?:coins|tokens|plays)\b/.test(t)) return { kind: "trending", chain };
+  if (/\b(?:any|some)\s+(?:good|new|hot|decent)\s+(?:coins|tokens|plays|memes)\b/.test(t) || /^what\s+(?:should|to|can)\s+i\s+(?:buy|ape|get)(?:\s+(?:now|today))?$/.test(t) || /\bwhat'?s\s+popping\b/.test(t) || /\bbest\s+(?:coins|tokens|plays)\b/.test(t) || /^(?:show\s+(?:me\s+)?)?(?:new|fresh|newest|latest)\s+(?:coins|launches|tokens|pairs)$/.test(t) || /^(?:show\s+(?:me\s+)?)?(?:the\s+)?(?:runners|movers|pumpers)$/.test(t)) return { kind: "trending", chain };
   if (/^what\s+can\s+(?:you|ya|crux)\s+do\b|^how\s+(?:do\s+)?(?:i|you)\s+use\s+(?:this|you|crux)\b/.test(t)) return { kind: "help" };
   return null;
 }
