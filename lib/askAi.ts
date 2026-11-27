@@ -51,8 +51,10 @@ export function assistantTurn(a: AiAnswer): string {
   return [a.text, ...(shown.length ? [`(Shown: ${shown.join("; ")})`] : [])].filter(Boolean).join("\n");
 }
 
-/** The coin open on screen, from the page's address (/solana/<mint>, /base/0x…, /bnb/0x…), for "is this safe?". */
+/** The coin open on screen, from the page's address (/sol/<mint>, /base/0x…, /bnb/0x…, /token/0x…), for "is this safe?". */
 export function pageCoin(pathname: string | null): { coin: string; chain: CommandChain } | null {
-  const m = pathname?.match(/^\/(solana|base|bnb)\/([A-Za-z0-9]{20,64})(?:[/?#]|$)/);
-  return m ? { chain: m[1] as CommandChain, coin: m[2] } : null;
+  const m = pathname?.match(/^\/(sol|solana|base|bnb|token)\/([A-Za-z0-9]{20,64})(?:[/?#]|$)/);
+  if (!m) return null;
+  const chain: CommandChain = m[1] === "sol" || m[1] === "solana" ? "solana" : m[1] === "bnb" ? "bnb" : "base";
+  return { chain, coin: m[2] };
 }

@@ -24,6 +24,8 @@ test("the assistant's turn carries what it showed, with addresses, for follow-up
 test("the coin open on screen comes from the page's address", () => {
   assert.deepEqual(pageCoin("/base/0x2250d427d030bD859412790d942B18A9DF7C5afE"), { chain: "base", coin: "0x2250d427d030bD859412790d942B18A9DF7C5afE" });
   assert.deepEqual(pageCoin("/solana/9TKbd3VFaMSXsEAicD9JVQWpWwAoLi4fSgWmZL2cpump?x=1"), { chain: "solana", coin: "9TKbd3VFaMSXsEAicD9JVQWpWwAoLi4fSgWmZL2cpump" });
+  assert.deepEqual(pageCoin("/sol/9TKbd3VFaMSXsEAicD9JVQWpWwAoLi4fSgWmZL2cpump"), { chain: "solana", coin: "9TKbd3VFaMSXsEAicD9JVQWpWwAoLi4fSgWmZL2cpump" });
+  assert.deepEqual(pageCoin("/token/0x2250d427d030bD859412790d942B18A9DF7C5afE"), { chain: "base", coin: "0x2250d427d030bD859412790d942B18A9DF7C5afE" });
   assert.equal(pageCoin("/launch/new"), null);
   assert.equal(pageCoin(null), null);
 });
