@@ -25,11 +25,14 @@ function Check({ on, onClick, label, swatch }: { on: boolean; onClick: () => voi
   );
 }
 
-/** The toolbar's Overlays menu: which on-chain trades and levels to draw on the candles, and the smallest trade marked. */
-export function OverlaysButton({ settings, onChange, counts }: { settings: ChartSettings; onChange: (s: ChartSettings) => void; counts: { mine: number; dev: number; top: number } }) {
+/**
+ * The toolbar's Overlays menu: which on-chain trades and levels to draw on the candles, and the smallest trade marked.
+ * `devOnly`: another chain's coin, where only its creator's buys and sells (DB / DS) are marked so far.
+ */
+export function OverlaysButton({ settings, onChange, counts, devOnly = false }: { settings: ChartSettings; onChange: (s: ChartSettings) => void; counts: { mine: number; dev: number; top: number }; devOnly?: boolean }) {
   const marks = settings.marks;
   const toggle = (k: keyof ChartSettings["marks"]) => onChange({ ...settings, marks: { ...marks, [k]: !marks[k] } });
-  const on = [marks.mine, marks.dev, marks.top, settings.clearingLine].filter(Boolean).length;
+  const on = (devOnly ? [marks.dev] : [marks.mine, marks.dev, marks.top, settings.clearingLine]).filter(Boolean).length;
   return (
     <Popover
       width="w-60"
@@ -48,10 +51,16 @@ export function OverlaysButton({ settings, onChange, counts }: { settings: Chart
       {() => (
         <div className="flex flex-col gap-0.5 p-1">
           <p className="px-1.5 pb-1 text-[10px] uppercase tracking-[0.14em] text-dim">Mark on the chart</p>
-          <Check on={marks.mine} onClick={() => toggle("mine")} label={`My swaps${counts.mine ? ` (${counts.mine})` : ""}`} swatch="#00e676" />
-          <Check on={marks.dev} onClick={() => toggle("dev")} label={`Whale / Dev swaps${counts.dev ? ` (${counts.dev})` : ""}`} swatch="#c792ea" />
-          <Check on={marks.top} onClick={() => toggle("top")} label={`Top 10 holders${counts.top ? ` (${counts.top})` : ""}`} swatch="#ffd166" />
-          <Check on={settings.clearingLine} onClick={() => onChange({ ...settings, clearingLine: !settings.clearingLine })} label="Batch floor" swatch="#f3f3f0" />
+          {devOnly ? (
+            <Check on={marks.dev} onClick={() => toggle("dev")} label={`Dev buys & sells${counts.dev ? ` (${counts.dev})` : ""}`} swatch="#c792ea" />
+          ) : (
+            <>
+              <Check on={marks.mine} onClick={() => toggle("mine")} label={`My swaps${counts.mine ? ` (${counts.mine})` : ""}`} swatch="#00e676" />
+              <Check on={marks.dev} onClick={() => toggle("dev")} label={`Whale / Dev swaps${counts.dev ? ` (${counts.dev})` : ""}`} swatch="#c792ea" />
+              <Check on={marks.top} onClick={() => toggle("top")} label={`Top 10 holders${counts.top ? ` (${counts.top})` : ""}`} swatch="#ffd166" />
+              <Check on={settings.clearingLine} onClick={() => onChange({ ...settings, clearingLine: !settings.clearingLine })} label="Batch floor" swatch="#f3f3f0" />
+            </>
+          )}
           <label className="mt-1 flex items-center justify-between gap-2 border-t border-line px-1.5 pt-2 text-[11.5px] text-dim">
             Smallest trade marked
             <select

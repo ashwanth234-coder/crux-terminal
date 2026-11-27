@@ -10,6 +10,8 @@ import { useTokenTransfers } from "@/hooks/useTokenTransfers";
 import { useStandingOrders } from "@/hooks/useStandingOrders";
 import { useCreatorVestingDays } from "@/hooks/useCreatorVesting";
 import { barTime, markBarTime, markTrades, type MarkWho } from "@/lib/chartMarks";
+import { devMarks } from "@/lib/devMarks";
+import { useCoinCreator } from "@/hooks/useCoinCreator";
 import { buildHolders } from "@/lib/holders";
 import { CRUX_SOLVERS, PREVIOUS_SETTLERS, SETTLER } from "@/lib/intents";
 import { EMPTY_CONTEXT, computeInstance, flowByCandle, holdersByCandle, paramsOf, poolByCandle, top10ByCandle, type StudyContext, type StudyId } from "@/lib/indicators";
@@ -279,6 +281,8 @@ export function ProChart({
   const feed = useFeedCandles(external ? null : auction.pair, pickedInterval, onFeedFrame);
   // Another chain's coin: its candles and trades from its own pool there.
   const rc = useRemoteChart(remote ?? null, pickedInterval);
+  // Another chain's coin: who made it, for its DB / DS badges.
+  const coinCreator = useCoinCreator(remote?.network ?? null, remote?.token ?? null);
   const swapData = useThrottled(remote ? rc.swapData : swaps.data, redrawMs);
   const tradesPending = remote ? rc.isPending : swaps.isPending;
   const tradesLoaded = remote ? rc.candles !== undefined : swaps.data !== undefined;
@@ -449,6 +453,11 @@ export function ProChart({
     return { balance: bal, entry };
   }, [holders, me]);
   const marks = useMemo(() => {
+    // Another chain's coin: its creator's buys and sells (DB / DS) from the coin's trades list.
+    if (remote) {
+      const trades = (swapData?.trades ?? []).map((t) => ({ time: t.time, side: t.side, usd: Number(t.usdc) / 1e6, price: t.price, trader: t.to, tx: t.txHash }));
+      return devMarks(trades, coinCreator);
+    }
     if (!transfers.data || candles.length === 0) return [];
     const system = new Set(["pool", "auction", "solver", "settler", "burn"]);
     const people = holders.filter((h) => !h.tags.some((t) => system.has(t)));
@@ -470,7 +479,7 @@ export function ProChart({
         return bt === null ? null : (candles.find((c) => c.time === bt)?.close ?? null);
       },
     );
-  }, [transfers.data, candles, holders, me, auction.pair, auction.creator, market.batchPool, focus]);
+  }, [transfers.data, candles, holders, me, auction.pair, auction.creator, market.batchPool, focus, remote, swapData, coinCreator]);
   // A wallet picked in the desk shows alone, every trade of it, whatever the overlay switches say.
   const replayEnd = replayIndex !== null && candles.length ? candles[candles.length - 1].time + interval : null;
   const shownMarks = useMemo(
@@ -1353,7 +1362,7 @@ export function ProChart({
         compareSlot={<CompareButton current={auction.pair} items={config.compare} onChange={setCompare} />}
         symbolSlot={<SymbolSwitch symbol={symbol} />}
         templatesSlot={<TemplatesButton config={config} set={set} />}
-        overlaysSlot={<OverlaysButton settings={settings} onChange={setSettings} counts={markCounts} />}
+        overlaysSlot={<OverlaysButton settings={settings} onChange={setSettings} counts={markCounts} devOnly={!!remote} />}
         layoutSlot={layoutSlot}
         onReplay={() => setReplay((r) => (r ? null : { index: null, playing: false, speed: 1 }))}
       />
