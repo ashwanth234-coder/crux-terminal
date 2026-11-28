@@ -83,6 +83,8 @@ export function markBarTime(
   isDown?: (candleTime: number) => boolean,
   interval?: number,
 ): number | null {
+  // A trade from before the chart's first candle has no candle of its own: no badge (never pinned on a later one).
+  if (times.length === 0 || time < times[0]) return null;
   const at = barTime(times, time);
   if (side !== "sell") return at;
   // The transfer's own candle, if one covers it (a wallet sale straight into the pool lands there).

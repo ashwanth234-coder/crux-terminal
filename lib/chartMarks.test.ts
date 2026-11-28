@@ -112,3 +112,10 @@ test("markBarTime: an escrow transfer with no sale nearby gets no badge, never o
   const red = new Set([200, 205]);
   assert.equal(markBarTime([200, 205], 200, "sell", (t) => red.has(t), 1), 200);
 });
+
+test("markBarTime: a trade from before the first candle gets no badge, never the first candle's", async () => {
+  const { markBarTime } = await import("./chartMarks.ts");
+  assert.equal(markBarTime([100, 160], 40, "buy"), null);
+  assert.equal(markBarTime([100, 160], 40, "sell", () => true, 60), null);
+  assert.equal(markBarTime([100, 160], 170, "buy"), 160);
+});
