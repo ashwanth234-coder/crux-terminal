@@ -61,6 +61,23 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
   });
   const launchTrades = launch.data && !launch.data.loading && !launch.data.none ? launch.data.trades : null;
 
+  // When the coin graduated from its launchpad (pump.fun, LetsBonk / Raydium LaunchLab, Moonshot…), as Jupiter has it:
+  // the "Graduated" marker for launchpads whose curve Crux doesn't read. Asked again every minute until it graduates.
+  const jupGraduated = useQuery({
+    queryKey: ["jupiter-graduated", coin?.token],
+    enabled: coin?.network === "solana",
+    staleTime: 60_000,
+    retry: 1,
+    refetchInterval: (q) => (q.state.data ? false : 60_000),
+    queryFn: async () => {
+      const r = await fetch(`https://lite-api.jup.ag/tokens/v2/search?query=${encodeURIComponent(coin!.token)}`);
+      if (!r.ok) return null;
+      const hit = ((await r.json()) as { id: string; graduatedAt?: string }[]).find((t) => t.id === coin!.token);
+      const at = hit?.graduatedAt ? Date.parse(hit.graduatedAt) : NaN;
+      return Number.isFinite(at) ? Math.floor(at / 1000) : null;
+    },
+  });
+
   // Every trade on the coin's market, pushed by Crux's server the moment it lands (crux-solver coinfeed.ts), merged
   // into the trades list the chart and the trades tab both read.
   const qc = useQueryClient();
@@ -190,7 +207,7 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
     isError: pool.isError || trades.isError || (!fine && candles.isError),
     noMarket: pool.data === null,
     /** When the coin left its launch curve (unix s), for a "Graduated" line; null when unknown or still on it. */
-    graduatedAt: launch.data && !launch.data.loading && launch.data.complete ? (launch.data.graduatedAt ?? null) : null,
+    graduatedAt: (launch.data && !launch.data.loading && launch.data.complete ? (launch.data.graduatedAt ?? null) : null) ?? jupGraduated.data ?? null,
     /** The launch phase is still being read (the chart says so). */
     launchLoading: launch.data?.loading === true,
   };

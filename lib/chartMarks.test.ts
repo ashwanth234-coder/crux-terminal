@@ -9,7 +9,9 @@ test("graduationPoint: the last launch-curve candle and the price it graduated a
   // Graduated at 230 (inside the 220 candle): that candle's close is where the curve ended.
   assert.deepEqual(graduationPoint(candles, 230), { time: 220, price: 3.5 });
   assert.deepEqual(graduationPoint(candles, 220), { time: 220, price: 3.5 });
-  assert.equal(graduationPoint(candles, 50), null, "before the first candle: no point to mark");
+  // Graduated shortly before the chart starts (a launchpad whose curve isn't read): the market it opened, its first candle.
+  assert.deepEqual(graduationPoint(candles, 50), { time: 100, price: 1 });
+  assert.equal(graduationPoint(candles, 100 - 1_801), null, "long before the first candle: no point to mark");
   assert.equal(graduationPoint([], 230), null);
   assert.equal(graduationPoint([c(100, 0)], 120), null, "no real price: no point");
 });
