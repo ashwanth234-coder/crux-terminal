@@ -29,11 +29,12 @@ function Check({ on, onClick, label, swatch }: { on: boolean; onClick: () => voi
  * The toolbar's Overlays menu: which on-chain trades and levels to draw on the candles, and the smallest trade marked.
  * `devOnly`: another chain's coin, where its creator's buys and sells (DB / DS) and saved wallets' (★B / ★S) are marked.
  */
-export function OverlaysButton({ settings, onChange, counts, devOnly = false }: { settings: ChartSettings; onChange: (s: ChartSettings) => void; counts: { mine: number; dev: number; top: number; saved?: number }; devOnly?: boolean }) {
+export function OverlaysButton({ settings, onChange, counts, devOnly = false }: { settings: ChartSettings; onChange: (s: ChartSettings) => void; counts: { mine: number; dev: number; top: number; saved?: number; kol?: number }; devOnly?: boolean }) {
   const marks = settings.marks;
-  const toggle = (k: keyof ChartSettings["marks"]) => onChange({ ...settings, marks: { ...marks, [k]: k === "saved" ? marks.saved === false : !marks[k] } });
+  const toggle = (k: keyof ChartSettings["marks"]) => onChange({ ...settings, marks: { ...marks, [k]: k === "saved" || k === "kol" ? marks[k] === false : !marks[k] } });
   const savedOn = marks.saved !== false;
-  const on = (devOnly ? [marks.dev, savedOn] : [marks.mine, marks.dev, marks.top, settings.clearingLine]).filter(Boolean).length;
+  const kolOn = marks.kol !== false;
+  const on = (devOnly ? [marks.dev, savedOn, kolOn] : [marks.mine, marks.dev, marks.top, settings.clearingLine]).filter(Boolean).length;
   return (
     <Popover
       width="w-60"
@@ -56,6 +57,7 @@ export function OverlaysButton({ settings, onChange, counts, devOnly = false }: 
             <>
               <Check on={marks.dev} onClick={() => toggle("dev")} label={`Dev buys & sells${counts.dev ? ` (${counts.dev})` : ""}`} swatch="#c792ea" />
               <Check on={savedOn} onClick={() => toggle("saved")} label={`Saved wallets ★${counts.saved ? ` (${counts.saved})` : ""}`} swatch="#ff9d00" />
+              <Check on={kolOn} onClick={() => toggle("kol")} label={`KOLs${counts.kol ? ` (${counts.kol})` : ""}`} swatch="#ff4fd8" />
             </>
           ) : (
             <>

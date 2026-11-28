@@ -3,11 +3,12 @@ import type { TokenTransfer } from "../hooks/useTokenTransfers";
 
 /**
  * Whose trade a chart mark shows, strongest first: the wallet picked in the desk, the viewer, the launch's creator, a
- * whale, a top-10 holder; on another chain's coin, also a wallet the trader saved (lib/savedWallets, ★ badges).
+ * whale, a top-10 holder; on another chain's coin, also a wallet the trader saved (lib/savedWallets, ★ badges) and
+ * a KOL (lib/kols, KB / KS badges).
  */
-export type MarkWho = "focus" | "me" | "dev" | "whale" | "top" | "saved";
+export type MarkWho = "focus" | "me" | "dev" | "whale" | "top" | "saved" | "kol";
 
-export type MarkTrade = { time: number; side: "buy" | "sell"; who: MarkWho; address: Address; tokens: number; usd: number; txHash: string };
+export type MarkTrade = { time: number; side: "buy" | "sell"; who: MarkWho; address: Address; tokens: number; usd: number; txHash: string; name?: string };
 
 export type MarkContext = {
   /** Where buys come from: the pool, the batch pool, the solver (intent fills). */

@@ -16,7 +16,9 @@ import { HolderMap } from "@/components/coin/HolderMap";
 import { useTradingSince } from "@/hooks/useTradingSince";
 import { SafetyStrip } from "@/components/coin/SafetyStrip";
 import { SaveStar } from "@/components/wallets/SaveWallet";
-import { savedMarksOn, setSavedMarks, SETTINGS_EVENT } from "@/components/chart/settings";
+import { kolMarksOn, savedMarksOn, setKolMarks, setSavedMarks, SETTINGS_EVENT } from "@/components/chart/settings";
+import { useKolTrades } from "@/hooks/useKolTrades";
+import { kolIndex, kolName } from "@/lib/kols";
 import { useSavedWallets } from "@/hooks/useSavedWallets";
 import { chainOf, walletKey } from "@/lib/savedWallets";
 import { coinLinks, launchpadOf } from "@/lib/coinLinks";
@@ -309,6 +311,10 @@ function Desk({
   const savedWallets = useSavedWallets();
   const saved = savedWallets.index;
   const savedOf = (trader: string) => (trader ? saved.get(walletKey(wchain, trader)) : undefined);
+  // KOLs (GMGN's list via Crux's server): their names in the trades list, and the chart switch.
+  const kolFeed = useKolTrades(network, token);
+  const kolsBy = kolIndex(kolFeed.trades);
+  const kolOf = (trader: string) => (trader ? kolsBy.get(trader.startsWith("0x") ? trader.toLowerCase() : trader) : undefined);
   const shown = trades.filter((t) => (!focus || t.trader === focus) && (!bigOnly || t.usd >= 500) && (!savedOnly || !!savedOf(t.trader))).slice(0, 100);
   const tabs: [Tab, string][] = [
     ["trades", "Trades"],
@@ -346,6 +352,7 @@ function Desk({
               $500+ only
             </label>
             <StarsOnChart />
+            {kolFeed.on && <KolsOnChart count={kolFeed.trades.length} />}
             {saved.size > 0 && (
               <label className="flex items-center gap-1.5 text-dim" title="Only trades by wallets you saved">
                 <input type="checkbox" checked={savedOnly} onChange={(e) => setSavedOnly(e.target.checked)} />
@@ -424,6 +431,11 @@ function Desk({
                     ) : (
                       <span className="text-dim" title="This trade's wallet isn't known yet">—</span>
                     )}
+                    {t.trader && kolOf(t.trader) && (
+                      <span className="ml-1.5 rounded-[3px] bg-[#ff4fd8]/15 px-1 text-[10px] text-[#ff4fd8]" title="A KOL (well-known trader)">
+                        KOL {kolName(kolOf(t.trader)!)}
+                      </span>
+                    )}
                     {t.tx && (
                       <a href={x.tx(t.tx)} target="_blank" rel="noopener noreferrer" className="ml-2 text-dim hover:text-chrome" aria-label="Open the trade">
                         ↗
@@ -462,6 +474,23 @@ function StarsOnChart() {
     <label className="flex items-center gap-1.5 text-dim" title="Show your saved wallets' buys and sells on the chart (★B / ★S)">
       <input type="checkbox" checked={on} onChange={(e) => setSavedMarks(e.target.checked)} />
       ★ on chart
+    </label>
+  );
+}
+
+/** The trades list's switch for KOLs' buys and sells on the chart (KB / KS; the chart's Overlays has the same one). */
+function KolsOnChart({ count }: { count: number }) {
+  const [on, setOn] = useState(true);
+  useEffect(() => {
+    const read = () => setOn(kolMarksOn());
+    read();
+    window.addEventListener(SETTINGS_EVENT, read);
+    return () => window.removeEventListener(SETTINGS_EVENT, read);
+  }, []);
+  return (
+    <label className="flex items-center gap-1.5 text-dim" title="Show well-known traders' (KOLs') buys and sells on the chart (KB / KS)">
+      <input type="checkbox" checked={on} onChange={(e) => setKolMarks(e.target.checked)} />
+      <span className={on ? "text-[#ff4fd8]" : ""}>KOLs{count ? ` (${count})` : ""}</span>
     </label>
   );
 }

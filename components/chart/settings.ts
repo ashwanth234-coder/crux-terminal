@@ -35,7 +35,7 @@ export type ChartSettings = {
   /** The auction's clearing price as a dashed line (the overlays bar's "Batch floor"). */
   clearingLine: boolean;
   /** Trades marked on the candles: yours (B / S, plus your average entry), the creator's and whales' (D / W), the top 10 holders' (T). */
-  marks: { mine: boolean; dev: boolean; top: boolean; saved?: boolean };
+  marks: { mine: boolean; dev: boolean; top: boolean; saved?: boolean; kol?: boolean };
   /** Trades under this many USD aren't marked. */
   minUsd: number;
   /** Drawing magnet: new points snap to the bar's open / high / low / close. */
@@ -77,7 +77,7 @@ export const DEFAULT_SETTINGS: ChartSettings = {
   seconds: true,
   palette: "crux",
   clearingLine: true,
-  marks: { mine: false, dev: true, top: false, saved: true },
+  marks: { mine: false, dev: true, top: false, saved: true, kol: true },
   minUsd: 0,
   snap: true,
   cursor: "cross",
@@ -169,6 +169,12 @@ export const SETTINGS_EVENT = "crux:chart-settings";
 
 /** Saved wallets' buys and sells on the chart (★B / ★S): on unless switched off. */
 export const savedMarksOn = () => loadSettings().marks.saved !== false;
+/** KOLs' buys and sells on the chart (KB / KS): on unless switched off. */
+export const kolMarksOn = () => loadSettings().marks.kol !== false;
+export function setKolMarks(on: boolean) {
+  const s = loadSettings();
+  saveSettings({ ...s, marks: { ...s.marks, kol: on } });
+}
 export function setSavedMarks(on: boolean) {
   const s = loadSettings();
   saveSettings({ ...s, marks: { ...s.marks, saved: on } });

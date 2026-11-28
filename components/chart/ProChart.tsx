@@ -13,6 +13,8 @@ import { barTime, graduationPoint, markBarTime, markTrades, type MarkWho } from 
 import { devMarks } from "@/lib/devMarks";
 import { useCoinCreator } from "@/hooks/useCoinCreator";
 import { useSavedWallets } from "@/hooks/useSavedWallets";
+import { useKolTrades } from "@/hooks/useKolTrades";
+import { kolMarks } from "@/lib/kols";
 import { chainOf, eventMarks, savedMarks } from "@/lib/savedWallets";
 import { buildHolders } from "@/lib/holders";
 import { CRUX_SOLVERS, PREVIOUS_SETTLERS, SETTLER } from "@/lib/intents";
@@ -78,6 +80,7 @@ const MARK_STYLE: Record<MarkWho, { color: string; buy: string; sell: string }> 
   whale: { color: "#4cc9f0", buy: "WB", sell: "WS" },
   top: { color: "#ffd166", buy: "TB", sell: "TS" },
   saved: { color: "#ff9d00", buy: "★B", sell: "★S" },
+  kol: { color: "#ff4fd8", buy: "KB", sell: "KS" },
 };
 
 const compactUsd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 2 });
@@ -296,6 +299,8 @@ export function ProChart({
   const savedWallets = useSavedWallets();
   const savedIndex = savedWallets.index;
   const savedEvents = savedWallets.events;
+  const kols = useKolTrades(remote?.network ?? null, remote?.token ?? null);
+  const kolTrades = kols.trades;
   const rcGraduatedAt = remote ? rc.graduatedAt : null;
   const swapData = useThrottled(remote ? rc.swapData : swaps.data, redrawMs);
   const tradesPending = remote ? rc.isPending : swaps.isPending;
@@ -473,7 +478,7 @@ export function ProChart({
       const fromList = savedMarks(trades, chainOf(remote.network), savedIndex);
       // Solana: the wallet watcher's trades too (the coin's live trades don't always say who traded).
       const watched = remote.network === "solana" ? eventMarks(savedEvents, remote.token, savedIndex, new Set(fromList.map((m) => m.txHash))) : [];
-      return [...devMarks(trades, coinCreator), ...fromList, ...watched].sort((a, b) => a.time - b.time);
+      return [...devMarks(trades, coinCreator), ...fromList, ...watched, ...kolMarks(kolTrades)].sort((a, b) => a.time - b.time);
     }
     if (!transfers.data || candles.length === 0) return [];
     const system = new Set(["pool", "auction", "solver", "settler", "burn"]);
@@ -496,7 +501,7 @@ export function ProChart({
         return bt === null ? null : (candles.find((c) => c.time === bt)?.close ?? null);
       },
     );
-  }, [transfers.data, candles, holders, me, auction.pair, auction.creator, market.batchPool, focus, remote, swapData, coinCreator, savedIndex, savedEvents]);
+  }, [transfers.data, candles, holders, me, auction.pair, auction.creator, market.batchPool, focus, remote, swapData, coinCreator, savedIndex, savedEvents, kolTrades]);
   // A wallet picked in the desk shows alone, every trade of it, whatever the overlay switches say.
   const replayEnd = replayIndex !== null && candles.length ? candles[candles.length - 1].time + interval : null;
   const shownMarks = useMemo(
@@ -507,14 +512,14 @@ export function ProChart({
             (m) =>
               (replayEnd === null || m.time < replayEnd) &&
               m.usd >= settings.minUsd &&
-              (m.who === "me" ? settings.marks.mine : m.who === "top" ? settings.marks.top : m.who === "saved" ? settings.marks.saved !== false : settings.marks.dev),
+              (m.who === "me" ? settings.marks.mine : m.who === "top" ? settings.marks.top : m.who === "saved" ? settings.marks.saved !== false : m.who === "kol" ? settings.marks.kol !== false : settings.marks.dev),
           ),
     [marks, settings.minUsd, settings.marks, focus, replayEnd],
   );
   /** Your trades' badges shown ahead of their marks (see the overlays effect). */
   const ownBadges = useRef<{ id: number; time: number; side: "buy" | "sell"; who: MarkWho; at: number; filled: boolean; until: number; usd: number | null; tokens: number | null }[]>([]);
   const markCounts = useMemo(
-    () => ({ mine: marks.filter((m) => m.who === "me").length, dev: marks.filter((m) => m.who === "dev" || m.who === "whale").length, top: marks.filter((m) => m.who === "top").length, saved: marks.filter((m) => m.who === "saved").length }),
+    () => ({ mine: marks.filter((m) => m.who === "me").length, dev: marks.filter((m) => m.who === "dev" || m.who === "whale").length, top: marks.filter((m) => m.who === "top").length, saved: marks.filter((m) => m.who === "saved").length, kol: marks.filter((m) => m.who === "kol").length }),
     [marks],
   );
   const last = candles.length ? candles[candles.length - 1] : null;
@@ -634,13 +639,13 @@ export function ProChart({
       if (!marksHidden) {
         for (const m of shownMarks.slice(-300)) {
           // Badges for the creator (DB / DS) and you (B / S) only, or the wallet picked in the desk.
-          if (m.who !== "dev" && m.who !== "me" && m.who !== "focus" && m.who !== "saved") continue;
+          if (m.who !== "dev" && m.who !== "me" && m.who !== "focus" && m.who !== "saved" && m.who !== "kol") continue;
           const time = markBarTime(times, m.time, m.side, isDown, interval);
           if (time === null) continue;
           const style = MARK_STYLE[m.who];
           // Its own swap's amount and price where that's known; otherwise its size at the candle's close, and no price.
           const exec = executions.get(m) ?? null;
-          add(time, { who: m.who, side: m.side, label: m.side === "buy" ? style.buy : style.sell, usd: exec ? exec.usd : m.usd > 0 ? m.usd : null, tokens: m.tokens, price: exec ? exec.price : null, at: m.time * 1000 });
+          add(time, { who: m.who, side: m.side, label: m.side === "buy" ? style.buy : style.sell, usd: exec ? exec.usd : m.usd > 0 ? m.usd : null, tokens: m.tokens, price: exec ? exec.price : m.who === "kol" && m.tokens > 0 && m.usd > 0 ? m.usd / m.tokens : null, at: m.time * 1000, name: m.name });
         }
       }
       // Your own trade's badge (DB / DS for the creator, B / S with "My trades" on) the moment you press Buy or Sell,
@@ -1590,6 +1595,7 @@ export function ProChart({
               return (
                 <p key={i} className="flex gap-2 whitespace-nowrap">
                   <span className="w-6 text-chrome">{f.label}</span>
+                  {f.name && <span className="max-w-[120px] truncate text-[#ff4fd8]">{f.name}</span>}
                   <span>{usd !== null ? `$${usd.toLocaleString("en-US", { maximumFractionDigits: 2 })}` : "…"}</span>
                   {f.price !== null && Number.isFinite(f.price) && f.price > 0 && <span>@ {fmt(f.price * k)}</span>}
                   <span className="ml-auto pl-2 text-dim">{f.pending ? "sending" : age < 60 ? `${age}s ago` : age < 3_600 ? `${Math.floor(age / 60)}m ago` : age < 86_400 ? `${Math.floor(age / 3_600)}h ago` : `${Math.floor(age / 86_400)}d ago`}</span>
