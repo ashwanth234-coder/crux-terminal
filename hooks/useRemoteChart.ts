@@ -68,13 +68,16 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
     if (!coin || pool.isPending) return;
     const key = ["coin-trades", coin.network, addr ?? coin.token];
     const me = `${coin.network}:${coin.token}`;
+    let first = true;
     return watchCoinTrades(
       coin.network,
       coin.token,
       (fresh) => {
       setLiveFeed(true);
       const at = Date.now();
-      const lags = fresh.filter((t) => t.seq !== undefined).map((t) => at - t.time);
+      // Timed: trades that land while the page is open (the first batch is what already happened).
+      const lags = first ? [] : fresh.filter((t) => t.seq !== undefined && at - t.time < 120_000).map((t) => at - t.time);
+      first = false;
       if (lags.length) setArrival((a) => ({ key: me, lags: [...(a?.key === me ? a.lags : []), ...lags].slice(-200) }));
       qc.setQueryData<CoinTrade[]>(key, (old) => {
         // A trade read from a market's balances carries no transaction: its own id keeps it apart.
