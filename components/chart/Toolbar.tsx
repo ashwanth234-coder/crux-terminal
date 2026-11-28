@@ -51,6 +51,7 @@ export function Toolbar({
   onAddAlert,
   formatInput,
   live,
+  feed,
   replaying,
   onReplay,
   symbolSlot,
@@ -78,6 +79,8 @@ export function Toolbar({
   /** The current price in the current units, prefilled in the alert box. */
   formatInput: string;
   live: boolean;
+  /** How current a coin's live feed is (BNB Chain and Base coins): the Live sign says it. */
+  feed?: { state: "live" | "delayed" | "reconnecting" | "catching_up"; pageLagMs: number | null } | null;
   replaying: boolean;
   onReplay: () => void;
   /** The compare button (it reads the launch list, so the chart provides it). */
@@ -326,10 +329,28 @@ export function Toolbar({
       </Tool>
 
       <div className="ml-auto flex shrink-0 items-center gap-0.5 pl-2">
-        {live && (
-          <span title="Live: updates as trades land" className="mr-1 inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-up">
+        {live && (!feed || feed.state === "live") && (
+          <span
+            title={feed?.pageLagMs != null ? `Live: each trade shows here about ${(feed.pageLagMs / 1000).toFixed(1)} s after it happens` : "Live: updates as trades land"}
+            className="mr-1 inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-up"
+          >
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-up" aria-hidden="true" />
             <span className="sr-only 2xl:not-sr-only">Live</span>
+          </span>
+        )}
+        {live && feed && feed.state !== "live" && (
+          <span
+            title={
+              feed.state === "delayed"
+                ? "Delayed: new trades are arriving a few seconds late. Nothing is lost; the chart fills in."
+                : feed.state === "catching_up"
+                  ? "Catching up: reading the trades made while this coin wasn't being followed."
+                  : "Reconnecting: the live connection dropped. Trades made meanwhile are filled in when it's back."
+            }
+            className="mr-1 inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-signal"
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-signal" aria-hidden="true" />
+            <span>{feed.state === "delayed" ? "Delayed" : feed.state === "catching_up" ? "Catching up" : "Reconnecting"}</span>
           </span>
         )}
         <Popover

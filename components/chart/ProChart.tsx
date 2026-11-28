@@ -1371,6 +1371,7 @@ export function ProChart({
         onAddAlert={addAlert}
         formatInput={last ? fmt(last.close * k) : ""}
         live={live && !replay}
+        feed={remote ? rc.feed : null}
         replaying={replay !== null}
         compareSlot={<CompareButton current={auction.pair} items={config.compare} onChange={setCompare} />}
         symbolSlot={<SymbolSwitch symbol={symbol} />}

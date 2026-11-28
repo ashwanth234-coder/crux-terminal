@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { watchCoinTrades } from "@/lib/coinFeed";
+import { watchCoinTrades, type FeedStatus } from "@/lib/coinFeed";
 import { relay } from "@/hooks/useSolanaTrading";
 import { newestFirst, poolTrades, type CoinTrade } from "@/lib/coinMarket";
 import type { Address, Hex } from "viem";
@@ -29,6 +29,9 @@ async function remoteCandles(network: ChartNetwork, pool: string, token: string,
  */
 export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
   const [liveFeed, setLiveFeed] = useState(false);
+  // How current the feed says it is (BNB Chain and Base), and how long after their block trades reached this page.
+  const [feed, setFeed] = useState<{ key: string; status: FeedStatus } | null>(null);
+  const [arrival, setArrival] = useState<{ key: string; lags: number[] } | null>(null);
   const pool = useQuery({ queryKey: ["coin-pool-addr", coin?.network, coin?.token], queryFn: () => topPool(coin!.network, coin!.token), enabled: coin !== null, staleTime: 60_000 });
   const addr = pool.data ?? null;
   const trades = useQuery({
@@ -64,8 +67,15 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
   useEffect(() => {
     if (!coin || pool.isPending) return;
     const key = ["coin-trades", coin.network, addr ?? coin.token];
-    return watchCoinTrades(coin.network, coin.token, (fresh) => {
+    const me = `${coin.network}:${coin.token}`;
+    return watchCoinTrades(
+      coin.network,
+      coin.token,
+      (fresh) => {
       setLiveFeed(true);
+      const at = Date.now();
+      const lags = fresh.filter((t) => t.seq !== undefined).map((t) => at - t.time);
+      if (lags.length) setArrival((a) => ({ key: me, lags: [...(a?.key === me ? a.lags : []), ...lags].slice(-200) }));
       qc.setQueryData<CoinTrade[]>(key, (old) => {
         // A trade read from a market's balances carries no transaction: its own id keeps it apart.
         const keyOf = (t: CoinTrade) => t.tx || t.id;
@@ -74,7 +84,9 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
         if (add.length === 0) return old;
         return [...add, ...(old ?? [])].sort(newestFirst).slice(0, 600);
       });
-    });
+      },
+      (status) => setFeed({ key: me, status }),
+    );
   }, [coin, addr, qc, pool.isPending]);
 
   // Base: Crux's server streams each trade from the chain; only while that feed hasn't answered (or can't follow the
@@ -164,7 +176,11 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
   const busy = trades.isError || (!fine && candles.isError);
   const drawn = base;
 
+  const me = coin ? `${coin.network}:${coin.token}` : "";
+  const sorted = arrival?.key === me ? [...arrival.lags].sort((a, b) => a - b) : [];
   return {
+    /** The feed's state for the chart's Live sign, with the median time from a trade's block to this page; null when unknown. */
+    feed: feed?.key === me ? { ...feed.status, pageLagMs: sorted.length >= 3 ? sorted[sorted.length >> 1] : null } : null,
     candles: drawn,
     swapData,
     isPending: coin !== null && drawn === undefined && !pool.isError && !busy,
