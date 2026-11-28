@@ -10,7 +10,8 @@ type Listener = (trades: CoinTrade[]) => void;
 const listeners = new Map<string, Set<Listener>>();
 let ws: WebSocket | null = null;
 let retry = 0;
-const keyOf = (chain: ChartNetwork, coin: string) => `${chain}:${chain === "bsc" ? coin.toLowerCase() : coin}`;
+// EVM addresses in any letter case are the same coin (the server answers in lower case).
+const keyOf = (chain: ChartNetwork, coin: string) => `${chain}:${chain === "solana" ? coin : coin.toLowerCase()}`;
 const subMsg = (t: "sub" | "unsub", key: string) => {
   const [chain, coin] = key.split(/:(.+)/);
   return JSON.stringify({ t, chain, coin });
