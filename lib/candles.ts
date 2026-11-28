@@ -1,8 +1,8 @@
 /**
- * OHLC candles from a pool's swaps, made only of real trades: a candle opens at its period's first trade, its high and
- * low are the highest and lowest trades, it closes at its last trade, and its volume is theirs. A period with no trade
- * has no candle (a gap, never a made-up flat one). Prices are the swaps' execution prices (USDC per whole token, the
- * pool's fee included), like DEX charts use.
+ * OHLC candles from a pool's swaps, made only of real trades. Each candle opens where the market stood when its period
+ * began, the previous trade's price (as DEX charts draw them, so candles join up), then tracks the trades inside its
+ * period; it closes at its last trade, and its volume is theirs. A period with no trade has no candle of its own here
+ * (never a quoted price). Prices are the swaps' execution prices (USDC per whole token, the pool's fee included).
  */
 
 export type Fill = { time: number; price: number; usdc: bigint };
@@ -28,15 +28,15 @@ export function autoInterval(firstTime: number, now: number, maxCandles = 120): 
 }
 
 /**
- * `fills` in any order (trades at the same second keep their given order). `openPrice` is a real price the market
- * stood at before the first fill (a launch's clearing / graduation price): only the first candle opens there.
+ * `fills` in any order (trades at the same second keep their given order). `openPrice` is the price the market stood
+ * at before the first fill (a launch's clearing price, or the last trade before these), so the first candle opens there.
  */
 export function toCandles(fills: Fill[], interval: number, openPrice: number | null = null): Candle[] {
   const sorted = fills.filter((f) => f.price > 0);
   // Already in time order (the chart passes them so): skip the sort, the costliest step on a long history.
   if (sorted.some((f, i) => i > 0 && f.time < sorted[i - 1].time)) sorted.sort((a, b) => a.time - b.time);
   const out: Candle[] = [];
-  let firstOpen = openPrice;
+  let prevClose = openPrice;
   for (const f of sorted) {
     const bucket = Math.floor(f.time / interval) * interval;
     const last = out[out.length - 1];
@@ -47,10 +47,10 @@ export function toCandles(fills: Fill[], interval: number, openPrice: number | n
       last.volume += Number(f.usdc) / 1e6;
       last.trades += 1;
     } else {
-      const open = firstOpen ?? f.price;
-      firstOpen = null;
+      const open = prevClose ?? f.price;
       out.push({ time: bucket, open, high: Math.max(open, f.price), low: Math.min(open, f.price), close: f.price, volume: Number(f.usdc) / 1e6, trades: 1 });
     }
+    prevClose = f.price;
   }
   return out;
 }

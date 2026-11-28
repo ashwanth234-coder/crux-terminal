@@ -17,7 +17,7 @@ test("withLatestTrades: a trade the candles don't count yet moves the newest can
   // Newest first: a trade in the same second at a new high, then one in the next second.
   const out = withLatestTrades(candles, [t(101, 1.3), t(100, 1.2), t(99, 0.5)], 1);
   assert.deepEqual(out[0], { time: 100, open: 1, high: 1.2, low: 1, close: 1.2, volume: 5, trades: 2 }, "the old trade at 99 is ignored");
-  assert.deepEqual(out[1], { time: 101, open: 1.3, high: 1.3, low: 1.3, close: 1.3, volume: 0, trades: 0 }, "opens at its own trade");
+  assert.deepEqual(out[1], { time: 101, open: 1.2, high: 1.3, low: 1.2, close: 1.3, volume: 0, trades: 0 });
   assert.equal(candles.length, 1, "the input isn't changed");
   assert.equal(withLatestTrades(candles, [t(50, 2)], 1), candles, "nothing new: the same array");
 });
@@ -36,8 +36,6 @@ test("trades chart at the price they leave: a big sell then a buy draws the buy 
   const base = [{ time: 0, open: 69, high: 69, low: 69, close: 69, volume: 0, trades: 1 }];
   const out = withLatestTrades(base, [buy, sell], 60);
   assert.equal(out[1].close, 13, "the sell's candle closes where it left the price");
-  // One trade in its period: it opens and closes at that trade (no made-up open from the last close), never red.
-  assert.deepEqual([out[2].open, out[2].close], [35, 35]);
-  assert.ok(out[2].close >= out[2].open, "the buy's candle isn't red");
+  assert.ok(out[2].close > out[2].open, "the buy's candle is green");
   assert.equal(chartPrice({ price: 5 }), 5, "without priceAfter: the average");
 });

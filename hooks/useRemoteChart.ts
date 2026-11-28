@@ -169,7 +169,7 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
           last.high = Math.max(last.high, t.price);
           last.low = Math.min(last.low, t.price);
           last.volume += usd;
-        } else out.push({ time: b, open: t.price, high: t.price, low: t.price, close: t.price, volume: usd, trades: 1 });
+        } else out.push({ time: b, open: last.close, high: Math.max(last.close, t.price), low: Math.min(last.close, t.price), close: t.price, volume: usd, trades: 1 });
       }
     }
     return out;

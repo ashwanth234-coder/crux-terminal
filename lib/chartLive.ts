@@ -31,9 +31,9 @@ export function withPendingTrades(
   const nowS = Math.floor(Math.max(...ahead.map((p) => p.at)) / 1000);
   const barAt = nowS < newest.time + interval ? newest.time : Math.floor(nowS / interval) * interval;
   const first = ahead.map((p) => (priceOk(p.expected) ? p.expected : priceOk(p.price) ? p.price : null)).find((v) => v !== null) ?? null;
-  // A new period opens at the first pending trade's own price, as the confirmed trade's candle will.
+  // A new period opens where the last candle closed, as the confirmed trade's candle will (nothing without a price).
   if (barAt > newest.time && first === null) return candles;
-  const bar: Candle = barAt > newest.time ? { time: barAt, open: first!, high: first!, low: first!, close: first!, volume: 0, trades: 0 } : { ...newest };
+  const bar: Candle = barAt > newest.time ? { time: barAt, open: newest.close, high: newest.close, low: newest.close, close: newest.close, volume: 0, trades: 0 } : { ...newest };
   for (const p of ahead) {
     const to = priceOk(p.expected) ? p.expected : priceOk(p.price) ? p.price : null;
     if (to !== null) {

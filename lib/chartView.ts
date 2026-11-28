@@ -55,8 +55,8 @@ export function withLatestTrades(
     if (bucket === tail.time) {
       out[out.length - 1] = { ...tail, high: Math.max(tail.high, p), low: Math.min(tail.low, p), close: p };
     } else if (bucket > tail.time) {
-      // A new period opens at its own first trade, never at the last close.
-      out.push({ time: bucket, open: p, high: p, low: p, close: p, volume: 0, trades: 0 });
+      // A new period opens where the last one closed (the price the market stood at), as DEX charts draw it.
+      out.push({ time: bucket, open: tail.close, high: Math.max(tail.close, p), low: Math.min(tail.close, p), close: p, volume: 0, trades: 0 });
     }
   }
   return out;

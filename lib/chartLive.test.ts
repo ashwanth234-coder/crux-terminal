@@ -8,9 +8,9 @@ test("withPendingTrades: a trade on its way moves the newest bar; one already on
   const candles = [bar(100, 2)];
   const out = withPendingTrades(candles, [{ at: 100_400, price: 2, expected: 2.5, usdc: 1 }], new Set(), 1);
   assert.deepEqual(out[0], { time: 100, open: 2, high: 2.5, low: 2, close: 2.5, volume: 4, trades: 2 });
-  // Pressed after the bar's second was up: the next bar opens at its own price, as its confirmed trade's candle will.
+  // Pressed after the bar's second was up: the next bar opens at the last close, as its confirmed trade's candle will.
   const next = withPendingTrades(candles, [{ at: 101_200, price: 2, expected: 1.5 }], new Set(), 1);
-  assert.deepEqual(next[1], { time: 101, open: 1.5, high: 1.5, low: 1.5, close: 1.5, volume: 0, trades: 1 });
+  assert.deepEqual(next[1], { time: 101, open: 2, high: 2, low: 1.5, close: 1.5, volume: 0, trades: 1 });
   // With no usable price, a new period gets no bar at all.
   assert.equal(withPendingTrades(candles, [{ at: 101_200, price: NaN }], new Set(), 1), candles);
   assert.equal(withPendingTrades(candles, [{ at: 100_400, price: 2, expected: 2.5, tx: "0xAB" }], new Set(["0xab"]), 1), candles);
