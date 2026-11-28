@@ -160,6 +160,18 @@ export function saveSettings(s: ChartSettings) {
   } catch {
     // Private mode or blocked storage: settings last for this visit only.
   }
+  // Other parts of the page showing a setting (the trades list's "★ on chart") follow the change.
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(SETTINGS_EVENT));
+}
+
+/** Fired on the window whenever chart settings are saved. */
+export const SETTINGS_EVENT = "crux:chart-settings";
+
+/** Saved wallets' buys and sells on the chart (★B / ★S): on unless switched off. */
+export const savedMarksOn = () => loadSettings().marks.saved !== false;
+export function setSavedMarks(on: boolean) {
+  const s = loadSettings();
+  saveSettings({ ...s, marks: { ...s.marks, saved: on } });
 }
 
 const layoutKey = (token: string) => `crux:chart:layout:v1:${token.toLowerCase()}`;

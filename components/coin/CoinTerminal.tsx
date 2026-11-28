@@ -16,6 +16,7 @@ import { HolderMap } from "@/components/coin/HolderMap";
 import { useTradingSince } from "@/hooks/useTradingSince";
 import { SafetyStrip } from "@/components/coin/SafetyStrip";
 import { SaveStar } from "@/components/wallets/SaveWallet";
+import { savedMarksOn, setSavedMarks, SETTINGS_EVENT } from "@/components/chart/settings";
 import { useSavedWallets } from "@/hooks/useSavedWallets";
 import { chainOf, walletKey } from "@/lib/savedWallets";
 import { coinLinks, launchpadOf } from "@/lib/coinLinks";
@@ -344,6 +345,7 @@ function Desk({
               <input type="checkbox" checked={bigOnly} onChange={(e) => setBigOnly(e.target.checked)} />
               $500+ only
             </label>
+            <StarsOnChart />
             {saved.size > 0 && (
               <label className="flex items-center gap-1.5 text-dim" title="Only trades by wallets you saved">
                 <input type="checkbox" checked={savedOnly} onChange={(e) => setSavedOnly(e.target.checked)} />
@@ -392,6 +394,9 @@ function Desk({
             <caption className="sr-only">Latest trades</caption>
             <thead className="sticky top-0 bg-void">
               <tr className="border-b border-line">
+                <th scope="col" className={`${th} w-6 pr-0`} title="Save a wallet (★) to follow it: its buys and sells show on the chart">
+                  ★
+                </th>
                 <th scope="col" className={th}>Age</th>
                 <th scope="col" className={th}>Side</th>
                 <th scope="col" className={`${th} text-right`}>USD</th>
@@ -403,19 +408,21 @@ function Desk({
             <tbody className="font-mono">
               {shown.map((t) => (
                 <tr key={t.id} className={`border-b border-line/60 ${t.side === "buy" ? "hover:bg-up/[0.04]" : "hover:bg-down/[0.04]"}`}>
+                  <td className={`${td} pr-0`}>
+                    {t.trader ? <SaveStar chain={wchain} address={t.trader} saved={savedOf(t.trader)} loggedIn={savedWallets.loggedIn} login={savedWallets.login} /> : null}
+                  </td>
                   <td className={`${td} text-dim`}>{ago(now, t.time)}</td>
                   <td className={`${td} ${t.side === "buy" ? "text-up" : "text-down"}`}>{t.side === "buy" ? "Buy" : "Sell"}</td>
                   <td className={`${td} text-right ${t.usd >= 500 ? "font-semibold" : ""} ${t.side === "buy" ? "text-up" : "text-down"}`}>{usd(t.usd)}</td>
                   <td className={`${td} text-right text-muted`}>{amount(t.amount)}</td>
                   <td className={`${td} text-right text-chrome`}>{fmtPrice(t.price)}</td>
                   <td className={td}>
-                    {t.trader && <SaveStar chain={wchain} address={t.trader} saved={savedOf(t.trader)} loggedIn={savedWallets.loggedIn} login={savedWallets.login} />}
                     {t.trader ? (
                       <button type="button" onClick={() => setFocus(focus === t.trader ? null : t.trader)} className={savedOf(t.trader)?.name ? "text-signal hover:text-chrome" : "text-muted hover:text-chrome"} title="Only this trader's trades">
                         {savedOf(t.trader)?.name || short(t.trader)}
                       </button>
                     ) : (
-                      <span className="text-dim">live</span>
+                      <span className="text-dim" title="This trade's wallet isn't known yet">—</span>
                     )}
                     {t.tx && (
                       <a href={x.tx(t.tx)} target="_blank" rel="noopener noreferrer" className="ml-2 text-dim hover:text-chrome" aria-label="Open the trade">
@@ -439,5 +446,22 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
       <dt className="text-dim">{label}</dt>
       <dd className="text-right text-chrome">{children}</dd>
     </div>
+  );
+}
+
+/** The trades list's switch for saved wallets' buys and sells on the chart (the chart's Overlays has the same one). */
+function StarsOnChart() {
+  const [on, setOn] = useState(true);
+  useEffect(() => {
+    const read = () => setOn(savedMarksOn());
+    read();
+    window.addEventListener(SETTINGS_EVENT, read);
+    return () => window.removeEventListener(SETTINGS_EVENT, read);
+  }, []);
+  return (
+    <label className="flex items-center gap-1.5 text-dim" title="Show your saved wallets' buys and sells on the chart (★B / ★S)">
+      <input type="checkbox" checked={on} onChange={(e) => setSavedMarks(e.target.checked)} />
+      ★ on chart
+    </label>
   );
 }

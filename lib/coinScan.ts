@@ -155,7 +155,7 @@ export function solanaWarnings(c: ScanCoin): string[] {
   if ((c.liquidity ?? 0) < SCAN_SAFETY.minLiquidity) w.push("Little money in its pool");
   if ((c.creatorPct ?? 0) >= SCAN_SAFETY.maxCreatorPct) w.push(`Creator holds ${Math.round(c.creatorPct ?? 0)}%`);
   if ((c.topHoldersPct ?? 0) >= SCAN_SAFETY.maxTopHoldersPct) w.push(`Top holders own ${Math.round(c.topHoldersPct ?? 0)}%`);
-  if ((c.creatorLaunches ?? 0) >= SCAN_SAFETY.maxCreatorLaunches) w.push(`Its creator has launched ${c.creatorLaunches} coins`);
+  if ((c.creatorLaunches ?? 0) >= SCAN_SAFETY.maxCreatorLaunches) w.push(`Its creator has launched ${(c.creatorLaunches ?? 0).toLocaleString("en-US")} coins`);
   if ((c.change24h ?? 0) >= SCAN_SAFETY.maxPump24hPct) w.push(`Already up ${Math.round(c.change24h ?? 0).toLocaleString("en-US")}% today`);
   if (c.organic === "low") w.push("Its trading looks like bots");
   if (c.holders !== undefined && c.holders < SCAN_SAFETY.minHolders) w.push(`Only ${c.holders} holders`);

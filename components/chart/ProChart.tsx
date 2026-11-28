@@ -52,7 +52,7 @@ import type { Badge } from "./badges";
 import { FACTORY_V9 } from "@/lib/v9";
 import { timingMark } from "@/lib/tradeTiming";
 import { TemplatesButton } from "./Templates";
-import { DEFAULT_CONFIG, DEFAULT_SETTINGS, loadLayout, loadSettings, palette, saveSettings, type ChartSettings, type ScaleMode } from "./settings";
+import { DEFAULT_CONFIG, DEFAULT_SETTINGS, loadLayout, loadSettings, palette, saveSettings, SETTINGS_EVENT, type ChartSettings, type ScaleMode } from "./settings";
 import { SettingsModal } from "./SettingsModal";
 import { CompareButton, CompareFeed } from "./Compare";
 import type { SyncBus, SyncOptions } from "./sync";
@@ -238,6 +238,12 @@ export function ProChart({
   // Whether the price scale fits itself to the data (off once it was stretched by hand).
   const [autoOn, setAutoOn] = useState(true);
 
+  // A setting changed elsewhere on the page (the trades list's "★ on chart" switch) shows here at once.
+  useEffect(() => {
+    const on = () => setSettingsState(loadSettings());
+    window.addEventListener(SETTINGS_EVENT, on);
+    return () => window.removeEventListener(SETTINGS_EVENT, on);
+  }, []);
   const setSettings = (s: ChartSettings) => {
     setSettingsState(s);
     saveSettings(s);

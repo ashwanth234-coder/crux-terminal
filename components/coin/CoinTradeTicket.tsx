@@ -343,7 +343,7 @@ function SafetyPanel({ check, symbol, asking, note, onAccept, onCancel }: { chec
   if (!asking) {
     return (
       <p className="mt-2 text-[12px] text-signal">
-        {`⚠ ${check.warnings.length} warning sign${check.warnings.length === 1 ? "" : "s"}: ${check.warnings[0]}${check.warnings.length > 1 ? ", …" : ""}. You'll be asked before buying.`}
+        {`⚠ ${check.warnings.length} warning sign${check.warnings.length === 1 ? "" : "s"}: ${check.warnings[0]}${check.warnings.length > 1 ? `, and ${check.warnings.length - 1} more` : ""}. You'll be asked before buying.`}
       </p>
     );
   }
