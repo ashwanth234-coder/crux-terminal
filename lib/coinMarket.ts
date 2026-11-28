@@ -184,7 +184,10 @@ export async function poolStats(network: ChartNetwork, token: string): Promise<P
   };
 }
 
-export type CoinTrade = { id: string; time: number; side: "buy" | "sell"; usd: number; amount: number; price: number; trader: string; tx: string };
+export type CoinTrade = { id: string; time: number; side: "buy" | "sell"; usd: number; amount: number; price: number; trader: string; tx: string; seq?: number };
+
+/** Newest first; trades in the same second by their place on the chain (block, then position) when the feed gives it. */
+export const newestFirst = (a: { time: number; seq?: number }, b: { time: number; seq?: number }) => b.time - a.time || (b.seq ?? 0) - (a.seq ?? 0);
 
 type TradeAttrs = {
   block_timestamp: string;

@@ -12,7 +12,7 @@ export function joinLaunch(market: readonly CoinTrade[], launch: readonly CoinTr
   if (!launch?.length) return [...market];
   const seen = new Set(market.map((t) => t.tx || t.id));
   const older = launch.filter((t) => !seen.has(t.tx || t.id) && !seen.has(t.id));
-  return [...market, ...older].sort((a, b) => b.time - a.time);
+  return [...market, ...older].sort((a, b) => b.time - a.time || (b.seq ?? 0) - (a.seq ?? 0));
 }
 
 /**

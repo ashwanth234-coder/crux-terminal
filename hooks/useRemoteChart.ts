@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { watchCoinTrades } from "@/lib/coinFeed";
 import { relay } from "@/hooks/useSolanaTrading";
-import { poolTrades, type CoinTrade } from "@/lib/coinMarket";
+import { newestFirst, poolTrades, type CoinTrade } from "@/lib/coinMarket";
 import type { Address, Hex } from "viem";
 import { toCandles, type Candle } from "@/lib/candles";
 import { topPool, type ChartNetwork } from "@/lib/solanaCoins";
@@ -72,15 +72,15 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
         const have = new Set((old ?? []).map(keyOf));
         const add = fresh.filter((t) => !have.has(keyOf(t)));
         if (add.length === 0) return old;
-        return [...add, ...(old ?? [])].sort((a, b) => b.time - a.time).slice(0, 600);
+        return [...add, ...(old ?? [])].sort(newestFirst).slice(0, 600);
       });
     });
   }, [coin, addr, qc, pool.isPending]);
 
-  // Base: Crux's server streams no live trades for Base coins yet (only Solana and BNB Chain), so the market's latest
-  // trades are read from GeckoTerminal every 15 s (4 reads a minute, well inside its free limit per viewer).
+  // Base: Crux's server streams each trade from the chain; only while that feed hasn't answered (or can't follow the
+  // market) are the market's latest trades read from GeckoTerminal every 15 s.
   useEffect(() => {
-    if (!coin || coin.network !== "base" || !addr) return;
+    if (!coin || coin.network !== "base" || !addr || liveFeed) return;
     const key = ["coin-trades", coin.network, addr];
     let stop = false;
     const read = () =>
@@ -91,7 +91,7 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
             const have = new Set((old ?? []).map((t) => t.tx || t.id));
             const add = fresh.filter((t) => !have.has(t.tx || t.id));
             if (add.length === 0) return old;
-            return [...add, ...(old ?? [])].sort((a, b) => b.time - a.time).slice(0, 600);
+            return [...add, ...(old ?? [])].sort(newestFirst).slice(0, 600);
           });
         })
         .catch(() => undefined);
@@ -101,7 +101,7 @@ export function useRemoteChart(coin: RemoteCoin | null, interval: number) {
       stop = true;
       clearInterval(t);
     };
-  }, [coin, addr, qc]);
+  }, [coin, addr, qc, liveFeed]);
   const fine = interval < 60;
   const candles = useQuery({
     queryKey: ["coin-ohlcv", coin?.network, addr, interval],

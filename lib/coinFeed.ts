@@ -1,5 +1,5 @@
 /**
- * The live trade feed for Solana and BNB Chain coins (crux-solver coinfeed.ts): one WebSocket per page, a subscription
+ * The live trade feed for Solana, BNB Chain and Base coins (crux-solver coinfeed.ts): one WebSocket per page, a subscription
  * per coin, trades pushed as they land. Reconnects by itself and resubscribes.
  */
 import { RELAY_URL } from "@/lib/readCache";
