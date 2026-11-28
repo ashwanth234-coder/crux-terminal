@@ -246,7 +246,8 @@ export function deepestPair(network: ChartNetwork, token: string): Promise<DexPa
     const r = await fetch(`https://api.dexscreener.com/token-pairs/v1/${DEX_CHAIN[network]}/${token}`);
     if (!r.ok) throw new Error(`markets ${r.status}`);
     const t = token.toLowerCase();
-    const pairs = ((await r.json()) as DexPair[]).filter(
+    // A four.meme launch curve ("<coin>:4meme") is followed as the coin's own address, as the market data sites name it.
+    const pairs = ((await r.json()) as DexPair[]).map((p) => (/^0x[0-9a-fA-F]{40}:4meme$/.test(p.pairAddress) ? { ...p, pairAddress: p.pairAddress.slice(0, 42) } : p)).filter(
       // Pools with a 0x… address (a 32-byte Uniswap V4 pool id only on Base, where Crux's V4 coins live), or any Solana
       // one: the chart's source reads those.
       (p) => (p.baseToken.address.toLowerCase() === t || p.quoteToken.address.toLowerCase() === t) && poolIdOk(network, p.pairAddress),
