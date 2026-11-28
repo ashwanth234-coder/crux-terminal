@@ -2,20 +2,15 @@
 
 import { useEffect, useMemo, useState, type ComponentProps } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { createPublicClient, fallback, formatEther, http, type Address } from "viem";
+import { createPublicClient, fallback, http, type Address } from "viem";
 import { base } from "viem/chains";
 import { BASE_RPCS, NETWORK } from "@/lib/network";
 import { V4Receipt } from "@/components/base/V4Receipt";
-import { feeAt, readV4Launch, rulesText } from "@/lib/v4launch";
+import { feeAt, fmtQuote, quoteOf, readV4Launch, rulesText } from "@/lib/v4launch";
 
 const client = createPublicClient({ chain: base, transport: fallback(BASE_RPCS.map((u) => http(u, { timeout: 8_000 }))) });
 // The same Base reads typed without the chain's own transaction formatters (V4Receipt only reads contracts, logs and blocks).
 const receiptClient = client as unknown as ComponentProps<typeof V4Receipt>["client"];
-
-function eth(v: bigint): string {
-  const n = Number(formatEther(v));
-  return `${n === 0 ? "0" : n < 0.0001 ? "<0.0001" : n.toFixed(4).replace(/\.?0+$/, "")} ETH`;
-}
 
 function fmtFee(bps: number): string {
   return bps >= 100 ? `${Math.round(bps / 100)}%` : `${(bps / 100).toFixed(1)}%`;
@@ -42,11 +37,12 @@ export function V4LaunchCard({ address }: { address: string }) {
   const l = q.data;
   const rules = useMemo(() => (l ? rulesText(l) : []), [l]);
   if (!l) return null;
+  const eth = (v: bigint) => fmtQuote(v, quoteOf(l));
   const left = l.launchedAt + l.windowSec - now;
   const live = l.windowSec > 0 && left > 0;
   return (
     <section aria-label="Launch rules" className="mb-3 rounded-xl border border-line p-4">
-      <p className="text-[10.5px] uppercase tracking-[0.14em] text-dim">Launch rules</p>
+      <p className="text-[10.5px] uppercase tracking-[0.14em] text-dim">Launch rules{quoteOf(l) === "USDC" ? " · dollar coin" : ""}</p>
       <p className="mt-1.5 text-[12.5px] text-chrome">{rules.join(" ")}</p>
       <div className="mt-2 space-y-1 font-mono text-[11.5px]">
         {l.windowSec > 0 && (

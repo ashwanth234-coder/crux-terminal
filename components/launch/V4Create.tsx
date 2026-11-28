@@ -15,11 +15,13 @@ import { useWalletTrading } from "@/hooks/useBnbTrading";
 import { isReservedName } from "@/lib/antiVamp";
 import { BASE_RPCS, NETWORK } from "@/lib/network";
 import { RELAY_URL, postRelay } from "@/lib/session";
+import { BASE_USDC, dollarCoins } from "@/lib/dollarCoins";
 import { rulesText } from "@/lib/v4launch";
 import { DEFAULT_MIX, DEFAULT_WINDOW, DESCRIPTION_MAX_CHARS, ETH_USD_FEED, ethUsdFeedAbi, firstBuyFunds, MAX_FIRST_BUY_USD, NAME_MAX_BYTES, TICKER_MAX_BYTES, V4_FACTORY, V4_WINDOWS, fitBytes, makeSaltKeeper, mixBps, mixProblem, previewLaunch, v4FactoryAbi, type Mix } from "@/lib/v4create";
 
 const client = createPublicClient({ chain: base, transport: fallback(BASE_RPCS.map((u) => http(u, { timeout: 8_000 }))) });
 const WINDOW_LABEL: Record<number, string> = { 0: "Off", 60: "1 min", 180: "3 min", 300: "5 min" };
+type Pair = "eth" | "usdc";
 const MIX_ROWS: { key: keyof Mix; label: string }[] = [
   { key: "you", label: "To you" },
   { key: "floor", label: "This coin's locked floor" },
@@ -53,9 +55,21 @@ export function V4Create() {
   const [pending, setPending] = useState<{ coin: string; link: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const saltFor = useRef(
-    makeSaltKeeper((i) => client.readContract({ address: V4_FACTORY, abi: v4FactoryAbi, functionName: "coinInitCodeHash", args: [i.name, i.symbol, i.metadataURI, i.creator] })),
-  ).current;
+  // Dollar coins (paired with USDC): a choice only once the server says they're on (their own factory).
+  const dollar = useQuery({ queryKey: ["dollar-coins"], enabled: !NETWORK.testnet, staleTime: 60_000, queryFn: dollarCoins });
+  const [pairPick, setPair] = useState<Pair>("eth");
+  const pair: Pair = pairPick === "usdc" && dollar.data ? "usdc" : "eth";
+  const factory = pair === "usdc" && dollar.data ? dollar.data.factory : V4_FACTORY;
+  const keepers = useRef(new Map<string, ReturnType<typeof makeSaltKeeper>>()).current;
+  /** The salt keeper for a factory (each set mines its own addresses; dollar coins also sort after USDC). */
+  const saltKeeper = (f: Address, dollarPair: boolean) => {
+    let k = keepers.get(f);
+    if (!k) {
+      k = makeSaltKeeper((i) => client.readContract({ address: f, abi: v4FactoryAbi, functionName: "coinInitCodeHash", args: [i.name, i.symbol, i.metadataURI, i.creator] }), undefined, f, dollarPair ? BASE_USDC : undefined);
+      keepers.set(f, k);
+    }
+    return k;
+  };
 
   // ETH's price, to count ETH already in the wallet (a first buy left from a launch that didn't go through).
   const ethUsd = useQuery({
@@ -68,13 +82,13 @@ export function V4Create() {
     },
   });
   const fees = useQuery({
-    queryKey: ["v4-factory-fees"],
+    queryKey: ["v4-factory-fees", factory],
     enabled: !NETWORK.testnet,
     staleTime: 60_000,
     queryFn: async () => {
       const [startBps, cruxEarlyBps] = await Promise.all([
-        client.readContract({ address: V4_FACTORY, abi: v4FactoryAbi, functionName: "earlyStartBps" }),
-        client.readContract({ address: V4_FACTORY, abi: v4FactoryAbi, functionName: "cruxEarlyBps" }),
+        client.readContract({ address: factory, abi: v4FactoryAbi, functionName: "earlyStartBps" }),
+        client.readContract({ address: factory, abi: v4FactoryAbi, functionName: "cruxEarlyBps" }),
       ]);
       return { startBps: Number(startBps), cruxEarlyBps: Number(cruxEarlyBps) };
     },
@@ -111,7 +125,8 @@ export function V4Create() {
   const buyOk = Number.isFinite(buyUsd) && buyUsd >= 0 && buyUsd <= MAX_FIRST_BUY_USD && (buyUsd === 0 || buyUsd >= 1);
   const cash = wallet.holdings ? Number(wallet.holdings.cash) / 10 ** wallet.holdings.cashDecimals : null;
   // Cash plus ETH above the gas floor: the relay spends ETH already in the wallet first and swaps only the rest.
-  const funds = wallet.holdings && cash !== null ? firstBuyFunds({ cash, ethWei: wallet.holdings.bnb, ethUsd: ethUsd.data ?? null }) : null;
+  // A dollar coin's first buy is paid from cash only (no ETH involved).
+  const funds = wallet.holdings && cash !== null ? (pair === "usdc" ? cash : firstBuyFunds({ cash, ethWei: wallet.holdings.bnb, ethUsd: ethUsd.data ?? null })) : null;
   const enoughCash = buyUsd === 0 || funds === null || funds >= buyUsd;
   const mixWhy = mixProblem(mix);
   const reserved = isReservedName(name) || isReservedName(symbol);
@@ -130,12 +145,12 @@ export function V4Create() {
       if (copycat) throw new Error(copycat);
       const metadataURI = metadataOf({ name: name.trim(), description: description.trim(), image: image.trim(), x: x.trim() });
       setBusy("Finding your coin's 5afe address…");
-      const { salt } = await saltFor({ name: name.trim(), symbol: sym, metadataURI, creator });
-      setBusy(buyUsd > 0 ? "Buying ETH with your cash, then launching…" : "Launching…");
+      const { salt } = await saltKeeper(factory, pair === "usdc")({ name: name.trim(), symbol: sym, metadataURI, creator });
+      setBusy(buyUsd > 0 ? (pair === "usdc" ? `Launching with your $${buyUsd} first buy…` : "Buying ETH with your cash, then launching…") : "Launching…");
       const body = async () => {
         const token = await getAccessToken();
         if (!token) throw new Error("Log in first.");
-        return { token, name: name.trim(), symbol: sym, metadataURI, salt, vest, window: windowSec, ...mixBps(mix), firstBuy: String(Math.round(buyUsd * 1e6)) };
+        return { token, ...(pair === "usdc" ? { pair } : {}), name: name.trim(), symbol: sym, metadataURI, salt, vest, window: windowSec, ...mixBps(mix), firstBuy: String(Math.round(buyUsd * 1e6)) };
       };
       type Launched = { coin: string; pending?: boolean; link?: string };
       let r: Launched;
@@ -230,6 +245,25 @@ export function V4Create() {
             <input value={x} onChange={(e) => setX(e.target.value)} placeholder="https://x.com/…" className={field} />
           </label>
 
+          {dollar.data && (
+            <div className="text-muted">
+              Pair with
+              <div className="mt-2 flex gap-2">
+                <button type="button" onClick={() => setPair("eth")} className={chip(pair === "eth")} aria-pressed={pair === "eth"}>
+                  ETH
+                </button>
+                <button type="button" onClick={() => setPair("usdc")} className={chip(pair === "usdc")} aria-pressed={pair === "usdc"}>
+                  Dollars
+                </button>
+              </div>
+              <p className="mt-1 text-[12px] text-dim">
+                {pair === "usdc"
+                  ? "A dollar coin: its price, locked floor, fees and rewards are all in dollars (USDC). USDC's issuer, Circle, can freeze funds in rare cases such as court orders."
+                  : "Paired with ETH, like most coins on Base."}
+              </p>
+            </div>
+          )}
+
           <div className="text-muted">
             Early buyers&apos; fee
             <p className="text-[12px] text-dim">Buyers in the first minutes pay an extra fee that falls to zero. It makes sniping your launch costly.</p>
@@ -267,14 +301,14 @@ export function V4Create() {
 
           <div className="text-muted">
             <label className="block">
-              Your first buy <span className="text-dim">($0 to ${MAX_FIRST_BUY_USD}, from your cash or ETH already in your wallet)</span>
+              Your first buy <span className="text-dim">($0 to ${MAX_FIRST_BUY_USD}, from your cash{pair === "usdc" ? "" : " or ETH already in your wallet"})</span>
               <input value={firstBuy} inputMode="decimal" onChange={(e) => setFirstBuy(e.target.value.replace(/[^0-9.]/g, ""))} className={`${field} font-mono`} />
             </label>
             <p className="mt-1 text-[12px] text-dim">
               Bought before anyone else, with no early fee.{funds !== null ? ` You have $${funds.toFixed(2)}${cash !== null && funds - cash >= 0.01 ? ` (including $${(funds - cash).toFixed(2)} as ETH)` : ""}.` : ""}
             </p>
             {!buyOk && <p className="mt-1 text-[12px] text-down">A first buy is $1 to ${MAX_FIRST_BUY_USD}, or $0 for none.</p>}
-            {buyOk && !enoughCash && <p className="mt-1 text-[12px] text-down">You don&apos;t have that much in cash or ETH.</p>}
+            {buyOk && !enoughCash && <p className="mt-1 text-[12px] text-down">{pair === "usdc" ? "You don't have that much cash." : "You don't have that much in cash or ETH."}</p>}
           </div>
 
           <div className="rounded-lg border border-line p-3 text-muted">

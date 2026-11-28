@@ -53,14 +53,14 @@ export type SaltInput = { name: string; symbol: string; metadataURI: string; cre
 /**
  * The form's salt: mined against the factory's init-code hash for exactly these inputs, and mined again whenever any
  * of them changes (an edited name, ticker, picture, description or X link, or another wallet). Unchanged inputs reuse
- * the last salt.
+ * the last salt. `factory`: the launch set's factory; `after`: for dollar coins, USDC (the coin must sort after it).
  */
-export function makeSaltKeeper(hashOf: (i: SaltInput) => Promise<Hex>, mine: typeof mineTokenSalt = mineTokenSalt) {
+export function makeSaltKeeper(hashOf: (i: SaltInput) => Promise<Hex>, mine: typeof mineTokenSalt = mineTokenSalt, factory: Address = V4_FACTORY, after?: Address) {
   let last: { key: string; salt: Hex; coin: Address } | null = null;
   return async function saltFor(i: SaltInput): Promise<{ salt: Hex; coin: Address; mined: boolean }> {
     const key = JSON.stringify([i.name, i.symbol, i.metadataURI, i.creator.toLowerCase()]);
     if (last && last.key === key) return { salt: last.salt, coin: last.coin, mined: false };
-    const { salt, token } = mine(V4_FACTORY, await hashOf(i));
+    const { salt, token } = mine(factory, await hashOf(i), undefined, after);
     last = { key, salt, coin: token };
     return { salt, coin: token, mined: true };
   };

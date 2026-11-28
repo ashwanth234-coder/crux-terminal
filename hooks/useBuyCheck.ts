@@ -10,6 +10,7 @@ import { createPublicClient, erc20Abi, fallback, http, isAddress, type Address }
 import { base } from "viem/chains";
 import { BASE_RPCS } from "@/lib/network";
 import { V4_HOOK, hookAbi } from "@/lib/v4launch";
+import { dollarCoins, maybeDollarCoin } from "@/lib/dollarCoins";
 
 const baseClient = createPublicClient({ chain: base, transport: fallback(BASE_RPCS.map((u) => http(u, { timeout: 8_000 }))) });
 
@@ -22,7 +23,12 @@ export async function isCruxV4Coin(coin: string): Promise<boolean> {
   if (!isAddress(coin, { strict: false })) return false;
   try {
     const cfg = await baseClient.readContract({ address: V4_HOOK, abi: hookAbi, functionName: "configOf", args: [coin as Address] });
-    return Number(cfg.launchedAt) > 0;
+    if (Number(cfg.launchedAt) > 0) return true;
+    // A dollar coin (USDC-paired): its own hook, once dollar coins are on.
+    const d = maybeDollarCoin(coin) ? await dollarCoins() : null;
+    if (!d) return false;
+    const dc = await baseClient.readContract({ address: d.hook, abi: hookAbi, functionName: "configOf", args: [coin as Address] });
+    return Number(dc.launchedAt) > 0;
   } catch {
     return false;
   }

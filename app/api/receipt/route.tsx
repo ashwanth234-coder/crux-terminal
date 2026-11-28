@@ -7,7 +7,7 @@ import { BASE_RPCS, NETWORK } from "@/lib/network";
 import { noReceiptPossible, parseReceiptParams, rateLimiter } from "@/lib/receiptGuard";
 import { RELAY_URL } from "@/lib/readCache";
 import { ttlCache } from "@/lib/ttlCache";
-import { V4_HOOK, V4_REWARDS, readCreator, readV4Launch, type V4Launch } from "@/lib/v4launch";
+import { contractsOf, readCreator, readV4Launch, type V4Launch } from "@/lib/v4launch";
 import { buildReceipt, fetchRewards, readEarlyFees, readEthUsd, readWalletPaid, type RewardsResult } from "@/lib/v4receipt";
 
 const size = { width: 1200, height: 800 };
@@ -82,7 +82,7 @@ async function build(coin: Address, wallet: Address): Promise<Cached> {
 
   let creator = creators.get(coin) ?? null;
   if (!creator) {
-    creator = await readCreator(client, coin);
+    creator = await readCreator(client, coin, contractsOf(launch).locker);
     if (!creator) throw new Error("creator unreadable");
     creators.set(coin, creator);
   }
@@ -95,8 +95,8 @@ async function build(coin: Address, wallet: Address): Promise<Cached> {
     symbols.set(coin, symbol);
   }
   const [earlyFees, paid, ethUsd] = await Promise.all([
-    readEarlyFees(client, V4_HOOK, coin, launch),
-    readWalletPaid(client, V4_HOOK, V4_REWARDS, coin, wallet, launch, file?.snapshotAt ?? launch.launchedAt + 86_400),
+    readEarlyFees(client, contractsOf(launch).hook, coin, launch),
+    readWalletPaid(client, contractsOf(launch).hook, contractsOf(launch).rewards, coin, wallet, launch, file?.snapshotAt ?? launch.launchedAt + 86_400),
     readEthUsd(client),
   ]);
   const r = buildReceipt({ symbol, launch, file, wallet, logs: { earlyFees, ...paid }, ethUsd });

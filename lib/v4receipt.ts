@@ -1,7 +1,7 @@
 import { formatEther, formatUnits, getAbiItem, type Address, type Hex, type PublicClient } from "viem";
 import { ttlCache } from "./ttlCache.ts";
 import { ETH_USD_FEED, ethUsdFeedAbi } from "./v4create.ts";
-import { hookAbi, rewardsAbi, rulesText, type V4Launch } from "./v4launch.ts";
+import { fmtQuote, hookAbi, quoteOf, rewardsAbi, rulesText, type V4Launch } from "./v4launch.ts";
 
 /** The holders' payout list the relay publishes for a coin (crux-solver scripts/v4snapshot.ts). */
 export type RewardsFile = {
@@ -263,14 +263,16 @@ export function buildReceipt(o: {
   ethUsd: number | null;
 }): Receipt | null {
   const line = receiptFor(o.file, o.wallet);
+  const quote = quoteOf(o.launch);
   const sym = `$${shortSymbol(o.symbol)}`;
   const base = {
     coin: sym,
     launchDate: fmtDate(o.launch.launchedAt),
-    earlyFees: o.logs.earlyFees === null ? "—" : fmtEth(o.logs.earlyFees),
+    earlyFees: o.logs.earlyFees === null ? "—" : fmtQuote(o.logs.earlyFees, quote),
     choice: rulesText(o.launch).join(" "),
   };
-  const usd = (wei: bigint) => fmtUsd(o.ethUsd === null ? null : Number(formatEther(wei)) * o.ethUsd);
+  // Dollar coins are paid in dollars already: no second dollar figure.
+  const usd = (wei: bigint) => (quote === "USDC" ? null : fmtUsd(o.ethUsd === null ? null : Number(formatEther(wei)) * o.ethUsd));
   if (line) {
     const amount = BigInt(line.amount);
     const heldAmount = fmtCoins(BigInt(line.avgBalance));
@@ -280,14 +282,14 @@ export function buildReceipt(o: {
       kind: "holder",
       heldAmount,
       held: `You held an average of ${heldAmount} ${sym} through day one`,
-      shareEth: fmtEth(amount),
+      shareEth: fmtQuote(amount, quote),
       shareUsd: usd(amount),
       paid: paid !== null,
       tx: paid?.tx ?? null,
     };
   }
   const cp = o.logs.creatorPaid;
-  if (cp) return { ...base, kind: "creator", heldAmount: null, held: null, shareEth: fmtEth(cp.amount), shareUsd: usd(cp.amount), paid: true, tx: cp.tx };
+  if (cp) return { ...base, kind: "creator", heldAmount: null, held: null, shareEth: fmtQuote(cp.amount, quote), shareUsd: usd(cp.amount), paid: true, tx: cp.tx };
   return null;
 }
 

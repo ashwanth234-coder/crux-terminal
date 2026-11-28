@@ -10,8 +10,12 @@ export const TOKEN_SUFFIX = 0x5afe;
 
 const hexBytes = (hex: string) => Uint8Array.from(Buffer.from(hex.replace(/^0x/, ""), "hex"));
 
-/** The first salt at or after `start` whose CREATE2 address (deployer, initCodeHash) ends in 5afe. */
-export function mineTokenSalt(deployer: Address, initCodeHash: Hex, start: bigint = randomStart()): { salt: Hex; token: Address } {
+/**
+ * The first salt at or after `start` whose CREATE2 address (deployer, initCodeHash) ends in 5afe and, with `after`,
+ * sorts above that address (a dollar coin must sort after USDC, its pool's other coin: about twice the tries).
+ */
+export function mineTokenSalt(deployer: Address, initCodeHash: Hex, start: bigint = randomStart(), after?: Address): { salt: Hex; token: Address } {
+  const floor = after ? BigInt(after) : null;
   // 0xff ++ deployer (20) ++ salt (32) ++ initCodeHash (32); only the salt changes between tries.
   const buf = new Uint8Array(85);
   buf[0] = 0xff;
@@ -24,7 +28,7 @@ export function mineTokenSalt(deployer: Address, initCodeHash: Hex, start: bigin
       v >>= BigInt(8);
     }
     const hash = keccak256(buf, "bytes");
-    if (hash[30] === TOKEN_SUFFIX >> 8 && hash[31] === (TOKEN_SUFFIX & 0xff)) {
+    if (hash[30] === TOKEN_SUFFIX >> 8 && hash[31] === (TOKEN_SUFFIX & 0xff) && (floor === null || BigInt(`0x${Buffer.from(hash.subarray(12)).toString("hex")}`) > floor)) {
       const salt = `0x${Buffer.from(buf.subarray(21, 53)).toString("hex")}` as Hex;
       return { salt, token: getContractAddress({ opcode: "CREATE2", from: deployer, salt, bytecodeHash: initCodeHash }) };
     }

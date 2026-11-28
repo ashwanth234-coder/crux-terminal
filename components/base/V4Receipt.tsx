@@ -9,7 +9,7 @@ import { waitForTransactionReceipt } from "wagmi/actions";
 import { NETWORK } from "@/lib/network";
 import { simulateThenWrite } from "@/lib/preflight";
 import { RELAY_URL } from "@/lib/readCache";
-import { V4_HOOK, V4_REWARDS, readCreator, rewardsAbi, type V4Launch } from "@/lib/v4launch";
+import { contractsOf, readCreator, rewardsAbi, type V4Launch } from "@/lib/v4launch";
 import { buildReceipt, canClaimYourself, fetchRewards, isAddress40, listState, readEarlyFees, readEthUsd, readWalletPaid, receiptFor } from "@/lib/v4receipt";
 
 type Client = Pick<PublicClient, "readContract" | "multicall" | "getLogs" | "getBlock" | "getBlockNumber">;
@@ -29,11 +29,12 @@ export function V4Receipt({ address, launch, client }: { address: string; launch
   const typed = touched ? edited : (connected ?? edited);
   const wallet = isAddress40(typed.trim()) ? getAddress(typed.trim()) : null;
   const coin = getAddress(address);
+  const { hook, locker, rewards } = contractsOf(launch);
 
   const list = useQuery({ queryKey: ["v4-rewards", coin], queryFn: () => fetchRewards(RELAY_URL, coin), refetchInterval: 60_000 });
   const file = list.data?.status === "ok" ? list.data.file : null;
   const line = receiptFor(file, wallet);
-  const creator = useQuery({ queryKey: ["v4-creator", coin], enabled: Boolean(wallet), staleTime: 300_000, queryFn: () => readCreator(client, coin) });
+  const creator = useQuery({ queryKey: ["v4-creator", coin], enabled: Boolean(wallet), staleTime: 300_000, queryFn: () => readCreator(client, coin, locker) });
   const isCreator = Boolean(wallet && creator.data && creator.data.toLowerCase() === wallet.toLowerCase());
   const listKnown = list.data !== undefined && list.data.status !== "error";
   /** Only a wallet that has a line (or is the creator) has anything to look up on chain. */
@@ -47,19 +48,19 @@ export function V4Receipt({ address, launch, client }: { address: string; launch
   });
   const price = useQuery({ queryKey: ["eth-usd-feed"], enabled: hasReceipt, staleTime: 60_000, queryFn: () => readEthUsd(client) });
   // The same for every wallet: read once per coin.
-  const fees = useQuery({ queryKey: ["v4-early-fees", coin], enabled: hasReceipt, staleTime: 300_000, queryFn: () => readEarlyFees(client, V4_HOOK, coin, launch) });
+  const fees = useQuery({ queryKey: ["v4-early-fees", coin], enabled: hasReceipt, staleTime: 300_000, queryFn: () => readEarlyFees(client, hook, coin, launch) });
   const snapshotAt = file?.snapshotAt ?? launch.launchedAt + 86_400;
   const paid = useQuery({
     queryKey: ["v4-wallet-paid", coin, wallet, snapshotAt],
     enabled: hasReceipt,
     staleTime: 30_000,
-    queryFn: () => readWalletPaid(client, V4_HOOK, V4_REWARDS, coin, wallet as Address, launch, snapshotAt),
+    queryFn: () => readWalletPaid(client, hook, rewards, coin, wallet as Address, launch, snapshotAt),
   });
   const claimed = useQuery({
     queryKey: ["v4-claimed", coin, wallet],
     enabled: Boolean(line),
     refetchInterval: 20_000,
-    queryFn: () => client.readContract({ address: V4_REWARDS, abi: rewardsAbi, functionName: "isClaimed", args: [coin, wallet as Address] }),
+    queryFn: () => client.readContract({ address: rewards, abi: rewardsAbi, functionName: "isClaimed", args: [coin, wallet as Address] }),
   });
 
   const [busy, setBusy] = useState(false);
@@ -84,7 +85,7 @@ export function V4Receipt({ address, launch, client }: { address: string; launch
     try {
       if (chainId !== base.id) await switchChain({ chainId: base.id });
       const hash = await simulateThenWrite(config, connected, {
-        address: V4_REWARDS,
+        address: rewards,
         abi: rewardsAbi,
         functionName: "claim",
         args: [coin, getAddress(line.account), BigInt(line.amount), line.proof],
