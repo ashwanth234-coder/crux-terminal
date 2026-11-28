@@ -19,12 +19,52 @@ function ago(ms: number) {
 export function SavedWalletsList() {
   const s = useSavedWallets();
   const [editing, setEditing] = useState<string | null>(null);
+  const [paste, setPaste] = useState("");
+  const [note, setNote] = useState<string | null>(null);
   if (!s.loggedIn) return null;
+  const typed = paste.trim();
+  const kind = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(typed) ? "solana" : /^0x[0-9a-fA-F]{40}$/.test(typed) ? "evm" : null;
+  const add = async (chain: WalletChain) => {
+    setNote(null);
+    try {
+      await s.save({ chain, address: typed, name: "", chart: true, notify: false });
+      setPaste("");
+      setNote("Saved. Its buys and sells show on charts; tap Edit to name it or get notifications.");
+    } catch (e) {
+      setNote((e as Error).message);
+    }
+  };
   return (
     <section aria-labelledby="saved-wallets-h">
       <h2 id="saved-wallets-h" className="mb-3 text-[12px] font-medium uppercase tracking-[0.18em] text-dim">
         Saved wallets
       </h2>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <input
+          value={paste}
+          onChange={(e) => setPaste(e.target.value)}
+          placeholder="Paste a wallet to follow (a trader, a KOL)"
+          aria-label="Wallet address to save"
+          className="min-w-0 flex-1 rounded-lg border border-line bg-void px-3 py-2 font-mono text-[12px] text-chrome placeholder:font-sans placeholder:text-dim"
+        />
+        {kind === "solana" && (
+          <button type="button" onClick={() => void add("solana")} className="rounded-lg border border-signal px-3 py-2 text-[12px] text-signal hover:bg-signal/10">
+            Save Solana wallet
+          </button>
+        )}
+        {kind === "evm" && (
+          <>
+            <button type="button" onClick={() => void add("base")} className="rounded-lg border border-signal px-3 py-2 text-[12px] text-signal hover:bg-signal/10">
+              Save on Base
+            </button>
+            <button type="button" onClick={() => void add("bnb")} className="rounded-lg border border-signal px-3 py-2 text-[12px] text-signal hover:bg-signal/10">
+              Save on BNB Chain
+            </button>
+          </>
+        )}
+      </div>
+      {typed && !kind && <p className="mb-3 text-[12px] text-dim">That doesn&apos;t look like a wallet address.</p>}
+      {note && <p className="mb-3 text-[12px] text-muted">{note}</p>}
       {s.wallets.length === 0 ? (
         <p className="rounded-xl border border-line px-4 py-3 text-[12.5px] text-muted">
           {s.loading ? "Reading…" : "None yet. Tap ☆ next to a trader on any coin's trades or holder map to save them, give them a nickname, and see their trades on charts or get a notification when they trade."}

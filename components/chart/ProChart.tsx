@@ -13,7 +13,7 @@ import { barTime, graduationPoint, markBarTime, markTrades, type MarkWho } from 
 import { devMarks } from "@/lib/devMarks";
 import { useCoinCreator } from "@/hooks/useCoinCreator";
 import { useSavedWallets } from "@/hooks/useSavedWallets";
-import { chainOf, savedMarks } from "@/lib/savedWallets";
+import { chainOf, eventMarks, savedMarks } from "@/lib/savedWallets";
 import { buildHolders } from "@/lib/holders";
 import { CRUX_SOLVERS, PREVIOUS_SETTLERS, SETTLER } from "@/lib/intents";
 import { EMPTY_CONTEXT, computeInstance, flowByCandle, holdersByCandle, paramsOf, poolByCandle, top10ByCandle, type StudyContext, type StudyId } from "@/lib/indicators";
@@ -293,7 +293,9 @@ export function ProChart({
   // Another chain's coin: who made it, for its DB / DS badges.
   const coinCreator = useCoinCreator(remote?.network ?? null, remote?.token ?? null);
   // Another chain's coin: the wallets the trader saved, for their ★ badges.
-  const savedIndex = useSavedWallets().index;
+  const savedWallets = useSavedWallets();
+  const savedIndex = savedWallets.index;
+  const savedEvents = savedWallets.events;
   const rcGraduatedAt = remote ? rc.graduatedAt : null;
   const swapData = useThrottled(remote ? rc.swapData : swaps.data, redrawMs);
   const tradesPending = remote ? rc.isPending : swaps.isPending;
@@ -468,7 +470,10 @@ export function ProChart({
     // Another chain's coin: its creator's buys and sells (DB / DS) from the coin's trades list.
     if (remote) {
       const trades = (swapData?.trades ?? []).map((t) => ({ time: t.time, side: t.side, usd: Number(t.usdc) / 1e6, price: t.price, trader: t.to, tx: t.txHash }));
-      return [...devMarks(trades, coinCreator), ...savedMarks(trades, chainOf(remote.network), savedIndex)].sort((a, b) => a.time - b.time);
+      const fromList = savedMarks(trades, chainOf(remote.network), savedIndex);
+      // Solana: the wallet watcher's trades too (the coin's live trades don't always say who traded).
+      const watched = remote.network === "solana" ? eventMarks(savedEvents, remote.token, savedIndex, new Set(fromList.map((m) => m.txHash))) : [];
+      return [...devMarks(trades, coinCreator), ...fromList, ...watched].sort((a, b) => a.time - b.time);
     }
     if (!transfers.data || candles.length === 0) return [];
     const system = new Set(["pool", "auction", "solver", "settler", "burn"]);
@@ -491,7 +496,7 @@ export function ProChart({
         return bt === null ? null : (candles.find((c) => c.time === bt)?.close ?? null);
       },
     );
-  }, [transfers.data, candles, holders, me, auction.pair, auction.creator, market.batchPool, focus, remote, swapData, coinCreator, savedIndex]);
+  }, [transfers.data, candles, holders, me, auction.pair, auction.creator, market.batchPool, focus, remote, swapData, coinCreator, savedIndex, savedEvents]);
   // A wallet picked in the desk shows alone, every trade of it, whatever the overlay switches say.
   const replayEnd = replayIndex !== null && candles.length ? candles[candles.length - 1].time + interval : null;
   const shownMarks = useMemo(

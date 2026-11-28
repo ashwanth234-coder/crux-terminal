@@ -20,3 +20,16 @@ test("a wallet shows by its nickname, else its short address", () => {
   assert.equal(walletLabel({ name: "Whale", address: "0x1234567890abcdef" }), "Whale");
   assert.equal(walletLabel({ name: "", address: "0x1234567890abcdef" }), "0x12…cdef");
 });
+
+test("eventMarks: a saved wallet's watched Solana trades of this coin, once, only with Show on charts", async () => {
+  const { eventMarks, savedIndex } = await import("./savedWallets.ts");
+  const W = "9SLPTL41SPsYkgdsMzdfJsxymEANKr5bYoBsQzJyKpKS";
+  const OFF = "So11111111111111111111111111111111111111112";
+  const idx = savedIndex([
+    { chain: "solana", address: W, name: "Ansem", chart: true, notify: false, savedAt: 1 },
+    { chain: "solana", address: OFF, name: "", chart: false, notify: true, savedAt: 1 },
+  ]);
+  const ev = (address: string, mint: string, tx: string, at: number) => ({ address, name: "", mint, symbol: "X", side: "buy" as const, sol: 1, at, tx, usd: 150, tokens: 1000 });
+  const marks = eventMarks([ev(W, "MINT", "t2", 2_000_500), ev(W, "MINT", "t1", 1_000_000), ev(W, "OTHER", "t3", 1), ev(OFF, "MINT", "t4", 1), ev(W, "MINT", "seen", 5)], "MINT", idx, new Set(["seen"]));
+  assert.deepEqual(marks.map((m) => [m.time, m.who, m.usd, m.txHash]), [[1000, "saved", 150, "t1"], [2000, "saved", 150, "t2"]]);
+});

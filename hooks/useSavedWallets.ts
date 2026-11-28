@@ -23,8 +23,9 @@ export function useSavedWallets() {
   const q = useQuery({
     queryKey: key,
     enabled: crux.loggedIn && crux.owner !== null,
-    staleTime: 30_000,
-    refetchInterval: 60_000,
+    staleTime: 10_000,
+    // Their trades show on charts as ★ marks: read every 15 s.
+    refetchInterval: 15_000,
     queryFn: async () => {
       const token = await getAccessToken();
       return token ? relay<Answer>("/v1/wallets/list", { token }) : EMPTY;

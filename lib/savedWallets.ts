@@ -8,7 +8,8 @@ import type { ChartTrade } from "./devMarks.ts";
  */
 export type WalletChain = "solana" | "base" | "bnb";
 export type SavedWallet = { chain: WalletChain; address: string; name: string; chart: boolean; notify: boolean; savedAt: number };
-export type WalletEvent = { address: string; name: string; mint: string; symbol: string; side: "buy" | "sell"; sol: number; at: number; tx: string };
+/** A saved wallet's trade seen by Crux's wallet watcher (Solana): `at` the chain's time in ms, `usd` / `tokens` its size. */
+export type WalletEvent = { address: string; name: string; mint: string; symbol: string; side: "buy" | "sell"; sol: number; at: number; tx: string; usd?: number; tokens?: number };
 
 export const chainOf = (network: "solana" | "bsc" | "base" | "bnb"): WalletChain => (network === "bsc" ? "bnb" : network);
 /** One key per wallet: EVM addresses whatever their case, Solana's as they are. */
@@ -29,6 +30,20 @@ export function savedMarks(trades: readonly ChartTrade[], chain: WalletChain, in
     const w = t.trader ? index.get(walletKey(chain, t.trader)) : undefined;
     if (!w?.chart) continue;
     out.push({ time: t.time, side: t.side, who: "saved", address: t.trader as Address, tokens: t.price > 0 ? t.usd / t.price : 0, usd: t.usd, txHash: t.tx });
+  }
+  return out.sort((a, b) => a.time - b.time);
+}
+
+/**
+ * The chart's ★ badges from the wallet watcher: a saved wallet's buys and sells of `mint` (with "Show on charts" on),
+ * also when the coin's own trade list doesn't say who traded. `skip`: transactions already marked. Pure.
+ */
+export function eventMarks(events: readonly WalletEvent[], mint: string, index: ReadonlyMap<string, SavedWallet>, skip: ReadonlySet<string> = new Set()): MarkTrade[] {
+  const out: MarkTrade[] = [];
+  for (const e of events) {
+    if (e.mint !== mint || skip.has(e.tx)) continue;
+    if (!index.get(walletKey("solana", e.address))?.chart) continue;
+    out.push({ time: Math.floor(e.at / 1000), side: e.side, who: "saved", address: e.address as Address, tokens: e.tokens ?? 0, usd: e.usd ?? 0, txHash: e.tx });
   }
   return out.sort((a, b) => a.time - b.time);
 }
